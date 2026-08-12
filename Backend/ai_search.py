@@ -7,6 +7,9 @@ StoreFlow AI - AI 검색 (Claude API 연동)
 
 import os
 import re
+import json
+import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -71,33 +74,19 @@ KNOWN_ADJ = ["프리미엄", "국산", "제철", "대용량", "실속형", "든�
 STOPWORDS = ["어디있어", "어디있나요", "어디에있어", "찾아줘", "추천해줘", "알려줘",
              "있어", "있나요", "해줘", "주세요", "좀", "혹시"]
 
-def simple_keyword_split(query: str) -> list[str]:
-    """AI 없이 쓰는 최소한의 키워드 추출: 공백으로 쪼개고 흔한 어미만 제거."""
-    text = query
-    for sw in STOPWORDS:
-        text = text.replace(sw, " ")
-    tokens = [t.strip("?!., ") for t in text.split()]
-    return [t for t in tokens if t]
-
-def extract_item_keyword(name: str, brand: str | None, unit: str | None) -> str | None:
-    """상품명에서 브랜드/용량/수식어를 빼고 핵심 품목명만 뽑는다.
-    예: '웰니스플러스 든든한 고무장갑(대) 3L' -> '고무장갑'"""
-    text = name
-    if brand:
-        text = text.replace(brand, "")
-    if unit:
-        text = text.replace(unit, "")
-
-    tokens = [t for t in text.split() if t not in KNOWN_ADJ]
-    if not tokens:
-        return None
-
-    item = re.sub(r"\(.*?\)", "", tokens[0])  # 고무장갑(대) -> 고무장갑
-    return item.strip() or None
-
 
 class SearchRequest(BaseModel):
     query: str
+    session_id: str | None = None
+
+
+def simple_keyword_split(query: str) -> list[str]:
+    """AI 없이 쓰는 최소한의 키워드 추출: 공백으로 쪼개고 흔한 어미만 제거."""
+    cleaned = query
+    for sw in STOPWORDS:
+        cleaned = cleaned.replace(sw, " ")
+    tokens = [t.strip("?!., ") for t in cleaned.split()]
+    return [t for t in tokens if t]
 
 
 def extract_intent(query: str) -> dict:
@@ -124,7 +113,6 @@ def extract_intent(query: str) -> dict:
     except Exception as e:
         print(f"[AI Fallback] Intent 분석 실패: {e}")
 
-    # Claude 실패 시: 문장을 단어 단위로 쪼개서 최소한의 키워드 검색이라도 되게 한다
     keywords = simple_keyword_split(query)
     return {
         "intent_type": "PRODUCT_SEARCH",
@@ -136,8 +124,9 @@ def extract_intent(query: str) -> dict:
 
 
 def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
+    """키워드로 먼저 찾고, 하나도 없으면 카테고리로 다시 찾는다."""
     keywords = intent.get("keywords", [])
-    keywords = [kw for kw in keywords if kw not in KNOWN_ADJ]  # 이 줄 추가: 수식어는 검색 키워드에서 제외
+    keywords = [kw for kw in keywords if kw not in KNOWN_ADJ]
     categories = intent.get("category_hints", [])
     params = {"limit": limit}
 
@@ -156,7 +145,6 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
             rows = conn.execute(text(query), query_params).mappings().all()
         return [dict(r) for r in rows]
 
-    # 1) 키워드로 먼저 찾아본다 (구체적인 상품명 검색에 적합)
     if keywords:
         kw_params = dict(params)
         or_clauses = []
@@ -168,7 +156,6 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
         if results:
             return results
 
-    # 2) 키워드로 못 찾았거나 키워드가 없으면 카테고리로 찾는다 (예산추천처럼 상황형 질의에 적합)
     if categories:
         cat_params = dict(params)
         or_clauses = []
@@ -182,7 +169,6 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
 
 
 def build_budget_combo(candidates: list[dict], budget: int) -> list[dict]:
-    """예산 안에서 조합을 만든다 (평점 높은 순으로 담다가 예산 넘기면 스킵하는 단순 그리디)."""
     combo = []
     total = 0
     for c in candidates:
@@ -223,8 +209,31 @@ def generate_explanation(query: str, items: list[dict]) -> tuple[str, bool]:
         return "지금 AI 설명 생성에 문제가 있어 상품 목록만 보여드려요. 아래 목록을 확인해 주세요.", False
 
 
+def log_search_event(session_id: str, query: str):
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO consumer_events
+                        (event_type, occurred_at, session_id, meta)
+                    VALUES
+                        ('SEARCH', :occurred_at, :session_id, :meta)
+                """),
+                {
+                    "occurred_at": datetime.utcnow(),
+                    "session_id": session_id,
+                    "meta": json.dumps({"query": query}, ensure_ascii=False),
+                },
+            )
+            conn.commit()
+    except Exception as e:
+        print(f"[Event Log] SEARCH 이벤트 기록 실패: {e}")
+
+
 @router.post("/api/ai/search")
 def ai_search(body: SearchRequest):
+    session_id = body.session_id or f"sess-{uuid.uuid4().hex[:12]}"
+
     intent = extract_intent(body.query)
     candidates = search_candidates(intent)
 
@@ -236,7 +245,10 @@ def ai_search(body: SearchRequest):
     explanation, explanation_ok = generate_explanation(body.query, items)
     total_price = sum(it["price_krw"] for it in items)
 
+    log_search_event(session_id, body.query)
+
     return {
+        "session_id": session_id,
         "intent": intent,
         "items": items,
         "total_price": total_price,
@@ -244,7 +256,24 @@ def ai_search(body: SearchRequest):
         "ai_available": intent.get("ai_available", True) and explanation_ok,
     }
 
+
 # ============ 대체상품 추천 ============
+
+def extract_item_keyword(name: str, brand: str | None, unit: str | None) -> str | None:
+    """상품명에서 브랜드/용량/수식어를 빼고 핵심 품목명만 뽑는다."""
+    cleaned = name
+    if brand:
+        cleaned = cleaned.replace(brand, "")
+    if unit:
+        cleaned = cleaned.replace(unit, "")
+
+    tokens = [t for t in cleaned.split() if t not in KNOWN_ADJ]
+    if not tokens:
+        return None
+
+    item = re.sub(r"\(.*?\)", "", tokens[0])
+    return item.strip() or None
+
 
 def find_alternative_candidates(sku_id: int, limit: int = 5) -> tuple[dict | None, list[dict]]:
     with engine.connect() as conn:
@@ -259,7 +288,6 @@ def find_alternative_candidates(sku_id: int, limit: int = 5) -> tuple[dict | Non
         item_keyword = extract_item_keyword(original["name"], original["brand"], original["unit"])
         price = original["price_krw"]
 
-        # 같은 카테고리 + 핵심 품목명이 이름에 포함 + 가격대 0.5~1.8배 + 본인 제외
         query = """
             SELECT p.sku_id, p.name, p.category, p.price_krw,
                    COALESCE(AVG(r.rating), 0) AS avg_rating
@@ -303,12 +331,16 @@ def generate_alternative_explanation(original: dict, alternatives: list[dict]) -
         f"목록에 없는 상품을 지어내지 마라."
     )
 
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=300,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text
+    except Exception as e:
+        print(f"[AI Fallback] 대체상품 설명 생성 실패: {e}")
+        return "지금 AI 설명 생성에 문제가 있어 후보 목록만 보여드려요."
 
 
 @router.get("/api/products/{sku_id}/alternatives")

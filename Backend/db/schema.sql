@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS products (
     origin          VARCHAR(20),
     attributes_json JSON,
     active          BOOLEAN DEFAULT TRUE,
+    stock_quantity  INT NOT NULL DEFAULT 100,
     INDEX idx_category (category),
     INDEX idx_name (name)
 );
@@ -185,4 +186,25 @@ CREATE TABLE IF NOT EXISTS event_log (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_type (event_type),
     INDEX idx_created (created_at)
+);
+
+-- ── 장민영 파트: 주문 ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS orders (
+    order_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
+    consumer_id   BIGINT NOT NULL,
+    total_amount  INT NOT NULL,
+    status        VARCHAR(20) NOT NULL DEFAULT 'PAID',
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_order_consumer FOREIGN KEY (consumer_id) REFERENCES consumer(consumer_id)
+);
+
+CREATE TABLE IF NOT EXISTS order_item (
+    order_item_id  BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id       BIGINT NOT NULL,
+    sku_id         INT NOT NULL,
+    product_name   VARCHAR(255) NOT NULL,
+    price_krw      INT NOT NULL,
+    quantity       INT NOT NULL,
+    CONSTRAINT fk_orderitem_order FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    CONSTRAINT fk_orderitem_product FOREIGN KEY (sku_id) REFERENCES products(sku_id)
 );
