@@ -96,5 +96,10 @@ public class Consumer {
         this.monthlySpendAmount += amount;
         this.grade = Grade.calculateFrom(this.monthlySpendAmount);
     }
+
+    public void resetMonthlySpend() {
+        this.monthlySpendAmount = 0;
+        this.grade = Grade.calculateFrom(0);
+    }
 }
 
