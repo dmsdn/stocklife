@@ -5,12 +5,12 @@ __pycache__/
 
 # C extensions
 *.so
-
+.gradle/
+build/
 application.yml
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
