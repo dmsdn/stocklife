@@ -33,6 +33,23 @@ BASE_PRICE_RANGE = {
     "건강뷰티": (300, 3000),            # 원/개
     "사무공구": (1000, 15000),          # 원/개
 }
+CATEGORY_PRICE_CEILING = {
+    "신선식품-과일채소": 60000,
+    "신선식품-정육수산": 120000,
+    "가공식품-간편식": 80000,
+    "음료": 100000,
+    "주류": 150000,
+    "음료주류": 150000,
+    "생활용품-세제욕실": 60000,
+    "주방용품": 200000,
+    "가전": 800000,
+    "의류패션잡화": 200000,
+    "계절레저용품": 300000,
+    "완구문구": 150000,
+    "반려동물용품": 100000,
+    "건강뷰티": 100000,
+    "사무공구": 80000,
+}
 
 
 def parse_unit(unit: str):
@@ -108,7 +125,9 @@ def main():
         else:
             price = base_unit_price * qty * brand_multiplier * bulk_discount
 
-        price = max(500, round(price / 100) * 100)  # 최소 500원, 100원 단위 반올림
+        price = max(500, round(price / 100) * 100)
+        ceiling = CATEGORY_PRICE_CEILING.get(category, 500000)
+        price = min(price, ceiling)  # 이 줄 추가 — 상한선 적용
         updates.append({"sku_id": row["sku_id"], "price_krw": int(price)})
 
     with engine.connect() as conn:
