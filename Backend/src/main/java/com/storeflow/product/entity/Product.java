@@ -22,6 +22,12 @@ public class Product {
     @Column(name = "active")
     private boolean active;
 
+    @Column(name = "category", nullable = false)
+    private String category;
+
+    @Column(name = "brand")
+    private String brand;
+
     protected Product() {}
 
     public void decreaseStock(int quantity) {
@@ -31,6 +37,8 @@ public class Product {
         this.stockQuantity -= quantity;
     }
 
+    public String getCategory() { return category; }
+    public String getBrand() { return brand; }
     public Integer getSkuId() { return skuId; }
     public String getName() { return name; }
     public int getPriceKrw() { return priceKrw; }
