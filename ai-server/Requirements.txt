@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 pymysql
+anthropic
+python-dotenv
+httpx

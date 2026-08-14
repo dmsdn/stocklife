@@ -150,9 +150,9 @@ activemq-data/
 *.sage.py
 
 # Environments
-.env
+../Ai-server/.env
 .envrc
-.venv
+../Ai-server/.venv
 env/
 venv/
 ENV/
@@ -223,7 +223,7 @@ __marimo__/
 node_modules/
 dist/
 build/
-.env
+../Ai-server/.env
 .env.local
 *.log
 .DS_Store

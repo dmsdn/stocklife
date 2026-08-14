@@ -17,9 +17,13 @@ from fastapi import FastAPI, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from ai_search import router as ai_search_router
+from ai_agent_shop import router as ai_agent_shop_router
+from agent_chat import router as agent_chat_router
 
 app = FastAPI(title="StoreFlow AI - Data/AI Backend")
 app.include_router(ai_search_router)
+app.include_router(ai_agent_shop_router)
+app.include_router(agent_chat_router)
 
 DB_USER = "root"
 DB_PASSWORD = "1234"
@@ -41,8 +45,8 @@ def health_check():
 
 @app.get("/api/products")
 def get_products(limit: int = Query(default=20, le=100),
-                  category: str | None = None,
-                  active_only: bool = True):
+                 category: str | None = None,
+                 active_only: bool = True):
     query = "SELECT sku_id, name, category, price_krw, active FROM products WHERE 1=1"
     params = {"limit": limit}
     if category:
@@ -109,16 +113,16 @@ def create_product(body: ProductCreate):
 
         conn.execute(
             text("""
-                INSERT INTO products (sku_id, name, category, price_krw, unit, brand, origin, active)
-                VALUES (:sku_id, :name, :category, :price_krw, :unit, :brand, :origin, TRUE)
-            """),
+                 INSERT INTO products (sku_id, name, category, price_krw, unit, brand, origin, active)
+                 VALUES (:sku_id, :name, :category, :price_krw, :unit, :brand, :origin, TRUE)
+                 """),
             {"sku_id": new_id, **body.model_dump()},
         )
         conn.execute(
             text("""
-                INSERT INTO event_log (event_type, ref_id, message, created_at)
-                VALUES ('PRODUCT_CREATED', :ref_id, :message, :created_at)
-            """),
+                 INSERT INTO event_log (event_type, ref_id, message, created_at)
+                 VALUES ('PRODUCT_CREATED', :ref_id, :message, :created_at)
+                 """),
             {"ref_id": str(new_id), "message": f"신규 상품 등록: {body.name}",
              "created_at": datetime.utcnow()},
         )
@@ -146,9 +150,9 @@ def update_product(sku_id: int, body: ProductUpdate):
         conn.execute(text(f"UPDATE products SET {set_clause} WHERE sku_id = :sku_id"), fields)
         conn.execute(
             text("""
-                INSERT INTO event_log (event_type, ref_id, message, created_at)
-                VALUES ('PRODUCT_UPDATED', :ref_id, :message, :created_at)
-            """),
+                 INSERT INTO event_log (event_type, ref_id, message, created_at)
+                 VALUES ('PRODUCT_UPDATED', :ref_id, :message, :created_at)
+                 """),
             {"ref_id": str(sku_id), "message": f"상품 정보 수정: {list(fields.keys())}",
              "created_at": datetime.utcnow()},
         )
@@ -172,9 +176,9 @@ def deactivate_product(sku_id: int):
         )
         conn.execute(
             text("""
-                INSERT INTO event_log (event_type, ref_id, message, created_at)
-                VALUES ('PRODUCT_DEACTIVATED', :ref_id, :message, :created_at)
-            """),
+                 INSERT INTO event_log (event_type, ref_id, message, created_at)
+                 VALUES ('PRODUCT_DEACTIVATED', :ref_id, :message, :created_at)
+                 """),
             {"ref_id": str(sku_id), "message": f"상품 판매 중지: {existing['name']}",
              "created_at": datetime.utcnow()},
         )
