@@ -21,10 +21,14 @@ public class ChatController {
     }
 
     @PostMapping
-    public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request,
-                                             @RequestHeader(value = "Authorization", required = false) String authorization) {
+    public ResponseEntity<?> chat(@Valid @RequestBody ChatRequest request,
+                                  @RequestHeader(value = "Authorization", required = false) String authorization) {
         Long consumerId = resolveConsumerIdOrNull(authorization);
-        return ResponseEntity.ok(chatService.relay(request, consumerId));
+        try {
+            return ResponseEntity.ok(chatService.relay(request, consumerId));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        }
     }
 
     /**

@@ -314,6 +314,8 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
         if cat and cat.strip()
     ]
     sort_by = intent.get("sort_by")
+    min_price = intent.get("min_price")  # "만원 이상" 같은 하한
+    max_price = intent.get("max_price")  # "이만원 이하" 같은 상한
 
     order_clause = {
         "price_desc": "p.price_krw DESC, p.sku_id ASC",
@@ -321,6 +323,17 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
     }.get(sort_by, "p.sku_id ASC")
 
     base_params = {"limit": limit}
+
+    def price_range_clause(params: dict) -> str:
+        """가격 범위는 키워드/카테고리 검색 결과에 AND로 항상 덧붙는 조건."""
+        clause = ""
+        if min_price is not None:
+            clause += " AND p.price_krw >= :min_price"
+            params["min_price"] = min_price
+        if max_price is not None:
+            clause += " AND p.price_krw <= :max_price"
+            params["max_price"] = max_price
+        return clause
 
     def run_query(where_extra: str, query_params: dict) -> list[dict]:
         query = f"""
@@ -371,10 +384,10 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
             )
             kw_params[key] = f"%{kw}%"
 
-        results = run_query(
-            "AND (" + " OR ".join(keyword_groups) + ")",
-            kw_params,
-            )
+        where_extra = "AND (" + " OR ".join(keyword_groups) + ")"
+        where_extra += price_range_clause(kw_params)
+
+        results = run_query(where_extra, kw_params)
 
         if results:
             return results
@@ -391,10 +404,20 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
             )
             cat_params[key] = category
 
-        return run_query(
-            "AND (" + " OR ".join(category_groups) + ")",
-            cat_params,
-            )
+        where_extra = "AND (" + " OR ".join(category_groups) + ")"
+        where_extra += price_range_clause(cat_params)
+
+        results = run_query(where_extra, cat_params)
+
+        if results:
+            return results
+
+    # 3순위: 키워드/카테고리 없이 가격 범위만 있는 경우 ("만원 이하 상품 보여줘")
+    if min_price is not None or max_price is not None:
+        price_only_params = dict(base_params)
+        where_extra = price_range_clause(price_only_params)
+        if where_extra:
+            return run_query(where_extra, price_only_params)
 
     return []
 

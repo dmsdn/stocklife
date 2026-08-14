@@ -49,6 +49,12 @@ MAX_TOOL_TURNS = 6
 
 TOOLS = SHOP_TOOLS  # search_products / compare_products / add_to_cart / update_cart_item / remove_from_cart / get_cart 동일
 
+# 프롬프트 캐싱: TOOLS 마지막 항목에 breakpoint를 찍으면, 그 앞까지(TOOLS 전체)가 캐싱 대상이 된다.
+# TOOLS는 요청마다 내용이 똑같으므로 매번 새로 이 부분에 대한 입력 비용을 낼 필요가 없다.
+if TOOLS:
+    TOOLS = [dict(t) for t in TOOLS]  # 원본(ai_agent_shop.TOOLS) 리스트를 안 건드리게 얕은 복사
+    TOOLS[-1] = {**TOOLS[-1], "cache_control": {"type": "ephemeral"}}
+
 SYSTEM_PROMPT = (
     "너는 StoreFlow 쇼핑과 대화를 함께 도와주는 에이전트다. 사용자와의 지난 대화(history)를 "
     "참고해서 문맥을 이해하고, 필요하면 검색/비교/장바구니 도구를 순서대로 호출해라.\n"
@@ -63,6 +69,17 @@ SYSTEM_PROMPT = (
     "6. 순수 잡담/질문이면 도구를 안 써도 된다.\n"
     "모든 도구 호출이 끝나면 실제 결과만 근거로 2~3문장 한국어로 답해라."
 )
+
+# system도 블록으로 만들어서 캐싱 breakpoint를 찍는다. SYSTEM_PROMPT 정의 이후에 만들어야 함.
+SYSTEM_BLOCKS = [
+    {
+        "type": "text",
+        "text": SYSTEM_PROMPT,
+        "cache_control": {"type": "ephemeral"},
+    }
+]
+
+
 
 
 class HistoryTurn(BaseModel):
@@ -171,7 +188,7 @@ def agent_chat(body: AgentChatRequest):
         response = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=600,
-            system=SYSTEM_PROMPT,
+            system=SYSTEM_BLOCKS,
             tools=TOOLS,
             messages=messages,
         )
