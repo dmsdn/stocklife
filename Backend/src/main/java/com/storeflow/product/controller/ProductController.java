@@ -3,10 +3,7 @@ package com.storeflow.product.controller;
 import com.storeflow.product.dto.ProductSearchResponse;
 import com.storeflow.product.service.ProductSearchService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -21,7 +18,23 @@ public class ProductController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<List<ProductSearchResponse>> search(@RequestParam String keyword) {
-        return ResponseEntity.ok(productSearchService.search(keyword));
+    public ResponseEntity<List<ProductSearchResponse>> search(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String categoryL1,
+            @RequestParam(required = false) String categoryL2,
+            @RequestParam(required = false) Integer maxPrice,
+            @RequestParam(name = "onPromo", required = false, defaultValue = "false") boolean onPromoOnly,
+            @RequestParam(required = false) Integer recentDays) {
+        return ResponseEntity.ok(productSearchService.search(
+                keyword, categoryL1, categoryL2, maxPrice, onPromoOnly, recentDays));
+    }
+
+    @GetMapping("/{skuId}")
+    public ResponseEntity<?> getProduct(@PathVariable Integer skuId) {
+        try {
+            return ResponseEntity.ok(productSearchService.getDetail(skuId));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
     }
 }
