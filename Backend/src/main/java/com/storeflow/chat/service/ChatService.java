@@ -5,6 +5,7 @@ import com.storeflow.chat.entity.ChatMessage;
 import com.storeflow.chat.entity.ChatSession;
 import com.storeflow.chat.repository.ChatMessageRepository;
 import com.storeflow.chat.repository.ChatSessionRepository;
+import com.storeflow.realtime.service.EventBroadcastService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,16 +28,19 @@ public class ChatService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RestTemplate restTemplate;
+    private final EventBroadcastService eventBroadcastService;
 
     @Value("${agent.base-url}")
     private String agentBaseUrl;
 
     public ChatService(ChatSessionRepository chatSessionRepository,
                        ChatMessageRepository chatMessageRepository,
-                       RestTemplate restTemplate) {
+                       RestTemplate restTemplate,
+                       EventBroadcastService eventBroadcastService) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.restTemplate = restTemplate;
+        this.eventBroadcastService = eventBroadcastService;
     }
 
     /**
@@ -220,6 +224,20 @@ public class ChatService {
 
         session.touch();
         chatSessionRepository.save(session);
+
+        // 요구사항 22: 저장과 동시에 프론트 실시간 채널로도 말풍선을 밀어준다.
+        // 프론트가 챗창을 닫아뒀어도(구독자 없음) EventBroadcastService가 조용히 버리므로 안전하고,
+        // 다음에 챗창을 열면 어차피 getMessages()(24번, DB 조회)로 이 메시지를 다시 보게 된다.
+        eventBroadcastService.pushToFrontend(
+                sessionId,
+                "chat_message",
+                Map.of(
+                        "messageId", saved.getChatMessageId(),
+                        "sender", saved.getSender().name(),
+                        "content", saved.getContent(),
+                        "createdAt", saved.getCreatedAt().toString()
+                )
+        );
 
         return ChatMessageResponse.from(saved);
     }
