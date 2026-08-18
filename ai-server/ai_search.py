@@ -295,7 +295,7 @@ def _normalize_product(item: dict) -> dict:
         "sku_id": item.get("skuId"),
         "name": item.get("name"),
         "brand": item.get("brand"),
-        "category_l1": item.get("category"),
+        "category_l1": (item.get("category") or item.get("categoryL1")),
         "category_l2": item.get("categoryL2"),
         "price_krw": item.get("priceKrw"),
         "unit": item.get("unit"),

@@ -15,17 +15,14 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * 원래 ai-server/ai_search.py가 MySQL에 직접 SQLAlchemy로 하던 상품 검색/비교/대체상품
- * 후보 조회를 백엔드로 옮긴 것. Claude(Agent)는 여기서 나온 사실만 가지고 의도 해석·설명
- * 생성을 담당하고, 상품 사실 데이터(가격/카테고리/재고여부)는 전부 이 서비스가 책임진다.
+ * 쇼핑몰 검색과 AI Agent 검색이 함께 쓰는 상품 조회 서비스.
+ * 상품 사실 데이터는 이 서비스/DB에서만 읽고, AI는 결과를 해석하는 역할만 맡는다.
  */
 @Service
 public class ProductSearchService {
 
     private static final int MAX_RESULTS = 20;
     private static final int MAX_ALTERNATIVES = 5;
-
-    // 대체상품 후보를 원가의 몇 %~몇 % 범위에서 찾을지 (ai_search.py와 동일)
     private static final double ALT_PRICE_MIN_RATIO = 0.5;
     private static final double ALT_PRICE_MAX_RATIO = 1.8;
 
@@ -41,20 +38,42 @@ public class ProductSearchService {
         this.productRepository = productRepository;
     }
 
-    /** 기존 쇼핑몰 검색창이 쓰던 단순 키워드 검색. 그대로 유지한다 (겸용). */
+    /** 기존 단순 검색 API 호환용. */
     @Transactional(readOnly = true)
     public List<ProductSearchResponse> search(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
         return productRepository.searchByKeyword(keyword.trim()).stream()
-    public List<ProductSearchResponse> search(String keyword, String categoryL1, String categoryL2,
-                                               Integer maxPrice, boolean onPromoOnly, Integer recentDays) {
-        String normalizedKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
-        LocalDate sinceDate = (recentDays == null) ? null : LocalDate.now().minusDays(recentDays);
+                .limit(MAX_RESULTS)
+                .map(ProductSearchResponse::new)
+                .toList();
+    }
 
-        return productRepository.search(Product.LifecycleStatus.ACTIVE, normalizedKeyword,
-                        categoryL1, categoryL2, maxPrice, sinceDate, onPromoOnly, Instant.now())
+    /** 요구사항 정의서의 조건형 search_products. */
+    @Transactional(readOnly = true)
+    public List<ProductSearchResponse> search(
+            String keyword,
+            String categoryL1,
+            String categoryL2,
+            Integer maxPrice,
+            boolean onPromoOnly,
+            Integer recentDays
+    ) {
+        String normalizedKeyword = normalizeNullable(keyword);
+        String normalizedCategoryL1 = normalizeNullable(categoryL1);
+        String normalizedCategoryL2 = normalizeNullable(categoryL2);
+        LocalDate sinceDate = recentDays == null ? null : LocalDate.now().minusDays(Math.max(0, recentDays));
+
+        return productRepository.search(
+                        Product.LifecycleStatus.ACTIVE,
+                        normalizedKeyword,
+                        normalizedCategoryL1,
+                        normalizedCategoryL2,
+                        maxPrice,
+                        sinceDate,
+                        onPromoOnly,
+                        Instant.now())
                 .stream()
                 .limit(MAX_RESULTS)
                 .map(ProductSearchResponse::new)
@@ -69,13 +88,7 @@ public class ProductSearchService {
     }
 
     /**
-     * Agent(find find_frequent_purchase 등)가 쓰는 조건부 검색.
-     * ai_search.py의 search_candidates()와 동일한 3단계 우선순위:
-     *   1) 키워드 매치 -> 있으면 바로 반환
-     *   2) 대분류 힌트 매치 -> 있으면 반환
-     *   3) 키워드/카테고리 없이 가격 범위만 있으면 그걸로 반환
-     * 가격 범위(minPrice/maxPrice)는 항상 AND로 덧붙는다.
-     * 정렬(sortBy)과 limit도 Java 쪽에서 마지막에 적용한다.
+     * AI 검색 호환 API. 키워드 -> 카테고리 -> 가격 범위 순으로 후보를 찾는다.
      */
     @Transactional(readOnly = true)
     public List<ProductSearchResponse> searchAdvanced(
@@ -86,30 +99,35 @@ public class ProductSearchService {
             String sortBy,
             Integer limit
     ) {
-        int effectiveLimit = (limit == null || limit <= 0) ? MAX_RESULTS : Math.min(limit, MAX_RESULTS);
+        int effectiveLimit = (limit == null || limit <= 0)
+                ? MAX_RESULTS
+                : Math.min(limit, MAX_RESULTS);
 
         List<Product> candidates = List.of();
 
         if (keywords != null && !keywords.isEmpty()) {
             candidates = keywords.stream()
-                    .filter(kw -> kw != null && !kw.isBlank() && !KNOWN_ADJ.contains(kw.trim()))
-                    .flatMap(kw -> productRepository.searchByKeyword(kw.trim()).stream())
+                    .map(ProductSearchService::normalizeNullable)
+                    .filter(kw -> kw != null && !KNOWN_ADJ.contains(kw))
+                    .flatMap(kw -> productRepository.searchByKeyword(kw).stream())
                     .distinct()
                     .toList();
         }
 
         if (candidates.isEmpty() && categoryHints != null && !categoryHints.isEmpty()) {
             candidates = categoryHints.stream()
-                    .filter(c -> c != null && !c.isBlank())
-                    .flatMap(c -> productRepository.findByCategoryHint(c.trim()).stream())
+                    .map(ProductSearchService::normalizeNullable)
+                    .filter(c -> c != null)
+                    .flatMap(c -> productRepository.findByCategoryHint(c).stream())
                     .distinct()
                     .toList();
         }
 
         if (candidates.isEmpty() && (minPrice != null || maxPrice != null)) {
-            int lo = minPrice != null ? minPrice : 0;
-            int hi = maxPrice != null ? maxPrice : Integer.MAX_VALUE;
-            candidates = productRepository.findByActiveTrueAndPriceKrwBetween(lo, hi);
+            int lo = minPrice == null ? 0 : Math.max(0, minPrice);
+            int hi = maxPrice == null ? Integer.MAX_VALUE : maxPrice;
+            candidates = productRepository.findByLifecycleStatusAndPriceKrwBetween(
+                    Product.LifecycleStatus.ACTIVE, lo, hi);
         }
 
         return candidates.stream()
@@ -119,6 +137,52 @@ public class ProductSearchService {
                 .limit(effectiveLimit)
                 .map(ProductSearchResponse::new)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductSearchResponse> getBySkuIds(List<Integer> skuIds) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            return List.of();
+        }
+        return productRepository.findBySkuIdInAndLifecycleStatus(
+                        skuIds, Product.LifecycleStatus.ACTIVE)
+                .stream()
+                .sorted(Comparator.comparingInt(p -> skuIds.indexOf(p.getSkuId())))
+                .map(ProductSearchResponse::new)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AlternativesResponse getAlternatives(Integer skuId) {
+        Product original = productRepository.findById(skuId).orElse(null);
+        if (original == null) {
+            return null;
+        }
+
+        int price = original.getPriceKrw();
+        int minPrice = Math.max(0, (int) (price * ALT_PRICE_MIN_RATIO));
+        int maxPrice = (int) (price * ALT_PRICE_MAX_RATIO);
+        String categoryL2 = original.getCategoryL2();
+
+        List<Product> alternatives = List.of();
+        String itemKeyword = extractItemKeyword(original.getName(), original.getBrand(), original.getUnit());
+
+        if (categoryL2 != null && itemKeyword != null) {
+            alternatives = productRepository.findAlternativesByKeyword(
+                    categoryL2, skuId, minPrice, maxPrice, itemKeyword, price);
+        }
+
+        if (alternatives.isEmpty() && categoryL2 != null) {
+            alternatives = productRepository.findAlternativesByPriceBand(
+                    categoryL2, skuId, minPrice, maxPrice, price);
+        }
+
+        List<ProductSearchResponse> altDtos = alternatives.stream()
+                .limit(MAX_ALTERNATIVES)
+                .map(ProductSearchResponse::new)
+                .toList();
+
+        return new AlternativesResponse(new ProductSearchResponse(original), altDtos);
     }
 
     private Comparator<Product> resolveComparator(String sortBy) {
@@ -133,64 +197,12 @@ public class ProductSearchService {
         return Comparator.comparing(Product::getSkuId);
     }
 
-    /** compare_products 도구 전용: sku_id 목록으로 정확히 조회 (Claude가 만든 값이 아니라 항상 재조회) */
-    @Transactional(readOnly = true)
-    public List<ProductSearchResponse> getBySkuIds(List<Integer> skuIds) {
-        if (skuIds == null || skuIds.isEmpty()) {
-            return List.of();
-        }
-        return productRepository.findBySkuIdInAndActiveTrue(skuIds).stream()
-                .map(ProductSearchResponse::new)
-                .toList();
-    }
-
-    /**
-     * ai_search.py의 find_alternative_candidates()를 그대로 옮긴 것.
-     * 같은 소분류(categoryL2) 안에서 원가의 50%~180% 범위 상품을 찾되,
-     * 원 상품명에서 뽑은 대표 키워드로 먼저 시도하고, 없으면 가격대만으로 재시도한다.
-     */
-    @Transactional(readOnly = true)
-    public AlternativesResponse getAlternatives(Integer skuId) {
-        Product original = productRepository.findById(skuId).orElse(null);
-        if (original == null) {
-            return null;
-        }
-
-        int price = original.getPriceKrw();
-        int minPrice = Math.max(0, (int) (price * ALT_PRICE_MIN_RATIO));
-        int maxPrice = (int) (price * ALT_PRICE_MAX_RATIO);
-        String categoryL2 = original.getCategoryL2();
-
-        List<Product> alternatives = List.of();
-
-        String itemKeyword = extractItemKeyword(original.getName(), original.getBrand(), original.getUnit());
-        if (categoryL2 != null && itemKeyword != null) {
-            alternatives = productRepository.findAlternativesByKeyword(
-                    categoryL2, skuId, minPrice, maxPrice, itemKeyword, price
-            );
-        }
-
-        if (alternatives.isEmpty() && categoryL2 != null) {
-            alternatives = productRepository.findAlternativesByPriceBand(
-                    categoryL2, skuId, minPrice, maxPrice, price
-            );
-        }
-
-        List<ProductSearchResponse> altDtos = alternatives.stream()
-                .limit(MAX_ALTERNATIVES)
-                .map(ProductSearchResponse::new)
-                .toList();
-
-        return new AlternativesResponse(new ProductSearchResponse(original), altDtos);
-    }
-
-    /** ai_search.py의 extract_item_keyword()와 동일한 규칙 기반 키워드 추출. */
     private String extractItemKeyword(String name, String brand, String unit) {
-        String cleaned = name;
-        if (brand != null) {
+        String cleaned = name == null ? "" : name;
+        if (brand != null && !brand.isBlank()) {
             cleaned = cleaned.replace(brand, "");
         }
-        if (unit != null) {
+        if (unit != null && !unit.isBlank()) {
             cleaned = cleaned.replace(unit, "");
         }
         cleaned = PAREN.matcher(cleaned).replaceAll(" ");
@@ -203,5 +215,13 @@ public class ProductSearchService {
             }
         }
         return null;
+    }
+
+    private static String normalizeNullable(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
