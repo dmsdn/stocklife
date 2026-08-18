@@ -70,7 +70,7 @@ def search_products(keyword: str | None = None,
 
     out = []
     for p in mock_data.PRODUCTS.values():
-        if keyword and keyword not in p["name"] and keyword not in p["brand"] and keyword not in p["category"]:
+        if keyword and keyword not in p["name"] and keyword not in p["brand"] and keyword not in p["category_l2"]:
             continue
         if category_l1 and p["category_l1"] != category_l1:
             continue
@@ -78,7 +78,7 @@ def search_products(keyword: str | None = None,
             continue
         if max_price is not None and p["price_krw"] > max_price:
             continue
-        if on_promo_only and p["sku_id"] in promo_skus:
+        if on_promo_only and p["sku_id"] not in promo_skus:
             continue
         if new_within_days is not None:
             stocked = datetime.strptime(p["first_stocked_at"], "%Y-%m-%d")
@@ -88,7 +88,7 @@ def search_products(keyword: str | None = None,
 
     return out
 
-def get_products(sku_id:int) -> dict | None:
+def get_product(sku_id:int) -> dict | None:
     if not config.USE_MOCK_SOT:
         return _http_get(_API["get_product"].format(sku_id = sku_id))
     return mock_data.PRODUCTS.get(sku_id)
@@ -165,7 +165,7 @@ def get_change_events(sku_ids: list[int] | None = None, within_hours: int =24) -
             continue
         if sku_ids is not None and e["sku_id"] not in sku_ids:
             continue
-        if _parse_ms(e["occured_at"]) <since:
+        if _parse_ms(e["occurred_at"]) <since:
             continue
         out.append(e)
-        return sorted(out, key=lambda e: e["occured_at"])
+    return sorted(out, key=lambda e: e["occurred_at"])

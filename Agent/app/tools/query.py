@@ -47,7 +47,7 @@ def _search_products(**kw) -> dict:
     }
 
 def _get_product(sku_id: int) -> dict:
-    row = sot_client.get_products(sku_id)
+    row = sot_client.get_product(sku_id)
     if row is None:
         return {"found": False, "sku_id": sku_id}
     return {"found": True, "product": row}
@@ -55,8 +55,8 @@ def _get_product(sku_id: int) -> dict:
 def _get_inventory(sku_id: int) -> dict:
     inv = sot_client.get_inventory(sku_id)
     locs = inv["locations"]
-    pick_qty = sum(I["qty"] for I in locs if I["tier_role"] == "PICK")
-    other_qty = sum(I["qty"] for I in locs if I["tier_role"] != "PICK")
+    pick_qty = sum(I["qty"] for l in locs if l["tier_role"] == "PICK")
+    other_qty = sum(I["qty"] for l in locs if l["tier_role"] != "PICK")
     return {
         **inv,
         "pick_qty": pick_qty,
@@ -78,7 +78,7 @@ def _get_wishlist(member_id:int) -> dict:
     rows = sot_client.get_wishlist(member_id)
     out = []
     for w in rows:
-        p = sot_client.get_products(w["sku_id"])
+        p = sot_client.get_product(w["sku_id"])
         out.append({**w, "name": p["name"] if p else None})
     return {"member_id": member_id, "items": out}
 

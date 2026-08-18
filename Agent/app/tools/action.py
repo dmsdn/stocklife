@@ -55,10 +55,10 @@ def _call(method: str, path: str, json_body: dict | None = None, params: dict | 
         body = r.json() if r.content else None
         return {"ok": True, "status": r.status_code, "data": body}
 
-    reason = {401: "Internal_auth_failed",
+    reason = {401: "internal_auth_failed",
               404: "not_found",
               400: "bad_request"}.get(r.status_code, "backend_error")
-    return {"ok": False, "error": reason, "status": r.status_code, "message": r.text[200]}
+    return {"ok": False, "error": reason, "status": r.status_code, "message": r.text[:200]}
 
 #===============================================
 
