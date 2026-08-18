@@ -5,9 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
+# Gradle
 .gradle/
-gradle/
-gradle
 build/
 application.yml
 
