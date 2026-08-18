@@ -37,4 +37,13 @@ public class ProductController {
             return ResponseEntity.status(404).body(e.getMessage());
         }
     }
+
+        @GetMapping("/barcode/{barcode}")
+    public ResponseEntity<?> getByBarcode(@PathVariable String barcode) {
+        try {
+            return ResponseEntity.ok(productSearchService.getByBarcode(barcode));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
+    }
 }

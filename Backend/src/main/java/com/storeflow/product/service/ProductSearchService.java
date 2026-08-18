@@ -42,4 +42,12 @@ public class ProductSearchService {
                 .orElseThrow(() -> new IllegalStateException("존재하지 않는 상품입니다. skuId=" + skuId));
         return new ProductDetailResponse(product);
     }
+
+        /** 바코드 조회(36번). Scan&Go의 시작점. */
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getByBarcode(String barcode) {
+        Product product = productRepository.findByBarcode(barcode)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 바코드입니다. barcode=" + barcode));
+        return new ProductDetailResponse(product);
+    }
 }
