@@ -197,6 +197,34 @@ public class ChatService {
     }
 
     /**
+     * Agent가 먼저 건 개입 발화(AI_PROACTIVE)를 이력에 저장.
+     *
+     * 호출 주체가 사용자가 아니라 Agent(서버 대 서버)이므로 소유권 검사(authorizeAndMaybeClaim)는
+     * 하지 않는다 — Agent는 X-Internal-Service-Key로 이미 인증됐다.
+     * 세션이 없으면 만들지 않고 그대로 실패시킨다: 개입 발화는 반드시 기존 세션(장보기 세션과
+     * 함께 시작된 채팅방)에 붙어야 하고, 여기서 새 세션을 만들면 사용자가 채팅창을 열었을 때
+     * 엉뚱한 빈 방이 하나 더 보이게 된다.
+     */
+    @Transactional
+    public ChatMessageResponse saveProactiveMessage(String sessionId, String content) {
+        ChatSession session = chatSessionRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
+
+        ChatMessage saved = chatMessageRepository.save(
+                new ChatMessage(
+                        session.getChatSessionId(),
+                        ChatMessage.Sender.AI_PROACTIVE,
+                        content
+                )
+        );
+
+        session.touch();
+        chatSessionRepository.save(session);
+
+        return ChatMessageResponse.from(saved);
+    }
+
+    /**
      * 기존 클라이언트 호환:
      * POST /api/chat으로 처음 보는 sessionId가 바로 들어와도 세션을 생성한다.
      *
