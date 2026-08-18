@@ -9,12 +9,15 @@ import com.storeflow.inventory.repository.ShelfConfigRepository;
 import com.storeflow.inventory.repository.ShelfEventRepository;
 import com.storeflow.inventory.repository.StockRepository;
 import com.storeflow.product.repository.ProductRepository;
+import com.storeflow.realtime.service.EventBroadcastService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class InventoryService {
@@ -26,20 +29,34 @@ public class InventoryService {
     private final ShelfConfigRepository shelfConfigRepository;
     private final ShelfEventRepository shelfEventRepository;
     private final ProductRepository productRepository;
+    private final EventBroadcastService eventBroadcastService;
 
     public InventoryService(StockRepository stockRepository,
-                             ShelfConfigRepository shelfConfigRepository,
-                             ShelfEventRepository shelfEventRepository,
-                             ProductRepository productRepository) {
+                            ShelfConfigRepository shelfConfigRepository,
+                            ShelfEventRepository shelfEventRepository,
+                            ProductRepository productRepository,
+                            EventBroadcastService eventBroadcastService) {
         this.stockRepository = stockRepository;
         this.shelfConfigRepository = shelfConfigRepository;
         this.shelfEventRepository = shelfEventRepository;
         this.productRepository = productRepository;
+        this.eventBroadcastService = eventBroadcastService;
+    }
+
+    /** 요구사항 21: shelf_event는 저장한 걸 그대로 Agent 스트림에 흘려보낸다. */
+    private void broadcast(ShelfEvent event) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("skuId", event.getSkuId());
+        data.put("locationId", event.getLocationId());
+        data.put("qty", event.getQty());
+        data.put("taskId", event.getTaskId());
+        data.put("occurredAt", event.getOccurredAt().toString());
+        eventBroadcastService.publishToAgent(event.getEventType().name(), data);
     }
 
     @Transactional
     public void applyChange(Integer skuId, String locationId, int deltaQty,
-                             ShelfEvent.EventType eventType, String taskId) {
+                            ShelfEvent.EventType eventType, String taskId) {
         Stock stock = stockRepository.findWithLockBySkuIdAndLocationId(skuId, locationId)
                 .orElseThrow(() -> new IllegalStateException(
                         "재고 행이 없습니다. skuId=" + skuId + ", locationId=" + locationId));
@@ -53,19 +70,19 @@ public class InventoryService {
         stock.setQty(newQty);
 
         Instant now = Instant.now();
-        shelfEventRepository.save(new ShelfEvent(eventType, skuId, locationId,
-                Math.abs(deltaQty), taskId, now, null));
+        broadcast(shelfEventRepository.save(new ShelfEvent(eventType, skuId, locationId,
+                Math.abs(deltaQty), taskId, now, null)));
 
         shelfConfigRepository.findBySkuIdAndLocationId(skuId, locationId).ifPresent(cfg -> {
             if (oldQty >= cfg.getMinQty() && newQty < cfg.getMinQty()) {
-                shelfEventRepository.save(new ShelfEvent(
-                        ShelfEvent.EventType.BELOW_PAR, skuId, locationId, newQty, null, now, null));
+                broadcast(shelfEventRepository.save(new ShelfEvent(
+                        ShelfEvent.EventType.BELOW_PAR, skuId, locationId, newQty, null, now, null)));
             }
         });
 
         if (oldQty > 0 && newQty == 0) {
-            shelfEventRepository.save(new ShelfEvent(
-                    ShelfEvent.EventType.STOCKOUT, skuId, locationId, 0, null, now, null));
+            broadcast(shelfEventRepository.save(new ShelfEvent(
+                    ShelfEvent.EventType.STOCKOUT, skuId, locationId, 0, null, now, null)));
         }
     }
 
@@ -93,13 +110,14 @@ public class InventoryService {
         stockRepository.save(new Stock(skuId, toLocationId, qty));
 
         String payload = "{\"prev_location_id\":\"" + fromLocationId + "\"}";
-        shelfEventRepository.save(new ShelfEvent(
-                ShelfEvent.EventType.MOVE, skuId, toLocationId, qty, taskId, Instant.now(), payload));
+        broadcast(shelfEventRepository.save(new ShelfEvent(
+                ShelfEvent.EventType.MOVE, skuId, toLocationId, qty, taskId, Instant.now(), payload)));
     }
 
     @Transactional
     public void recordTaskStatus(ShelfEvent.EventType eventType, Integer skuId, String locationId, String taskId) {
-        shelfEventRepository.save(new ShelfEvent(eventType, skuId, locationId, null, taskId, Instant.now(), null));
+        broadcast(shelfEventRepository.save(
+                new ShelfEvent(eventType, skuId, locationId, null, taskId, Instant.now(), null)));
     }
 
     @Transactional(readOnly = true)
