@@ -87,6 +87,14 @@ public class ProductSearchService {
         return new ProductDetailResponse(product);
     }
 
+        /** 바코드 조회(36번). Scan&Go의 시작점. */
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getByBarcode(String barcode) {
+        Product product = productRepository.findByBarcode(barcode)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 바코드입니다. barcode=" + barcode));
+        return new ProductDetailResponse(product);
+    }
+
     /**
      * AI 검색 호환 API. 키워드 -> 카테고리 -> 가격 범위 순으로 후보를 찾는다.
      */

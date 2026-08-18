@@ -64,6 +64,15 @@ public class ProductController {
             return ResponseEntity.status(404).body(e.getMessage());
         }
     }
+        /** 바코드 조회(36번). Scan&Go의 시작점. */
+        @GetMapping("/barcode/{barcode}")
+    public ResponseEntity<?> getByBarcode(@PathVariable String barcode) {
+        try {
+            return ResponseEntity.ok(productSearchService.getByBarcode(barcode));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
+    }
 
     /** Agent 대체상품 후보 조회. */
     @GetMapping("/{skuId}/alternatives/candidates")
