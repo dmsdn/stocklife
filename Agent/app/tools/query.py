@@ -55,8 +55,8 @@ def _get_product(sku_id: int) -> dict:
 def _get_inventory(sku_id: int) -> dict:
     inv = sot_client.get_inventory(sku_id)
     locs = inv["locations"]
-    pick_qty = sum(I["qty"] for l in locs if l["tier_role"] == "PICK")
-    other_qty = sum(I["qty"] for l in locs if l["tier_role"] != "PICK")
+    pick_qty = sum(l["qty"] for l in locs if l["tier_role"] == "PICK")
+    other_qty = sum(l["qty"] for l in locs if l["tier_role"] != "PICK")
     return {
         **inv,
         "pick_qty": pick_qty,
