@@ -5,6 +5,7 @@ import com.storeflow.cart.repository.CartItemRepository;
 import com.storeflow.consumer.entity.Consumer;
 import com.storeflow.consumer.entity.Member;
 import com.storeflow.consumer.repository.ConsumerRepository;
+import com.storeflow.order.dto.FrequentPurchaseResponse;
 import com.storeflow.inventory.entity.ConsumerEvent;
 import com.storeflow.inventory.service.ConsumerEventService;
 import com.storeflow.inventory.service.InventoryService;
@@ -25,6 +26,10 @@ import java.util.UUID;
 
 @Service
 public class OrderService {
+
+    // "몇 번 이상 사야 '항상 구매하는' 상품으로 볼 것인가"의 기본값.
+    // 1로 두면 딱 한 번 산 것도 걸리므로 최소 2번은 반복되어야 "항상"으로 인정한다.
+    private static final long DEFAULT_MIN_PURCHASE_COUNT = 2;
 
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
@@ -114,5 +119,21 @@ public class OrderService {
         Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
                 .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
         return new OrderResponse(order);
+    }
+
+    /**
+     * "내가 항상 구매하는 X 장바구니에 담아줘" 요청을 처리하기 위한 조회.
+     * keyword가 null/blank면 전체 반복 구매 상품을, 있으면 그 키워드가 이름에 포함된
+     * 상품만 필터링해서 반환한다. minCount 미만이면 반복 구매로 안 보고, minCount는
+     * null이면 기본값(2)을 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public List<FrequentPurchaseResponse> getFrequentPurchases(Long consumerId, String keyword, Long minCount) {
+        String normalizedKeyword = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        long threshold = (minCount == null || minCount < 1) ? DEFAULT_MIN_PURCHASE_COUNT : minCount;
+
+        return orderRepository.findFrequentPurchases(consumerId, normalizedKeyword, threshold).stream()
+                .map(FrequentPurchaseResponse::new)
+                .toList();
     }
 }

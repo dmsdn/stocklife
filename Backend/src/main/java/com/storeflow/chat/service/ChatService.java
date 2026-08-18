@@ -1,110 +1,386 @@
 package com.storeflow.chat.service;
 
-import com.storeflow.chat.dto.AgentChatRequest;
-import com.storeflow.chat.dto.AgentChatResponse;
-import com.storeflow.chat.dto.ChatRequest;
-import com.storeflow.chat.dto.ChatResponse;
+import com.storeflow.chat.dto.*;
 import com.storeflow.chat.entity.ChatMessage;
 import com.storeflow.chat.entity.ChatSession;
 import com.storeflow.chat.repository.ChatMessageRepository;
 import com.storeflow.chat.repository.ChatSessionRepository;
+import com.storeflow.realtime.service.EventBroadcastService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
- * 요구사항 25번: 흐름은 프론트 -> 백엔드 /api/chat -> Agent /agent/chat -> 응답 반환.
- * 이 서비스가 하는 일 세 가지뿐:
- *   1) 세션 확인 (없으면 생성 - 비회원도 가능)
- *   2) 이력에서 최근 대화를 꺼내 Agent에 같이 전달
- *   3) Agent 응답을 이력에 저장하고 반환
- * AI 판단/Claude 호출은 전부 Agent 쪽 책임. 여기엔 anthropic 라이브러리도, Claude 키도 없다.
+ * 채팅 세션/이력의 Source of Truth는 Spring Boot.
+ * AI 판단과 Claude 호출은 Agent(FastAPI)가 담당한다.
  */
 @Service
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
-    private static final int HISTORY_TURN_LIMIT = 20;
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RestTemplate restTemplate;
+    private final EventBroadcastService eventBroadcastService;
 
     @Value("${agent.base-url}")
     private String agentBaseUrl;
 
     public ChatService(ChatSessionRepository chatSessionRepository,
                        ChatMessageRepository chatMessageRepository,
-                       RestTemplate restTemplate) {
+                       RestTemplate restTemplate,
+                       EventBroadcastService eventBroadcastService) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.restTemplate = restTemplate;
+        this.eventBroadcastService = eventBroadcastService;
     }
 
-    public ChatResponse relay(ChatRequest request, Long consumerIdOrNull) {
-        ChatSession session = getOrCreateSession(request.getSessionId(), consumerIdOrNull);
+    /**
+     * ChatGPT의 "새 채팅"에 해당.
+     * sessionId는 백엔드가 UUID로 발급한다.
+     *
+     * 로그인 사용자: consumerId로 소유권 구분
+     * 비회원: X-Chat-Client-Id 값(anonymousId)으로 소유권 구분
+     */
+    @Transactional
+    public ChatSessionResponse createSession(Long consumerIdOrNull, String anonymousIdOrNull) {
+        requireOwnerIdentity(consumerIdOrNull, anonymousIdOrNull);
+
+        String sessionId = UUID.randomUUID().toString();
+
+        ChatSession session = new ChatSession(
+                sessionId,
+                consumerIdOrNull,
+                consumerIdOrNull == null ? normalizeAnonymousId(anonymousIdOrNull) : null
+        );
+
+        return ChatSessionResponse.from(chatSessionRepository.save(session));
+    }
+
+    /**
+     * ChatGPT 좌측 사이드바의 "채팅 목록"에 해당.
+     */
+    @Transactional(readOnly = true)
+    public List<ChatSessionResponse> getSessions(Long consumerIdOrNull, String anonymousIdOrNull) {
+        requireOwnerIdentity(consumerIdOrNull, anonymousIdOrNull);
+
+        List<ChatSession> sessions =
+                consumerIdOrNull != null
+                        ? chatSessionRepository.findByConsumerIdOrderByUpdatedAtDesc(consumerIdOrNull)
+                        : chatSessionRepository.findByAnonymousIdOrderByUpdatedAtDesc(
+                        normalizeAnonymousId(anonymousIdOrNull)
+                );
+
+        return sessions.stream()
+                .map(ChatSessionResponse::from)
+                .toList();
+    }
+
+    /**
+     * 특정 채팅방 메타데이터 조회.
+     */
+    @Transactional(readOnly = true)
+    public ChatSessionResponse getSession(String sessionId,
+                                          Long consumerIdOrNull,
+                                          String anonymousIdOrNull) {
+        ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
+        return ChatSessionResponse.from(session);
+    }
+
+    /**
+     * 과거 채팅방을 열 때 전체 메시지를 시간순으로 반환.
+     */
+    @Transactional(readOnly = true)
+    public List<ChatMessageResponse> getMessages(String sessionId,
+                                                 Long consumerIdOrNull,
+                                                 String anonymousIdOrNull) {
+        ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
+
+        return chatMessageRepository
+                .findByChatSessionIdOrderByCreatedAtAsc(session.getChatSessionId())
+                .stream()
+                .map(ChatMessageResponse::from)
+                .toList();
+    }
+
+    /**
+     * 기존 /api/chat 릴레이.
+     * 같은 sessionId로 다시 호출하면 해당 채팅의 최근 문맥을 Agent에 전달하므로
+     * 과거 채팅창을 다시 열어 계속 대화할 수 있다.
+     */
+    @Transactional
+    public ChatResponse relay(ChatRequest request,
+                              Long consumerIdOrNull,
+                              String anonymousIdOrNull) {
+
+        ChatSession session = getOrCreateOwnedSession(
+                request.getSessionId(), consumerIdOrNull, anonymousIdOrNull
+        );
 
         List<ChatMessage> recent = chatMessageRepository
                 .findTop20ByChatSessionIdOrderByCreatedAtDesc(session.getChatSessionId());
-        Collections.reverse(recent); // 오래된 순으로 뒤집어서 Agent에 전달
+        Collections.reverse(recent);
 
         List<AgentChatRequest.HistoryTurn> history = new ArrayList<>();
-        for (ChatMessage m : recent) {
-            String role = (m.getSender() == ChatMessage.Sender.USER) ? "user" : "assistant";
-            history.add(new AgentChatRequest.HistoryTurn(role, m.getContent()));
+        for (ChatMessage message : recent) {
+            String role =
+                    message.getSender() == ChatMessage.Sender.USER
+                            ? "user"
+                            : "assistant";
+
+            history.add(new AgentChatRequest.HistoryTurn(role, message.getContent()));
         }
 
-        // 1) 사용자 발화 먼저 저장 (Agent 호출이 실패하더라도 사용자가 뭘 물었는지는 남아야 함)
+        // 첫 사용자 발화를 채팅방 제목으로 사용.
+        // 너무 길면 사이드바 표시용으로 40자까지만 저장.
+        session.setTitleIfEmpty(makeTitle(request.getMessage()));
+        session.touch();
+        chatSessionRepository.save(session);
+
         chatMessageRepository.save(
-                new ChatMessage(session.getChatSessionId(), ChatMessage.Sender.USER, request.getMessage())
+                new ChatMessage(
+                        session.getChatSessionId(),
+                        ChatMessage.Sender.USER,
+                        request.getMessage()
+                )
         );
 
-        // 2) Agent 호출 - 판단/Claude API 호출은 전부 저 너머에서 일어난다
-        // ★ 실패해도(네트워크 끊김, Agent 500, 타임아웃 등) 여기서 예외를 그대로 던지지 않는다.
-        //   USER 메시지는 이미 저장됐는데 AI 응답만 안 남으면, 이력이 USER:AI = N:M로
-        //   비대칭이 되고 다음 턴에 Agent가 받는 history 순서도 꼬인다. 실패도 하나의 턴 결과로
-        //   남겨서 대칭을 유지한다.
         AgentChatRequest agentRequest = new AgentChatRequest(
-                request.getSessionId(), consumerIdOrNull, request.getMessage(), history
+                request.getSessionId(),
+                consumerIdOrNull,
+                request.getMessage(),
+                history
         );
 
         AgentChatResponse agentResponse;
         String reply;
+
         try {
             agentResponse = restTemplate.postForObject(
-                    agentBaseUrl + "/agent/chat", agentRequest, AgentChatResponse.class
+                    agentBaseUrl + "/agent/chat",
+                    agentRequest,
+                    AgentChatResponse.class
             );
-            reply = (agentResponse != null && agentResponse.getReply() != null)
-                    ? agentResponse.getReply()
-                    : "지금 답변을 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
+
+            reply =
+                    agentResponse != null && agentResponse.getReply() != null
+                            ? agentResponse.getReply()
+                            : "지금 답변을 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
+
         } catch (RestClientException e) {
             log.error("Agent 서버 호출 실패 (sessionId={})", request.getSessionId(), e);
             agentResponse = null;
             reply = "지금 답변을 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
         }
 
-        // 3) AI 응답(또는 실패 메시지) 저장 - 성공/실패 관계없이 항상 USER 한 번에 AI 한 번 남긴다
         chatMessageRepository.save(
-                new ChatMessage(session.getChatSessionId(), ChatMessage.Sender.AI, reply)
+                new ChatMessage(
+                        session.getChatSessionId(),
+                        ChatMessage.Sender.AI,
+                        reply
+                )
         );
 
-        List<java.util.Map<String, Object>> actions =
-                (agentResponse != null && agentResponse.getActions() != null)
+        session.touch();
+        chatSessionRepository.save(session);
+
+        List<Map<String, Object>> actions =
+                agentResponse != null && agentResponse.getActions() != null
                         ? agentResponse.getActions()
                         : Collections.emptyList();
 
         return new ChatResponse(reply, actions);
     }
 
-    private ChatSession getOrCreateSession(String sessionId, Long consumerIdOrNull) {
-        return chatSessionRepository.findBySessionId(sessionId)
-                .orElseGet(() -> chatSessionRepository.save(new ChatSession(sessionId, consumerIdOrNull)));
+    /**
+     * Agent가 먼저 건 개입 발화(AI_PROACTIVE)를 이력에 저장.
+     *
+     * 호출 주체가 사용자가 아니라 Agent(서버 대 서버)이므로 소유권 검사(authorizeAndMaybeClaim)는
+     * 하지 않는다 — Agent는 X-Internal-Service-Key로 이미 인증됐다.
+     * 세션이 없으면 만들지 않고 그대로 실패시킨다: 개입 발화는 반드시 기존 세션(장보기 세션과
+     * 함께 시작된 채팅방)에 붙어야 하고, 여기서 새 세션을 만들면 사용자가 채팅창을 열었을 때
+     * 엉뚱한 빈 방이 하나 더 보이게 된다.
+     */
+    @Transactional
+    public ChatMessageResponse saveProactiveMessage(String sessionId, String content) {
+        ChatSession session = chatSessionRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
+
+        ChatMessage saved = chatMessageRepository.save(
+                new ChatMessage(
+                        session.getChatSessionId(),
+                        ChatMessage.Sender.AI_PROACTIVE,
+                        content
+                )
+        );
+
+        session.touch();
+        chatSessionRepository.save(session);
+
+        // 요구사항 22: 저장과 동시에 프론트 실시간 채널로도 말풍선을 밀어준다.
+        // 프론트가 챗창을 닫아뒀어도(구독자 없음) EventBroadcastService가 조용히 버리므로 안전하고,
+        // 다음에 챗창을 열면 어차피 getMessages()(24번, DB 조회)로 이 메시지를 다시 보게 된다.
+        eventBroadcastService.pushToFrontend(
+                sessionId,
+                "chat_message",
+                Map.of(
+                        "messageId", saved.getChatMessageId(),
+                        "sender", saved.getSender().name(),
+                        "content", saved.getContent(),
+                        "createdAt", saved.getCreatedAt().toString()
+                )
+        );
+
+        return ChatMessageResponse.from(saved);
+    }
+
+    /**
+     * 기존 클라이언트 호환:
+     * POST /api/chat으로 처음 보는 sessionId가 바로 들어와도 세션을 생성한다.
+     *
+     * 다만 새 프론트에서는 POST /api/chat/sessions로 먼저 생성하는 것을 권장.
+     */
+    private ChatSession getOrCreateOwnedSession(String sessionId,
+                                                Long consumerIdOrNull,
+                                                String anonymousIdOrNull) {
+
+        Optional<ChatSession> existing = chatSessionRepository.findBySessionId(sessionId);
+
+        if (existing.isPresent()) {
+            return authorizeAndMaybeClaim(
+                    existing.get(),
+                    consumerIdOrNull,
+                    anonymousIdOrNull,
+                    true
+            );
+        }
+
+        String anonymousId =
+                consumerIdOrNull == null
+                        ? normalizeAnonymousIdNullable(anonymousIdOrNull)
+                        : null;
+
+        return chatSessionRepository.save(
+                new ChatSession(sessionId, consumerIdOrNull, anonymousId)
+        );
+    }
+
+    private ChatSession getOwnedSession(String sessionId,
+                                        Long consumerIdOrNull,
+                                        String anonymousIdOrNull,
+                                        boolean allowClaim) {
+
+        ChatSession session = chatSessionRepository.findBySessionId(sessionId)
+                .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
+
+        return authorizeAndMaybeClaim(
+                session,
+                consumerIdOrNull,
+                anonymousIdOrNull,
+                allowClaim
+        );
+    }
+
+    /**
+     * 소유권 규칙
+     *
+     * 1) consumer_id가 있는 방:
+     *    같은 로그인 사용자만 접근 가능.
+     *
+     * 2) anonymous_id가 있는 방:
+     *    같은 X-Chat-Client-Id만 접근 가능.
+     *    같은 브라우저에서 로그인한 경우 allowClaim=true이면 로그인 계정으로 귀속 가능.
+     *
+     * 3) 둘 다 NULL인 과거 legacy 방:
+     *    sessionId를 가진 기존 클라이언트 호환을 위해 접근을 허용한다.
+     */
+    private ChatSession authorizeAndMaybeClaim(ChatSession session,
+                                               Long consumerIdOrNull,
+                                               String anonymousIdOrNull,
+                                               boolean allowClaim) {
+
+        if (session.getConsumerId() != null) {
+            if (!Objects.equals(session.getConsumerId(), consumerIdOrNull)) {
+                throw new SecurityException("이 채팅 세션에 접근할 권한이 없습니다.");
+            }
+            return session;
+        }
+
+        if (session.getAnonymousId() != null) {
+            String anonymousId = normalizeAnonymousIdNullable(anonymousIdOrNull);
+
+            if (!Objects.equals(session.getAnonymousId(), anonymousId)) {
+                throw new SecurityException("이 채팅 세션에 접근할 권한이 없습니다.");
+            }
+
+            if (allowClaim && consumerIdOrNull != null) {
+                session.claimByConsumer(consumerIdOrNull);
+                return chatSessionRepository.save(session);
+            }
+
+            return session;
+        }
+
+        // migration 이전에 만들어진 legacy 세션.
+        return session;
+    }
+
+    private void requireOwnerIdentity(Long consumerIdOrNull, String anonymousIdOrNull) {
+        if (consumerIdOrNull == null && normalizeAnonymousIdNullable(anonymousIdOrNull) == null) {
+            throw new IllegalArgumentException(
+                    "비회원 채팅에서는 X-Chat-Client-Id 헤더가 필요합니다."
+            );
+        }
+    }
+
+    private String normalizeAnonymousId(String anonymousId) {
+        String normalized = normalizeAnonymousIdNullable(anonymousId);
+        if (normalized == null) {
+            throw new IllegalArgumentException(
+                    "비회원 채팅에서는 X-Chat-Client-Id 헤더가 필요합니다."
+            );
+        }
+        return normalized;
+    }
+
+    private String normalizeAnonymousIdNullable(String anonymousId) {
+        if (anonymousId == null) {
+            return null;
+        }
+
+        String normalized = anonymousId.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException(
+                    "X-Chat-Client-Id는 64자를 초과할 수 없습니다."
+            );
+        }
+
+        return normalized;
+    }
+
+    private String makeTitle(String message) {
+        if (message == null) {
+            return null;
+        }
+
+        String oneLine = message.replaceAll("\\s+", " ").trim();
+
+        if (oneLine.length() <= 40) {
+            return oneLine;
+        }
+
+        return oneLine.substring(0, 40) + "…";
     }
 }

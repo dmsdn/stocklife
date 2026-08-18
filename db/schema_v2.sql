@@ -1,8 +1,14 @@
 -- ============================================================================
--- StoreFlow 스키마 v2.2 — 매장 세계 테이블군 (2026-08-13 전면 재정립판)
+-- StoreFlow 스키마 v2.4 — 매장 세계 테이블군 (2026-08-13 전면 재정립판)
 -- v2.1: reviews 테이블 제거 (후기·별점 기능 팀 회의 탈락)
 -- v2.2: 1 상품 = 1 로케이션 확정 (동거 폐지) — stocks.location_id UNIQUE 추가
 -- v2.3: 랙 6단 전환 — L1~L3 PICK / L4~L6 BULK (구조 변경 없음, 주석·생성 규칙만)
+-- v2.4 (08-18): ① members.household_size NULL 허용 — NULL = 모름(실사용자).
+--                  임의 숫자로 채우지 않는다(그럴듯한 가짜가 조용한 오답을 만든다)
+--               ② price_histories 테이블 제거 — 읽는 기능이 없음(백엔드 제안 수용).
+--                  "그때 얼마에 샀나"는 purchases.unit_price_krw 동결값이 담당
+--               ③ reviews DROP 제거 — 백엔드가 UI용 reviews 테이블을 소유하게 됨.
+--                  우리가 지우면 안 된다(AI는 여전히 안 읽는다 — 웹 검색 대체 결정 유지)
 -- ============================================================================
 -- 지위: 구 「DB스키마_초안.md 부록 A」를 대체한다. 조건부 ALTER로 기존 테이블을
 --       고치는 방식이 아니라, 매장 세계 테이블군을 통째로 재생성한다(권한 확보됨).
@@ -36,8 +42,9 @@ DROP TABLE IF EXISTS consumer_events;
 DROP TABLE IF EXISTS shelf_events;
 DROP TABLE IF EXISTS wishlists;
 DROP TABLE IF EXISTS purchases;
-DROP TABLE IF EXISTS reviews;   -- v2.1: 후기·별점 기능 탈락(팀 회의) — 남아 있으면 지워준다
-DROP TABLE IF EXISTS price_histories;
+-- (v2.4: reviews는 DROP하지 않는다 — 백엔드 소유 UI 테이블로 이관됨.
+--  세계 재적재가 백엔드의 25만 행 리뷰 시드를 지워버리면 안 된다.)
+DROP TABLE IF EXISTS price_histories;   -- v2.4: 테이블 제거 — 구버전 DB의 잔재 청소용으로만 남김
 DROP TABLE IF EXISTS promotions;
 DROP TABLE IF EXISTS shelf_configs;
 DROP TABLE IF EXISTS stocks;
@@ -185,7 +192,7 @@ CREATE TABLE shelf_configs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- 4. 가격·행사·후기 — promotions · price_histories · reviews
+-- 4. 가격·행사 — promotions
 -- ============================================================================
 
 CREATE TABLE promotions (
@@ -201,18 +208,10 @@ CREATE TABLE promotions (
   CONSTRAINT fk_promo_sku FOREIGN KEY (sku_id) REFERENCES products(sku_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 가격 이력: products.price_krw는 "현재가"(상태), 여기는 변천(사건의 요약).
--- 현재가를 매번 이력에서 MAX(effective_from)으로 뽑으면 모든 상품 조회가 서브쿼리를
--- 물게 되므로, 상태·사건 분리 원칙대로 현재가는 products에 중복 보관한다.
-CREATE TABLE price_histories (
-  history_id     INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  sku_id         INT UNSIGNED NOT NULL,
-  price_krw      INT UNSIGNED NOT NULL,
-  effective_from TIMESTAMP(3) NOT NULL,
-  PRIMARY KEY (history_id),
-  KEY idx_ph_sku (sku_id, effective_from),
-  CONSTRAINT fk_ph_sku FOREIGN KEY (sku_id) REFERENCES products(sku_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- (v2.4에서 price_histories 삭제 — 도구 19·기능 21 어디에도 소비자가 없었다.
+--  현재가는 products.price_krw가 유일 소스이고, "그때 얼마에 샀나"는
+--  purchases.unit_price_krw가 구매 시점에 동결 보관한다. 시뮬 세계의 가격 변동
+--  자체는 생성기 내부·parquet에 살아 있다 — DB 서빙만 없앤 것.)
 
 -- (v2.1에서 reviews 테이블 삭제 — 후기·별점 기능이 팀 회의에서 탈락했다.
 --  근거: 창고형 매장 사이트들에서 후기·별점이 실사용되지 않고, "이 상품 어때?"류 질의는
@@ -230,7 +229,11 @@ CREATE TABLE members (
   member_id      INT UNSIGNED NOT NULL,     -- 시드가 부여 — sku_id와 같은 이유(결정적 재생성)
   persona_type   VARCHAR(30)  NOT NULL,     -- '4인가족'/'자영업' 등 7종. ENUM이 아닌 이유:
                                             -- 페르소나는 시뮬 튜닝 대상이라 목록이 바뀔 수 있다
-  household_size TINYINT      NOT NULL,     -- "너무 많이 사는 거 아니에요?"(기능 14)의 입력
+  household_size TINYINT      NULL,         -- "너무 많이 사는 거 아니에요?"(기능 14)의 입력.
+                                            -- v2.4: NULL 허용 — NULL = 모름(실사용자 행).
+                                            -- 시뮬 회원은 항상 채운다. 기능 14는 IS NOT NULL일 때만 켠다
+                                            -- (모르는 값을 2 같은 그럴듯한 숫자로 채우면
+                                            --  필터를 깜빡한 코드가 조용히 틀린다 — NULL은 시끄럽게 틀린다)
   created_at     TIMESTAMP(3) NOT NULL,
   PRIMARY KEY (member_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

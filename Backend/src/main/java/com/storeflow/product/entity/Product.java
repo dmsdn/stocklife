@@ -1,8 +1,13 @@
 package com.storeflow.product.entity;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDate;
 
+/**
+ * schema_v2.sql의 products 테이블과 1:1로 맞춘 상품 엔티티.
+ * 재고는 products가 아니라 stocks 테이블에서 관리하므로 이 엔티티가 재고를 직접 차감하지 않는다.
+ */
 @Entity
 @Table(name = "products")
 public class Product {
@@ -47,7 +52,7 @@ public class Product {
     @Column(name = "price_krw", nullable = false)
     private int priceKrw;
 
-    // JSON 컬럼. 우선 문자열로 받아둠 — 파싱해서 쓸 일이 생기면 그때 타입 바꾸면 됨.
+    // MySQL JSON 컬럼은 현재 문자열 원문으로 읽는다.
     @Column(name = "spec", nullable = false, columnDefinition = "json")
     private String spec;
 
@@ -64,13 +69,13 @@ public class Product {
     @Column(name = "lifecycle_status", nullable = false)
     private LifecycleStatus lifecycleStatus;
 
-    public enum LifecycleStatus { ACTIVE, DISCONTINUED }
+    public enum LifecycleStatus {
+        ACTIVE,
+        DISCONTINUED
+    }
 
-    protected Product() {}
-
-    // 주의: 재고 관련 필드·decreaseStock() 메서드를 여기서 뺐음.
-    // 재고는 이제 stocks 테이블(위치별)에 있고, "재고를 바꾸는 문은 하나"(16번 재고 갱신 API)
-    // 원칙 때문에 Product 엔티티가 직접 재고를 깎으면 안 됨. OrderService 쪽 대응은 아래 참고.
+    protected Product() {
+    }
 
     public Integer getSkuId() { return skuId; }
     public String getBarcode() { return barcode; }
