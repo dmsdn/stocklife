@@ -26,8 +26,24 @@ public class ProductController {
 
     /** 기존 쇼핑몰 단순 검색창 (겸용, 그대로 유지) */
     @GetMapping("/search")
-    public ResponseEntity<List<ProductSearchResponse>> search(@RequestParam String keyword) {
-        return ResponseEntity.ok(productSearchService.search(keyword));
+    public ResponseEntity<List<ProductSearchResponse>> search(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String categoryL1,
+            @RequestParam(required = false) String categoryL2,
+            @RequestParam(required = false) Integer maxPrice,
+            @RequestParam(name = "onPromo", required = false, defaultValue = "false") boolean onPromoOnly,
+            @RequestParam(required = false) Integer recentDays) {
+        return ResponseEntity.ok(productSearchService.search(
+                keyword, categoryL1, categoryL2, maxPrice, onPromoOnly, recentDays));
+    }
+
+    @GetMapping("/{skuId}")
+    public ResponseEntity<?> getProduct(@PathVariable Integer skuId) {
+        try {
+            return ResponseEntity.ok(productSearchService.getDetail(skuId));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
     }
 
     /**
