@@ -17,7 +17,7 @@ public class Consumer {
     private String phoneNumber;
 
     @Column(name = "password", nullable = false)
-    private String password; // 암호화된 값 저장
+    private String password;
 
     @Column(name = "gender", length = 10)
     private String gender;
@@ -35,7 +35,7 @@ public class Consumer {
     private boolean micConsent;
 
     @Column(name = "refresh_token")
-    private String refreshToken; // 로그아웃 시 null 처리
+    private String refreshToken;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -50,7 +50,7 @@ public class Consumer {
     @Column(name = "monthly_spend_amount", nullable = false)
     private int monthlySpendAmount = 0;
 
-    protected Consumer() {} // JPA 기본 생성자
+    protected Consumer() {}
 
     public Consumer(String phoneNumber, String password, String gender, LocalDate birthDate,
                      boolean cameraConsent, boolean personalInfoConsent, boolean micConsent) {
@@ -78,7 +78,6 @@ public class Consumer {
         this.refreshToken = refreshToken;
     }
 
-    // getters
     public Long getConsumerId() { return consumerId; }
     public String getPhoneNumber() { return phoneNumber; }
     public String getPassword() { return password; }
@@ -91,7 +90,6 @@ public class Consumer {
     public Grade getGrade() { return grade; }
     public int getMonthlySpendAmount() { return monthlySpendAmount; }
 
-
     public void addSpend(int amount) {
         this.monthlySpendAmount += amount;
         this.grade = Grade.calculateFrom(this.monthlySpendAmount);
@@ -102,4 +100,3 @@ public class Consumer {
         this.grade = Grade.calculateFrom(0);
     }
 }
-

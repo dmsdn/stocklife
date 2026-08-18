@@ -106,4 +106,16 @@ public class InternalCartController {
         }
         return ResponseEntity.noContent().build();
     }
+
+        @GetMapping("/session")
+    public ResponseEntity<?> getSessionCart(@RequestHeader("X-Internal-Service-Key") String key,
+                                            @RequestParam Long consumerId) {
+        try {
+            internalServiceAuth.verify(key);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(401).body(e.getMessage());
+        }
+
+        return ResponseEntity.ok(cartService.getSessionCart(consumerId));
+    }
 }
