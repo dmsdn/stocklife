@@ -10,13 +10,16 @@ reply + actions를 돌려주는 것" 하나뿐이다.
 ★ 인증 구조가 이전(ai_agent_shop.py)과 다르다 ★
   - 이전: 프론트가 Agent를 직접 호출 -> 사용자 JWT를 그대로 Spring에 전달
   - 지금: Backend가 Agent를 서버 대 서버로 호출 -> Agent는 JWT를 못 받고 consumerId(숫자)만 받음
-  - 그래서 장바구니 쓰기(add_to_cart 등)는 기존 공개 /api/cart(JWT 필수)를 못 쓰고,
-    consumerId를 직접 실어 보내는 내부 전용 엔드포인트가 필요하다.
-    아래 _call_cart_api_internal()은 Spring에 POST /internal/cart 가 생겼다고 가정하고 짠 것.
-    ★ Spring 쪽에 이 내부 엔드포인트가 아직 없으면 이 파일의 장바구니 관련 도구는 501을 반환한다.
+  - 그래서 장바구니 쓰기(add_to_cart 등)와 주문 이력 조회(find_frequent_purchase)는
+    기존 공개 /api/cart, /api/orders(JWT 필수)를 못 쓰고, consumerId를 직접 실어
+    보내는 내부 전용 엔드포인트가 필요하다.
+    아래 _call_cart_api_internal()은 Spring에 POST /internal/cart 가 생겼다고 가정하고,
+    _call_orders_api_internal()은 Spring에 GET /internal/orders/frequent 가 생겼다고
+    가정하고 짠 것.
+    ★ Spring 쪽에 이 내부 엔드포인트가 아직 없으면 이 파일의 해당 도구들은 501을 반환한다.
     (Backend 담당자와 협의 후 실제 엔드포인트/인증 방식 맞춰야 함)
   - 내부 엔드포인트는 사용자 JWT 대신 공유 비밀키(X-Internal-Service-Key) 헤더로 인증해서,
-    외부에서 consumerId를 마음대로 지어내 남의 장바구니를 건드리는 걸 막는다.
+    외부에서 consumerId를 마음대로 지어내 남의 장바구니/구매이력을 건드리는 걸 막는다.
     (이 키는 Backend<->Agent만 아는 값이어야 하고, 프론트에 절대 노출되면 안 됨)
 """
 
@@ -33,6 +36,7 @@ from ai_agent_shop import (
     TOOLS as SHOP_TOOLS,
     _run_search_products,
     _run_compare_products,
+    DEFAULT_FREQUENT_MIN_COUNT,
 )
 
 load_dotenv()
@@ -47,7 +51,7 @@ INTERNAL_SERVICE_KEY = os.environ.get("INTERNAL_SERVICE_KEY", "")  # Backend와 
 
 MAX_TOOL_TURNS = 6
 
-TOOLS = SHOP_TOOLS  # search_products / compare_products / add_to_cart / update_cart_item / remove_from_cart / get_cart 동일
+TOOLS = SHOP_TOOLS  # search_products / compare_products / find_frequent_purchase / add_to_cart / update_cart_item / remove_from_cart / get_cart 동일
 
 # 프롬프트 캐싱: TOOLS 마지막 항목에 breakpoint를 찍으면, 그 앞까지(TOOLS 전체)가 캐싱 대상이 된다.
 # TOOLS는 요청마다 내용이 똑같으므로 매번 새로 이 부분에 대한 입력 비용을 낼 필요가 없다.
@@ -57,8 +61,13 @@ if TOOLS:
 
 SYSTEM_PROMPT = (
     "너는 StoreFlow 쇼핑과 대화를 함께 도와주는 에이전트다. 사용자와의 지난 대화(history)를 "
-    "참고해서 문맥을 이해하고, 필요하면 검색/비교/장바구니 도구를 순서대로 호출해라.\n"
+    "참고해서 문맥을 이해하고, 필요하면 검색/비교/반복구매조회/장바구니 도구를 순서대로 호출해라.\n"
     "규칙:\n"
+    "0. '내가 항상/자주/맨날 사는 X', '저번에 샀던 거 또' 같이 과거 구매 이력이 근거인 "
+    "요청은 search_products가 아니라 find_frequent_purchase부터 호출해라. 결과가 비어 있으면 "
+    "'반복 구매 이력이 없다'고 사용자에게 솔직히 말하고, 임의로 상품을 지어내 담지 마라. "
+    "결과가 여러 개면 가장 purchase_count가 높은 것을 우선하되, 애매하면 사용자에게 어떤 걸 "
+    "말하는지 되물어라.\n"
     "1. 상품을 찾아야 하면 search_products부터 호출해라. sku_id를 스스로 지어내지 마라.\n"
     "2. '제일 싼 거', '가장 비싼 거' 같은 비교/정렬은 반드시 compare_products로 실제 정렬 결과를 "
     "받은 뒤에 판단해라. 눈대중으로 비교해서 바로 add_to_cart로 넘어가지 마라.\n"
@@ -78,8 +87,6 @@ SYSTEM_BLOCKS = [
         "cache_control": {"type": "ephemeral"},
     }
 ]
-
-
 
 
 class HistoryTurn(BaseModel):
@@ -167,11 +174,58 @@ def _call_cart_api_internal(action: str, tool_input: dict, consumer_id: int | No
         return {"ok": False, "error": f"장바구니 서버 연결 실패: {e}"}
 
 
+def _call_orders_api_internal(action: str, tool_input: dict, consumer_id: int | None) -> dict:
+    """
+    ★ Spring에 /internal/orders/frequent 가 아직 없으면 이 함수는 501을 돌려준다.
+    (InternalOrderController.java가 그 계약을 구현한다: X-Internal-Service-Key 인증,
+    consumerId/keyword/minCount를 쿼리 파라미터로 직접 받음)
+    """
+    if not consumer_id:
+        return {"ok": False, "error": "비회원은 구매 이력을 조회할 수 없습니다. 로그인이 필요해요."}
+
+    if not INTERNAL_SERVICE_KEY:
+        return {
+            "ok": False,
+            "status": 501,
+            "error": "내부 서비스 키(INTERNAL_SERVICE_KEY) 미설정 - Backend와 협의 후 /internal/orders/frequent 연동 필요",
+        }
+
+    headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
+    try:
+        with httpx.Client(base_url=SPRING_API_BASE, timeout=5.0) as http:
+            if action == "find_frequent_purchase":
+                params = {"consumerId": consumer_id}
+                if tool_input.get("keyword"):
+                    params["keyword"] = tool_input["keyword"]
+                params["minCount"] = tool_input.get("min_count") or DEFAULT_FREQUENT_MIN_COUNT
+                resp = http.get("/internal/orders/frequent", headers=headers, params=params)
+            else:
+                return {"ok": False, "error": f"알 수 없는 액션: {action}"}
+
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            return {"ok": False, "status": resp.status_code, "error": detail}
+
+        try:
+            data = resp.json()
+        except Exception:
+            data = None
+        return {"ok": True, "status": resp.status_code, "data": data}
+
+    except httpx.RequestError as e:
+        return {"ok": False, "error": f"주문 이력 서버 연결 실패: {e}"}
+
+
 def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
     if name == "compare_products":
         return _run_compare_products(tool_input)
+    if name == "find_frequent_purchase":
+        return _call_orders_api_internal(name, tool_input, consumer_id)
     if name in ("add_to_cart", "update_cart_item", "remove_from_cart", "get_cart"):
         return _call_cart_api_internal(name, tool_input, consumer_id)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
