@@ -1,12 +1,18 @@
 package com.storeflow.chat.entity;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
 /**
- * 채팅방 하나 = 장보기 세션(session_id) 하나에 연결.
- * 비회원도 대화 가능하므로 memberId(=consumerId)는 nullable.
- * session_id는 consumer_events.session_id와 같은 값 체계를 쓴다 (매장 내 행동 이벤트와 대화를 같은 축으로 묶기 위함).
+ * 채팅방 하나.
+ *
+ * - session_id: 외부에서 사용하는 공개 식별자(UUID 권장)
+ * - consumer_id: 로그인 사용자 소유 채팅이면 값 존재
+ * - anonymous_id: 비회원 브라우저/앱 소유 채팅이면 값 존재
+ *
+ * consumer_id와 anonymous_id는 동시에 필수는 아니지만,
+ * 새 세션 API로 생성하는 세션은 둘 중 하나로 소유권을 식별한다.
  */
 @Entity
 @Table(name = "chat_session")
@@ -17,12 +23,17 @@ public class ChatSession {
     @Column(name = "chat_session_id")
     private Long chatSessionId;
 
-    @Column(name = "session_id", nullable = false, length = 64)
+    @Column(name = "session_id", nullable = false, length = 64, unique = true)
     private String sessionId;
 
-    // 비회원이면 null. 회원이면 consumer_id 연결.
     @Column(name = "consumer_id")
     private Long consumerId;
+
+    @Column(name = "anonymous_id", length = 64)
+    private String anonymousId;
+
+    @Column(name = "title", length = 120)
+    private String title;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -32,15 +43,17 @@ public class ChatSession {
 
     protected ChatSession() {}
 
-    public ChatSession(String sessionId, Long consumerId) {
+    public ChatSession(String sessionId, Long consumerId, String anonymousId) {
         this.sessionId = sessionId;
         this.consumerId = consumerId;
+        this.anonymousId = anonymousId;
     }
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
     }
 
     @PreUpdate
@@ -48,7 +61,31 @@ public class ChatSession {
         this.updatedAt = LocalDateTime.now();
     }
 
+    public void touch() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void setTitleIfEmpty(String title) {
+        if ((this.title == null || this.title.isBlank()) && title != null && !title.isBlank()) {
+            this.title = title;
+        }
+    }
+
+    /**
+     * 비회원으로 만든 채팅을 같은 브라우저에서 로그인한 뒤 이어갈 때 사용.
+     * anonymousId가 일치하는 경우에만 Service에서 호출한다.
+     */
+    public void claimByConsumer(Long consumerId) {
+        this.consumerId = consumerId;
+        this.anonymousId = null;
+        touch();
+    }
+
     public Long getChatSessionId() { return chatSessionId; }
     public String getSessionId() { return sessionId; }
     public Long getConsumerId() { return consumerId; }
+    public String getAnonymousId() { return anonymousId; }
+    public String getTitle() { return title; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }
