@@ -9,6 +9,9 @@ import com.storeflow.consumer.exception.InvalidCredentialsException;
 import com.storeflow.consumer.repository.ConsumerRepository;
 import com.storeflow.consumer.repository.MemberRepository;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
+import com.storeflow.inventory.repository.ConsumerEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,19 +21,24 @@ import java.time.Instant;
 @Service
 public class ConsumerService {
 
+    private static final Logger log = LoggerFactory.getLogger(ConsumerService.class);
+
     private final ConsumerRepository consumerRepository;
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final ConsumerJwtUtil jwtUtil;
+    private final ConsumerEventRepository consumerEventRepository;
 
     public ConsumerService(ConsumerRepository consumerRepository,
-                            MemberRepository memberRepository,
-                            PasswordEncoder passwordEncoder,
-                            ConsumerJwtUtil jwtUtil) {
+                           MemberRepository memberRepository,
+                           PasswordEncoder passwordEncoder,
+                           ConsumerJwtUtil jwtUtil,
+                           ConsumerEventRepository consumerEventRepository) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.consumerEventRepository = consumerEventRepository;
     }
 
     @Transactional
@@ -73,6 +81,17 @@ public class ConsumerService {
         String refreshToken = jwtUtil.generateRefreshToken(consumer.getConsumerId());
 
         consumer.updateRefreshToken(refreshToken);
+
+        // 요구사항 29: 비회원 상태로 쌓인 행동 기록(consumer_events)을 이 계정으로 승계한다.
+        // member_id는 Member.toMemberId(consumerId)와 동일한 계산식으로 구해야 값이 일치한다.
+        if (request.getSessionId() != null && !request.getSessionId().isBlank()) {
+            Integer memberId = Member.toMemberId(consumer.getConsumerId());
+            int claimed = consumerEventRepository.claimGuestEvents(request.getSessionId(), memberId);
+            if (claimed > 0) {
+                log.info("비회원 이벤트 {}건을 sessionId={} → memberId={} 로 승계했습니다.",
+                        claimed, request.getSessionId(), memberId);
+            }
+        }
 
         return new LoginResponse(accessToken, refreshToken);
     }
