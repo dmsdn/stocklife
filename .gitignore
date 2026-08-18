@@ -35,3 +35,9 @@ Thumbs.db
 *.pkl
 *.joblib
 *.pickle
+
+# Claude Code (개인 작업 환경 - 공유 대상 아님)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.mcp.json
