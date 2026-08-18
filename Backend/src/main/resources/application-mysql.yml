@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:mysql://<팀원_PC_IP>:3307/storeflow_db
+    username: root
+    password: 1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none   # schema.sql로 직접 관리
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+jwt:
+  consumer-secret: change-this-to-a-real-secret-key-before-deploy-please
+  consumer-access-expiration: 1800000
+  consumer-refresh-expiration: 1209600000
