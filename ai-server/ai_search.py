@@ -1,11 +1,15 @@
 """
 StoreFlow AI - AI 검색 (Claude API 연동)
-schema_v2.sql / products_seed_5000.sql 기준
 
-원칙:
+★ 2026-08-14 요구사항 정의서 반영: DB 직접 접속 제거 ★
+예전에는 이 파일이 SQLAlchemy engine으로 MySQL(storeflow_db)에 직접 SELECT/INSERT를
+했다. 이제 상품 데이터 조회와 SEARCH 이벤트 기록은 전부 backend_client를 통해
+Spring Boot REST API를 호출한다. 이 파일에는 create_engine이나 raw SQL이 없다.
+
+원칙(그대로 유지):
 - Claude는 가격/카테고리/상품 상태 같은 사실을 스스로 만들지 않는다.
-- Claude는 자연어 의도 파악과 DB에서 조회된 후보에 대한 설명만 담당한다.
-- 상품 사실 데이터는 항상 MySQL(storeflow_db)에서 가져온다.
+- Claude는 자연어 의도 파악과, 백엔드가 조회해 준 후보에 대한 설명만 담당한다.
+- 상품 사실 데이터는 항상 백엔드(Spring Boot -> MySQL)에서 가져온다.
 """
 
 import os
@@ -16,9 +20,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import anthropic
+
+import backend_client
 
 
 # ============================================================================
@@ -33,17 +38,6 @@ router = APIRouter()
 # 데모 단계에서는 인메모리로 유지한다. 서버 재시작 시 초기화된다.
 SESSION_HISTORY: dict[str, list[dict]] = {}
 MAX_HISTORY_TURNS = 6
-
-DB_USER = os.environ.get("DB_USER", "root")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "1234")
-DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_PORT = int(os.environ.get("DB_PORT", "3307"))
-DB_NAME = os.environ.get("DB_NAME", "storeflow_db")
-
-engine = create_engine(
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
-    pool_pre_ping=True,
-)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
@@ -231,7 +225,7 @@ def extract_intent(query: str, session_id: str) -> dict:
         "4. 사용자가 상품명을 직접 말하지 않고 목적만 말하면 필요한 구체 품목을 추론한다.\n"
         "   예: '캠핑 처음 가는데' -> 텐트, 랜턴, 침낭 등.\n"
         "5. 이전 대화가 있으면 앞선 조건을 유지하면서 새 조건을 추가해 해석한다.\n"
-        "6. 가격/재고/위치/실제 상품 존재 여부는 추측하지 않는다. 그것은 DB 조회가 결정한다."
+        "6. 가격/재고/위치/실제 상품 존재 여부는 추측하지 않는다. 그것은 백엔드 조회가 결정한다."
     )
 
     history = SESSION_HISTORY.get(session_id, [])
@@ -288,21 +282,35 @@ def extract_intent(query: str, session_id: str) -> dict:
 
 
 # ============================================================================
-# DB 상품 검색
+# 백엔드 상품 조회 (구 DB 직접 조회를 대체)
 # ============================================================================
+
+def _normalize_product(item: dict) -> dict:
+    """
+    백엔드가 camelCase로 내려주는 필드를, 기존에 이 파일 곳곳에서 쓰던
+    snake_case 키(sku_id, category_l1 ...)로 맞춰준다. 백엔드 응답 스키마가
+    바뀌어도 이 함수 하나만 고치면 되도록 변환 지점을 한 곳에 모았다.
+    """
+    return {
+        "sku_id": item.get("skuId"),
+        "name": item.get("name"),
+        "brand": item.get("brand"),
+        "category_l1": item.get("category"),
+        "category_l2": item.get("categoryL2"),
+        "price_krw": item.get("priceKrw"),
+        "unit": item.get("unit"),
+        "spec_raw": item.get("specRaw"),
+        "image_url": item.get("imageUrl"),
+        "lifecycle_status": item.get("lifecycleStatus"),
+    }
+
 
 def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
     """
-    schema_v2.sql 기준 products 컬럼:
-      sku_id, barcode, name, brand, is_pb,
-      category_l1, category_l2,
-      is_refrigerated, is_frozen, is_alcohol, is_fresh,
-      unit, price_krw, spec, spec_raw, image_url,
-      first_stocked_at, lifecycle_status
-
-    reviews 테이블은 schema_v2에서 제거됐으므로 JOIN하지 않는다.
+    구 DB 직접 조회를 대체한다. 우선순위 로직(키워드 -> 카테고리 -> 가격만)은
+    이제 백엔드(ProductSearchService.searchAdvanced)가 그대로 수행하고,
+    여기서는 결과를 받아 필드 이름만 맞춰준다.
     """
-
     keywords = [
         kw.strip()
         for kw in intent.get("keywords", [])
@@ -313,113 +321,22 @@ def search_candidates(intent: dict, limit: int = 20) -> list[dict]:
         for cat in intent.get("category_hints", [])
         if cat and cat.strip()
     ]
-    sort_by = intent.get("sort_by")
-    min_price = intent.get("min_price")  # "만원 이상" 같은 하한
-    max_price = intent.get("max_price")  # "이만원 이하" 같은 상한
 
-    order_clause = {
-        "price_desc": "p.price_krw DESC, p.sku_id ASC",
-        "price_asc": "p.price_krw ASC, p.sku_id ASC",
-    }.get(sort_by, "p.sku_id ASC")
+    result = backend_client.search_products(
+        keywords=keywords or None,
+        category_hints=categories or None,
+        min_price=intent.get("min_price"),
+        max_price=intent.get("max_price"),
+        sort_by=intent.get("sort_by"),
+        limit=limit,
+    )
 
-    base_params = {"limit": limit}
+    if not result.get("ok"):
+        print(f"[Backend] 상품 검색 실패: {result.get('error')}")
+        return []
 
-    def price_range_clause(params: dict) -> str:
-        """가격 범위는 키워드/카테고리 검색 결과에 AND로 항상 덧붙는 조건."""
-        clause = ""
-        if min_price is not None:
-            clause += " AND p.price_krw >= :min_price"
-            params["min_price"] = min_price
-        if max_price is not None:
-            clause += " AND p.price_krw <= :max_price"
-            params["max_price"] = max_price
-        return clause
-
-    def run_query(where_extra: str, query_params: dict) -> list[dict]:
-        query = f"""
-            SELECT
-                p.sku_id,
-                p.name,
-                p.brand,
-                p.category_l1,
-                p.category_l2,
-                p.price_krw,
-                p.unit,
-                p.spec_raw,
-                p.image_url,
-                p.is_pb,
-                p.is_refrigerated,
-                p.is_frozen,
-                p.is_alcohol,
-                p.is_fresh,
-                p.first_stocked_at,
-                p.lifecycle_status
-            FROM products p
-            WHERE p.lifecycle_status = 'ACTIVE'
-              {where_extra}
-            ORDER BY {order_clause}
-            LIMIT :limit
-        """
-
-        with engine.connect() as conn:
-            rows = conn.execute(text(query), query_params).mappings().all()
-
-        return [dict(row) for row in rows]
-
-    # 1순위: 구체 키워드
-    # 상품명 + 브랜드 + 대분류 + 소분류를 모두 검색한다.
-    if keywords:
-        kw_params = dict(base_params)
-        keyword_groups = []
-
-        for i, kw in enumerate(keywords):
-            key = f"kw{i}"
-            keyword_groups.append(
-                "("
-                f"p.name LIKE :{key} "
-                f"OR p.brand LIKE :{key} "
-                f"OR p.category_l1 LIKE :{key} "
-                f"OR p.category_l2 LIKE :{key}"
-                ")"
-            )
-            kw_params[key] = f"%{kw}%"
-
-        where_extra = "AND (" + " OR ".join(keyword_groups) + ")"
-        where_extra += price_range_clause(kw_params)
-
-        results = run_query(where_extra, kw_params)
-
-        if results:
-            return results
-
-    # 2순위: Claude가 추정한 대분류
-    if categories:
-        cat_params = dict(base_params)
-        category_groups = []
-
-        for i, category in enumerate(categories):
-            key = f"cat{i}"
-            category_groups.append(
-                f"(p.category_l1 = :{key} OR p.category_l2 = :{key})"
-            )
-            cat_params[key] = category
-
-        where_extra = "AND (" + " OR ".join(category_groups) + ")"
-        where_extra += price_range_clause(cat_params)
-
-        results = run_query(where_extra, cat_params)
-
-        if results:
-            return results
-
-    # 3순위: 키워드/카테고리 없이 가격 범위만 있는 경우 ("만원 이하 상품 보여줘")
-    if min_price is not None or max_price is not None:
-        price_only_params = dict(base_params)
-        where_extra = price_range_clause(price_only_params)
-        if where_extra:
-            return run_query(where_extra, price_only_params)
-
-    return []
+    items = result.get("data") or []
+    return [_normalize_product(item) for item in items]
 
 
 # ============================================================================
@@ -473,7 +390,7 @@ def generate_explanation(query: str, items: list[dict]) -> tuple[str, bool]:
 
     prompt = (
         f'고객 질문: "{query}"\n\n'
-        "아래 목록은 실제 StoreFlow DB에서 조회된 상품이다.\n"
+        "아래 목록은 실제 백엔드 조회 결과로 받은 상품이다.\n"
         "반드시 아래 목록에 존재하는 상품명, 브랜드, 카테고리, 가격만 사용해라.\n"
         "목록에 없는 상품, 가격, 재고 수량, 위치, 행사 정보를 절대 지어내지 마라.\n"
         "고객 질문에 맞는 상품을 2~3문장으로 짧고 자연스럽게 설명해라.\n\n"
@@ -500,7 +417,7 @@ def generate_explanation(query: str, items: list[dict]) -> tuple[str, bool]:
         except Exception as e:
             print(f"[AI Fallback] 설명 생성 실패: {e}")
 
-    # API 키가 없거나 Claude 호출 실패 시에도 DB 검색 결과는 정상 반환
+    # API 키가 없거나 Claude 호출 실패 시에도 검색 결과는 정상 반환
     first = items[0]
     return (
         f"조건에 맞는 상품 {len(items)}개를 찾았습니다. "
@@ -510,64 +427,22 @@ def generate_explanation(query: str, items: list[dict]) -> tuple[str, bool]:
 
 
 # ============================================================================
-# SEARCH 이벤트 기록
+# SEARCH 이벤트 기록 (구 DB 직접 INSERT를 대체)
 # ============================================================================
 
 def log_search_event(session_id: str, query: str) -> None:
     """
-    schema_v2 consumer_events 기준:
-      event_type, session_id, member_id, sku_id,
-      location_id, occurred_at, payload
-
-    기존 코드의 meta 컬럼은 schema_v2에 없으므로 payload를 사용한다.
-
-    NOTE:
-    최종 아키텍처에서는 상태/이벤트 기록을 Spring Boot 단일 경로로
-    이동하는 것이 프로젝트 설계 원칙에 더 맞다.
-    현재 함수는 기존 FastAPI 단독 테스트 호환을 위해 유지한다.
+    이제 이 함수는 DB에 직접 쓰지 않는다. backend_client.log_event()를 통해
+    Spring Boot의 /internal/events(=이 테이블에 쓰는 유일한 문)를 호출만 한다.
     """
-    try:
-        occurred_at = datetime.now(timezone.utc).replace(tzinfo=None)
-
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO consumer_events
-                    (
-                        event_type,
-                        session_id,
-                        member_id,
-                        sku_id,
-                        location_id,
-                        occurred_at,
-                        payload
-                    )
-                    VALUES
-                        (
-                            'SEARCH',
-                            :session_id,
-                            NULL,
-                            NULL,
-                            NULL,
-                            :occurred_at,
-                            :payload
-                        )
-                    """
-                ),
-                {
-                    "session_id": session_id,
-                    "occurred_at": occurred_at,
-                    "payload": json.dumps(
-                        {"query": query},
-                        ensure_ascii=False,
-                    ),
-                },
-            )
-
-    except Exception as e:
+    result = backend_client.log_event(
+        event_type="SEARCH",
+        session_id=session_id,
+        payload={"query": query},
+    )
+    if not result.get("ok"):
         # 검색 자체는 이벤트 기록 실패 때문에 죽이지 않는다.
-        print(f"[Event Log] SEARCH 이벤트 기록 실패: {e}")
+        print(f"[Event Log] SEARCH 이벤트 기록 실패: {result.get('error')}")
 
 
 # ============================================================================
@@ -625,160 +500,32 @@ def ai_search(body: SearchRequest):
 
 
 # ============================================================================
-# 대체상품 추천
+# 대체상품 추천 (구 DB 직접 조회를 대체)
 # ============================================================================
 
-def extract_item_keyword(
-        name: str,
-        brand: str | None,
-        unit: str | None,
-) -> str | None:
-    """
-    상품명에서 대체상품 검색에 쓸 대표 키워드 하나를 뽑는다.
-    너무 강한 조건이 되면 후보가 0개가 될 수 있으므로,
-    실제 후보 검색에서는 키워드 검색 실패 시 소분류만으로 재시도한다.
-    """
-    cleaned = name
+@router.get("/api/products/{sku_id}/alternatives")
+def get_alternatives(sku_id: int):
+    result = backend_client.get_alternatives(sku_id)
 
-    if brand:
-        cleaned = cleaned.replace(brand, "")
-
-    # unit은 'volume_ml' 같은 구조값일 수 있으므로
-    # 실제 이름에 포함된 경우에만 제거된다.
-    if unit:
-        cleaned = cleaned.replace(unit, "")
-
-    cleaned = re.sub(r"\([^)]*\)", " ", cleaned)
-    cleaned = re.sub(r"\[[^]]*\]", " ", cleaned)
-
-    tokens = [
-        token.strip()
-        for token in cleaned.split()
-        if token.strip() and token.strip() not in KNOWN_ADJ
-    ]
-
-    if not tokens:
-        return None
-
-    return tokens[0]
-
-
-def find_alternative_candidates(
-        sku_id: int,
-        limit: int = 5,
-) -> tuple[dict | None, list[dict]]:
-    """
-    같은 category_l2 안에서,
-    원상품 가격의 50%~180% 범위에 있는 ACTIVE 상품을 우선 후보로 찾는다.
-
-    reviews 테이블은 schema_v2에서 삭제됐으므로 평점 기반 정렬을 하지 않는다.
-    """
-    with engine.connect() as conn:
-        original = conn.execute(
-            text(
-                """
-                SELECT
-                    sku_id,
-                    name,
-                    brand,
-                    category_l1,
-                    category_l2,
-                    price_krw,
-                    unit,
-                    spec_raw,
-                    image_url,
-                    lifecycle_status
-                FROM products
-                WHERE sku_id = :sku_id
-                """
-            ),
-            {"sku_id": sku_id},
-        ).mappings().first()
-
-        if not original:
-            return None, []
-
-        original_dict = dict(original)
-        price = int(original_dict["price_krw"])
-
-        base_params = {
-            "category_l2": original_dict["category_l2"],
-            "sku_id": sku_id,
-            "price_min": max(0, int(price * 0.5)),
-            "price_max": int(price * 1.8),
-            "limit": limit,
-        }
-
-        item_keyword = extract_item_keyword(
-            original_dict["name"],
-            original_dict.get("brand"),
-            original_dict.get("unit"),
+    if not result.get("ok"):
+        status = result.get("status") or 502
+        raise HTTPException(
+            status_code=404 if status == 404 else 502,
+            detail=result.get("error") or "대체상품 조회에 실패했습니다.",
         )
 
-        select_sql = """
-                     SELECT
-                         p.sku_id,
-                         p.name,
-                         p.brand,
-                         p.category_l1,
-                         p.category_l2,
-                         p.price_krw,
-                         p.unit,
-                         p.spec_raw,
-                         p.image_url,
-                         p.lifecycle_status
-                     FROM products p
-                     WHERE p.lifecycle_status = 'ACTIVE'
-                       AND p.category_l2 = :category_l2
-                       AND p.sku_id != :sku_id
-              AND p.price_krw BETWEEN :price_min AND :price_max \
-                     """
+    data = result.get("data") or {}
+    original = _normalize_product(data.get("original") or {})
+    alternatives = [_normalize_product(a) for a in (data.get("alternatives") or [])]
 
-        # 1차: 같은 소분류 + 대표 키워드까지 비슷한 상품
-        if item_keyword:
-            keyword_params = {
-                **base_params,
-                "item_kw": f"%{item_keyword}%",
-            }
+    explanation, explanation_ok = generate_alternative_explanation(original, alternatives)
 
-            keyword_rows = conn.execute(
-                text(
-                    select_sql
-                    + """
-                      AND p.name LIKE :item_kw
-                    ORDER BY
-                      ABS(p.price_krw - :original_price) ASC,
-                      p.sku_id ASC
-                    LIMIT :limit
-                    """
-                ),
-                {
-                    **keyword_params,
-                    "original_price": price,
-                },
-            ).mappings().all()
-
-            if keyword_rows:
-                return original_dict, [dict(row) for row in keyword_rows]
-
-        # 2차 fallback: 같은 소분류 + 비슷한 가격대
-        rows = conn.execute(
-            text(
-                select_sql
-                + """
-                ORDER BY
-                  ABS(p.price_krw - :original_price) ASC,
-                  p.sku_id ASC
-                LIMIT :limit
-                """
-            ),
-            {
-                **base_params,
-                "original_price": price,
-            },
-        ).mappings().all()
-
-    return original_dict, [dict(row) for row in rows]
+    return {
+        "original": original,
+        "alternatives": alternatives,
+        "explanation": explanation,
+        "ai_available": explanation_ok and client is not None,
+    }
 
 
 def generate_alternative_explanation(
@@ -804,7 +551,7 @@ def generate_alternative_explanation(
     prompt = (
         f"원래 상품: {original['name']} ({original['price_krw']}원)\n"
         f"카테고리: {original['category_l1']} > {original['category_l2']}\n\n"
-        f"실제 DB 대체 후보:\n{alt_text}\n\n"
+        f"실제 대체 후보:\n{alt_text}\n\n"
         "위 후보에 있는 상품과 가격만 사용해서 "
         "원상품과 비교했을 때 어떤 대안인지 2~3문장으로 설명해라. "
         "재고, 위치, 행사, 평점은 제공되지 않았으므로 절대 지어내지 마라."
@@ -836,26 +583,3 @@ def generate_alternative_explanation(
         f"가장 먼저 볼 상품은 '{first['name']}'이고 가격은 {first['price_krw']}원입니다.",
         False,
     )
-
-
-@router.get("/api/products/{sku_id}/alternatives")
-def get_alternatives(sku_id: int):
-    original, alternatives = find_alternative_candidates(sku_id)
-
-    if original is None:
-        raise HTTPException(
-            status_code=404,
-            detail="상품을 찾을 수 없습니다.",
-        )
-
-    explanation, explanation_ok = generate_alternative_explanation(
-        original,
-        alternatives,
-    )
-
-    return {
-        "original": original,
-        "alternatives": alternatives,
-        "explanation": explanation,
-        "ai_available": explanation_ok and client is not None,
-    }

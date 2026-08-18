@@ -1,8 +1,13 @@
 """
 StoreFlow AI - 쇼핑 에이전트 (검색 -> 비교 -> 장바구니 / 반복구매 자동 담기)
 
+★ 2026-08-14 요구사항 정의서 반영: DB 직접 접속 제거 ★
+예전에는 compare_products가 SQLAlchemy engine으로 MySQL을 직접 재조회했다.
+이제 상품 검색/비교/장바구니/반복구매 조회 전부 backend_client를 통해
+Spring Boot REST API만 호출한다. 이 파일에는 DB 커넥션이 전혀 없다.
+
 예: "우유 찾아서 제일 싼 거 2개 장바구니에 넣어줘"
-    -> search_products(우유)로 DB 조회
+    -> search_products(우유)로 백엔드 조회
     -> compare_products로 가격 정렬 (파이썬이 계산, Claude가 숫자 비교 안 함)
     -> add_to_cart로 실제 장바구니에 반영
 
@@ -10,49 +15,35 @@ StoreFlow AI - 쇼핑 에이전트 (검색 -> 비교 -> 장바구니 / 반복구
     -> find_frequent_purchase(휴지)로 "휴지"가 이름에 들어간 상품 중
        사용자가 반복 구매(기본 2회 이상)한 상품과, 매번 산 평균 수량을 조회
     -> 결과에서 나온 sku_id/suggested_quantity로 바로 add_to_cart
-    (검색/가격비교가 아니라 "과거에 실제로 반복해서 산 이력"이 근거이므로
-     search_products/compare_products를 거치지 않는다)
-
-이 파일은 원래 ai_agent_cart.py 였던 걸 검색/비교 기능까지 포함하도록
-이름을 바꾸고 확장한 것이다. (경로: Backend/ai_agent_shop.py)
 
 설계 원칙 (기존 ai_agent_cart.py에서 유지):
-  1) Claude는 DB에 직접 쓰지 않는다. 쓰기는 전부 Spring Boot /api/cart 호출로만 이루어진다.
+  1) Claude는 DB에 직접 쓰지 않는다. 쓰기는 전부 Spring Boot API 호출로만 이루어진다.
   2) consumerId는 Claude가 정하지 않는다. 이 엔드포인트로 들어온 사용자 JWT를
      그대로 Spring Boot에 전달해서, 토큰 주인의 장바구니만 바뀌도록 강제한다.
 
 추가된 원칙:
   3) "제일 싼 거", "가장 비싼 거" 같은 비교/정렬 판단은 Claude가 눈대중으로 하지 않는다.
      반드시 compare_products 도구를 호출하게 하고, 실제 정렬은 이 파일의 파이썬 코드가
-     DB에서 다시 조회한 값으로 계산한다. Claude가 숫자를 잘못 읽어 엉뚱한 상품을
+     백엔드에서 다시 조회한 값으로 계산한다. Claude가 숫자를 잘못 읽어 엉뚱한 상품을
      담는 걸 막기 위함이다.
-  4) search_products는 상품 사실 데이터(가격/카테고리/재고 상태)를 스스로 만들지 않는
-     ai_search.py의 기존 검색 로직(search_candidates)을 그대로 재사용한다.
-     검색 규칙을 두 군데서 따로 관리하지 않기 위함이다.
+  4) search_products는 상품 사실 데이터(가격/카테고리/재고 상태)를 스스로 만들지 않고
+     backend_client를 통해 백엔드(Spring Boot)에서만 가져온다.
   5) "내가 항상 사는 X" 같은 반복구매 판단도 Claude가 대화 기억에 의존해 지어내지
-     않는다. 반드시 find_frequent_purchase를 호출해서 실제 주문 이력(Spring
-     /api/orders/frequent) 집계 결과를 근거로 삼는다. 수량도 Claude가 임의로 정하지
-     않고, 그 도구가 돌려준 suggested_quantity(과거 구매 평균)를 기본값으로 쓴다.
+     않는다. 반드시 find_frequent_purchase를 호출해서 실제 주문 이력(백엔드
+     /api(또는 internal)/orders/frequent) 집계 결과를 근거로 삼는다. 수량도 Claude가
+     임의로 정하지 않고, 그 도구가 돌려준 suggested_quantity(과거 구매 평균)를
+     기본값으로 쓴다.
 """
 
 import os
 import json
-import httpx
 
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import anthropic
-from sqlalchemy import text
 
-# ai_search.py의 검증된 DB 조회/키워드 확장 로직을 그대로 재사용한다.
-# (검색 규칙이 두 파일에서 따로 놀지 않도록)
-from ai_search import (
-    engine,
-    search_candidates,
-    expand_generic_keywords,
-    CATEGORY_LIST,
-)
+import backend_client
 
 load_dotenv()
 
@@ -61,13 +52,15 @@ router = APIRouter()
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
-# Spring Boot 백엔드 주소
-CART_API_BASE = os.environ.get("STOREFLOW_API_BASE", "http://localhost:8080")
-
 MAX_TOOL_TURNS = 6  # search -> compare -> add까지 여러 스텝이라 cart 전용(4턴)보다 여유를 둠
 
 # 반복구매로 인정할 최소 구매 횟수. 이 값 미만은 "항상 사는 상품"으로 보지 않는다.
 DEFAULT_FREQUENT_MIN_COUNT = 2
+
+CATEGORY_LIST = [
+    "신선식품", "냉장·냉동식품", "가공식품", "음료·주류", "생활용품", "주방용품",
+    "뷰티·헬스", "반려용품", "홈·가전", "의류·잡화", "스포츠·레저", "완구·문구",
+]
 
 # ---------------------------------------------------------------------------
 # 도구 정의
@@ -77,7 +70,7 @@ TOOLS = [
     {
         "name": "search_products",
         "description": (
-            "상품명/품목/브랜드로 StoreFlow DB를 검색해서 후보 목록을 가져온다. "
+            "상품명/품목/브랜드로 StoreFlow 상품을 검색해서 후보 목록을 가져온다. "
             "'제일 싼 거'처럼 비교가 필요한 요청이라도, 비교 자체는 이 도구가 아니라 "
             "compare_products로 한다. 이 도구는 후보를 모으는 용도다. "
             "'내가 항상/자주 사는 X'처럼 과거 구매 이력을 근거로 담아야 하는 요청에는 "
@@ -216,114 +209,35 @@ class AgentRequest(BaseModel):
     message: str
 
 
-def _auth_headers(bearer_token: str) -> dict:
-    return {"Authorization": f"Bearer {bearer_token}"}
-
-
-def _call_cart_api(action: str, tool_input: dict, bearer_token: str) -> dict:
-    """장바구니 쓰기/조회는 전부 기존 Spring Boot /api/cart를 그대로 호출한다."""
-    headers = _auth_headers(bearer_token)
-    try:
-        with httpx.Client(base_url=CART_API_BASE, timeout=5.0) as http:
-            if action == "get_cart":
-                resp = http.get("/api/cart", headers=headers)
-            elif action == "add_to_cart":
-                resp = http.post(
-                    "/api/cart",
-                    headers=headers,
-                    json={"skuId": tool_input["sku_id"], "quantity": tool_input.get("quantity") or 1},
-                )
-            elif action == "update_cart_item":
-                body = {}
-                if tool_input.get("quantity") is not None:
-                    body["quantity"] = tool_input["quantity"]
-                if tool_input.get("checked") is not None:
-                    body["checked"] = tool_input["checked"]
-                resp = http.patch(f"/api/cart/{tool_input['cart_item_id']}", headers=headers, json=body)
-            elif action == "remove_from_cart":
-                resp = http.delete(f"/api/cart/{tool_input['cart_item_id']}", headers=headers)
-            else:
-                return {"ok": False, "error": f"알 수 없는 액션: {action}"}
-
-        if resp.status_code >= 400:
-            try:
-                detail = resp.json()
-            except Exception:
-                detail = resp.text
-            return {"ok": False, "status": resp.status_code, "error": detail}
-
-        try:
-            data = resp.json()
-        except Exception:
-            data = None
-        return {"ok": True, "status": resp.status_code, "data": data}
-
-    except httpx.RequestError as e:
-        return {"ok": False, "error": f"장바구니 서버 연결 실패: {e}"}
-
-
-def _call_orders_api(action: str, tool_input: dict, bearer_token: str) -> dict:
-    """주문 이력 조회는 Spring Boot /api/orders를 그대로 호출한다 (쓰기 없음, 조회 전용)."""
-    headers = _auth_headers(bearer_token)
-    try:
-        with httpx.Client(base_url=CART_API_BASE, timeout=5.0) as http:
-            if action == "find_frequent_purchase":
-                params = {}
-                if tool_input.get("keyword"):
-                    params["keyword"] = tool_input["keyword"]
-                params["minCount"] = tool_input.get("min_count") or DEFAULT_FREQUENT_MIN_COUNT
-                resp = http.get("/api/orders/frequent", headers=headers, params=params)
-            else:
-                return {"ok": False, "error": f"알 수 없는 액션: {action}"}
-
-        if resp.status_code >= 400:
-            try:
-                detail = resp.json()
-            except Exception:
-                detail = resp.text
-            return {"ok": False, "status": resp.status_code, "error": detail}
-
-        try:
-            data = resp.json()
-        except Exception:
-            data = None
-        return {"ok": True, "status": resp.status_code, "data": data}
-
-    except httpx.RequestError as e:
-        return {"ok": False, "error": f"주문 이력 서버 연결 실패: {e}"}
-
-
 def _run_search_products(tool_input: dict) -> dict:
-    """ai_search.py의 search_candidates를 그대로 재사용. 가격/재고는 항상 DB에서만 가져온다."""
-    keywords = expand_generic_keywords(tool_input.get("keywords") or [])
-    intent = {
-        "keywords": keywords,
-        "category_hints": tool_input.get("category_hints") or [],
-        "sort_by": None,
-    }
-    results = search_candidates(intent, limit=20)
+    """backend_client를 통해 백엔드에서 검색한다. 가격/재고는 항상 백엔드에서만 가져온다."""
+    result = backend_client.search_products(
+        keywords=tool_input.get("keywords") or None,
+        category_hints=tool_input.get("category_hints") or None,
+        limit=20,
+    )
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error") or "상품 검색에 실패했습니다."}
 
-    if not results:
-        return {"ok": True, "count": 0, "items": []}
-
-    items = [
+    items = result.get("data") or []
+    normalized = [
         {
-            "sku_id": r["sku_id"],
-            "name": r["name"],
-            "brand": r["brand"],
-            "category_l1": r["category_l1"],
-            "category_l2": r["category_l2"],
-            "price_krw": int(r["price_krw"]),
-            "unit": r["unit"],
+            "sku_id": item.get("skuId"),
+            "name": item.get("name"),
+            "brand": item.get("brand"),
+            "category_l1": item.get("category"),
+            "category_l2": item.get("categoryL2"),
+            "price_krw": item.get("priceKrw"),
+            "unit": item.get("unit"),
         }
-        for r in results
+        for item in items
     ]
-    return {"ok": True, "count": len(items), "items": items}
+    return {"ok": True, "count": len(normalized), "items": normalized}
 
 
 def _run_compare_products(tool_input: dict) -> dict:
     """
-    비교는 Claude에게 맡기지 않는다. sku_id로 DB를 다시 조회해서
+    비교는 Claude에게 맡기지 않는다. sku_id로 백엔드를 다시 조회해서
     파이썬이 직접 정렬한다 - Claude가 검색 결과 텍스트를 잘못 읽어
     다른 가격을 '제일 싼 거'로 착각하는 걸 막기 위함.
     """
@@ -333,26 +247,19 @@ def _run_compare_products(tool_input: dict) -> dict:
     if not sku_ids:
         return {"ok": False, "error": "비교할 sku_id가 없습니다."}
 
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
-                SELECT sku_id, name, brand, price_krw, unit
-                FROM products
-                WHERE sku_id IN :sku_ids AND lifecycle_status = 'ACTIVE'
-                """
-            ).bindparams(sku_ids=tuple(sku_ids)),
-        ).mappings().all()
+    result = backend_client.get_products_by_skus(sku_ids)
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error") or "상품 비교 조회에 실패했습니다."}
 
     items = [
         {
-            "sku_id": r["sku_id"],
-            "name": r["name"],
-            "brand": r["brand"],
-            "price_krw": int(r["price_krw"]),
-            "unit": r["unit"],
+            "sku_id": item.get("skuId"),
+            "name": item.get("name"),
+            "brand": item.get("brand"),
+            "price_krw": item.get("priceKrw"),
+            "unit": item.get("unit"),
         }
-        for r in rows
+        for item in (result.get("data") or [])
     ]
 
     reverse = sort_by == "price_desc"
@@ -367,9 +274,9 @@ def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
     if name == "compare_products":
         return _run_compare_products(tool_input)
     if name == "find_frequent_purchase":
-        return _call_orders_api(name, tool_input, bearer_token)
+        return backend_client.find_frequent_purchase(tool_input, bearer_token=bearer_token, consumer_id=None)
     if name in ("add_to_cart", "update_cart_item", "remove_from_cart", "get_cart"):
-        return _call_cart_api(name, tool_input, bearer_token)
+        return backend_client.cart_action(name, tool_input, bearer_token=bearer_token, consumer_id=None)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
 
 
