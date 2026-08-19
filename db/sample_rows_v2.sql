@@ -140,9 +140,15 @@ INSERT INTO promotions (sku_id, promo_type, discount_krw, starts_at, ends_at) VA
 -- ── 8. 회원과 구매 이력 ──────────────────────────────────────────────────
 -- 소비주기 학습의 최소 형태: 같은 회원이 같은 품목을 6~7주 간격으로 반복 구매.
 -- 마지막 구매(6/28)로부터 데모 시점(8/13)까지 46일 → "살 때 되셨어요"가 성립한다.
-INSERT INTO members (member_id, persona_type, household_size, created_at) VALUES
- (9001, '4인가족',  4, '2026-02-01 10:00:00.000'),
- (9002, '1인자취',  1, '2026-03-11 19:20:00.000');
+-- v2.5: 축 컬럼 4개. 두 행이 서로 다른 분기를 담당한다(mock 6상품과 같은 '시험지' 원리).
+--   9001 = 4인·자녀·차량   → 대용량 추천이 켜지는 쪽
+--   9002 = 1인·반려·도보   → 대용량 추천이 게이트에 걸리는 쪽. 구 7종 라벨로는
+--                            "1인인데 반려동물"이 표현되지 않았다 — 축 분리의 실효를 여기서 시연한다
+-- has_child가 9002에서 FALSE인 것과 NULL인 것은 다르다: FALSE는 "없다고 답함"이라
+-- 유아용품을 빼도 되고, NULL이면 모르니 일반 추천으로 간다.
+INSERT INTO members (member_id, household_size, has_pet, has_child, by_car, created_at) VALUES
+ (9001, 4, FALSE, TRUE,  TRUE,  '2026-02-01 10:00:00.000'),
+ (9002, 1, TRUE,  FALSE, FALSE, '2026-03-11 19:20:00.000');
 
 INSERT INTO purchases (basket_id, member_id, sku_id, qty, unit_price_krw, purchased_at) VALUES
  ('bskt-0001', 9001, 101042, 1, 13900, '2026-03-08 15:22:41.000'),
