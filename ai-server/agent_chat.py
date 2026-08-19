@@ -37,6 +37,8 @@ from ai_agent_shop import (
     _run_search_products,
     _run_compare_products,
     _run_recommend_by_preference,
+    _run_get_product_metrics,
+    _run_find_substitutes,
     DEFAULT_FREQUENT_MIN_COUNT,
 )
 
@@ -82,6 +84,12 @@ SYSTEM_PROMPT = (
     "items의 reason(신상/행사)을 근거로 이유를 함께 설명해라. items가 비어 있으면 note의 "
     "사유를 그대로 전달하고 상품을 지어내지 마라. 비회원(consumerId 없음)이면 로그인을 "
     "안내하고 이 도구를 부르지 마라.\n"
+    "8. 상품의 최근 판매량/누적 판매량/담기/검색/조회/재구매율을 함께 묻거나 종합 비교를 "
+    "요구하면 get_product_metrics를 사용해라. 상품명이면 search_products로 sku_id부터 확정한다. "
+    "웹 평판은 이 Backend 지표에 없으므로 지어내지 마라.\n"
+    "9. '대체상품 추천', '이거 대신 살 거', '품절인데 비슷한 거' 요청이면 상품명이 있을 때 "
+    "search_products로 원래 sku_id를 확정한 뒤 find_substitutes를 호출해라. 결과에 없는 상품을 "
+    "대체상품이라고 지어내지 말고, personalized/reasons/행사/가격/반응 지표를 근거로 설명해라.\n"
     "모든 도구 호출이 끝나면 실제 결과만 근거로 2~3문장 한국어로 답해라."
 )
 
@@ -254,6 +262,10 @@ def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict
         return _call_cart_api_internal(name, tool_input, consumer_id)
     if name in ("compare_purchase_popularity", "get_popular_products"):
         return _call_purchase_stats_unavailable(name)
+    if name == "get_product_metrics":
+        return _run_get_product_metrics(tool_input)
+    if name == "find_substitutes":
+        return _run_find_substitutes(tool_input, bearer_token=None, consumer_id=consumer_id)
     if name == "recommend_by_preference":
         # get_top_categories는 /internal/purchases/top-categories(consumer_id + 서비스 키)로,
         # search_by_category는 공개 API라 이 경로(JWT 없음)에서도 그대로 동작한다.

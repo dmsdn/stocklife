@@ -235,6 +235,50 @@ TOOLS = [
         },
     },
     {
+        "name": "get_product_metrics",
+        "description": (
+            "상품의 실제 반응 지표를 종합해서 비교할 때 쓴다. 최근 30일 판매량, 누적 판매량, "
+            "최근 30일 장바구니 담기(SCAN_ADD), 검색, 조회수, 전체 구매자 수, 재구매자 수, "
+            "재구매율을 Backend가 계산해서 돌려준다. 'A와 B 중 뭐가 더 반응이 좋아?', "
+            "'조회수/재구매율까지 같이 비교해줘' 같은 질문은 search_products로 sku_id를 찾은 뒤 "
+            "이 도구를 호출해라. 웹 평판은 이 도구에 포함되지 않는다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sku_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "지표를 조회할 sku_id 목록. 한 번에 최대 20개.",
+                }
+            },
+            "required": ["sku_ids"],
+        },
+    },
+    {
+        "name": "find_substitutes",
+        "description": (
+            "특정 상품을 대신할 대체상품을 찾는다. 품절/단종/가격 부담/다른 선택지를 원하는 요청에 사용한다. "
+            "먼저 search_products로 원래 상품의 sku_id를 확정한 뒤 이 도구를 호출해라. "
+            "Backend가 같은 소분류와 비슷한 가격대의 후보를 만들고, ai-server는 행사 여부/실판매가/구매 반응 지표와 "
+            "로그인 회원의 과거 반복구매 여부를 붙여 대체 후보를 정렬한다. 원래 상품과 무관한 상품을 새로 지어내지 마라."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "original_sku_id": {
+                    "type": "integer",
+                    "description": "대체할 원래 상품의 sku_id. search_products 결과에서 확인한 값만 사용.",
+                },
+                "limit": {
+                    "type": ["integer", "null"],
+                    "description": "최대 후보 수. 모르면 null (기본 5개).",
+                },
+            },
+            "required": ["original_sku_id", "limit"],
+        },
+    },
+    {
         "name": "recommend_by_preference",
         "description": (
             "이 회원이 평소 많이 사는 카테고리를 근거로 '지금 살 만한 것'을 추천한다. "
@@ -293,12 +337,23 @@ SYSTEM_PROMPT = (
     "'요즘 뭐가 잘 나가?'처럼 특정 상품을 안 짚고 순위를 물어보면 get_popular_products를 써라. "
     "두 도구 모두 구매자 수(purchaser_count)를 인기도 기준으로 삼되, 절대 눈대중으로 순서를 "
     "판단하지 말고 도구가 돌려준 순서/숫자를 그대로 근거로 삼아라.\n"
-    "7. '나한테 추천해줘', '내 취향에 맞는 거 있어?'처럼 막연한 개인화 추천 요청은 "
+    "7. '최근 30일 판매량/누적 판매량/장바구니 담기/검색/조회수/재구매율까지 보고 비교해줘', "
+    "'A와 B 중 실제 반응이 더 좋은 건 뭐야?'처럼 여러 행동·구매 지표를 함께 요구하면 "
+    "get_product_metrics를 써라. 상품명이면 먼저 search_products로 sku_id를 확정해라. "
+    "재구매율과 카운트는 Backend가 계산한 값을 그대로 사용하고 네가 다시 계산하지 마라. "
+    "웹 평판은 이 도구 결과에 없으므로 있는 것처럼 지어내지 마라.\n"
+    "8. '나한테 추천해줘', '내 취향에 맞는 거 있어?'처럼 막연한 개인화 추천 요청은 "
     "recommend_by_preference를 호출해라. 결과의 categories_used(회원이 많이 산 카테고리)와 "
     "items의 reason(신상/행사)을 근거로 '평소 OO을 많이 구매하셔서 신상/할인 중인 OO을 "
     "추천드려요'처럼 이유를 함께 설명해라. items가 비어 있으면 note에 있는 사유를 그대로 "
     "사용자에게 알려주고, 다른 상품을 지어내 추천하지 마라.\n"
-    "8. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량만 근거로 "
+    "9. '이거 품절인데 대신 살 거', '이 상품 말고 비슷한 거', '대체상품 추천해줘'처럼 "
+    "기준 상품을 대신할 후보가 필요하면 find_substitutes를 써라. 상품명이면 먼저 search_products로 "
+    "원래 상품의 sku_id를 확정해라. find_substitutes 결과는 같은 소분류/유사 가격대 후보를 Backend가 "
+    "만든 뒤, 과거 반복구매 여부·행사·실판매가·반응 지표를 붙여 정렬한 것이다. 후보에 없는 상품을 "
+    "임의로 대체상품이라고 만들지 마라. personalized=true 후보는 사용자가 과거 반복 구매한 이력이 있는 "
+    "상품이라는 뜻이므로 추천 이유에 활용해라.\n"
+    "10. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량/지표만 근거로 "
     "2~3문장 한국어로 요약해라. 도구 결과에 없는 가격이나 상품을 지어내지 마라."
 )
 
@@ -423,6 +478,36 @@ def _run_get_popular_products(tool_input: dict, bearer_token: str) -> dict:
     return {"ok": True, "items": items}
 
 
+def _run_get_product_metrics(tool_input: dict) -> dict:
+    result = backend_client.get_product_metrics_internal(tool_input.get("sku_ids") or [])
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error") or "상품 지표 조회에 실패했습니다."}
+
+    items = []
+    for item in (result.get("data") or []):
+        items.append({
+            "sku_id": item.get("skuId"),
+            "name": item.get("productName"),
+            "sales_qty_30d": item.get("salesQty30d"),
+            "sales_qty_total": item.get("salesQtyTotal"),
+            "cart_add_count_30d": item.get("cartAddCount30d"),
+            "search_count_30d": item.get("searchCount30d"),
+            "view_count_30d": item.get("viewCount30d"),
+            "unique_buyer_count": item.get("uniqueBuyerCount"),
+            "repeat_buyer_count": item.get("repeatBuyerCount"),
+            "repurchase_rate_pct": item.get("repurchaseRate"),
+        })
+    return {
+        "ok": True,
+        "window_days": 30,
+        "items": items,
+        "note": (
+            "search_count_30d는 SEARCH 이벤트에 sku_id가 기록된 경우만 집계된다. "
+            "웹 평판은 Backend 지표가 아니라 Agent의 별도 웹 검색 대상이다."
+        ),
+    }
+
+
 def _normalize_product(item: dict, reason: str, based_on_category: str) -> dict:
     return {
         "sku_id": item.get("skuId"),
@@ -436,6 +521,130 @@ def _normalize_product(item: dict, reason: str, based_on_category: str) -> dict:
         "unit": item.get("unit"),
         "reason": reason,                      # "청소용품 신상" / "청소용품 행사" 처럼 왜 추천됐는지
         "based_on_category": based_on_category,  # 근거가 된 회원의 다구매 카테고리
+    }
+
+
+def _run_find_substitutes(
+        tool_input: dict,
+        bearer_token: str | None,
+        consumer_id: int | None,
+) -> dict:
+    """
+    대체상품 추천은 3단계로 나눈다.
+      1) Backend가 원상품과 같은 소분류 + 유사 가격대 후보를 만든다.
+      2) Backend 지표(판매/조회/재구매율)를 붙인다.
+      3) 로그인 회원이면 과거 반복구매 후보를 우선한다.
+
+    '무엇이 비슷한 상품인가'라는 사실 후보 생성은 Backend가 담당하고,
+    ai-server는 그 후보 안에서 개인화/행사/가격/반응 지표로 순서를 정한다.
+    """
+    original_sku_id = tool_input.get("original_sku_id")
+    limit = max(1, min(int(tool_input.get("limit") or 5), 10))
+    if not original_sku_id:
+        return {"ok": False, "error": "원래 상품의 sku_id가 필요합니다."}
+
+    alt_result = backend_client.get_alternatives(int(original_sku_id))
+    if not alt_result.get("ok"):
+        return {"ok": False, "error": alt_result.get("error") or "대체상품 후보 조회에 실패했습니다."}
+
+    payload = alt_result.get("data") or {}
+    original = payload.get("original") or {}
+    raw_candidates = payload.get("alternatives") or []
+    if not raw_candidates:
+        return {
+            "ok": True,
+            "original": _normalize_product(original, "원래 상품", original.get("categoryL2")),
+            "items": [],
+            "note": "같은 소분류와 유사 가격대에서 대체상품 후보를 찾지 못했습니다.",
+        }
+
+    candidate_skus = [p.get("skuId") for p in raw_candidates if p.get("skuId") is not None]
+
+    # 상품 반응 지표는 추천 보조 근거다. 실패해도 대체상품 추천 자체는 계속 진행한다.
+    metrics_by_sku: dict[int, dict] = {}
+    metrics_result = backend_client.get_product_metrics_internal(candidate_skus)
+    if metrics_result.get("ok"):
+        metrics_by_sku = {
+            int(m.get("skuId")): m
+            for m in (metrics_result.get("data") or [])
+            if m.get("skuId") is not None
+        }
+
+    # 로그인 회원의 반복구매 이력에 후보가 있으면 가장 강한 개인화 신호로 사용한다.
+    frequent_skus: set[int] = set()
+    if bearer_token or consumer_id:
+        freq = backend_client.find_frequent_purchase(
+            {"keyword": None, "min_count": 2},
+            bearer_token=bearer_token,
+            consumer_id=consumer_id,
+        )
+        if freq.get("ok"):
+            data = freq.get("data") or []
+            # 엔드포인트 버전에 따라 list 또는 {items:[...]} 둘 다 허용한다.
+            if isinstance(data, dict):
+                data = data.get("items") or data.get("products") or []
+            for f in data:
+                sku = f.get("skuId", f.get("sku_id"))
+                if sku is not None:
+                    frequent_skus.add(int(sku))
+
+    normalized = []
+    original_final = original.get("finalPriceKrw", original.get("priceKrw")) or 0
+    for p in raw_candidates:
+        sku = p.get("skuId")
+        m = metrics_by_sku.get(int(sku), {}) if sku is not None else {}
+        final_price = p.get("finalPriceKrw", p.get("priceKrw"))
+        personalized = sku is not None and int(sku) in frequent_skus
+        reasons = []
+        if personalized:
+            reasons.append("과거 반복 구매 이력 있음")
+        if p.get("onPromo", False):
+            reasons.append("현재 행사 중")
+        if final_price is not None and original_final and final_price < original_final:
+            reasons.append("원래 상품보다 현재 판매가가 저렴함")
+        if (m.get("repurchaseRate") or 0) > 0:
+            reasons.append(f"재구매율 {m.get('repurchaseRate')}%")
+
+        normalized.append({
+            "sku_id": sku,
+            "name": p.get("name"),
+            "brand": p.get("brand"),
+            "category_l2": p.get("categoryL2"),
+            "regular_price_krw": p.get("priceKrw"),
+            "final_price_krw": final_price,
+            "on_promo": p.get("onPromo", False),
+            "discount_krw": p.get("discountKrw", 0),
+            "unit": p.get("unit"),
+            "personalized": personalized,
+            "sales_qty_30d": m.get("salesQty30d"),
+            "view_count_30d": m.get("viewCount30d"),
+            "repurchase_rate_pct": m.get("repurchaseRate"),
+            "reasons": reasons or ["같은 소분류·유사 가격대 후보"],
+        })
+
+    # 정렬 우선순위: 내 반복구매 > 행사 > 저렴한 실판매가 > 재구매율 > 판매량.
+    # 후보 유사성 자체는 Backend가 이미 보장하므로 여기서는 '어떤 후보를 먼저 보여줄지'만 결정한다.
+    normalized.sort(key=lambda x: (
+        0 if x["personalized"] else 1,
+        0 if x["on_promo"] else 1,
+        x["final_price_krw"] if x["final_price_krw"] is not None else 10**12,
+        -(x["repurchase_rate_pct"] or 0),
+        -(x["sales_qty_30d"] or 0),
+    ))
+
+    return {
+        "ok": True,
+        "original": {
+            "sku_id": original.get("skuId"),
+            "name": original.get("name"),
+            "brand": original.get("brand"),
+            "category_l2": original.get("categoryL2"),
+            "regular_price_krw": original.get("priceKrw"),
+            "final_price_krw": original.get("finalPriceKrw", original.get("priceKrw")),
+            "on_promo": original.get("onPromo", False),
+        },
+        "items": normalized[:limit],
+        "ranking_basis": ["개인 반복구매", "행사", "실판매가", "재구매율", "최근30일 판매량"],
     }
 
 
@@ -516,6 +725,10 @@ def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
         return _run_compare_purchase_popularity(tool_input, bearer_token)
     if name == "get_popular_products":
         return _run_get_popular_products(tool_input, bearer_token)
+    if name == "get_product_metrics":
+        return _run_get_product_metrics(tool_input)
+    if name == "find_substitutes":
+        return _run_find_substitutes(tool_input, bearer_token=bearer_token, consumer_id=None)
     if name == "recommend_by_preference":
         return _run_recommend_by_preference(tool_input, bearer_token=bearer_token, consumer_id=None)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}

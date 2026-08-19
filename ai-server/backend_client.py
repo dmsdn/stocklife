@@ -348,6 +348,20 @@ def find_frequent_purchase(
 # 능동 개입 watcher 전용 내부 API
 # ---------------------------------------------------------------------------
 
+def get_product_metrics_internal(sku_ids: list[int]) -> dict:
+    """
+    Agent 전용 상품 통합 지표. Backend가 최근 30일 판매/행동, 누적 판매, 재구매율을
+    모두 계산해서 반환한다. 웹 평판은 이 API 범위가 아니다.
+    """
+    if not sku_ids:
+        return {"ok": False, "error": "조회할 sku_id가 없습니다."}
+    if not INTERNAL_SERVICE_KEY:
+        return {"ok": False, "status": 501, "error": "INTERNAL_SERVICE_KEY 미설정"}
+
+    headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
+    return _get("/internal/products/metrics", params={"skuIds": sku_ids}, headers=headers)
+
+
 def compare_purchase_popularity_internal(sku_ids: list[int], lookback_days: int | None = None) -> dict:
     """SSE watcher는 사용자 JWT가 없으므로 내부 서비스 키로 전체 판매 집계를 조회한다."""
     if not sku_ids:

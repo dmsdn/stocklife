@@ -76,4 +76,32 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
     List<CategoryPreferenceResponse> findTopCategoriesByMemberId(@Param("memberId") Integer memberId,
                                                                  @Param("since") Instant since,
                                                                  Pageable pageable);
+
+    /** 상품 지표: 최근 기간 판매수량. */
+    @Query("SELECT COALESCE(SUM(p.qty), 0) FROM Purchase p WHERE p.skuId = :skuId AND p.purchasedAt >= :since")
+    Long sumQtySince(@Param("skuId") Integer skuId, @Param("since") Instant since);
+
+    /** 상품 지표: 전체 누적 판매수량. */
+    @Query("SELECT COALESCE(SUM(p.qty), 0) FROM Purchase p WHERE p.skuId = :skuId")
+    Long sumQtyTotal(@Param("skuId") Integer skuId);
+
+    /** 상품 지표: 한 번이라도 구매한 서로 다른 회원 수. */
+    @Query("SELECT COUNT(DISTINCT p.memberId) FROM Purchase p WHERE p.skuId = :skuId")
+    Long countUniqueBuyers(@Param("skuId") Integer skuId);
+
+    /**
+     * 상품 지표: 서로 다른 결제(basket_id)에서 2회 이상 구매한 회원 수.
+     * 같은 결제에서 수량을 2개 산 것은 재구매로 세지 않는다.
+     */
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM (
+            SELECT member_id
+            FROM purchases
+            WHERE sku_id = :skuId
+            GROUP BY member_id
+            HAVING COUNT(DISTINCT basket_id) >= 2
+        ) repeat_buyers
+        """, nativeQuery = true)
+    Long countRepeatBuyers(@Param("skuId") Integer skuId);
 }
