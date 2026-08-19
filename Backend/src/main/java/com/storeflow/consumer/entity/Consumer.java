@@ -34,6 +34,10 @@ public class Consumer {
     @Column(name = "mic_consent", nullable = false)
     private boolean micConsent;
 
+    // 마케팅 정보 수신 동의(선택). 회원가입 시 새로 추가된 항목.
+    @Column(name = "marketing_consent", nullable = false)
+    private boolean marketingConsent;
+
     @Column(name = "refresh_token")
     private String refreshToken;
 
@@ -53,7 +57,8 @@ public class Consumer {
     protected Consumer() {}
 
     public Consumer(String phoneNumber, String password, String gender, LocalDate birthDate,
-                     boolean cameraConsent, boolean personalInfoConsent, boolean micConsent) {
+                    boolean cameraConsent, boolean personalInfoConsent, boolean micConsent,
+                    boolean marketingConsent) {
         this.phoneNumber = phoneNumber;
         this.password = password;
         this.gender = gender;
@@ -61,6 +66,7 @@ public class Consumer {
         this.cameraConsent = cameraConsent;
         this.personalInfoConsent = personalInfoConsent;
         this.micConsent = micConsent;
+        this.marketingConsent = marketingConsent;
     }
 
     @PrePersist
@@ -86,6 +92,7 @@ public class Consumer {
     public boolean isCameraConsent() { return cameraConsent; }
     public boolean isPersonalInfoConsent() { return personalInfoConsent; }
     public boolean isMicConsent() { return micConsent; }
+    public boolean isMarketingConsent() { return marketingConsent; }
     public String getRefreshToken() { return refreshToken; }
     public Grade getGrade() { return grade; }
     public int getMonthlySpendAmount() { return monthlySpendAmount; }
