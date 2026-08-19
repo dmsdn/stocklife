@@ -43,6 +43,22 @@ public class Order {
         this.totalAmount += item.getPriceKrw() * item.getQuantity();
     }
 
+    /** 33번: 환불 요청 접수. PAID 상태에서만 가능. */
+    public void requestRefund() {
+        if (!"PAID".equals(status)) {
+            throw new IllegalStateException("결제 완료 상태에서만 환불을 요청할 수 있습니다. 현재 상태=" + status);
+        }
+        this.status = "REFUND_REQUESTED";
+    }
+
+    /** 33번: 환불 승인. REFUND_REQUESTED 상태에서만 가능. */
+    public void approveRefund() {
+        if (!"REFUND_REQUESTED".equals(status)) {
+            throw new IllegalStateException("환불 요청 상태에서만 승인할 수 있습니다. 현재 상태=" + status);
+        }
+        this.status = "REFUNDED";
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
