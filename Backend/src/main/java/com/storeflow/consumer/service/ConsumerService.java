@@ -4,26 +4,41 @@ import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.SignupRequest;
 import com.storeflow.consumer.entity.Consumer;
+import com.storeflow.consumer.entity.Member;
 import com.storeflow.consumer.exception.InvalidCredentialsException;
 import com.storeflow.consumer.repository.ConsumerRepository;
+import com.storeflow.consumer.repository.MemberRepository;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
+import com.storeflow.inventory.repository.ConsumerEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+
 @Service
 public class ConsumerService {
 
+    private static final Logger log = LoggerFactory.getLogger(ConsumerService.class);
+
     private final ConsumerRepository consumerRepository;
+    private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final ConsumerJwtUtil jwtUtil;
+    private final ConsumerEventRepository consumerEventRepository;
 
     public ConsumerService(ConsumerRepository consumerRepository,
-                            PasswordEncoder passwordEncoder,
-                            ConsumerJwtUtil jwtUtil) {
+                           MemberRepository memberRepository,
+                           PasswordEncoder passwordEncoder,
+                           ConsumerJwtUtil jwtUtil,
+                           ConsumerEventRepository consumerEventRepository) {
         this.consumerRepository = consumerRepository;
+        this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.consumerEventRepository = consumerEventRepository;
     }
 
     @Transactional
@@ -44,7 +59,13 @@ public class ConsumerService {
                 request.isMicConsent()
         );
 
-        consumerRepository.save(consumer);
+        consumerRepository.save(consumer); // IDENTITY라 save 직후 consumerId가 채워짐
+
+        // member_id는 저장하지 않고 계산(Member.toMemberId). persona_type은 반드시 '실사용자'
+        // 문자열 그대로 — Agent 쪽이 학습 데이터에서 이 값으로 필터링함.
+        // household_size는 가입 폼에 없는 값이라 NULL — 나중에 마이페이지 등에서 채움.
+        int memberId = Member.toMemberId(consumer.getConsumerId());
+        memberRepository.save(new Member(memberId, "실사용자", null, Instant.now()));
     }
 
     @Transactional
@@ -61,6 +82,17 @@ public class ConsumerService {
 
         consumer.updateRefreshToken(refreshToken);
 
+        // 요구사항 29: 비회원 상태로 쌓인 행동 기록(consumer_events)을 이 계정으로 승계한다.
+        // member_id는 Member.toMemberId(consumerId)와 동일한 계산식으로 구해야 값이 일치한다.
+        if (request.getSessionId() != null && !request.getSessionId().isBlank()) {
+            Integer memberId = Member.toMemberId(consumer.getConsumerId());
+            int claimed = consumerEventRepository.claimGuestEvents(request.getSessionId(), memberId);
+            if (claimed > 0) {
+                log.info("비회원 이벤트 {}건을 sessionId={} → memberId={} 로 승계했습니다.",
+                        claimed, request.getSessionId(), memberId);
+            }
+        }
+
         return new LoginResponse(accessToken, refreshToken);
     }
 
@@ -69,6 +101,6 @@ public class ConsumerService {
         Consumer consumer = consumerRepository.findById(consumerId)
                 .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
 
-        consumer.updateRefreshToken(null); // refreshToken 무효화
+        consumer.updateRefreshToken(null);
     }
 }
