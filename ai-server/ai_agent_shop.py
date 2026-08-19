@@ -196,7 +196,11 @@ SYSTEM_PROMPT = (
     "1. 상품을 찾아야 하면 search_products부터 호출해라. sku_id를 스스로 지어내지 마라.\n"
     "2. '제일 싼 거', '가장 비싼 거', '~중에 골라줘' 같은 비교/정렬이 필요한 요청은 "
     "반드시 compare_products를 호출해서 실제 정렬 결과를 받은 뒤에 판단해라. "
-    "search_products 결과만 보고 네가 직접 가격을 비교해서 add_to_cart로 넘어가지 마라.\n"
+    "search_products 결과만 보고 네가 직접 가격을 비교해서 add_to_cart로 넘어가지 마라. "
+    "가격을 말하거나 비교할 때는 항상 final_price_krw(행사가 반영된 실제 판매가)를 기준으로 "
+    "삼아라 — regular_price_krw(정가)로 비교하면 지금 행사 중이라 실제로 더 싼 상품을 놓친다. "
+    "on_promo가 true인 상품은 '지금 행사 중이라 원래 {regular_price_krw}원인데 "
+    "{discount_krw}원 할인된 {final_price_krw}원'처럼 사용자에게 행사 사실을 알려줘라.\n"
     "3. 장바구니에 담기 전에 어떤 상품인지(sku_id) 명확하지 않으면 담지 말고 사용자에게 되물어라.\n"
     "4. cart_item_id가 필요한 수정/삭제인데 ID를 모르면 get_cart로 먼저 확인해라.\n"
     "5. 삭제나 큰 폭의 수량 변경은 실행 후 응답에서 무엇을 했는지 명확히 알려줘라.\n"
@@ -227,7 +231,12 @@ def _run_search_products(tool_input: dict) -> dict:
             "brand": item.get("brand"),
             "category_l1": (item.get("category") or item.get("categoryL1")),
             "category_l2": item.get("categoryL2"),
-            "price_krw": item.get("priceKrw"),
+            # regular_price_krw = 정가, final_price_krw = 행사 반영된 실제 판매가.
+            # 가격을 언급하거나 비교할 때는 final_price_krw를 기준으로 말해야 한다.
+            "regular_price_krw": item.get("priceKrw"),
+            "final_price_krw": item.get("finalPriceKrw", item.get("priceKrw")),
+            "on_promo": item.get("onPromo", False),
+            "discount_krw": item.get("discountKrw", 0),
             "unit": item.get("unit"),
         }
         for item in items
@@ -240,6 +249,10 @@ def _run_compare_products(tool_input: dict) -> dict:
     비교는 Claude에게 맡기지 않는다. sku_id로 백엔드를 다시 조회해서
     파이썬이 직접 정렬한다 - Claude가 검색 결과 텍스트를 잘못 읽어
     다른 가격을 '제일 싼 거'로 착각하는 걸 막기 위함.
+
+    정렬 기준은 반드시 final_price_krw(행사 반영된 실제 판매가)여야 한다.
+    price_krw(정가)로 정렬하면 행사 중인 상품이 "제일 싼 거"에서 빠지는 문제가 있었다
+    (백엔드가 promo 정보를 아예 내려주지 않았던 버그 + 여기서 정가만 보던 버그).
     """
     sku_ids = tool_input.get("sku_ids") or []
     sort_by = tool_input.get("sort_by", "price_asc")
@@ -256,14 +269,17 @@ def _run_compare_products(tool_input: dict) -> dict:
             "sku_id": item.get("skuId"),
             "name": item.get("name"),
             "brand": item.get("brand"),
-            "price_krw": item.get("priceKrw"),
+            "regular_price_krw": item.get("priceKrw"),
+            "final_price_krw": item.get("finalPriceKrw", item.get("priceKrw")),
+            "on_promo": item.get("onPromo", False),
+            "discount_krw": item.get("discountKrw", 0),
             "unit": item.get("unit"),
         }
         for item in (result.get("data") or [])
     ]
 
     reverse = sort_by == "price_desc"
-    items.sort(key=lambda x: x["price_krw"], reverse=reverse)
+    items.sort(key=lambda x: x["final_price_krw"], reverse=reverse)
 
     return {"ok": True, "sort_by": sort_by, "items": items}
 

@@ -5,6 +5,8 @@ import com.storeflow.product.dto.ProductDetailResponse;
 import com.storeflow.product.dto.ProductSearchResponse;
 import com.storeflow.product.entity.Product;
 import com.storeflow.product.repository.ProductRepository;
+import com.storeflow.promotion.entity.Promotion;
+import com.storeflow.promotion.repository.PromotionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,11 +14,20 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 쇼핑몰 검색과 AI Agent 검색이 함께 쓰는 상품 조회 서비스.
  * 상품 사실 데이터는 이 서비스/DB에서만 읽고, AI는 결과를 해석하는 역할만 맡는다.
+ *
+ * 모든 조회 경로는 반환하는 상품들의 진행 중 행사(Promotion)를 함께 조회해서
+ * ProductSearchResponse/ProductDetailResponse의 onPromo/discountKrw/finalPriceKrw로
+ * 실어 보낸다. 이게 없으면 AI(compare_products 등)가 정가(priceKrw)만 보고
+ * 가격 비교를 하게 된다 — 행사 반영은 여기 한 곳에서만 계산해야 한다(가격 계산은
+ * 백엔드가, AI는 결과 해석만).
  */
 @Service
 public class ProductSearchService {
@@ -33,9 +44,11 @@ public class ProductSearchService {
     );
 
     private final ProductRepository productRepository;
+    private final PromotionRepository promotionRepository;
 
-    public ProductSearchService(ProductRepository productRepository) {
+    public ProductSearchService(ProductRepository productRepository, PromotionRepository promotionRepository) {
         this.productRepository = productRepository;
+        this.promotionRepository = promotionRepository;
     }
 
     /** 기존 단순 검색 API 호환용. */
@@ -44,10 +57,10 @@ public class ProductSearchService {
         if (keyword == null || keyword.isBlank()) {
             return List.of();
         }
-        return productRepository.searchByKeyword(keyword.trim()).stream()
+        List<Product> products = productRepository.searchByKeyword(keyword.trim()).stream()
                 .limit(MAX_RESULTS)
-                .map(ProductSearchResponse::new)
                 .toList();
+        return toResponses(products);
     }
 
     /** 요구사항 정의서의 조건형 search_products. */
@@ -65,7 +78,7 @@ public class ProductSearchService {
         String normalizedCategoryL2 = normalizeNullable(categoryL2);
         LocalDate sinceDate = recentDays == null ? null : LocalDate.now().minusDays(Math.max(0, recentDays));
 
-        return productRepository.search(
+        List<Product> products = productRepository.search(
                         Product.LifecycleStatus.ACTIVE,
                         normalizedKeyword,
                         normalizedCategoryL1,
@@ -76,23 +89,23 @@ public class ProductSearchService {
                         Instant.now())
                 .stream()
                 .limit(MAX_RESULTS)
-                .map(ProductSearchResponse::new)
                 .toList();
+        return toResponses(products);
     }
 
     @Transactional(readOnly = true)
     public ProductDetailResponse getDetail(Integer skuId) {
         Product product = productRepository.findById(skuId)
                 .orElseThrow(() -> new IllegalStateException("존재하지 않는 상품입니다. skuId=" + skuId));
-        return new ProductDetailResponse(product);
+        return new ProductDetailResponse(product, findActivePromotion(skuId));
     }
 
-        /** 바코드 조회(36번). Scan&Go의 시작점. */
+    /** 바코드 조회(36번). Scan&Go의 시작점. */
     @Transactional(readOnly = true)
     public ProductDetailResponse getByBarcode(String barcode) {
         Product product = productRepository.findByBarcode(barcode)
                 .orElseThrow(() -> new IllegalStateException("존재하지 않는 바코드입니다. barcode=" + barcode));
-        return new ProductDetailResponse(product);
+        return new ProductDetailResponse(product, findActivePromotion(product.getSkuId()));
     }
 
     /**
@@ -138,13 +151,14 @@ public class ProductSearchService {
                     Product.LifecycleStatus.ACTIVE, lo, hi);
         }
 
-        return candidates.stream()
+        List<Product> filtered = candidates.stream()
                 .filter(p -> minPrice == null || p.getPriceKrw() >= minPrice)
                 .filter(p -> maxPrice == null || p.getPriceKrw() <= maxPrice)
                 .sorted(resolveComparator(sortBy))
                 .limit(effectiveLimit)
-                .map(ProductSearchResponse::new)
                 .toList();
+
+        return toResponses(filtered);
     }
 
     @Transactional(readOnly = true)
@@ -152,12 +166,13 @@ public class ProductSearchService {
         if (skuIds == null || skuIds.isEmpty()) {
             return List.of();
         }
-        return productRepository.findBySkuIdInAndLifecycleStatus(
+        List<Product> products = productRepository.findBySkuIdInAndLifecycleStatus(
                         skuIds, Product.LifecycleStatus.ACTIVE)
                 .stream()
                 .sorted(Comparator.comparingInt(p -> skuIds.indexOf(p.getSkuId())))
-                .map(ProductSearchResponse::new)
                 .toList();
+        // compare_products가 바로 이 경로를 쓴다 — 행사 정보가 빠지면 AI가 정가로만 비교하게 된다.
+        return toResponses(products);
     }
 
     @Transactional(readOnly = true)
@@ -185,12 +200,12 @@ public class ProductSearchService {
                     categoryL2, skuId, minPrice, maxPrice, price);
         }
 
-        List<ProductSearchResponse> altDtos = alternatives.stream()
-                .limit(MAX_ALTERNATIVES)
-                .map(ProductSearchResponse::new)
-                .toList();
+        List<ProductSearchResponse> altDtos = toResponses(
+                alternatives.stream().limit(MAX_ALTERNATIVES).toList());
 
-        return new AlternativesResponse(new ProductSearchResponse(original), altDtos);
+        ProductSearchResponse originalDto = new ProductSearchResponse(original, findActivePromotion(skuId));
+
+        return new AlternativesResponse(originalDto, altDtos);
     }
 
     private Comparator<Product> resolveComparator(String sortBy) {
@@ -231,5 +246,28 @@ public class ProductSearchService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    // ------------------------------------------------------------------
+    // 행사(Promotion) 배치 조회 — 정가만 내려가지 않도록 모든 응답 경로가 이걸 거친다.
+    // ------------------------------------------------------------------
+
+    private List<ProductSearchResponse> toResponses(List<Product> products) {
+        if (products.isEmpty()) {
+            return List.of();
+        }
+        List<Integer> skuIds = products.stream().map(Product::getSkuId).toList();
+        Map<Integer, Promotion> promoBySku = promotionRepository
+                .findActiveBySkuIdIn(skuIds, Instant.now()).stream()
+                .collect(Collectors.toMap(Promotion::getSkuId, Function.identity(), (a, b) -> a));
+
+        return products.stream()
+                .map(p -> new ProductSearchResponse(p, promoBySku.get(p.getSkuId())))
+                .toList();
+    }
+
+    private Promotion findActivePromotion(Integer skuId) {
+        List<Promotion> active = promotionRepository.findActiveBySkuId(skuId, Instant.now());
+        return active.isEmpty() ? null : active.get(0);
     }
 }
