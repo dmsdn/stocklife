@@ -84,6 +84,12 @@ public class Consumer {
         this.refreshToken = refreshToken;
     }
 
+        // 비밀번호 재설정 — 호출하는 쪽(ConsumerService)에서 이미 인코딩된 비밀번호를 넘겨야 한다.
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
+        this.refreshToken = null; // 재설정 후 기존 로그인 세션은 전부 무효화
+    }
+
     public Long getConsumerId() { return consumerId; }
     public String getPhoneNumber() { return phoneNumber; }
     public String getPassword() { return password; }

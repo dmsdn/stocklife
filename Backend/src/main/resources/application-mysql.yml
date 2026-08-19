@@ -28,3 +28,11 @@ jwt:
 
 internal:
   service-key: change-this-to-a-real-shared-secret-before-deploy   # Backend <-> Agent만 아는 값. 프론트엔 절대 노출 금지
+
+# NAVER Cloud Platform SENS(SMS) 발송 설정 — 값은 전부 환경변수로 주입.
+ncp:
+  sms:
+    access-key: ${NCP_SMS_ACCESS_KEY}
+    secret-key: ${NCP_SMS_SECRET_KEY}
+    service-id: ${NCP_SMS_SERVICE_ID}
+    from: ${NCP_SMS_FROM}

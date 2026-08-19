@@ -3,14 +3,18 @@ package com.storeflow.consumer.service;
 import com.storeflow.cart.service.CartService;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
+import com.storeflow.consumer.dto.ResetPasswordRequest;
 import com.storeflow.consumer.dto.SignupRequest;
 import com.storeflow.consumer.entity.Consumer;
 import com.storeflow.consumer.entity.Member;
 import com.storeflow.consumer.exception.InvalidCredentialsException;
+import com.storeflow.consumer.exception.MemberNotFoundException;
 import com.storeflow.consumer.repository.ConsumerRepository;
 import com.storeflow.consumer.repository.MemberRepository;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
 import com.storeflow.inventory.repository.ConsumerEventRepository;
+import com.storeflow.verification.entity.VerificationPurpose;
+import com.storeflow.verification.service.PhoneVerificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,19 +34,22 @@ public class ConsumerService {
     private final ConsumerJwtUtil jwtUtil;
     private final ConsumerEventRepository consumerEventRepository;
     private final CartService cartService;
+    private final PhoneVerificationService phoneVerificationService;
 
     public ConsumerService(ConsumerRepository consumerRepository,
                            MemberRepository memberRepository,
                            PasswordEncoder passwordEncoder,
                            ConsumerJwtUtil jwtUtil,
                            ConsumerEventRepository consumerEventRepository,
-                           CartService cartService) {
+                           CartService cartService,
+                           PhoneVerificationService phoneVerificationService) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.consumerEventRepository = consumerEventRepository;
         this.cartService = cartService;
+        this.phoneVerificationService = phoneVerificationService;
     }
 
     @Transactional
@@ -50,6 +57,10 @@ public class ConsumerService {
         if (consumerRepository.existsByPhoneNumber(request.getPhoneNumber())) {
             throw new IllegalStateException("이미 가입된 전화번호입니다.");
         }
+
+        // signup/send-code -> signup/verify-code를 거쳐 verified=true가 된 레코드가 있어야 가입 완료 가능.
+        // 통과하면 레코드는 소비(삭제)되어 재사용할 수 없다.
+        phoneVerificationService.assertVerifiedAndConsume(request.getPhoneNumber(), VerificationPurpose.SIGNUP);
 
         String encodedPassword = passwordEncoder.encode(request.getPassword());
 
@@ -111,5 +122,26 @@ public class ConsumerService {
                 .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
 
         consumer.updateRefreshToken(null);
+    }
+
+    /**
+     * 비밀번호 재설정 인증번호 발송 "전에" 호출한다. 회원이 없으면 SMS를 보내지 않고 예외를 던진다.
+     */
+    @Transactional(readOnly = true)
+    public void assertMemberExistsByPhoneNumber(String phoneNumber) {
+        if (!consumerRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new MemberNotFoundException("가입된 회원이 없습니다.");
+        }
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        Consumer consumer = consumerRepository.findByPhoneNumber(request.getPhoneNumber())
+                .orElseThrow(() -> new MemberNotFoundException("가입된 회원이 없습니다."));
+
+        phoneVerificationService.assertVerifiedAndConsume(request.getPhoneNumber(), VerificationPurpose.PASSWORD_RESET);
+
+        String encodedPassword = passwordEncoder.encode(request.getNewPassword());
+        consumer.updatePassword(encodedPassword);
     }
 }
