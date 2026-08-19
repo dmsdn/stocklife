@@ -43,3 +43,5 @@ CLAUDE.md
 CLAUDE.local.md
 .claude/
 .mcp.json
+
+src/main/resources/application-mysql.yml
