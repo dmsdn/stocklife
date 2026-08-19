@@ -36,6 +36,7 @@ from ai_agent_shop import (
     TOOLS as SHOP_TOOLS,
     _run_search_products,
     _run_compare_products,
+    _run_recommend_by_preference,
     DEFAULT_FREQUENT_MIN_COUNT,
 )
 
@@ -76,6 +77,11 @@ SYSTEM_PROMPT = (
     "5. 도구 결과에 없는 가격/상품/재고를 지어내지 마라. 도구가 실패(ok=false)하면 "
     "사용자에게 실패 사실을 솔직하게 알려라.\n"
     "6. 순수 잡담/질문이면 도구를 안 써도 된다.\n"
+    "7. '나한테 추천해줘', '내 취향에 맞는 거 있어?'처럼 막연한 개인화 추천 요청은 "
+    "recommend_by_preference를 호출해라. 결과의 categories_used(회원이 많이 산 카테고리)와 "
+    "items의 reason(신상/행사)을 근거로 이유를 함께 설명해라. items가 비어 있으면 note의 "
+    "사유를 그대로 전달하고 상품을 지어내지 마라. 비회원(consumerId 없음)이면 로그인을 "
+    "안내하고 이 도구를 부르지 마라.\n"
     "모든 도구 호출이 끝나면 실제 결과만 근거로 2~3문장 한국어로 답해라."
 )
 
@@ -248,6 +254,10 @@ def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict
         return _call_cart_api_internal(name, tool_input, consumer_id)
     if name in ("compare_purchase_popularity", "get_popular_products"):
         return _call_purchase_stats_unavailable(name)
+    if name == "recommend_by_preference":
+        # get_top_categories는 /internal/purchases/top-categories(consumer_id + 서비스 키)로,
+        # search_by_category는 공개 API라 이 경로(JWT 없음)에서도 그대로 동작한다.
+        return _run_recommend_by_preference(tool_input, bearer_token=None, consumer_id=consumer_id)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
 
 

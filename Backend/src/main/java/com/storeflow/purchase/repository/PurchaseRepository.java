@@ -1,5 +1,6 @@
 package com.storeflow.purchase.repository;
 
+import com.storeflow.purchase.dto.CategoryPreferenceResponse;
 import com.storeflow.purchase.dto.ProductPopularityResponse;
 import com.storeflow.purchase.dto.PurchaseHistoryResponse;
 import com.storeflow.purchase.entity.Purchase;
@@ -37,7 +38,7 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         GROUP BY p.skuId, pr.name, pr.imageUrl
         """)
     List<ProductPopularityResponse> compareBySkuIds(@Param("skuIds") List<Integer> skuIds,
-                                                      @Param("since") Instant since);
+                                                    @Param("since") Instant since);
 
     /**
      * "다른 사람들은 보통 뭘 사?" — 카테고리(선택) 안에서 최근 기간 인기 상품 상위 N개.
@@ -54,6 +55,25 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
         ORDER BY SUM(p.qty) DESC
         """)
     List<ProductPopularityResponse> findPopular(@Param("categoryL2") String categoryL2,
-                                                  @Param("since") Instant since,
-                                                  Pageable pageable);
+                                                @Param("since") Instant since,
+                                                Pageable pageable);
+
+    /**
+     * "청소용품을 많이 샀으면" 판단의 근거 — 이 회원이 최근 기간 동안 가장 많이 산 카테고리(categoryL2) 순위.
+     * totalQty(수량 합) 내림차순. 취향 추천은 이 결과의 상위 N개 카테고리를 기준으로
+     * 신상/행사 상품(search API)을 다시 조회하는 2단계 구조다 — 이 쿼리 자체는 상품을 추천하지 않는다.
+     */
+    @Query("""
+        SELECT NEW com.storeflow.purchase.dto.CategoryPreferenceResponse(
+            pr.categoryL2, SUM(p.qty), COUNT(p))
+        FROM Purchase p, Product pr
+        WHERE p.skuId = pr.skuId
+          AND p.memberId = :memberId
+          AND p.purchasedAt >= :since
+        GROUP BY pr.categoryL2
+        ORDER BY SUM(p.qty) DESC
+        """)
+    List<CategoryPreferenceResponse> findTopCategoriesByMemberId(@Param("memberId") Integer memberId,
+                                                                 @Param("since") Instant since,
+                                                                 Pageable pageable);
 }

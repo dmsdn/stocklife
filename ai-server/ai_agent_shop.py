@@ -234,6 +234,37 @@ TOOLS = [
             "required": ["category_l2", "lookback_days", "limit"],
         },
     },
+    {
+        "name": "recommend_by_preference",
+        "description": (
+            "이 회원이 평소 많이 사는 카테고리를 근거로 '지금 살 만한 것'을 추천한다. "
+            "'나한테 뭐 추천해줘', '내 취향에 맞는 거 있어?'처럼 막연한 추천 요청에 쓴다. "
+            "여기서 말하는 '취향'은 개인 성향 설문이 아니라 실제 구매 이력 통계다 — "
+            "예를 들어 청소용품을 많이 샀으면 새로 들어온 청소용품이나 할인 중인 청소용품을, "
+            "육류를 많이 샀으면 신상/할인 육류를 찾아 근거(어느 카테고리를 많이 샀는지)와 "
+            "함께 보여준다. 회원(로그인)만 쓸 수 있다 — 비회원이면 부르지 말고 로그인 안내를 해라. "
+            "match_preferences(신상·행사 상품과 성향을 점수화해 매칭하는 더 정교한 도구)가 "
+            "따로 준비 중이니, 이 도구는 그게 갖춰지기 전까지 쓰는 실용적 버전이다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "top_categories": {
+                    "type": ["integer", "null"],
+                    "description": "몇 개 카테고리를 기준으로 추천할지. 모르면 null (기본 3개).",
+                },
+                "lookback_days": {
+                    "type": ["integer", "null"],
+                    "description": "구매 이력을 며칠치까지 볼지. 모르면 null (기본 180일).",
+                },
+                "new_arrival_days": {
+                    "type": ["integer", "null"],
+                    "description": "'신상'으로 볼 입고 기준일. 모르면 null (기본 14일 이내 입고).",
+                },
+            },
+            "required": ["top_categories", "lookback_days", "new_arrival_days"],
+        },
+    },
 ]
 
 SYSTEM_PROMPT = (
@@ -262,7 +293,12 @@ SYSTEM_PROMPT = (
     "'요즘 뭐가 잘 나가?'처럼 특정 상품을 안 짚고 순위를 물어보면 get_popular_products를 써라. "
     "두 도구 모두 구매자 수(purchaser_count)를 인기도 기준으로 삼되, 절대 눈대중으로 순서를 "
     "판단하지 말고 도구가 돌려준 순서/숫자를 그대로 근거로 삼아라.\n"
-    "7. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량만 근거로 "
+    "7. '나한테 추천해줘', '내 취향에 맞는 거 있어?'처럼 막연한 개인화 추천 요청은 "
+    "recommend_by_preference를 호출해라. 결과의 categories_used(회원이 많이 산 카테고리)와 "
+    "items의 reason(신상/행사)을 근거로 '평소 OO을 많이 구매하셔서 신상/할인 중인 OO을 "
+    "추천드려요'처럼 이유를 함께 설명해라. items가 비어 있으면 note에 있는 사유를 그대로 "
+    "사용자에게 알려주고, 다른 상품을 지어내 추천하지 마라.\n"
+    "8. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량만 근거로 "
     "2~3문장 한국어로 요약해라. 도구 결과에 없는 가격이나 상품을 지어내지 마라."
 )
 
@@ -387,6 +423,86 @@ def _run_get_popular_products(tool_input: dict, bearer_token: str) -> dict:
     return {"ok": True, "items": items}
 
 
+def _normalize_product(item: dict, reason: str, based_on_category: str) -> dict:
+    return {
+        "sku_id": item.get("skuId"),
+        "name": item.get("name"),
+        "brand": item.get("brand"),
+        "category_l2": item.get("categoryL2"),
+        "regular_price_krw": item.get("priceKrw"),
+        "final_price_krw": item.get("finalPriceKrw", item.get("priceKrw")),
+        "on_promo": item.get("onPromo", False),
+        "discount_krw": item.get("discountKrw", 0),
+        "unit": item.get("unit"),
+        "reason": reason,                      # "청소용품 신상" / "청소용품 행사" 처럼 왜 추천됐는지
+        "based_on_category": based_on_category,  # 근거가 된 회원의 다구매 카테고리
+    }
+
+
+def _run_recommend_by_preference(tool_input: dict, bearer_token: str | None, consumer_id: int | None) -> dict:
+    """
+    1단계: get_top_categories로 이 회원이 최근 많이 산 카테고리를 구한다(백엔드 집계).
+    2단계: 카테고리별로 신상(recent_days 이내 입고) + 행사 중 상품을 search_by_category로 각각 조회한다.
+    정렬/필터링 판단(무엇이 '신상'인지, '행사'인지)은 전부 백엔드 쿼리 조건으로 확정하고,
+    이 함수는 결과를 합치고 근거 카테고리를 붙이기만 한다 — Claude가 눈대중으로 카테고리나
+    신상 여부를 판단하지 않게 하기 위함.
+    """
+    top_n = tool_input.get("top_categories") or 3
+    lookback_days = tool_input.get("lookback_days")
+    new_arrival_days = tool_input.get("new_arrival_days") or 14
+
+    cat_result = backend_client.get_top_categories(
+        {"lookback_days": lookback_days, "limit": top_n},
+        bearer_token=bearer_token,
+        consumer_id=consumer_id,
+    )
+    if not cat_result.get("ok"):
+        return {"ok": False, "error": cat_result.get("error") or "구매 이력 기반 취향 조회에 실패했습니다."}
+
+    categories = cat_result.get("data") or []
+    if not categories:
+        return {
+            "ok": True,
+            "categories_used": [],
+            "items": [],
+            "note": "최근 구매 이력이 없어 취향 기반 추천을 만들 수 없습니다. 다른 방식(인기 상품 등)을 안내하세요.",
+        }
+
+    items: list[dict] = []
+    categories_used = []
+    seen_sku_ids: set[int] = set()
+
+    for cat in categories:
+        category_l2 = cat.get("categoryL2")
+        if not category_l2:
+            continue
+        categories_used.append({
+            "category_l2": category_l2,
+            "total_qty": cat.get("totalQty"),
+            "purchase_count": cat.get("purchaseCount"),
+        })
+
+        new_result = backend_client.search_by_category(category_l2=category_l2, recent_days=new_arrival_days)
+        if new_result.get("ok"):
+            for p in (new_result.get("data") or []):
+                sku_id = p.get("skuId")
+                if sku_id in seen_sku_ids:
+                    continue
+                seen_sku_ids.add(sku_id)
+                items.append(_normalize_product(p, reason=f"{category_l2} 신상", based_on_category=category_l2))
+
+        promo_result = backend_client.search_by_category(category_l2=category_l2, on_promo_only=True)
+        if promo_result.get("ok"):
+            for p in (promo_result.get("data") or []):
+                sku_id = p.get("skuId")
+                if sku_id in seen_sku_ids:
+                    continue
+                seen_sku_ids.add(sku_id)
+                items.append(_normalize_product(p, reason=f"{category_l2} 행사 중", based_on_category=category_l2))
+
+    return {"ok": True, "categories_used": categories_used, "items": items}
+
+
 def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
@@ -400,6 +516,8 @@ def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
         return _run_compare_purchase_popularity(tool_input, bearer_token)
     if name == "get_popular_products":
         return _run_get_popular_products(tool_input, bearer_token)
+    if name == "recommend_by_preference":
+        return _run_recommend_by_preference(tool_input, bearer_token=bearer_token, consumer_id=None)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
 
 
