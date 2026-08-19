@@ -12,11 +12,11 @@ public class SignupRequest {
     @Pattern(regexp = "^01[0-9]{8,9}$", message = "전화번호 형식이 올바르지 않습니다.")
     private String phoneNumber;
 
-    // 영문 최소 1자 + 특수문자 최소 1자 포함, 8~20자
+    // 영문 최소 1자 + 숫자 최소 1자 + 특수문자 최소 1자 포함, 8~20자
     @NotBlank(message = "비밀번호는 필수입니다.")
     @Pattern(
-        regexp = "^(?=.*[A-Za-z])(?=.*[^A-Za-z0-9]).{8,20}$",
-        message = "비밀번호는 영문과 특수문자를 포함해 8~20자여야 합니다."
+            regexp = "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+            message = "비밀번호는 영문, 숫자, 특수문자를 모두 포함해 8~20자여야 합니다."
     )
     private String password;
 
@@ -24,15 +24,14 @@ public class SignupRequest {
     private String gender;
     private LocalDate birthDate;
 
-    // 필수 동의 (AssertTrue -> false거나 null이면 검증 실패)
-    @AssertTrue(message = "카메라 사용에 동의해야 합니다.")
-    private boolean cameraConsent;
-
+    // 필수 동의 — 서비스 이용에 반드시 필요한 항목만 남긴다.
     @AssertTrue(message = "개인정보 수집에 동의해야 합니다.")
     private boolean personalInfoConsent;
 
-    @AssertTrue(message = "마이크 사용에 동의해야 합니다.")
+    // 선택 동의 — boolean 기본값(false)을 그대로 두면 "동의 안 함"으로 저장된다.
+    private boolean cameraConsent;
     private boolean micConsent;
+    private boolean marketingConsent;
 
     // getter/setter
     public String getPhoneNumber() { return phoneNumber; }
@@ -55,4 +54,7 @@ public class SignupRequest {
 
     public boolean isMicConsent() { return micConsent; }
     public void setMicConsent(boolean micConsent) { this.micConsent = micConsent; }
+
+    public boolean isMarketingConsent() { return marketingConsent; }
+    public void setMarketingConsent(boolean marketingConsent) { this.marketingConsent = marketingConsent; }
 }
