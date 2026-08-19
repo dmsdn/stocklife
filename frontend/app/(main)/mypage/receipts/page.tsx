@@ -16,7 +16,7 @@ export default function ReceiptsPage() {
           <button
             key={r.id}
             type="button"
-            className="flex w-full items-center gap-3 py-4 text-left md:rounded-lg md:border md:border-border md:p-4"
+            className="flex w-full items-center gap-3 py-4 text-left md:rounded-sm md:border md:border-border md:p-4"
           >
             <Receipt size={20} className="text-muted-foreground" />
             <div className="flex-1">

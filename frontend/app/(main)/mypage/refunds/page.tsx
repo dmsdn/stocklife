@@ -14,7 +14,7 @@ export default function RefundsPage() {
       <SubpageHeader title="취소 / 반품 / 환불 내역" />
       <div className="divide-y divide-border md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
         {refunds.map((r) => (
-          <div key={r.id} className="py-4 md:rounded-lg md:border md:border-border md:p-4">
+          <div key={r.id} className="py-4 md:rounded-sm md:border md:border-border md:p-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>{r.date}</span>
               <span>{r.status}</span>

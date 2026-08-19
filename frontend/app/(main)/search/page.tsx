@@ -1,47 +1,43 @@
 // app/(main)/search/page.tsx
-// ⚠ 백엔드 ProductSearchResponse에는 discountPercent/originalPrice/unitPrice가 없고
-//   priceKrw(정가) 하나뿐입니다. 할인 관련 표시는 아직 백엔드에 그 데이터 자체가 없어서
-//   지금은 originalPrice=finalPrice=priceKrw, discountPercent=0으로 채워 "할인 없음"
-//   상태로 보이게만 해뒀습니다. 실제 할인 데이터가 추가되면 이 매핑만 고치면 됩니다.
-// ⚠ 검색창이 원래 그냥 장식용 텍스트였어서, 실제로 검색어를 입력받는 폼으로 바꿨습니다.
+// ✅ 검색바 포커스하면 최근 검색어가 바로 아래에 뜹니다(검색 결과 유무와 무관).
+// ✅ 필터에 가격(1,000원 단위 이중 슬라이더) 추가, 카테고리/재고여부/가격 전부 실제 필터링에 반영.
+// ✅ 하트 = 담기 = 저장, 전부 같은 동작입니다. 누르면 어느 리스트에 담을지 고르고 그 리스트로
+//   들어갑니다. 별도 "담기" 버튼과 "담았어요" 상태는 없앴습니다.
 "use client";
 
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Search as SearchIcon, ShoppingCart } from "lucide-react";
-import { ProductCard } from "@/components/domain/product-card";
+import { ChevronLeft, Search as SearchIcon, X, Heart } from "lucide-react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
-import { trackConsumerEvent } from "@/lib/consumer-events";
-import { apiFetch } from "@/lib/api-client";
+import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
+import { searchMockProducts, MOCK_CATEGORIES, type MockProduct } from "@/lib/mock-products";
+import { addProductToCartGroup } from "@/lib/cart-storage";
+import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
 
-// TODO: 카테고리/지역/운영여부 목록은 실제 데이터 확정 전 자리표시자
-const CATEGORIES = ["신선식품", "유제품", "생활용품", "냉동식품"];
-const REGIONS: string[] = [];
 const STATUSES = ["재고 있음", "품절"] as const;
-
-interface BackendProduct {
-  skuId: number;
-  name: string;
-  category: string;
-  brand: string;
-  priceKrw: number;
-  stockQuantity: number;
-  inStock: boolean;
-}
+const PRICE_MIN = 0;
+const PRICE_MAX = 20000;
 
 export default function SearchPage() {
   const [keyword, setKeyword] = useState("");
-  const [products, setProducts] = useState<BackendProduct[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [submittedKeyword, setSubmittedKeyword] = useState("");
+  const [recent, setRecent] = useState<string[]>(() => readSearchHistory());
+  const [inputFocused, setInputFocused] = useState(false);
+  const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [savePickerProduct, setSavePickerProduct] = useState<MockProduct | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>("카테고리");
-  const [filters, setFilters] = useState({
-    categories: [] as string[],
-    regions: [] as string[],
-    statuses: [] as string[],
-    minRating: null as number | null,
+  const [filters, setFilters] = useState<{
+    categories: string[];
+    statuses: string[];
+    priceRange: [number, number];
+  }>({
+    categories: [],
+    statuses: [],
+    priceRange: [PRICE_MIN, PRICE_MAX],
   });
 
   const openFilter = (tab: FilterTab) => {
@@ -49,40 +45,70 @@ export default function SearchPage() {
     setFilterOpen(true);
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const onlyInStock = filters.statuses.includes("재고 있음") && !filters.statuses.includes("품절");
+  const priceActive = filters.priceRange[0] !== PRICE_MIN || filters.priceRange[1] !== PRICE_MAX;
+
+  const results = useMemo(
+    () =>
+      searchMockProducts({
+        keyword: submittedKeyword,
+        categories: filters.categories,
+        onlyInStock,
+        minPrice: filters.priceRange[0],
+        maxPrice: filters.priceRange[1],
+      }),
+    [submittedKeyword, filters, onlyInStock]
+  );
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!keyword.trim()) return;
-    setLoading(true);
-    setSearched(true);
-    trackConsumerEvent({ event_type: "SEARCH", meta: { keyword } });
-    try {
-      const results = await apiFetch<BackendProduct[]>(
-        `/api/products/search?keyword=${encodeURIComponent(keyword)}`,
-        { auth: false }
-      );
-      setProducts(results);
-    } catch {
-      setProducts([]);
-    } finally {
-      setLoading(false);
+    const trimmed = keyword.trim();
+    setSubmittedKeyword(trimmed);
+    if (trimmed) {
+      addSearchHistory(trimmed);
+      setRecent(readSearchHistory());
     }
+    setInputFocused(false);
   };
 
-  const handleAdd = async (skuId: number) => {
-    try {
-      await apiFetch("/api/cart", {
-        method: "POST",
-        body: JSON.stringify({ skuId, quantity: 1 }),
-      });
-      trackConsumerEvent({ event_type: "CART_ADD", sku_id: skuId });
-    } catch {
-      // TODO: 로그인 안 된 상태에서 담기 시도하면 401 — 로그인 유도 처리 필요
-    }
+  const handleRecentClick = (word: string) => {
+    setKeyword(word);
+    setSubmittedKeyword(word);
+    addSearchHistory(word);
+    setRecent(readSearchHistory());
+    setInputFocused(false);
+  };
+
+  const handleRemoveRecent = (word: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    removeSearchHistory(word);
+    setRecent(readSearchHistory());
+  };
+
+  // blur가 클릭보다 먼저 발생해서 목록이 사라지는 걸 막기 위해 살짝 지연
+  const handleBlur = () => {
+    blurTimeout.current = setTimeout(() => setInputFocused(false), 150);
+  };
+  const handleFocus = () => {
+    if (blurTimeout.current) clearTimeout(blurTimeout.current);
+    setInputFocused(true);
+  };
+
+  const handleSaveSelect = (groupId: number) => {
+    if (!savePickerProduct) return;
+    addProductToCartGroup(groupId, {
+      id: savePickerProduct.id,
+      name: savePickerProduct.name,
+      category: savePickerProduct.category,
+      price: savePickerProduct.price,
+    });
+    setSavedIds((prev) => new Set(prev).add(savePickerProduct.id));
   };
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-5xl md:p-8">
-      <form onSubmit={handleSearch} className="mb-4 flex items-center gap-3">
+      <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
         <Link href="/">
           <ChevronLeft size={20} />
         </Link>
@@ -91,72 +117,115 @@ export default function SearchPage() {
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             placeholder="상품을 검색해보세요"
             className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
+
+        {/* 검색창 포커스하면 결과 상태와 무관하게 바로 아래에 뜨는 최근 검색어 */}
+        {inputFocused && recent.length > 0 && (
+          <div className="absolute left-8 right-0 top-full z-20 mt-2 rounded-md border border-border bg-card p-3 shadow-sm">
+            <p className="mb-2 text-xs text-muted-foreground">최근 검색어</p>
+            <div className="flex flex-wrap gap-2">
+              {recent.map((word) => (
+                <button
+                  key={word}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleRecentClick(word)}
+                  className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs"
+                >
+                  {word}
+                  <X size={12} onMouseDown={(e) => handleRemoveRecent(word, e)} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </form>
 
-      <div className="mb-2 flex items-center gap-3 text-sm">
+      <div className="mb-2 flex items-center gap-2 text-sm">
         <button
           type="button"
           onClick={() => openFilter("카테고리")}
-          className="rounded-full border border-border px-3 py-1.5 text-muted-foreground"
+          className={`rounded-full border px-3 py-1.5 ${filters.categories.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
         >
-          필터
+          카테고리
         </button>
         <button
           type="button"
-          onClick={() => openFilter("운영여부")}
-          className="rounded-full border border-border px-3 py-1.5 text-muted-foreground"
+          onClick={() => openFilter("재고여부")}
+          className={`rounded-full border px-3 py-1.5 ${filters.statuses.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
         >
-          필터
+          재고여부
+        </button>
+        <button
+          type="button"
+          onClick={() => openFilter("가격")}
+          className={`rounded-full border px-3 py-1.5 ${priceActive ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
+        >
+          가격
         </button>
       </div>
 
       <div className="mb-2 flex items-center justify-between text-sm">
-        <span>{loading ? "검색 중..." : searched ? `${products.length}개 결과` : ""}</span>
+        <span>{results.length}개 결과</span>
         <span className="text-muted-foreground">랭킹순</span>
       </div>
 
       <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0">
-        {products.map((product) => (
-          <ProductCard
-            key={product.skuId}
-            skuId={product.skuId}
-            name={product.name}
-            originalPrice={product.priceKrw}
-            discountPercent={0}
-            finalPrice={product.priceKrw}
-            unitPrice={product.priceKrw}
-            onAdd={product.inStock ? () => handleAdd(product.skuId) : undefined}
-          />
+        {results.map((product) => (
+          <div key={product.id} className="flex gap-3 py-3">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+              IMG
+            </div>
+            <div className="flex flex-1 flex-col justify-between">
+              <div>
+                <p className="text-sm">{product.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {product.category} · {product.unit}
+                </p>
+                {!product.inStock && <p className="text-xs text-danger">품절</p>}
+              </div>
+              <p className="text-base font-semibold">{product.price.toLocaleString()}원</p>
+            </div>
+            <button
+              type="button"
+              disabled={!product.inStock}
+              onClick={() => setSavePickerProduct(product)}
+              aria-label="저장하기"
+              className="flex h-8 w-8 shrink-0 items-center justify-center self-start text-muted-foreground disabled:opacity-30"
+            >
+              <Heart size={20} fill={savedIds.has(product.id) ? "currentColor" : "none"} />
+            </button>
+          </div>
         ))}
       </div>
 
-      {searched && !loading && products.length === 0 && (
+      {results.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">검색 결과가 없어요.</p>
       )}
-
-      <Link href="/cart" className="mt-4 flex items-center justify-end gap-1 text-sm">
-        <ShoppingCart size={16} />
-        장바구니
-      </Link>
 
       {filterOpen && (
         <FilterPanel
           initialTab={filterTab}
-          categories={CATEGORIES}
-          regions={REGIONS}
+          categories={MOCK_CATEGORIES}
           statuses={STATUSES}
           selectedCategories={filters.categories}
-          selectedRegions={filters.regions}
           selectedStatuses={filters.statuses}
-          selectedMinRating={filters.minRating}
-          onApply={setFilters}
+          selectedPriceRange={filters.priceRange}
+          onApply={(next) => setFilters(next)}
           onClose={() => setFilterOpen(false)}
         />
       )}
+
+      <SaveToListDialog
+        open={!!savePickerProduct}
+        onClose={() => setSavePickerProduct(null)}
+        onSelect={handleSaveSelect}
+      />
     </div>
   );
 }

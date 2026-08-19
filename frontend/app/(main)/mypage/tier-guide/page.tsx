@@ -13,7 +13,7 @@ export default function TierGuidePage() {
       <SubpageHeader title="등급 안내" />
       <div className="space-y-3 md:grid md:grid-cols-3 md:gap-4 md:space-y-0">
         {tiers.map((t) => (
-          <div key={t.name} className="rounded-lg border border-border p-4">
+          <div key={t.name} className="rounded-sm border border-border p-4">
             <p className="text-base font-medium">{t.name}</p>
             <p className="mt-1 text-sm text-muted-foreground">{t.requirement}</p>
             <p className="mt-2 text-sm">{t.benefit}</p>

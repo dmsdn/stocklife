@@ -119,7 +119,7 @@ export default function LoginPage() {
           </Button>
 
           <div className="mt-10 text-center">
-            <Link href="/auth/signup" className="mt-3 block">
+            <Link href="/auth/signup/terms" className="mt-3 block">
               <Button variant="ghost" className="h-12 w-full rounded-sm">
                 <span className="text-sm font-normal"> AI 마트 회원이 아니신가요?</span>
                 <span className="text-base font-semibold">회원가입</span>

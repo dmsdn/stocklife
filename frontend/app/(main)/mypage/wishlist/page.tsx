@@ -1,26 +1,35 @@
+// app/(main)/mypage/wishlist/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
-import { ProductCard } from "@/components/domain/product-card";
+import { ChevronLeft, Trash2 } from "lucide-react";
+import { apiFetch } from "@/lib/api-client";
 
-// TODO: 백엔드 연동 전 목업 데이터
-const initialItems = [
-  { skuId: 1, name: "상품 이름", originalPrice: 29999, discountPercent: 80, finalPrice: 10000, unitPrice: 999 },
-  { skuId: 2, name: "상품 이름", originalPrice: 29999, discountPercent: 80, finalPrice: 10000, unitPrice: 999 },
-  { skuId: 3, name: "상품 이름", originalPrice: 29999, discountPercent: 80, finalPrice: 10000, unitPrice: 999 },
-];
+interface WishlistItem {
+  skuId: number;
+  name: string;
+  brand: string;
+  priceKrw: number;
+  imageUrl: string | null;
+  addedAt: string;
+}
 
 export default function WishlistPage() {
-  const [items] = useState(initialItems);
-  const [checked, setChecked] = useState<Record<number, boolean>>(
-    Object.fromEntries(initialItems.map((item) => [item.skuId, false]))
-  );
+  const [items, setItems] = useState<WishlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const total = items
-    .filter((item) => checked[item.skuId])
-    .reduce((sum, item) => sum + item.finalPrice, 0);
+  useEffect(() => {
+    apiFetch<WishlistItem[]>("/api/wishlist")
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleRemove = async (skuId: number) => {
+    setItems((prev) => prev.filter((i) => i.skuId !== skuId));
+    await apiFetch(`/api/wishlist/${skuId}`, { method: "DELETE" });
+  };
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
@@ -31,30 +40,35 @@ export default function WishlistPage() {
         <p className="text-base">찜</p>
       </div>
 
-      <div className="mb-2 flex items-center gap-3 text-sm text-muted-foreground">
-        <span className="h-4 w-4 rounded-full border border-border" />
-        <span>필터</span>
-        <span>필터</span>
-      </div>
-
-      <div className="mb-2 flex items-center justify-between text-sm">
-        <span>{items.length}개 결과</span>
-        <span className="text-muted-foreground">랭킹순</span>
-      </div>
+      {loading && <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>}
+      {!loading && items.length === 0 && (
+        <p className="py-10 text-center text-sm text-muted-foreground">찜한 상품이 없어요.</p>
+      )}
 
       <div className="divide-y divide-border">
         {items.map((item) => (
-          <ProductCard
-            key={item.skuId}
-            {...item}
-            variant="simple"
-            checked={checked[item.skuId]}
-            onCheckedChange={(v) => setChecked((prev) => ({ ...prev, [item.skuId]: v }))}
-          />
+          <div key={item.skuId} className="flex gap-3 py-3">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+              IMG
+            </div>
+            <div className="flex flex-1 items-center justify-between">
+              <div>
+                <p className="text-sm">{item.name}</p>
+                <p className="text-xs text-muted-foreground">{item.brand}</p>
+                <p className="text-sm font-medium">{item.priceKrw.toLocaleString()}원</p>
+              </div>
+              <button
+                type="button"
+                aria-label="찜 삭제"
+                onClick={() => handleRemove(item.skuId)}
+                className="text-muted-foreground"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
         ))}
       </div>
-
-      <p className="mt-4 text-right text-base font-medium">총 {total.toLocaleString()}원</p>
     </div>
   );
 }

@@ -1,754 +1,271 @@
-// app/(main)/saved/page.tsx
-
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ChevronRight, Map as MapIcon, Trash2, MessageSquare, PlayCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { RouteDialog } from "@/components/domain/route-dialog";
+import { QuantityStepper } from "@/components/domain/quantity-stepper";
+import { apiFetch, getAccessToken } from "@/lib/api-client";
+import { getOrCreateSessionId, startNewSession } from "@/lib/session";
+import { getClientId } from "@/lib/client-id";
+import { readCartGroups, updateCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
+import type { RouteStop } from "@/lib/navigation";
 
-type Product = {
-  id: number;
-  name: string;
-  category: string;
-  price: number;
-  quantity: number;
-  checked: boolean;
-};
+interface ChatSession {
+  sessionId: string;
+  title: string | null;
+  updatedAt: string;
+}
 
-type CartGroup = {
-  id: number;
-  title: string;
-  description: string;
-  createdAt: string;
-  store: string;
-  products: Product[];
-};
-
-type AiConversation = {
-  id: number;
-  title: string;
-  preview: string;
-  date: string;
-};
-
-const initialCartGroups: CartGroup[] = [
-  {
-    id: 1,
-    title: "이번 주 장보기",
-    description: "일주일 식재료",
-    createdAt: "오늘",
-    store: "이마트 성수점",
-    products: [
-      {
-        id: 1,
-        name: "서울우유 1L",
-        category: "유제품",
-        price: 2900,
-        quantity: 2,
-        checked: true,
-      },
-      {
-        id: 2,
-        name: "계란 15구",
-        category: "신선식품",
-        price: 7500,
-        quantity: 1,
-        checked: true,
-      },
-      {
-        id: 3,
-        name: "바나나",
-        category: "과일",
-        price: 4000,
-        quantity: 1,
-        checked: false,
-      },
-      {
-        id: 4,
-        name: "닭가슴살",
-        category: "냉동식품",
-        price: 4000,
-        quantity: 3,
-        checked: true,
-      },
-      {
-        id: 5,
-        name: "양파",
-        category: "채소",
-        price: 3200,
-        quantity: 1,
-        checked: false,
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: "자취방 채우기",
-    description: "생활용품 정리",
-    createdAt: "어제",
-    store: "쿠팡",
-    products: [
-      {
-        id: 6,
-        name: "두루마리 휴지",
-        category: "생활용품",
-        price: 8900,
-        quantity: 1,
-        checked: true,
-      },
-      {
-        id: 7,
-        name: "세탁세제",
-        category: "생활용품",
-        price: 12500,
-        quantity: 1,
-        checked: true,
-      },
-      {
-        id: 8,
-        name: "주방세제",
-        category: "생활용품",
-        price: 4500,
-        quantity: 2,
-        checked: false,
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: "주말 브런치",
-    description: "친구들이랑 먹을 것",
-    createdAt: "8월 15일",
-    store: "홈플러스 강서점",
-    products: [
-      {
-        id: 9,
-        name: "식빵",
-        category: "베이커리",
-        price: 3800,
-        quantity: 1,
-        checked: true,
-      },
-      {
-        id: 10,
-        name: "딸기잼",
-        category: "소스",
-        price: 5200,
-        quantity: 1,
-        checked: true,
-      },
-      {
-        id: 11,
-        name: "오렌지주스",
-        category: "음료",
-        price: 4900,
-        quantity: 2,
-        checked: true,
-      },
-    ],
-  },
-];
-
-const conversations: AiConversation[] = [
-  {
-    id: 1,
-    title: "이번 주 식비를 줄이고 싶어",
-    preview:
-      "냉장고에 있는 재료를 기준으로 필요한 식재료만 골라봤어요.",
-    date: "오늘",
-  },
-  {
-    id: 2,
-    title: "다이어트 식단 추천해줘",
-    preview:
-      "일주일 동안 먹을 수 있는 식재료와 간단한 메뉴를 정리했어요.",
-    date: "어제",
-  },
-  {
-    id: 3,
-    title: "성수에서 장보기",
-    preview:
-      "현재 위치에서 이동하기 편한 매장을 기준으로 장보기 동선을 만들었어요.",
-    date: "8월 16일",
-  },
-];
-
-const formatPrice = (price: number) =>
-  `${price.toLocaleString("ko-KR")}원`;
+function chatHeaders(): Record<string, string> {
+  return getAccessToken() ? {} : { "X-Chat-Client-Id": getClientId() };
+}
 
 export default function SavedPage() {
-  const [activeTab, setActiveTab] = useState<"cart" | "ai">("cart");
+  const router = useRouter();
+  const [tab, setTab] = useState<"cart" | "ai">("cart");
 
-  const [cartGroups, setCartGroups] =
-    useState<CartGroup[]>(initialCartGroups);
+  const [groups, setGroups] = useState<CartGroup[]>([]);
+  const [openGroupId, setOpenGroupId] = useState<number | null>(null);
+  const [newGroupTitle, setNewGroupTitle] = useState("");
+  const [showNewGroupInput, setShowNewGroupInput] = useState(false);
 
-  const [selectedGroupId, setSelectedGroupId] =
-    useState<number | null>(null);
+  const [routeOpen, setRouteOpen] = useState(false);
+  const [routeStops, setRouteStops] = useState<RouteStop[]>([]);
 
-  const selectedGroup = cartGroups.find(
-    (group) => group.id === selectedGroupId
-  );
+  useEffect(() => {
+    setGroups(readCartGroups());
+  }, []);
 
-  const selectedProducts = useMemo(() => {
-    if (!selectedGroup) return [];
+  const groupTotal = (group: CartGroup) =>
+    group.products.filter((p) => p.checked).reduce((sum, p) => sum + p.price * p.quantity, 0);
 
-    return selectedGroup.products.filter(
-      (product) => product.checked
-    );
-  }, [selectedGroup]);
+  const handleCreateGroup = () => {
+    if (!newGroupTitle.trim()) return;
+    const group = createCartGroup(newGroupTitle.trim());
+    setGroups(readCartGroups());
+    setNewGroupTitle("");
+    setShowNewGroupInput(false);
+    setOpenGroupId(group.id);
+  };
 
-  const selectedTotal = useMemo(() => {
-    return selectedProducts.reduce(
-      (sum, product) =>
-        sum + product.price * product.quantity,
-      0
-    );
-  }, [selectedProducts]);
-
-  const updateGroup = (
-    groupId: number,
-    updater: (group: CartGroup) => CartGroup
-  ) => {
-    setCartGroups((groups) =>
-      groups.map((group) =>
-        group.id === groupId ? updater(group) : group
+  const handleQuantityChange = (groupId: number, productId: number, quantity: number) => {
+    if (quantity < 1) return;
+    const next = updateCartGroups((gs) =>
+      gs.map((g) =>
+        g.id !== groupId
+          ? g
+          : { ...g, products: g.products.map((p) => (p.id === productId ? { ...p, quantity } : p)) }
       )
     );
+    setGroups(next);
   };
 
-  const toggleProduct = (productId: number) => {
-    if (!selectedGroupId) return;
-
-    updateGroup(selectedGroupId, (group) => ({
-      ...group,
-      products: group.products.map((product) =>
-        product.id === productId
-          ? {
-              ...product,
-              checked: !product.checked,
-            }
-          : product
-      ),
-    }));
-  };
-
-  const changeQuantity = (
-    productId: number,
-    amount: number
-  ) => {
-    if (!selectedGroupId) return;
-
-    updateGroup(selectedGroupId, (group) => ({
-      ...group,
-      products: group.products.map((product) =>
-        product.id === productId
-          ? {
-              ...product,
-              quantity: Math.max(
-                1,
-                product.quantity + amount
-              ),
-            }
-          : product
-      ),
-    }));
-  };
-
-  const deleteProduct = (productId: number) => {
-    if (!selectedGroupId) return;
-
-    updateGroup(selectedGroupId, (group) => ({
-      ...group,
-      products: group.products.filter(
-        (product) => product.id !== productId
-      ),
-    }));
-  };
-
-  const deleteGroup = (groupId: number) => {
-    setCartGroups((groups) =>
-      groups.filter((group) => group.id !== groupId)
+  const handleToggleChecked = (groupId: number, productId: number) => {
+    const next = updateCartGroups((gs) =>
+      gs.map((g) =>
+        g.id !== groupId
+          ? g
+          : { ...g, products: g.products.map((p) => (p.id === productId ? { ...p, checked: !p.checked } : p)) }
+      )
     );
-
-    setSelectedGroupId(null);
+    setGroups(next);
   };
 
-  const goBack = () => {
-    setSelectedGroupId(null);
-  };
-
-  /*
-   * ==========================================
-   * 장바구니 상세
-   * ==========================================
-   */
-
-  if (selectedGroup) {
-    return (
-      <div className="min-h-screen pb-28">
-        {/* Header */}
-        <header className="flex items-center gap-3 px-5 pb-5 pt-6">
-          <button
-            type="button"
-            onClick={goBack}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-lg"
-            aria-label="뒤로가기"
-          >
-            ←
-          </button>
-
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-xl font-semibold">
-              {selectedGroup.title}
-            </h1>
-
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {selectedGroup.store}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              deleteGroup(selectedGroup.id)
-            }
-            className="text-xs text-muted-foreground"
-          >
-            삭제
-          </button>
-        </header>
-
-        <main className="space-y-6 px-5">
-          {/* 동선 */}
-          <section>
-            <button
-              type="button"
-              className="flex w-full items-center gap-4 rounded-2xl bg-foreground p-5 text-left text-background"
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background/10 text-xl">
-                ⌖
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">
-                  장보기 동선 보기
-                </p>
-
-                <p className="mt-1 text-xs text-background/60">
-                  상품 위치를 기준으로 가장 효율적인
-                  순서로 안내해요.
-                </p>
-              </div>
-
-              <span className="text-xl">→</span>
-            </button>
-          </section>
-
-          {/* 상품 목록 */}
-          <section>
-            <div className="mb-3 flex items-end justify-between">
-              <div>
-                <h2 className="font-semibold">
-                  장보기 목록
-                </h2>
-
-                <p className="mt-1 text-xs text-muted-foreground">
-                  구매할 상품만 체크해주세요.
-                </p>
-              </div>
-
-              <span className="text-sm text-muted-foreground">
-                {selectedGroup.products.length}개
-              </span>
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border bg-card">
-              {selectedGroup.products.map(
-                (product, index) => (
-                  <div
-                    key={product.id}
-                    className={`p-4 ${
-                      index !==
-                      selectedGroup.products.length - 1
-                        ? "border-b"
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {/* 체크 */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleProduct(product.id)
-                        }
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
-                          product.checked
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-border"
-                        }`}
-                        aria-label={`${product.name} 구매 여부`}
-                      >
-                        {product.checked ? "✓" : ""}
-                      </button>
-
-                      {/* 상품 */}
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-sm font-medium ${
-                            !product.checked
-                              ? "text-muted-foreground line-through"
-                              : ""
-                          }`}
-                        >
-                          {product.name}
-                        </p>
-
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          {product.category}
-                        </p>
-                      </div>
-
-                      {/* 삭제 */}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          deleteProduct(product.id)
-                        }
-                        className="text-xs text-muted-foreground/60"
-                      >
-                        삭제
-                      </button>
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-between pl-8">
-                      {/* 수량 */}
-                      <div className="flex h-8 items-center rounded-lg border">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeQuantity(
-                              product.id,
-                              -1
-                            )
-                          }
-                          className="h-8 w-8 text-sm text-muted-foreground"
-                        >
-                          −
-                        </button>
-
-                        <span className="w-7 text-center text-xs">
-                          {product.quantity}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeQuantity(
-                              product.id,
-                              1
-                            )
-                          }
-                          className="h-8 w-8 text-sm"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <span className="text-sm font-medium">
-                        {formatPrice(
-                          product.price *
-                            product.quantity
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </section>
-
-          {/* 예상 금액 */}
-          <section className="rounded-2xl bg-muted p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                선택한 상품
-              </span>
-
-              <span className="text-sm font-medium">
-                {selectedProducts.length}개
-              </span>
-            </div>
-
-            <div className="mt-4 flex items-end justify-between">
-              <span className="font-medium">
-                예상 금액
-              </span>
-
-              <span className="text-2xl font-semibold">
-                {formatPrice(selectedTotal)}
-              </span>
-            </div>
-
-            <p className="mt-2 text-right text-[11px] text-muted-foreground">
-              실제 판매 가격과 다를 수 있어요.
-            </p>
-          </section>
-
-          {/* 하단 여백 */}
-          <div className="h-4" />
-        </main>
-      </div>
+  const handleRemove = (groupId: number, productId: number) => {
+    const next = updateCartGroups((gs) =>
+      gs.map((g) => (g.id !== groupId ? g : { ...g, products: g.products.filter((p) => p.id !== productId) }))
     );
-  }
+    setGroups(next);
+  };
 
-  /*
-   * ==========================================
-   * 저장 메인
-   * ==========================================
-   */
+  const handleOpenRoute = (group: CartGroup) => {
+    const stops: RouteStop[] = group.products
+      .filter((p) => p.checked)
+      .map((p) => ({ skuId: p.id, label: p.name }));
+    setRouteStops(stops);
+    setRouteOpen(true);
+  };
+
+  const handleStartShopping = (groupId: number) => {
+    router.push(`/scan?group=${groupId}`);
+  };
+
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  const loadSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const list = await apiFetch<ChatSession[]>("/api/chat/sessions", { headers: chatHeaders() });
+      setSessions(list);
+    } catch {
+      setSessions([]);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "ai") loadSessions();
+  }, [tab]);
+
+  const handleNewChat = async () => {
+    await startNewSession();
+    router.push("/ai");
+  };
 
   return (
-    <div className="min-h-screen pb-28">
-      {/* Header */}
-      <header className="px-5 pb-5 pt-7">
-        <h1 className="text-2xl font-semibold">
-          저장
-        </h1>
+    <div className="mx-auto max-w-md p-4 pb-24 md:max-w-3xl md:p-8">
+      <p className="mb-4 text-base">저장</p>
 
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          마음에 든 쇼핑 정보와
-          <br />
-          장보기 목록을 모아두세요.
-        </p>
-      </header>
-
-      {/* Tab */}
-      <div className="sticky top-0 z-10 bg-background px-5">
-        <div className="flex border-b">
-          <button
-            type="button"
-            onClick={() => setActiveTab("cart")}
-            className={`relative flex-1 py-3 text-sm font-medium ${
-              activeTab === "cart"
-                ? "text-foreground"
-                : "text-muted-foreground"
-            }`}
-          >
-            장바구니
-
-            {activeTab === "cart" && (
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-foreground" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("ai")}
-            className={`relative flex-1 py-3 text-sm font-medium ${
-              activeTab === "ai"
-                ? "text-foreground"
-                : "text-muted-foreground"
-            }`}
-          >
-            AI 대화
-
-            {activeTab === "ai" && (
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-foreground" />
-            )}
-          </button>
-        </div>
+      <div className="mb-4 flex gap-2 border-b border-border">
+        <button
+          type="button"
+          onClick={() => setTab("cart")}
+          className={`border-b-2 px-3 py-2 text-sm ${tab === "cart" ? "border-foreground font-medium" : "border-transparent text-muted-foreground"}`}
+        >
+          담은 리스트
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("ai")}
+          className={`border-b-2 px-3 py-2 text-sm ${tab === "ai" ? "border-foreground font-medium" : "border-transparent text-muted-foreground"}`}
+        >
+          AI 대화
+        </button>
       </div>
 
-      {activeTab === "cart" ? (
-        <main className="space-y-5 px-5 pt-5">
-          {/* 상단 정보 */}
-          <div className="flex items-end justify-between">
-            <div>
-              <h2 className="font-semibold">
-                내 장바구니
-              </h2>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                저장한 장보기 목록
-              </p>
-            </div>
-
-            <span className="text-xs text-muted-foreground">
-              {cartGroups.length}개
-            </span>
-          </div>
-
-          {/* 그룹 */}
-          <div className="space-y-4">
-            {cartGroups.map((group) => {
-              const checkedProducts =
-                group.products.filter(
-                  (product) => product.checked
-                );
-
-              const total =
-                checkedProducts.reduce(
-                  (sum, product) =>
-                    sum +
-                    product.price *
-                      product.quantity,
-                  0
-                );
-
-              return (
-                <article
-                  key={group.id}
-                  className="overflow-hidden rounded-3xl border bg-card"
-                >
-                  {/* 카드 상단 */}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedGroupId(group.id)
-                    }
-                    className="w-full p-5 text-left"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <h3 className="text-base font-semibold">
-                          {group.title}
-                        </h3>
-
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {group.description}
-                        </p>
-                      </div>
-
-                      <span className="text-lg text-muted-foreground">
-                        →
-                      </span>
-                    </div>
-
-                    {/* 상품 미리보기 */}
-                    <div className="mt-5 flex gap-2 overflow-hidden">
-                      {group.products
-                        .slice(0, 4)
-                        .map((product) => (
-                          <div
-                            key={product.id}
-                            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-muted text-center text-[10px] text-muted-foreground"
-                          >
-                            {product.name}
-                          </div>
-                        ))}
-                    </div>
-
-                    {/* 정보 */}
-                    <div className="mt-5 flex items-end justify-between border-t pt-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          {checkedProducts.length}
-                          개 상품 · {group.store}
-                        </p>
-
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          {group.createdAt} 저장
-                        </p>
-                      </div>
-
-                      <p className="font-semibold">
-                        {formatPrice(total)}
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* 동선 버튼 */}
-                  <div className="border-t px-5 py-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedGroupId(group.id)
-                      }
-                      className="flex w-full items-center justify-between text-xs font-medium"
-                    >
-                      <span>
-                        ⌖ 매장 동선 확인하기
-                      </span>
-
-                      <span>→</span>
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
-          {/* 안내 */}
-          <div className="rounded-2xl bg-muted/60 p-4">
-            <p className="text-xs font-medium">
-              AI에게 장보기를 부탁해보세요
-            </p>
-
-            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              필요한 상품을 추천받고,
-              한 번에 장바구니 그룹으로 저장할 수 있어요.
-            </p>
-          </div>
-        </main>
-      ) : (
-        /*
-         * ======================================
-         * AI 대화
-         * ======================================
-         */
-        <main className="px-5 pt-5">
-          <div className="mb-5">
-            <h2 className="font-semibold">
-              AI 대화
-            </h2>
-
-            <p className="mt-1 text-xs text-muted-foreground">
-              저장해둔 대화를 다시 확인할 수 있어요.
-            </p>
-          </div>
-
-          <div className="overflow-hidden rounded-3xl border bg-card">
-            {conversations.map(
-              (conversation, index) => (
+      {tab === "cart" && (
+        <div className="space-y-3">
+          {groups.map((group) => {
+            const isOpen = openGroupId === group.id;
+            return (
+              <div key={group.id} className="rounded-lg border border-border">
                 <button
-                  key={conversation.id}
                   type="button"
-                  className={`w-full p-5 text-left ${
-                    index !==
-                    conversations.length - 1
-                      ? "border-b"
-                      : ""
-                  }`}
+                  onClick={() => setOpenGroupId(isOpen ? null : group.id)}
+                  className="flex w-full items-center justify-between p-4 text-left"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm">
-                      AI
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="truncate text-sm font-medium">
-                          {conversation.title}
-                        </p>
-
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          {conversation.date}
-                        </span>
-                      </div>
-
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                        {conversation.preview}
-                      </p>
-                    </div>
-
-                    <span className="text-muted-foreground">
-                      →
-                    </span>
+                  <div>
+                    <p className="text-sm font-medium">{group.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {group.products.length}개 · {groupTotal(group).toLocaleString()}원 · {group.createdAt}
+                    </p>
                   </div>
+                  <ChevronRight size={16} className={`text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
                 </button>
-              )
-            )}
-          </div>
-        </main>
+
+                {isOpen && (
+                  <div className="border-t border-border p-4 pt-2">
+                    {group.products.length === 0 && (
+                      <p className="py-4 text-center text-xs text-muted-foreground">
+                        아직 담긴 상품이 없어요. 검색이나 "장보기 시작"에서 스캔하면 여기로 옵니다.
+                      </p>
+                    )}
+                    <div className="divide-y divide-border">
+                      {group.products.map((product) => (
+                        <div key={product.id} className="flex items-center gap-3 py-3">
+                          <input
+                            type="checkbox"
+                            checked={product.checked}
+                            onChange={() => handleToggleChecked(group.id, product.id)}
+                            className="h-4 w-4 rounded border-border"
+                          />
+                          <div className="h-14 w-14 shrink-0 rounded-md border border-border bg-muted" />
+                          <div className="flex-1">
+                            <p className="text-sm">{product.name}</p>
+                            <p className="text-xs text-muted-foreground">{product.price.toLocaleString()}원</p>
+                            <div className="mt-1">
+                              <QuantityStepper
+                                quantity={product.quantity}
+                                onChange={(q) => handleQuantityChange(group.id, product.id, q)}
+                                size="sm"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="삭제"
+                            onClick={() => handleRemove(group.id, product.id)}
+                            className="text-muted-foreground"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex items-center gap-1.5"
+                        onClick={() => handleOpenRoute(group)}
+                      >
+                        <MapIcon size={16} />
+                        동선 보기
+                      </Button>
+                      <Button
+                        className="flex items-center gap-1.5"
+                        onClick={() => handleStartShopping(group.id)}
+                      >
+                        <PlayCircle size={16} />
+                        장보기 시작
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {showNewGroupInput ? (
+            <div className="flex gap-2">
+              <Input
+                placeholder="리스트 이름 (예: 이번 주 장보기)"
+                value={newGroupTitle}
+                onChange={(e) => setNewGroupTitle(e.target.value)}
+              />
+              <Button onClick={handleCreateGroup}>추가</Button>
+            </div>
+          ) : (
+            <Button variant="outline" className="w-full" onClick={() => setShowNewGroupInput(true)}>
+              + 새 리스트 만들기
+            </Button>
+          )}
+        </div>
       )}
+
+      {tab === "ai" && (
+        <div className="space-y-2">
+          <Button variant="outline" className="w-full" onClick={handleNewChat}>
+            + 새 대화 시작
+          </Button>
+
+          {loadingSessions && <p className="py-8 text-center text-sm text-muted-foreground">불러오는 중...</p>}
+          {!loadingSessions && sessions.length === 0 && (
+            <p className="py-8 text-center text-sm text-muted-foreground">대화 이력이 없어요.</p>
+          )}
+
+          <div className="divide-y divide-border">
+            {sessions.map((s) => (
+              <Link key={s.sessionId} href={`/ai?session=${s.sessionId}`} className="flex items-center gap-3 py-3">
+                <MessageSquare size={18} className="shrink-0 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm">{s.title ?? "새 대화"}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(s.updatedAt).toLocaleString("ko-KR")}</p>
+                </div>
+                <ChevronRight size={16} className="text-muted-foreground" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <RouteDialog open={routeOpen} onClose={() => setRouteOpen(false)} stops={routeStops} />
     </div>
   );
 }

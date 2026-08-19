@@ -94,7 +94,7 @@ export default function MyPage() {
                   <Link href="/auth/login">
                     <Button variant="outline" className="w-full">로그인</Button>
                   </Link>
-                  <Link href="/auth/signup">
+                  <Link href="/auth/signup/terms">
                     <Button className="w-full">회원가입</Button>
                   </Link>
                 </div>

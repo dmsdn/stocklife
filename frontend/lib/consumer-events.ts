@@ -1,36 +1,41 @@
 // lib/consumer-events.ts
-// ML_근거.md §2 / DB스키마_초안.md §2.2 계약:
-// - SCAN_ADD / CART_ADD / CART_REMOVE / CHECKOUT / SEARCH 를 발생 즉시 개별 전송 (배치 금지)
-// - occurred_at은 이벤트 생성 시점에 밀리초까지 고정 캡처 (전송 지연·재시도와 분리)
-// - 네트워크 실패 시 로컬 큐에 원래 occurred_at 그대로 보존, 온라인 복귀 시 순서대로 재전송
+// ✅ 이번에 실제 수집 엔드포인트(ConsumerEventController: POST /api/events)를 확인했습니다.
+//   지난번까지 가정했던 계약과 다른 점이 세 가지 있어서 전면 수정했습니다.
 //
-// ⚠ 백엔드 소스 전체를 확인했는데 이 이벤트를 받는 컨트롤러가 없습니다 (consumer_events
-//   관련 파일 자체가 없음). 그래서 지금은 계속 실패 → 로컬 큐에 쌓이기만 하고 서버로는
-//   전송이 안 됩니다. 큐 적재/재전송 로직 자체는 정상 동작하니, 백엔드에 수집 엔드포인트가
-//   생기면 아래 ENDPOINT 값만 바꾸면 바로 붙습니다.
+// 1. 이벤트 타입이 6종입니다: SCAN_ADD, SCAN_REMOVE, SEARCH, VIEW, LIST_EDIT, PURCHASE
+//    — 예전에 쓰던 CART_ADD / CART_REMOVE / CHECKOUT은 백엔드에 없는 값입니다.
+//    CART_ADD·CART_REMOVE는 LIST_EDIT(payload.action으로 구분)에, CHECKOUT은 PURCHASE에 맞춰
+//    호출부(search/cart 페이지)를 같이 고쳤습니다.
+// 2. occurred_at을 서버가 받지 않습니다 — ConsumerEventService가 Instant.now()로 직접
+//    찍습니다. 그래서 "네트워크 끊겨도 원래 발생 시각을 보존한다"는 예전 설계 의도는
+//    이 백엔드 기준으로는 의미가 없어졌습니다. 재전송 큐 자체는 여전히 유용해서 남겨뒀지만,
+//    시각 보존 목적이 아니라 "실패한 이벤트를 나중에라도 보낸다" 정도로 이해하시면 됩니다.
+// 3. 요청 바디가 camelCase입니다 (eventType/sessionId/skuId/locationId/payload) —
+//    스네이크케이스가 아닙니다. session_id는 lib/session.ts의 실제 발급 세션을 사용합니다.
 "use client";
 
-import { getSessionId } from "./session";
+import { apiFetch } from "./api-client";
+import { getOrCreateSessionId } from "./session";
 
-export type ConsumerEventType = "SCAN_ADD" | "CART_ADD" | "CART_REMOVE" | "CHECKOUT" | "SEARCH";
+export type ConsumerEventType = "SCAN_ADD" | "SCAN_REMOVE" | "SEARCH" | "VIEW" | "LIST_EDIT" | "PURCHASE";
 
 export interface ConsumerEventInput {
   event_type: ConsumerEventType;
   sku_id?: number;
-  barcode?: string;
   location_id?: string;
-  meta?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
 }
 
-interface QueuedEvent extends ConsumerEventInput {
-  event_id: string;
-  occurred_at: string;
-  session_id: string | null;
+interface QueuedEvent {
+  eventType: ConsumerEventType;
+  sessionId: string;
+  skuId?: number;
+  locationId?: string;
+  payload?: string;
 }
 
 const QUEUE_KEY = "storeflow_consumer_event_queue";
-// TODO: 백엔드에 수집 엔드포인트 생기면 이 경로로 교체 (현재는 존재하지 않음 — 확인 완료)
-const ENDPOINT = "/api/consumer-events";
+const ENDPOINT = "/api/events";
 
 function readQueue(): QueuedEvent[] {
   if (typeof window === "undefined") return [];
@@ -48,25 +53,22 @@ function writeQueue(queue: QueuedEvent[]) {
 
 async function send(event: QueuedEvent): Promise<boolean> {
   try {
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(event),
-      keepalive: true,
-    });
-    return res.ok;
+    await apiFetch(ENDPOINT, { method: "POST", body: JSON.stringify(event) });
+    return true;
   } catch {
     return false;
   }
 }
 
 export async function trackConsumerEvent(input: ConsumerEventInput) {
-  // occurred_at은 전송 성공 여부와 무관하게 지금 이 순간(호출 시점)으로 고정한다.
+  const sessionId = await getOrCreateSessionId();
+
   const event: QueuedEvent = {
-    ...input,
-    event_id: crypto.randomUUID(),
-    occurred_at: new Date().toISOString(),
-    session_id: getSessionId(),
+    eventType: input.event_type,
+    sessionId,
+    skuId: input.sku_id,
+    locationId: input.location_id,
+    payload: input.payload ? JSON.stringify(input.payload) : undefined,
   };
 
   const ok = await send(event);
@@ -75,7 +77,7 @@ export async function trackConsumerEvent(input: ConsumerEventInput) {
   }
 }
 
-/** 온라인 복귀·앱 진입 시 큐에 쌓인 이벤트를 원래 occurred_at 그대로 재전송 */
+/** 온라인 복귀·앱 진입 시 큐에 쌓인 이벤트를 재전송 */
 export async function flushConsumerEventQueue() {
   const queue = readQueue();
   if (queue.length === 0) return;
