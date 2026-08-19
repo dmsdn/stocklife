@@ -65,14 +65,15 @@ public class ConsumerService {
         String encodedPassword = passwordEncoder.encode(request.getPassword());
 
         Consumer consumer = new Consumer(
-                request.getPhoneNumber(),
-                encodedPassword,
-                request.getGender(),
-                request.getBirthDate(),
-                request.isCameraConsent(),
-                request.isPersonalInfoConsent(),
-                request.isMicConsent()
-        );
+        request.getPhoneNumber(),
+        encodedPassword,
+        request.getGender(),
+        request.getBirthDate(),
+        request.isCameraConsent(),
+        request.isPersonalInfoConsent(),
+        request.isMicConsent(),
+        request.isMarketingConsent()
+);
 
         consumerRepository.save(consumer); // IDENTITY라 save 직후 consumerId가 채워짐
 
