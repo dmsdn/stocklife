@@ -132,9 +132,14 @@ def log_event(
         "memberId": member_id,
         "skuId": sku_id,
         "locationId": location_id,
-        "payloadJson": json.dumps(payload or {}, ensure_ascii=False),
+        # 백엔드 InternalEventController.InternalConsumerEventRequest는 필드명이
+        # "payload"(String)다 — "payloadJson"으로 보내면 백엔드가 이 값을 못 읽어
+        # payload가 항상 null로 기록된다.
+        "payload": json.dumps(payload or {}, ensure_ascii=False),
     }
-    return _post("/internal/events", json_body=body, headers=headers)
+    # 엔드포인트도 "/internal/events"가 아니라 "/internal/events/consumer"다.
+    # "/internal/events"로 보내면 매핑이 없어 404가 난다(shelf 이벤트는 /internal/events/shelf).
+    return _post("/internal/events/consumer", json_body=body, headers=headers)
 
 
 # ---------------------------------------------------------------------------
