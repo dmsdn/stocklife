@@ -1,5 +1,6 @@
 package com.storeflow.consumer.service;
 
+import com.storeflow.cart.service.CartService;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.SignupRequest;
@@ -28,22 +29,27 @@ public class ConsumerService {
     private final PasswordEncoder passwordEncoder;
     private final ConsumerJwtUtil jwtUtil;
     private final ConsumerEventRepository consumerEventRepository;
+    private final CartService cartService;
 
     public ConsumerService(ConsumerRepository consumerRepository,
                            MemberRepository memberRepository,
                            PasswordEncoder passwordEncoder,
                            ConsumerJwtUtil jwtUtil,
-                           ConsumerEventRepository consumerEventRepository) {
+                           ConsumerEventRepository consumerEventRepository,
+                           CartService cartService) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.consumerEventRepository = consumerEventRepository;
+        this.cartService = cartService;
     }
 
     @Transactional
     public void signup(SignupRequest request) {
-        if (consumerRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+        // 전화번호는 필수 항목이 아니므로, 값이 있을 때만 중복 체크한다.
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()
+                && consumerRepository.existsByPhoneNumber(request.getPhoneNumber())) {
             throw new IllegalStateException("이미 가입된 전화번호입니다.");
         }
 
@@ -56,16 +62,30 @@ public class ConsumerService {
                 request.getBirthDate(),
                 request.isCameraConsent(),
                 request.isPersonalInfoConsent(),
-                request.isMicConsent()
+                request.isMicConsent(),
+                request.isMarketingConsent()
         );
 
         consumerRepository.save(consumer); // IDENTITY라 save 직후 consumerId가 채워짐
 
-        // member_id는 저장하지 않고 계산(Member.toMemberId). persona_type은 반드시 '실사용자'
-        // 문자열 그대로 — Agent 쪽이 학습 데이터에서 이 값으로 필터링함.
-        // household_size는 가입 폼에 없는 값이라 NULL — 나중에 마이페이지 등에서 채움.
+        // member_id는 저장하지 않고 계산(Member.toMemberId).
+        // 스키마 v2.5: persona_type 폐기 → household_size/has_pet/has_child/by_car.
+        // 전부 선택 입력이라 안 받은 값은 그대로 null로 저장한다.
+        // 주의: null을 임의로 0/1(=false)로 채우면 안 됨 — "안 물어봄"과 "아니오"는 다른 의미이고,
+        // 잘못 채우면 Agent 쪽 추천이 조용히 틀어진다.
+        Byte householdSize = request.getHouseholdSize() == null
+                ? null
+                : request.getHouseholdSize().byteValue();
+
         int memberId = Member.toMemberId(consumer.getConsumerId());
-        memberRepository.save(new Member(memberId, "실사용자", null, Instant.now()));
+        memberRepository.save(new Member(
+                memberId,
+                householdSize,
+                request.getHasPet(),
+                request.getHasChild(),
+                request.getByCar(),
+                Instant.now()
+        ));
     }
 
     @Transactional
@@ -82,15 +102,20 @@ public class ConsumerService {
 
         consumer.updateRefreshToken(refreshToken);
 
-        // 요구사항 29: 비회원 상태로 쌓인 행동 기록(consumer_events)을 이 계정으로 승계한다.
+        // 요구사항 29: 비회원 상태로 쌓인 데이터(행동 기록 + 장바구니)를 이 계정으로 승계한다.
+        // 두 승계 모두 이 메서드의 @Transactional 하나 안에서 처리 — 한쪽만 성공하고 롤백되는
+        // 상황이 생기지 않도록 같은 트랜잭션에 둔다.
         // member_id는 Member.toMemberId(consumerId)와 동일한 계산식으로 구해야 값이 일치한다.
         if (request.getSessionId() != null && !request.getSessionId().isBlank()) {
             Integer memberId = Member.toMemberId(consumer.getConsumerId());
-            int claimed = consumerEventRepository.claimGuestEvents(request.getSessionId(), memberId);
-            if (claimed > 0) {
+            int claimedEvents = consumerEventRepository.claimGuestEvents(request.getSessionId(), memberId);
+            if (claimedEvents > 0) {
                 log.info("비회원 이벤트 {}건을 sessionId={} → memberId={} 로 승계했습니다.",
-                        claimed, request.getSessionId(), memberId);
+                        claimedEvents, request.getSessionId(), memberId);
             }
+
+            // 요구사항: 비회원 → 회원 장바구니 승계. 동일 SKU는 수량 병합(claimGuestCart 내부 처리).
+            cartService.claimGuestCart(request.getSessionId(), consumer.getConsumerId());
         }
 
         return new LoginResponse(accessToken, refreshToken);

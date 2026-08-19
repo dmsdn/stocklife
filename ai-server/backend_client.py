@@ -95,6 +95,29 @@ def search_products(
     return _get("/api/products/search-advanced", params=params)
 
 
+def search_by_category(
+        category_l2: str | None = None,
+        on_promo_only: bool = False,
+        recent_days: int | None = None,
+        max_price: int | None = None,
+) -> dict:
+    """
+    취향 추천용 — '이 카테고리에서 신상만' 또는 '이 카테고리에서 행사 중인 것만' 조회.
+    search_products(search-advanced)는 onPromo/recentDays 필터가 없어서 못 쓴다.
+    /api/products/search(단순 조건형, 요구사항 8번)를 쓴다 — 공개 API라 인증 불필요.
+    """
+    params = {}
+    if category_l2:
+        params["categoryL2"] = category_l2
+    if on_promo_only:
+        params["onPromo"] = True
+    if recent_days is not None:
+        params["recentDays"] = recent_days
+    if max_price is not None:
+        params["maxPrice"] = max_price
+    return _get("/api/products/search", params=params)
+
+
 def get_products_by_skus(sku_ids: list[int]) -> dict:
     if not sku_ids:
         return {"ok": True, "status": 200, "data": []}
@@ -107,6 +130,81 @@ def get_product_detail(sku_id: int) -> dict:
 
 def get_alternatives(sku_id: int) -> dict:
     return _get(f"/api/products/{sku_id}/alternatives/candidates")
+
+
+def get_top_categories(
+        tool_input: dict, bearer_token: str | None, consumer_id: int | None
+) -> dict:
+    """
+    취향 추천 1단계 — 이 회원이 최근 많이 산 카테고리 랭킹. GET /api/purchases/top-categories.
+    find_frequent_purchase와 동일하게 bearer_token(프론트 직접 호출 경로) /
+    consumer_id + X-Internal-Service-Key(Backend 서버 대 서버 경로) 둘 다 지원한다.
+    """
+    lookback_days = tool_input.get("lookback_days")
+    limit = tool_input.get("limit")
+
+    if bearer_token:
+        params = {}
+        if lookback_days:
+            params["lookbackDays"] = lookback_days
+        if limit:
+            params["limit"] = limit
+        return _get("/api/purchases/top-categories", params=params, headers=_auth_headers(bearer_token))
+
+    if not consumer_id:
+        return {"ok": False, "error": "비회원은 구매 이력 기반 추천을 받을 수 없습니다. 로그인이 필요해요."}
+    if not INTERNAL_SERVICE_KEY:
+        return {"ok": False, "status": 501, "error": "INTERNAL_SERVICE_KEY 미설정 - /internal/purchases/top-categories 연동 필요"}
+
+    params = {"consumerId": consumer_id}
+    if lookback_days:
+        params["lookbackDays"] = lookback_days
+    if limit:
+        params["limit"] = limit
+    headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
+    return _get("/internal/purchases/top-categories", params=params, headers=headers)
+
+
+def compare_purchase_popularity(
+        sku_ids: list[int],
+        lookback_days: int | None,
+        bearer_token: str | None,
+) -> dict:
+    """
+    "A샴푸랑 B샴푸 중 뭐가 더 잘 나가?" 같은 질문용. GET /api/purchases/compare.
+    개인 구매내역이 아니라 전 회원 합계/구매자 수만 반환하는 공개 성격의 데이터지만,
+    백엔드 PurchaseController가 @CurrentConsumer로 Bearer 토큰을 요구하므로
+    (CurrentConsumerArgumentResolver가 토큰 없으면 예외) bearer_token이 반드시 있어야 한다.
+    """
+    if not sku_ids:
+        return {"ok": False, "error": "비교할 sku_id가 없습니다."}
+    if not bearer_token:
+        return {"ok": False, "error": "로그인이 필요합니다. (판매 집계 조회는 인증된 사용자만 가능)"}
+
+    params = {"skuIds": sku_ids}
+    if lookback_days:
+        params["lookbackDays"] = lookback_days
+    return _get("/api/purchases/compare", params=params, headers=_auth_headers(bearer_token))
+
+
+def get_popular_products(
+        category_l2: str | None,
+        lookback_days: int | None,
+        limit: int | None,
+        bearer_token: str | None,
+) -> dict:
+    """"요즘 뭐가 잘 나가?" 같은 질문용. GET /api/purchases/popular. 인증 필요(위와 동일 이유)."""
+    if not bearer_token:
+        return {"ok": False, "error": "로그인이 필요합니다. (판매 집계 조회는 인증된 사용자만 가능)"}
+
+    params = {}
+    if category_l2:
+        params["categoryL2"] = category_l2
+    if lookback_days:
+        params["lookbackDays"] = lookback_days
+    if limit:
+        params["limit"] = limit
+    return _get("/api/purchases/popular", params=params, headers=_auth_headers(bearer_token))
 
 
 # ---------------------------------------------------------------------------
@@ -132,9 +230,14 @@ def log_event(
         "memberId": member_id,
         "skuId": sku_id,
         "locationId": location_id,
-        "payloadJson": json.dumps(payload or {}, ensure_ascii=False),
+        # 백엔드 InternalEventController.InternalConsumerEventRequest는 필드명이
+        # "payload"(String)다 — "payloadJson"으로 보내면 백엔드가 이 값을 못 읽어
+        # payload가 항상 null로 기록된다.
+        "payload": json.dumps(payload or {}, ensure_ascii=False),
     }
-    return _post("/internal/events", json_body=body, headers=headers)
+    # 엔드포인트도 "/internal/events"가 아니라 "/internal/events/consumer"다.
+    # "/internal/events"로 보내면 매핑이 없어 404가 난다(shelf 이벤트는 /internal/events/shelf).
+    return _post("/internal/events/consumer", json_body=body, headers=headers)
 
 
 # ---------------------------------------------------------------------------
@@ -241,3 +344,44 @@ def find_frequent_purchase(
         params["minCount"] = min_count
     headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
     return _get("/internal/orders/frequent", params=params, headers=headers)
+# ---------------------------------------------------------------------------
+# 능동 개입 watcher 전용 내부 API
+# ---------------------------------------------------------------------------
+
+def get_product_metrics_internal(sku_ids: list[int]) -> dict:
+    """
+    Agent 전용 상품 통합 지표. Backend가 최근 30일 판매/행동, 누적 판매, 재구매율을
+    모두 계산해서 반환한다. 웹 평판은 이 API 범위가 아니다.
+    """
+    if not sku_ids:
+        return {"ok": False, "error": "조회할 sku_id가 없습니다."}
+    if not INTERNAL_SERVICE_KEY:
+        return {"ok": False, "status": 501, "error": "INTERNAL_SERVICE_KEY 미설정"}
+
+    headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
+    return _get("/internal/products/metrics", params={"skuIds": sku_ids}, headers=headers)
+
+
+def compare_purchase_popularity_internal(sku_ids: list[int], lookback_days: int | None = None) -> dict:
+    """SSE watcher는 사용자 JWT가 없으므로 내부 서비스 키로 전체 판매 집계를 조회한다."""
+    if not sku_ids:
+        return {"ok": False, "error": "비교할 sku_id가 없습니다."}
+    if not INTERNAL_SERVICE_KEY:
+        return {"ok": False, "status": 501, "error": "INTERNAL_SERVICE_KEY 미설정"}
+    params = {"skuIds": sku_ids}
+    if lookback_days:
+        params["lookbackDays"] = lookback_days
+    headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
+    return _get("/internal/purchases/compare", params=params, headers=headers)
+
+
+def push_proactive_message(session_id: str, content: str) -> dict:
+    """Agent가 먼저 건 말을 Backend에 저장한다. Backend가 Frontend SSE에도 중계한다."""
+    if not INTERNAL_SERVICE_KEY:
+        return {"ok": False, "status": 501, "error": "INTERNAL_SERVICE_KEY 미설정"}
+    headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY}
+    return _post(
+        "/internal/chat/proactive",
+        json_body={"sessionId": session_id, "content": content},
+        headers=headers,
+    )

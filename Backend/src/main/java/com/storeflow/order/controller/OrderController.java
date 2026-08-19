@@ -36,7 +36,7 @@ public class OrderController {
 
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrderDetail(@CurrentConsumer Long consumerId,
-                                                        @PathVariable Long orderId) {
+            @PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.getOrderDetail(consumerId, orderId));
     }
 
@@ -44,7 +44,7 @@ public class OrderController {
      * "내가 항상 구매하는 휴지 장바구니에 담아줘" 같은 요청을 위한 반복 구매 조회.
      * 프론트가 사용자 JWT로 직접 호출하는 공개 엔드포인트다.
      * (Agent 서버가 서버 대 서버로 호출하는 경우는 InternalOrderController의
-     *  /internal/orders/frequent 를 대신 사용한다 — 거긴 JWT가 없기 때문)
+     * /internal/orders/frequent 를 대신 사용한다 — 거긴 JWT가 없기 때문)
      *
      * 예: GET /api/orders/frequent?keyword=휴지&minCount=2
      */
@@ -54,5 +54,23 @@ public class OrderController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long minCount) {
         return ResponseEntity.ok(orderService.getFrequentPurchases(consumerId, keyword, minCount));
+    }
+
+    @PostMapping("/{orderId}/refund/request")
+    public ResponseEntity<?> requestRefund(@CurrentConsumer Long consumerId, @PathVariable Long orderId) {
+        try {
+            return ResponseEntity.ok(orderService.requestRefund(consumerId, orderId));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{orderId}/refund/approve")
+    public ResponseEntity<?> approveRefund(@CurrentConsumer Long consumerId, @PathVariable Long orderId) {
+        try {
+            return ResponseEntity.ok(orderService.approveRefund(consumerId, orderId));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(e.getMessage());
+        }
     }
 }

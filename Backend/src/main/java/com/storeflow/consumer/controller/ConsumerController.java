@@ -25,6 +25,10 @@ public class ConsumerController {
         return ResponseEntity.status(201).build();
     }
 
+    // v2.5: persona_type 선택지 목록 API(/persona-types)는 폐기.
+    // household_size(1~5)/has_pet/has_child/by_car는 고정된 선택지 목록이 필요 없어
+    // 프론트가 하드코딩해도 되는 값이라 별도 조회 API를 두지 않는다.
+
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         LoginResponse response = consumerService.login(request);

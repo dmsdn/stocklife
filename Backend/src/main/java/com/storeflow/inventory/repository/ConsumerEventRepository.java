@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+
 public interface ConsumerEventRepository extends JpaRepository<ConsumerEvent, Long> {
 
     /**
@@ -17,4 +19,18 @@ public interface ConsumerEventRepository extends JpaRepository<ConsumerEvent, Lo
     @Query("UPDATE ConsumerEvent e SET e.memberId = :memberId " +
             "WHERE e.sessionId = :sessionId AND e.memberId IS NULL")
     int claimGuestEvents(@Param("sessionId") String sessionId, @Param("memberId") Integer memberId);
+
+    /**
+     * 상품별 행동 지표 집계. SEARCH는 sku_id가 있는 이벤트만 상품별 검색수로 잡힌다.
+     */
+    @Query("""
+        SELECT COUNT(e)
+        FROM ConsumerEvent e
+        WHERE e.skuId = :skuId
+          AND e.eventType = :eventType
+          AND e.occurredAt >= :since
+        """)
+    long countBySkuAndTypeSince(@Param("skuId") Integer skuId,
+                                @Param("eventType") ConsumerEvent.EventType eventType,
+                                @Param("since") Instant since);
 }

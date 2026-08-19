@@ -36,6 +36,9 @@ from ai_agent_shop import (
     TOOLS as SHOP_TOOLS,
     _run_search_products,
     _run_compare_products,
+    _run_recommend_by_preference,
+    _run_get_product_metrics,
+    _run_find_substitutes,
     DEFAULT_FREQUENT_MIN_COUNT,
 )
 
@@ -76,6 +79,17 @@ SYSTEM_PROMPT = (
     "5. 도구 결과에 없는 가격/상품/재고를 지어내지 마라. 도구가 실패(ok=false)하면 "
     "사용자에게 실패 사실을 솔직하게 알려라.\n"
     "6. 순수 잡담/질문이면 도구를 안 써도 된다.\n"
+    "7. '나한테 추천해줘', '내 취향에 맞는 거 있어?'처럼 막연한 개인화 추천 요청은 "
+    "recommend_by_preference를 호출해라. 결과의 categories_used(회원이 많이 산 카테고리)와 "
+    "items의 reason(신상/행사)을 근거로 이유를 함께 설명해라. items가 비어 있으면 note의 "
+    "사유를 그대로 전달하고 상품을 지어내지 마라. 비회원(consumerId 없음)이면 로그인을 "
+    "안내하고 이 도구를 부르지 마라.\n"
+    "8. 상품의 최근 판매량/누적 판매량/담기/검색/조회/재구매율을 함께 묻거나 종합 비교를 "
+    "요구하면 get_product_metrics를 사용해라. 상품명이면 search_products로 sku_id부터 확정한다. "
+    "웹 평판은 이 Backend 지표에 없으므로 지어내지 마라.\n"
+    "9. '대체상품 추천', '이거 대신 살 거', '품절인데 비슷한 거' 요청이면 상품명이 있을 때 "
+    "search_products로 원래 sku_id를 확정한 뒤 find_substitutes를 호출해라. 결과에 없는 상품을 "
+    "대체상품이라고 지어내지 말고, personalized/reasons/행사/가격/반응 지표를 근거로 설명해라.\n"
     "모든 도구 호출이 끝나면 실제 결과만 근거로 2~3문장 한국어로 답해라."
 )
 
@@ -219,6 +233,24 @@ def _call_orders_api_internal(action: str, tool_input: dict, consumer_id: int | 
         return {"ok": False, "error": f"주문 이력 서버 연결 실패: {e}"}
 
 
+def _call_purchase_stats_unavailable(name: str) -> dict:
+    """
+    compare_purchase_popularity / get_popular_products는 백엔드 PurchaseController가
+    @CurrentConsumer(Bearer JWT 필수)로만 열려 있고 /internal 대응 엔드포인트가 없다.
+    이 /agent/chat 경로는 Backend가 서버 대 서버로 호출해서 JWT가 없으므로 이 두 도구는
+    여기서는 쓸 수 없다 — ai_agent_shop.py(/api/ai/agent/shop, 프론트가 사용자 JWT를 직접
+    실어 호출하는 경로)에서는 정상 동작한다.
+    """
+    return {
+        "ok": False,
+        "status": 501,
+        "error": (
+            f"{name}은(는) 이 채팅 경로에서 아직 지원되지 않습니다. "
+            "판매량 비교는 로그인한 사용자가 /api/ai/agent/shop 경로로 물어봐야 합니다."
+        ),
+    }
+
+
 def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
@@ -228,6 +260,16 @@ def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict
         return _call_orders_api_internal(name, tool_input, consumer_id)
     if name in ("add_to_cart", "update_cart_item", "remove_from_cart", "get_cart"):
         return _call_cart_api_internal(name, tool_input, consumer_id)
+    if name in ("compare_purchase_popularity", "get_popular_products"):
+        return _call_purchase_stats_unavailable(name)
+    if name == "get_product_metrics":
+        return _run_get_product_metrics(tool_input)
+    if name == "find_substitutes":
+        return _run_find_substitutes(tool_input, bearer_token=None, consumer_id=consumer_id)
+    if name == "recommend_by_preference":
+        # get_top_categories는 /internal/purchases/top-categories(consumer_id + 서비스 키)로,
+        # search_by_category는 공개 API라 이 경로(JWT 없음)에서도 그대로 동작한다.
+        return _run_recommend_by_preference(tool_input, bearer_token=None, consumer_id=consumer_id)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
 
 

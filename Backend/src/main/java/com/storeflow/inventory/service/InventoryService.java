@@ -22,8 +22,8 @@ import java.util.Map;
 @Service
 public class InventoryService {
 
-    private static final List<ShelfEvent.EventType> CHANGE_EVENT_TYPES =
-            List.of(ShelfEvent.EventType.MOVE, ShelfEvent.EventType.RESTOCK_IN, ShelfEvent.EventType.STOCKOUT);
+    private static final List<ShelfEvent.EventType> CHANGE_EVENT_TYPES = List.of(ShelfEvent.EventType.MOVE,
+            ShelfEvent.EventType.RESTOCK_IN, ShelfEvent.EventType.STOCKOUT);
 
     private final StockRepository stockRepository;
     private final ShelfConfigRepository shelfConfigRepository;
@@ -32,10 +32,10 @@ public class InventoryService {
     private final EventBroadcastService eventBroadcastService;
 
     public InventoryService(StockRepository stockRepository,
-                            ShelfConfigRepository shelfConfigRepository,
-                            ShelfEventRepository shelfEventRepository,
-                            ProductRepository productRepository,
-                            EventBroadcastService eventBroadcastService) {
+            ShelfConfigRepository shelfConfigRepository,
+            ShelfEventRepository shelfEventRepository,
+            ProductRepository productRepository,
+            EventBroadcastService eventBroadcastService) {
         this.stockRepository = stockRepository;
         this.shelfConfigRepository = shelfConfigRepository;
         this.shelfEventRepository = shelfEventRepository;
@@ -56,7 +56,7 @@ public class InventoryService {
 
     @Transactional
     public void applyChange(Integer skuId, String locationId, int deltaQty,
-                            ShelfEvent.EventType eventType, String taskId) {
+            ShelfEvent.EventType eventType, String taskId) {
         Stock stock = stockRepository.findWithLockBySkuIdAndLocationId(skuId, locationId)
                 .orElseThrow(() -> new IllegalStateException(
                         "재고 행이 없습니다. skuId=" + skuId + ", locationId=" + locationId));
@@ -141,5 +141,15 @@ public class InventoryService {
         return shelfEventRepository.findChangeEvents(CHANGE_EVENT_TYPES, skuIds, since).stream()
                 .map(ChangeEventResponse::new)
                 .toList();
+    }
+
+    /** 환불 승인 시 재고 복원(33번). RESTOCK_IN 이벤트로 기록 — 판매 때 뺐던 PICK 위치에 되돌린다. */
+    @Transactional
+    public void restockForRefund(Integer skuId, int qty) {
+        String pickLocationId = stockRepository
+                .findLocationIdBySkuIdAndTierRole(skuId, Location.TierRole.PICK)
+                .orElseThrow(() -> new IllegalStateException(
+                        "PICK 위치 재고를 찾을 수 없습니다. skuId=" + skuId));
+        applyChange(skuId, pickLocationId, qty, ShelfEvent.EventType.RESTOCK_IN, null);
     }
 }

@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS chat_message (
     CONSTRAINT fk_chat_message_session
     FOREIGN KEY (chat_session_id) REFERENCES chat_session(chat_session_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+ALTER TABLE consumer
+    ADD COLUMN marketing_consent BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE consumer
+    MODIFY COLUMN camera_consent BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE consumer
+    MODIFY COLUMN mic_consent BOOLEAN NOT NULL DEFAULT FALSE;
