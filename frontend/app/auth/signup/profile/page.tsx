@@ -1,64 +1,146 @@
-// app/auth/signup/profile/page.tsx
-
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { writeSignupDraft } from "@/lib/signup-draft";
 
-type Gender = "" | "MALE" | "FEMALE";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+import { signup } from "@/lib/auth";
+import {
+  clearSignupDraft,
+  clearSignupProfileDraft,
+  readSignupDraft,
+} from "@/lib/signup-draft";
 
 export default function SignupProfilePage() {
   const router = useRouter();
 
-  const [form, setForm] = useState({
-    householdSize: 1,
-    gender: "" as Gender,
-    birthDate: "",
-  });
+  const [showSkipDialog, setShowSkipDialog] =
+    useState(false);
 
-  // 가구원 수 변경
-  const updateHouseholdSize = (value: number) => {
-    if (value < 1 || value > 20) return;
+  const [submitting, setSubmitting] =
+    useState(false);
 
-    setForm((prev) => ({
-      ...prev,
-      householdSize: value,
-    }));
+  const [error, setError] =
+    useState<string | null>(null);
+
+  /*
+   * 새로운 추가정보 입력을 시작한다.
+   *
+   * 이전에 입력했던 추가정보는 전부 제거하고
+   * 전화번호 / 비밀번호 / 약관 동의만 유지한다.
+   */
+  const handleStart = () => {
+    clearSignupProfileDraft();
+
+    router.push(
+      "/auth/signup/profile/birth-date"
+    );
   };
 
-  // 성별 선택
-  // 같은 버튼을 다시 누르면 선택 취소
-  const selectGender = (gender: Gender) => {
-    setForm((prev) => ({
-      ...prev,
-      gender: prev.gender === gender ? "" : gender,
-    }));
+  /*
+   * 추가정보 전체 건너뛰기.
+   */
+  const handleSkipAll = () => {
+    setShowSkipDialog(true);
   };
 
-  // 저장하기
-  const handleSave = () => {
-    writeSignupDraft({
-      gender: form.gender || undefined,
-      birthDate: form.birthDate || undefined,
-      householdSize: form.householdSize,
-    });
+  /*
+   * 추가정보를 모두 버리고 바로 가입.
+   */
+  const handleConfirmSkipAll = async () => {
+    clearSignupProfileDraft();
 
-    router.push("/auth/signup/terms");
+    setShowSkipDialog(false);
+
+    await handleSignup();
   };
 
-  // 건너뛰기
-  const handleSkip = () => {
-  writeSignupDraft({
-    gender: undefined,
-    birthDate: undefined,
-    householdSize: undefined,
-  });
+  /*
+   * 최종 회원가입
+   */
+  const handleSignup = async () => {
+    setError(null);
 
-  router.push("/auth/signup/terms");
-};
+    const draft = readSignupDraft();
+
+    if (!draft.phoneNumber) {
+      setError(
+        "전화번호 입력부터 다시 진행해주세요."
+      );
+      return;
+    }
+
+    if (!draft.password) {
+      setError(
+        "비밀번호 입력부터 다시 진행해주세요."
+      );
+      return;
+    }
+
+    /*
+     * 백엔드 수정 전 임시 조건.
+     * 카메라 / 마이크가 선택사항으로 바뀌면
+     * 이 부분도 수정한다.
+     */
+    if (
+      draft.personalInfoConsent !== true ||
+      draft.cameraConsent !== true ||
+      draft.micConsent !== true
+    ) {
+      setError(
+        "필수 동의 항목을 확인해주세요."
+      );
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      await signup({
+        phoneNumber: draft.phoneNumber,
+        password: draft.password,
+
+        gender:
+          draft.gender || undefined,
+
+        birthDate:
+          draft.birthDate || undefined,
+
+        cameraConsent:
+          draft.cameraConsent,
+
+        personalInfoConsent:
+          draft.personalInfoConsent,
+
+        micConsent:
+          draft.micConsent,
+      });
+
+      clearSignupDraft();
+
+      router.push("/auth/login");
+    } catch (e) {
+      console.error(
+        "회원가입 실패:",
+        e
+      );
+
+      setError(
+        "회원가입에 실패했습니다. 입력하신 정보를 확인해주세요."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex min-h-full flex-col">
@@ -69,116 +151,74 @@ export default function SignupProfilePage() {
           입력해주세요
         </p>
 
-        <div className="space-y-8">
-          {/* 가구원 수 */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium">
-              가구원 수
-            </p>
-
-            <div className="flex h-12 items-center justify-between rounded-lg border px-4">
-              <button
-                type="button"
-                onClick={() =>
-                  updateHouseholdSize(form.householdSize - 1)
-                }
-                disabled={form.householdSize <= 1}
-                className="flex h-8 w-8 items-center justify-center text-2xl disabled:opacity-30"
-                aria-label="가구원 수 줄이기"
-              >
-                −
-              </button>
-
-              <span className="text-base font-medium">
-                {form.householdSize}명
-              </span>
-
-              <button
-                type="button"
-                onClick={() =>
-                  updateHouseholdSize(form.householdSize + 1)
-                }
-                disabled={form.householdSize >= 20}
-                className="flex h-8 w-8 items-center justify-center text-2xl disabled:opacity-30"
-                aria-label="가구원 수 늘리기"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-          {/* 성별 */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium">
-              성별
-            </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => selectGender("MALE")}
-                className={`h-12 rounded-lg border text-sm font-medium transition ${
-                  form.gender === "MALE"
-                    ? "border-black bg-black text-white"
-                    : "border-gray-200 bg-white text-gray-700"
-                }`}
-              >
-                남
-              </button>
-
-              <button
-                type="button"
-                onClick={() => selectGender("FEMALE")}
-                className={`h-12 rounded-lg border text-sm font-medium transition ${
-                  form.gender === "FEMALE"
-                    ? "border-black bg-black text-white"
-                    : "border-gray-200 bg-white text-gray-700"
-                }`}
-              >
-                여
-              </button>
-            </div>
-          </div>
-
-          {/* 생년월일 */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium">
-              생년월일
-            </p>
-
-            <Input
-              type="date"
-              value={form.birthDate}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  birthDate: e.target.value,
-                }))
-              }
-              className="h-12 rounded-lg"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 하단 버튼 */}
-      <div className="mt-auto space-y-4 pt-10">
         <Button
           type="button"
-          className="h-12 w-full"
-          onClick={handleSave}
+          onClick={handleStart}
+          disabled={submitting}
+          className="h-12 w-full rounded-sm"
         >
-          저장하기
+          추가정보 입력하기
         </Button>
 
+        {error && (
+          <p className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-auto pt-10">
         <button
           type="button"
-          onClick={handleSkip}
-          className="w-full text-center text-sm text-gray-500"
+          onClick={handleSkipAll}
+          disabled={submitting}
+          className="flex h-12 w-full items-center justify-center rounded-sm text-sm text-muted-foreground transition hover:bg-muted disabled:opacity-50"
         >
-          건너뛰기
+          추가정보 전체 건너뛰기
         </button>
       </div>
+
+      <Dialog
+        open={showSkipDialog}
+        onOpenChange={setShowSkipDialog}
+      >
+        <DialogContent
+          showCloseButton
+          className="max-w-sm"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              추가정보를 모두 건너뛸까요?
+            </DialogTitle>
+
+            <DialogDescription>
+              추가정보를 입력하지 않고
+              회원가입을 진행합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() =>
+                setShowSkipDialog(false)
+              }
+              className="rounded-sm border border-border px-4 py-2 text-sm"
+            >
+              계속 입력하기
+            </button>
+
+            <Button
+              type="button"
+              onClick={handleConfirmSkipAll}
+              disabled={submitting}
+              className="rounded-sm"
+            >
+              모두 건너뛰고 가입
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

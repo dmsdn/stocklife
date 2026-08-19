@@ -6,22 +6,22 @@ import { useState } from "react";
 
 import { AiChatPanel } from "@/components/ai/ai-chat-panel";
 
-// TODO: 실제 안 읽은 알림 개수 API 연동 전 목업값.
 const MOCK_UNREAD_COUNT = 2;
+
+interface HomeAiHeaderProps {
+  active: "home" | "ai";
+  onAiChat?: () => void;
+}
 
 export function HomeAiHeader({
   active,
-}: {
-  active: "home" | "ai";
-}) {
-  const [showAiPanel, setShowAiPanel] = useState(false);
+  onAiChat,
+}: HomeAiHeaderProps) {
+  const [
+    showAiPanel,
+    setShowAiPanel,
+  ] = useState(false);
 
-  /*
-   * 현재 화면을 AI에게 전달하기 위한 기본 컨텍스트.
-   *
-   * 나중에는 실제 DOM 분석이나 페이지별 데이터 객체를
-   * 이 부분에 연결하면 된다.
-   */
   const pageContext =
     active === "home"
       ? `
@@ -43,18 +43,21 @@ export function HomeAiHeader({
 현재 사용자는 AI 쇼핑 화면을 보고 있습니다.
 `;
 
+  const handleAiClick = () => {
+    if (onAiChat) {
+      onAiChat();
+      return;
+    }
+
+    setShowAiPanel(true);
+  };
+
   return (
     <>
       <header className="relative z-50 flex items-center justify-between px-4 py-4">
-        {/* =====================================================
-            LEFT
-            기존 위치 그대로 유지
-        ====================================================== */}
-
         <div className="flex items-center gap-2">
           {active === "home" ? (
             <>
-              {/* 쇼핑 로고 */}
               <Image
                 src="/icons/logo-shopping.svg"
                 alt="쇼핑"
@@ -67,20 +70,9 @@ export function HomeAiHeader({
                 |
               </span>
 
-              {/* =================================================
-                  AI CHAT BUTTON
-
-                  중요:
-                  기존 AI SVG의 위치 그대로.
-                  위치 변경 없음.
-                  SVG 자체를 버튼으로 사용.
-              ================================================== */}
-
               <button
                 type="button"
-                onClick={() =>
-                  setShowAiPanel(true)
-                }
+                onClick={handleAiClick}
                 aria-label="AI Chat 열기"
                 className="shrink-0 opacity-60 transition hover:opacity-100"
               >
@@ -95,7 +87,6 @@ export function HomeAiHeader({
             </>
           ) : (
             <>
-              {/* 쇼핑 로고 */}
               <Link
                 href="/"
                 aria-label="홈 화면으로 이동"
@@ -113,7 +104,6 @@ export function HomeAiHeader({
                 |
               </span>
 
-              {/* AI 화면에서는 기존 AI 로고 위치 그대로 */}
               <Image
                 src="/icons/logo-ai.svg"
                 alt="AI"
@@ -124,10 +114,6 @@ export function HomeAiHeader({
             </>
           )}
         </div>
-
-        {/* =====================================================
-            NOTIFICATION
-        ====================================================== */}
 
         <Link
           href="/notifications"
@@ -150,18 +136,19 @@ export function HomeAiHeader({
         </Link>
       </header>
 
-      {/* =========================================================
-          AI CHAT PANEL
-
-          header의 AI SVG를 눌렀을 때만 나타난다.
-          홈 화면 자체는 건드리지 않는다.
-      ========================================================== */}
-
-      <AiChatPanel
-        open={showAiPanel}
-        onClose={() => setShowAiPanel(false)}
-        pageContext={pageContext}
-      />
+      {!onAiChat && (
+        <AiChatPanel
+          open={showAiPanel}
+          onClose={() =>
+            setShowAiPanel(
+              false,
+            )
+          }
+          pageContext={
+            pageContext
+          }
+        />
+      )}
     </>
   );
 }

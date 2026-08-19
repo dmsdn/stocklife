@@ -27,17 +27,14 @@ public class SignupRequest {
     private String gender;
     private LocalDate birthDate;
 
-    // 카메라/마이크 동의는 선택 동의로 변경(2026-08-19) — @AssertTrue 제거.
-    // boolean 기본값(false)이 그대로 "동의 안 함"으로 저장되므로 검증 자체가 필요 없음.
-    private boolean cameraConsent;
-
-    private boolean micConsent;
-
-    // 개인정보 수집 동의는 그대로 필수 유지.
+    // 필수 동의 — 서비스 이용에 반드시 필요한 항목만 남긴다.
     @AssertTrue(message = "개인정보 수집에 동의해야 합니다.")
     private boolean personalInfoConsent;
 
-    // 마케팅 정보 수신 동의(선택) — boolean 기본값(false)을 그대로 두면 "동의 안 함"으로 저장된다.
+    // 선택 동의 — boolean 기본값(false)을 그대로 두면 "동의 안 함"으로 저장된다.
+    // 카메라/마이크 동의는 선택 동의로 변경(2026-08-19) — @AssertTrue 제거.
+    private boolean cameraConsent;
+    private boolean micConsent;
     private boolean marketingConsent;
 
     // 스키마 v2.5 (2026-08-19) — persona_type(라벨 1개) 폐기, 속성 컬럼 4개로 분리.

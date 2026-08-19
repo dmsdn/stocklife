@@ -41,7 +41,7 @@ export default function OrdersPage() {
 
       <div className="divide-y divide-border md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
         {orders.map((order) => (
-          <div key={order.orderId} className="py-4 md:rounded-lg md:border md:border-border md:p-4">
+          <div key={order.orderId} className="py-4 md:rounded-sm md:border md:border-border md:p-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>주문 #{order.orderId}</span>
               <span>{order.status === "PAID" ? "결제완료" : order.status}</span>

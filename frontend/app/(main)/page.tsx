@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   ArrowRight,
   ChevronRight,
@@ -14,83 +19,108 @@ import {
   Wallet,
   X,
   ArrowUp,
-  Plus,
 } from "lucide-react";
+
+import { useRouter } from "next/navigation";
 
 import { HomeAiHeader } from "@/components/layout/home-ai-header";
 import { SwipeNav } from "@/components/layout/swipe-nav";
+import { AiChatPanel } from "@/components/ai/ai-chat-panel";
+
+import {
+  addProductToCartGroup,
+  createCartGroup,
+  readCartGroups,
+  type CartGroup,
+} from "@/lib/cart-storage";
 
 const recommendedProducts = [
   {
     id: 1,
     name: "서울우유 1L",
-    price: "2,490원",
+    category: "유제품",
+    price: 2490,
     image:
       "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400",
-    reason: "지난 구매 후 23일이 지났어요.",
+    reason:
+      "지난 구매 후 23일이 지났어요.",
     badge: "다시 살 때",
   },
   {
     id: 2,
     name: "동원 참치 150g",
-    price: "3,280원",
+    category: "가공식품",
+    price: 3280,
     image:
       "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400",
-    reason: "이번 주 식단에 필요한 재료예요.",
+    reason:
+      "이번 주 식단에 필요한 재료예요.",
     badge: "식단 추천",
   },
   {
     id: 3,
     name: "CJ 햇반 210g × 6",
-    price: "7,980원",
+    category: "즉석식품",
+    price: 7980,
     image:
       "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400",
-    reason: "최근 장보기에서 함께 구매했어요.",
+    reason:
+      "최근 장보기에서 함께 구매했어요.",
     badge: "함께 구매",
   },
   {
     id: 4,
     name: "크리넥스 3겹 화장지",
-    price: "12,900원",
+    category: "생활용품",
+    price: 12900,
     image:
       "https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=400",
-    reason: "최근 구매 주기가 가까워졌어요.",
+    reason:
+      "최근 구매 주기가 가까워졌어요.",
     badge: "구매 시기",
   },
   {
     id: 5,
     name: "오뚜기 진라면 5입",
-    price: "3,980원",
+    category: "라면",
+    price: 3980,
     image:
       "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400",
-    reason: "평소 자주 구매하는 상품이에요.",
+    reason:
+      "평소 자주 구매하는 상품이에요.",
     badge: "취향 추천",
   },
   {
     id: 6,
     name: "계란 30구",
-    price: "8,990원",
+    category: "신선식품",
+    price: 8990,
     image:
       "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400",
-    reason: "이번 주 식재료로 활용하기 좋아요.",
+    reason:
+      "이번 주 식재료로 활용하기 좋아요.",
     badge: "식재료",
   },
   {
     id: 7,
     name: "섬유유연제 2L",
-    price: "9,800원",
+    category: "생활용품",
+    price: 9800,
     image:
       "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=400",
-    reason: "지난 구매일을 기준으로 추천했어요.",
+    reason:
+      "지난 구매일을 기준으로 추천했어요.",
     badge: "재구매",
   },
   {
     id: 8,
     name: "생수 2L × 6",
-    price: "5,980원",
+    category: "음료",
+    price: 5980,
     image:
       "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400",
-    reason: "최근 소비량을 기준으로 추천했어요.",
+    reason:
+      "최근 소비량을 기준으로 추천했어요.",
     badge: "생활필수",
   },
 ];
@@ -99,18 +129,23 @@ const discoveredProducts = [
   {
     id: 1,
     name: "오뚜기 진라면 순한맛",
-    price: "3,980원",
-    originalPrice: "4,800원",
+    category: "라면",
+    price: 3980,
+    originalPrice: 4800,
     discount: "17%",
-    reason: "평소보다 820원 저렴해요.",
+    reason:
+      "평소보다 820원 저렴해요.",
   },
   {
     id: 2,
     name: "크리넥스 3겹 화장지",
-    price: "12,900원",
-    originalPrice: "16,900원",
+    category:
+      "생활용품",
+    price: 12900,
+    originalPrice: 16900,
     discount: "24%",
-    reason: "최근 구매한 상품과 같은 브랜드예요.",
+    reason:
+      "최근 구매한 상품과 같은 브랜드예요.",
   },
 ];
 
@@ -118,21 +153,26 @@ const popularProducts = [
   {
     id: 1,
     name: "신라면 5입",
-    price: "4,980원",
+    category: "라면",
+    price: 4980,
     image:
       "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400",
   },
   {
     id: 2,
     name: "동원 참치",
-    price: "3,280원",
+    category:
+      "가공식품",
+    price: 3280,
     image:
       "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400",
   },
   {
     id: 3,
     name: "계란 30구",
-    price: "8,990원",
+    category:
+      "신선식품",
+    price: 8990,
     image:
       "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400",
   },
@@ -150,26 +190,84 @@ type ChatMessage = {
   content: string;
 };
 
+function formatPrice(
+  price: number,
+) {
+  return `${price.toLocaleString(
+    "ko-KR",
+  )}원`;
+}
+
 export default function HomePage() {
-  const [showAiPanel, setShowAiPanel] = useState(false);
+  const router = useRouter();
 
-  const [message, setMessage] = useState("");
+  const [showAiPanel, setShowAiPanel] =
+    useState(false);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [message, setMessage] =
+    useState("");
 
-  const [sending, setSending] = useState(false);
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([]);
 
-  /*
-   * ============================================================
-   * 현재 홈 화면 정보
-   *
-   * 실제 AI API를 연결할 때 이 객체를 system prompt / context로
-   * 전달하면 AI가 "현재 화면을 보고" 답변할 수 있다.
-   * ============================================================
-   */
+  const [sending, setSending] =
+    useState(false);
+
+  const [
+    cartPickerOpen,
+    setCartPickerOpen,
+  ] = useState(false);
+
+  const [
+    selectedProduct,
+    setSelectedProduct,
+  ] = useState<
+    (typeof recommendedProducts)[number] | null
+  >(null);
+
+  const [
+    cartGroups,
+    setCartGroups,
+  ] = useState<CartGroup[]>([]);
+
+  useEffect(() => {
+    setCartGroups(
+      readCartGroups(),
+    );
+  }, []);
+
+  useEffect(() => {
+    const html =
+      document.documentElement;
+    const body =
+      document.body;
+
+    const previousHtmlOverflowX =
+      html.style.overflowX;
+
+    const previousBodyOverflowX =
+      body.style.overflowX;
+
+    html.style.overflowX =
+      "hidden";
+
+    body.style.overflowX =
+      "hidden";
+
+    return () => {
+      html.style.overflowX =
+        previousHtmlOverflowX;
+
+      body.style.overflowX =
+        previousBodyOverflowX;
+    };
+  }, []);
+
   const screenContext = useMemo(
     () => ({
-      screen: "shopping-home",
+      screen:
+        "shopping-home",
+
       user: {
         name: "OO",
         grade: "SHOPPER",
@@ -184,119 +282,206 @@ export default function HomePage() {
       },
 
       todayBriefing: {
-        title: "이번 주 생필품을 준비할 시기예요.",
+        title:
+          "이번 주 생필품을 준비할 시기예요.",
         description:
           "최근 구매 주기를 분석해보니 휴지와 세제를 다시 구매할 시기가 가까워졌어요.",
         estimatedShoppingAmount: 27800,
       },
 
-      recommendedProducts: recommendedProducts.map(
-        ({
-          id,
-          name,
-          price,
-          reason,
-          badge,
-        }) => ({
-          id,
-          name,
-          price,
-          reason,
-          badge,
-        })
-      ),
+      recommendedProducts:
+        recommendedProducts.map(
+          ({
+            id,
+            name,
+            price,
+            reason,
+            badge,
+          }) => ({
+            id,
+            name,
+            price,
+            reason,
+            badge,
+          }),
+        ),
 
-      aiDiscovered: discoveredProducts.map(
-        ({
-          id,
-          name,
-          price,
-          originalPrice,
-          discount,
-          reason,
-        }) => ({
-          id,
-          name,
-          price,
-          originalPrice,
-          discount,
-          reason,
-        })
-      ),
+      aiDiscovered:
+        discoveredProducts.map(
+          ({
+            id,
+            name,
+            price,
+            originalPrice,
+            discount,
+            reason,
+          }) => ({
+            id,
+            name,
+            price,
+            originalPrice,
+            discount,
+            reason,
+          }),
+        ),
 
       cart: {
-        name: "이번주 장보기",
+        name:
+          "이번주 장보기",
         productCount: 7,
         estimatedPrice: 38200,
         progress: 70,
       },
 
-      aiMemory: {
-        previousPlan:
-          "지난번에 5만원 안에서 장보기로 했었어요.",
-        suggestion:
-          "이번에도 비슷한 예산으로 장보기를 준비해드릴까요?",
-      },
-
-      popularProducts: popularProducts.map(
-        ({ id, name, price }) => ({
-          id,
-          name,
-          price,
-        })
-      ),
+      popularProducts:
+        popularProducts.map(
+          ({
+            id,
+            name,
+            price,
+          }) => ({
+            id,
+            name,
+            price,
+          }),
+        ),
     }),
-    []
+    [],
   );
 
-  useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-
-    const previousHtmlOverflowX = html.style.overflowX;
-    const previousBodyOverflowX = body.style.overflowX;
-
-    html.style.overflowX = "hidden";
-    body.style.overflowX = "hidden";
-
-    return () => {
-      html.style.overflowX = previousHtmlOverflowX;
-      body.style.overflowX = previousBodyOverflowX;
-    };
-  }, []);
+  const goSearch = () => {
+    router.push(
+      "/search",
+    );
+  };
 
   /*
-   * ============================================================
-   * AI 열기
-   * ============================================================
+   * 현재 프로젝트에서 상품 상세 페이지가
+   * 별도로 만들어지기 전까지 검색 화면에
+   * productId를 넘겨 상품을 지정한다.
    */
+  const goProduct = (
+    productId: number,
+  ) => {
+    router.push(
+      `/search?productId=${productId}`,
+    );
+  };
+
   const openAiPanel = () => {
     setShowAiPanel(true);
   };
 
-  /*
-   * ============================================================
-   * AI 닫기
-   * ============================================================
-   */
   const closeAiPanel = () => {
     setShowAiPanel(false);
   };
 
-  /*
-   * ============================================================
-   * AI Mock Reply
-   *
-   * 현재 화면의 데이터를 실제로 참고하도록 구성
-   * ============================================================
-   */
-  const getAiReply = (text: string) => {
-    const lower = text.toLowerCase();
+  const openCartPicker = (
+    product: (typeof recommendedProducts)[number],
+  ) => {
+    setSelectedProduct(
+      product,
+    );
+
+    setCartGroups(
+      readCartGroups(),
+    );
+
+    setCartPickerOpen(
+      true,
+    );
+  };
+
+  const handleAddToCart = (
+    groupId: number,
+  ) => {
+    if (!selectedProduct) {
+      return;
+    }
+
+    const nextGroups =
+      addProductToCartGroup(
+        groupId,
+        {
+          id:
+            selectedProduct.id,
+          name:
+            selectedProduct.name,
+          category:
+            selectedProduct.category,
+          price:
+            selectedProduct.price,
+          image:
+            selectedProduct.image,
+        },
+      );
+
+    setCartGroups(
+      nextGroups,
+    );
+
+    setCartPickerOpen(
+      false,
+    );
+
+    setSelectedProduct(
+      null,
+    );
+  };
+
+  const handleCreateCart =
+    () => {
+      if (!selectedProduct) {
+        return;
+      }
+
+      const newGroup =
+        createCartGroup(
+          "새 장보기",
+        );
+
+      const nextGroups =
+        addProductToCartGroup(
+          newGroup.id,
+          {
+            id:
+              selectedProduct.id,
+            name:
+              selectedProduct.name,
+            category:
+              selectedProduct.category,
+            price:
+              selectedProduct.price,
+            image:
+              selectedProduct.image,
+          },
+        );
+
+      setCartGroups(
+        nextGroups,
+      );
+
+      setCartPickerOpen(
+        false,
+      );
+
+      setSelectedProduct(
+        null,
+      );
+    };
+
+  const getAiReply = (
+    text: string,
+  ) => {
+    const lower =
+      text.toLowerCase();
 
     if (
       lower.includes("장보") ||
       lower.includes("쇼핑") ||
-      lower.includes("뭐부터")
+      lower.includes(
+        "뭐부터",
+      )
     ) {
       return `지금 홈 화면을 기준으로 보면 이번주 장보기를 준비할 시기예요.
 
@@ -358,58 +543,55 @@ export default function HomePage() {
 무엇을 기준으로 도와드릴까요?`;
   };
 
-  /*
-   * ============================================================
-   * AI 메시지 전송
-   * ============================================================
-   */
-  const handleAiSend = (text?: string) => {
-    const content = (text ?? message).trim();
+  const handleAiSend = (
+    text?: string,
+  ) => {
+    const content = (
+      text ?? message
+    ).trim();
 
-    if (!content || sending) return;
+    if (
+      !content ||
+      sending
+    ) {
+      return;
+    }
 
-    const userMessage: ChatMessage = {
-      id: `${Date.now()}-user`,
-      role: "user",
-      content,
-    };
+    setMessages(
+      (prev) => [
+        ...prev,
+        {
+          id: `${Date.now()}-user`,
+          role: "user",
+          content,
+        },
+      ],
+    );
 
-    setMessages((prev) => [...prev, userMessage]);
     setMessage("");
     setSending(true);
 
-    /*
-     * 실제 API 연결 시 여기에서 screenContext를 함께 전달.
-     *
-     * 예:
-     *
-     * fetch("/api/ai/chat", {
-     *   method: "POST",
-     *   body: JSON.stringify({
-     *     message: content,
-     *     screenContext,
-     *   }),
-     * })
-     */
-
     setTimeout(() => {
-      const assistantMessage: ChatMessage = {
-        id: `${Date.now()}-assistant`,
-        role: "assistant",
-        content: getAiReply(content),
-      };
-
-      setMessages((prev) => [
-        ...prev,
-        assistantMessage,
-      ]);
+      setMessages(
+        (prev) => [
+          ...prev,
+          {
+            id: `${Date.now()}-assistant`,
+            role: "assistant",
+            content:
+              getAiReply(
+                content,
+              ),
+          },
+        ],
+      );
 
       setSending(false);
     }, 700);
   };
 
   const handleAiKeyDown = (
-    e: React.KeyboardEvent<HTMLTextAreaElement>
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
   ) => {
     if (
       e.key === "Enter" &&
@@ -422,62 +604,61 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 overflow-x-hidden bg-background">
-      {/*
-       * ==========================================================
-       * 기존 Header
-       *
-       * ai chat 버튼은 기존 SVG 위치 그대로.
-       * onAiChat만 연결한다.
-       * ==========================================================
-       */}
       <HomeAiHeader
         active="home"
-        onAiChat={openAiPanel}
+        onAiChat={
+          openAiPanel
+        }
       />
 
       <SwipeNav current={0}>
         <main className="w-[min(100%,100vw)] max-w-[100vw] min-w-0 overflow-x-hidden pb-28">
           <div className="w-full min-w-0">
 
-            {/* =====================================================
-                SEARCH
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-4 sm:px-6 lg:px-8">
+            {/* 검색 */}
+            <section className="w-full px-4 pt-4 sm:px-6 lg:px-8">
               <button
                 type="button"
-                className="flex h-11 w-full min-w-0 items-center gap-3 rounded-[8px] bg-muted/70 px-3.5 text-left sm:h-12"
+                onClick={
+                  goSearch
+                }
+                className="flex h-11 w-full items-center gap-3 rounded-sm bg-muted/70 px-3.5 text-left sm:h-12"
               >
                 <Search
                   size={18}
                   className="shrink-0 text-muted-foreground"
                 />
 
-                <span className="min-w-0 truncate text-sm text-muted-foreground">
+                <span className="truncate text-sm text-muted-foreground">
                   찾고 싶은 상품을 검색해보세요
                 </span>
               </button>
             </section>
 
-            {/* =====================================================
-                MY SHOPPING STATUS
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-7 sm:px-6 lg:px-8">
+            {/* 나의 쇼핑 상태 */}
+            <section className="w-full px-4 pt-7 sm:px-6 lg:px-8">
               <SectionTitle
                 eyebrow="MY SHOPPING"
                 title="나의 쇼핑 상태"
                 action="자세히 보기"
               />
 
-              <div className="w-full min-w-0 rounded-[8px] border border-border bg-background p-4 sm:p-5">
-                <div className="flex w-full min-w-0 items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/mypage",
+                  )
+                }
+                className="w-full rounded-sm border border-border bg-background p-4 text-left sm:p-5"
+              >
+                <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs text-muted-foreground">
                       안녕하세요, OO님
                     </p>
 
-                    <p className="mt-1 truncate text-base font-semibold">
+                    <p className="mt-1 text-base font-semibold">
                       SHOPPER
                     </p>
                   </div>
@@ -487,9 +668,9 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <div className="my-4 h-px w-full bg-border" />
+                <div className="my-4 h-px bg-border" />
 
-                <div className="grid w-full min-w-0 grid-cols-3">
+                <div className="grid grid-cols-3">
                   <StatusItem
                     label="보유 포인트"
                     value="2,840P"
@@ -508,29 +689,26 @@ export default function HomePage() {
                   />
                 </div>
 
-                <div className="mt-4 w-full min-w-0 rounded-[8px] bg-muted/60 px-3 py-3">
-                  <div className="flex w-full min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[10px] text-muted-foreground">
+                <div className="mt-4 rounded-sm bg-muted/60 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-muted-foreground">
                       다음 등급까지
                     </span>
 
-                    <span className="shrink-0 text-[10px] font-medium">
+                    <span className="text-base font-medium">
                       160P
                     </span>
                   </div>
 
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-[8px] bg-border">
-                    <div className="h-full w-[78%] rounded-[8px] bg-foreground" />
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-border">
+                    <div className="h-full w-[78%] rounded-sm bg-foreground" />
                   </div>
                 </div>
-              </div>
+              </button>
             </section>
 
-            {/* =====================================================
-                AI GUIDE
-            ====================================================== */}
-
-            <section className="w-[min(100%,100vw)] min-w-0 pt-7">
+            {/* AI 활용 */}
+            <section className="w-full pt-7">
               <div className="px-4 sm:px-6 lg:px-8">
                 <SectionTitle
                   eyebrow="AI FOR SHOPPING"
@@ -538,200 +716,249 @@ export default function HomePage() {
                 />
               </div>
 
-              <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
+              <div className="w-full overflow-x-auto scrollbar-hide">
                 <div className="flex w-max gap-3 px-4 pb-1 sm:px-6 lg:px-8">
                   <AiGuideCard
-                    icon={<Sparkles size={18} />}
-                    title={"이번주 장보기를\nAI에게 맡겨보세요"}
+                    icon={
+                      <Sparkles size={18} />
+                    }
+                    title={
+                      "이번주 장보기를\nAI에게 맡겨보세요"
+                    }
                     description="필요한 상품부터 예산까지 한 번에 정리해드려요."
                     button="장보기 계획 세우기"
-                    onClick={openAiPanel}
+                    onClick={
+                      openAiPanel
+                    }
                   />
 
                   <AiGuideCard
-                    icon={<ShoppingCart size={18} />}
-                    title={"장보기 동선을\nAI가 만들어드려요"}
+                    icon={
+                      <ShoppingCart
+                        size={18}
+                      />
+                    }
+                    title={
+                      "장보기 동선을\nAI가 만들어드려요"
+                    }
                     description="매장 안에서 가장 효율적인 순서로 안내해요."
                     button="동선 만들어보기"
-                    onClick={openAiPanel}
+                    onClick={
+                      openAiPanel
+                    }
                   />
 
                   <AiGuideCard
-                    icon={<Wallet size={18} />}
-                    title={"이번달 소비를\nAI에게 분석받아보세요"}
+                    icon={
+                      <Wallet size={18} />
+                    }
+                    title={
+                      "이번달 소비를\nAI에게 분석받아보세요"
+                    }
                     description="내 쇼핑 패턴을 분석하고 절약 방법을 찾아드려요."
                     button="소비 분석하기"
-                    onClick={openAiPanel}
+                    onClick={
+                      openAiPanel
+                    }
                   />
                 </div>
               </div>
             </section>
 
-            {/* =====================================================
-                TODAY'S BRIEFING
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-8 sm:px-6 lg:px-8">
+            {/* 브리핑 */}
+            <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
               <SectionTitle
                 eyebrow="TODAY'S BRIEFING"
                 title="오늘의 쇼핑 브리핑"
               />
 
-              <div className="w-full min-w-0 rounded-[8px] bg-muted/70 p-4">
-                <div className="flex w-full min-w-0 items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-background">
+              <div className="rounded-sm bg-muted/70 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-background">
                     <Lightbulb size={17} />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="break-keep text-sm font-semibold">
+                    <p className="text-base font-semibold">
                       이번 주 생필품을 준비할 시기예요.
                     </p>
 
-                    <p className="mt-1 break-keep text-xs leading-5 text-muted-foreground">
-                      최근 구매 주기를 분석해보니 휴지와 세제를 다시 구매할
-                      시기가 가까워졌어요.
+                    <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                      최근 구매 주기를 분석해보니 휴지와 세제를 다시 구매할 시기가 가까워졌어요.
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-4 flex w-full min-w-0 items-center justify-between gap-3 rounded-[8px] bg-background px-3 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[10px] text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      "/saved",
+                    )
+                  }
+                  className="mt-4 flex w-full items-center justify-between rounded-sm bg-background px-3 py-3 text-left"
+                >
+                  <div>
+                    <p className="text-sm text-muted-foreground">
                       예상 장보기 금액
                     </p>
 
-                    <p className="mt-1 truncate text-sm font-semibold">
+                    <p className="mt-1 text-base font-semibold">
                       약 27,800원
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[10px] font-medium"
-                  >
+                  <span className="flex items-center gap-1 text-sm font-medium">
                     장보기 보기
                     <ArrowRight size={12} />
-                  </button>
-                </div>
+                  </span>
+                </button>
               </div>
             </section>
 
-            {/* =====================================================
-                BRIEFING RECOMMENDATION
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-8 sm:px-6 lg:px-8">
+            {/* 추천 상품 */}
+            <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
               <SectionTitle
                 eyebrow="FOR YOU"
                 title="브리핑에 맞춰 추천해요"
               />
 
-              <div className="grid w-full min-w-0 grid-cols-2 gap-x-3 gap-y-5">
-                {recommendedProducts.map((product) => (
-                  <RecommendedProductCard
-                    key={product.id}
-                    product={product}
-                  />
-                ))}
+              <div className="grid grid-cols-2 gap-x-3 gap-y-5">
+                {recommendedProducts.map(
+                  (product) => (
+                    <RecommendedProductCard
+                      key={product.id}
+                      product={product}
+                      onProductClick={() =>
+                        goProduct(
+                          product.id,
+                        )
+                      }
+                      onSave={() =>
+                        openCartPicker(
+                          product,
+                        )
+                      }
+                    />
+                  ),
+                )}
               </div>
 
               <button
                 type="button"
-                className="mt-6 flex h-10 w-full min-w-0 items-center justify-center gap-1 rounded-[8px] border border-border text-xs font-medium"
+                onClick={
+                  goSearch
+                }
+                className="mt-6 flex h-10 w-full items-center justify-center gap-1 rounded-sm border border-border text-sm font-medium"
               >
                 추천 상품 더보기
                 <ChevronRight size={14} />
               </button>
             </section>
 
-            {/* =====================================================
-                AI DISCOVERED
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-8 sm:px-6 lg:px-8">
+            {/* AI 발견 */}
+            <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
               <SectionTitle
                 eyebrow="AI DISCOVERED"
                 title="AI가 발견한 것"
                 description="OO님의 쇼핑 기록에서 찾았어요."
               />
 
-              <div className="w-full min-w-0 space-y-2">
-                {discoveredProducts.map((product) => (
-                  <div
-                    key={product.id}
-                    className="w-full min-w-0 rounded-[8px] border border-border p-3.5"
-                  >
-                    <div className="flex w-full min-w-0 items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <span className="shrink-0 rounded-[8px] bg-muted px-2 py-1 text-[9px] font-medium">
-                            {product.discount} OFF
-                          </span>
+              <div className="space-y-2">
+                {discoveredProducts.map(
+                  (product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() =>
+                        goProduct(
+                          product.id,
+                        )
+                      }
+                      className="w-full rounded-sm border border-border p-3.5 text-left"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="rounded-sm bg-muted px-2 py-1 text-xs font-medium">
+                              {
+                                product.discount
+                              } OFF
+                            </span>
 
-                          <span className="shrink-0 text-[9px] text-muted-foreground">
-                            AI 발견
-                          </span>
+                            <span className="text-xs text-muted-foreground">
+                              AI 발견
+                            </span>
+                          </div>
+
+                          <p className="mt-2 text-base font-medium">
+                            {product.name}
+                          </p>
+
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-base font-semibold">
+                              {formatPrice(
+                                product.price,
+                              )}
+                            </span>
+
+                            <span className="text-sm text-muted-foreground line-through">
+                              {formatPrice(
+                                product.originalPrice,
+                              )}
+                            </span>
+                          </div>
                         </div>
 
-                        <p className="mt-2 break-keep text-sm font-medium">
-                          {product.name}
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-muted">
+                          <TrendingDown size={15} />
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex items-start gap-1.5">
+                        <Sparkles
+                          size={12}
+                          className="mt-0.5 shrink-0 text-muted-foreground"
+                        />
+
+                        <p className="text-sm leading-4 text-muted-foreground">
+                          {product.reason}
                         </p>
-
-                        <div className="mt-1 flex min-w-0 items-center gap-2">
-                          <span className="shrink-0 text-sm font-semibold">
-                            {product.price}
-                          </span>
-
-                          <span className="min-w-0 truncate text-[10px] text-muted-foreground line-through">
-                            {product.originalPrice}
-                          </span>
-                        </div>
                       </div>
-
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-muted">
-                        <TrendingDown size={15} />
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex w-full min-w-0 items-start gap-1.5">
-                      <Sparkles
-                        size={12}
-                        className="mt-0.5 shrink-0 text-muted-foreground"
-                      />
-
-                      <p className="min-w-0 break-keep text-[10px] leading-4 text-muted-foreground">
-                        {product.reason}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                    </button>
+                  ),
+                )}
               </div>
             </section>
 
-            {/* =====================================================
-                CART
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-8 sm:px-6 lg:px-8">
+            {/* 나의 장바구니 */}
+            <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
               <SectionTitle
                 eyebrow="MY SHOPPING"
                 title="나의 장바구니"
                 action="전체보기"
               />
 
-              <div className="w-full min-w-0 rounded-[8px] border border-border p-4">
-                <div className="flex w-full min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-muted">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/saved",
+                  )
+                }
+                className="w-full rounded-sm border border-border p-4 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
                     <ShoppingCart size={18} />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">
+                    <p className="text-base font-semibold">
                       이번주 장보기
                     </p>
 
-                    <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       상품 7개 · 예상 38,200원
                     </p>
                   </div>
@@ -742,46 +969,43 @@ export default function HomePage() {
                   />
                 </div>
 
-                <div className="mt-4 w-full min-w-0">
-                  <div className="flex w-full min-w-0 items-center justify-between gap-2">
-                    <span className="truncate text-[10px] text-muted-foreground">
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
                       준비 진행률
                     </span>
 
-                    <span className="shrink-0 text-[10px] font-medium">
+                    <span className="text-sm font-medium">
                       70%
                     </span>
                   </div>
 
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-[8px] bg-muted">
-                    <div className="h-full w-[70%] rounded-[8px] bg-foreground" />
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-muted">
+                    <div className="h-full w-[70%] rounded-sm bg-foreground" />
                   </div>
                 </div>
-              </div>
+              </button>
             </section>
 
-            {/* =====================================================
-                AI MEMORY
-            ====================================================== */}
-
-            <section className="w-full min-w-0 px-4 pt-8 sm:px-6 lg:px-8">
+            {/* AI 기억 */}
+            <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
               <SectionTitle
                 eyebrow="AI MEMORY"
                 title="AI가 기억하고 있어요"
               />
 
-              <div className="w-full min-w-0 rounded-[8px] bg-muted/70 p-4">
-                <div className="flex w-full min-w-0 items-start gap-3">
+              <div className="rounded-sm bg-muted/70 p-4">
+                <div className="flex items-start gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background">
                     <Sparkles size={16} />
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <p className="break-keep text-sm font-medium leading-5">
+                  <div>
+                    <p className="text-sm font-medium">
                       지난번에 5만원 안에서 장보기로 했었어요.
                     </p>
 
-                    <p className="mt-2 break-keep text-xs leading-5 text-muted-foreground">
+                    <p className="mt-2 text-sm leading-5 text-muted-foreground">
                       이번에도 비슷한 예산으로 장보기를 준비해드릴까요?
                     </p>
                   </div>
@@ -789,8 +1013,10 @@ export default function HomePage() {
 
                 <button
                   type="button"
-                  onClick={openAiPanel}
-                  className="mt-4 flex w-full min-w-0 items-center justify-center gap-1 rounded-[8px] bg-background py-2.5 text-[10px] font-medium"
+                  onClick={
+                    openAiPanel
+                  }
+                  className="mt-4 flex w-full items-center justify-center gap-1 rounded-sm bg-background py-2.5 text-sm font-medium"
                 >
                   지난 계획 이어가기
                   <ArrowRight size={12} />
@@ -798,11 +1024,8 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* =====================================================
-                DISCOVER
-            ====================================================== */}
-
-            <section className="w-[min(100%,100vw)] min-w-0 pt-10">
+            {/* 발견 */}
+            <section className="w-full pt-10">
               <div className="px-4 sm:px-6 lg:px-8">
                 <SectionTitle
                   eyebrow="DISCOVER"
@@ -811,37 +1034,44 @@ export default function HomePage() {
                 />
               </div>
 
-              <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden scrollbar-hide">
+              <div className="w-full overflow-x-auto scrollbar-hide">
                 <div className="flex w-max gap-3 px-4 pb-1 sm:px-6 lg:px-8">
-                  {popularProducts.map((product) => (
-                    <div
-                      key={product.id}
-                      className="w-[140px] shrink-0"
-                    >
-                      <div className="relative aspect-square overflow-hidden rounded-[8px] bg-muted">
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="h-full w-full object-cover"
-                        />
+                  {popularProducts.map(
+                    (product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() =>
+                          goProduct(
+                            product.id,
+                          )
+                        }
+                        className="w-[140px] shrink-0 text-left"
+                      >
+                        <div className="relative aspect-square overflow-hidden rounded-sm bg-muted">
+                          <img
+                            src={
+                              product.image
+                            }
+                            alt={
+                              product.name
+                            }
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
 
-                        <button
-                          type="button"
-                          className="absolute right-2 top-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background/90"
-                        >
-                          <Heart size={14} />
-                        </button>
-                      </div>
+                        <p className="mt-2 truncate text-base font-medium">
+                          {product.name}
+                        </p>
 
-                      <p className="mt-2 truncate text-xs font-medium">
-                        {product.name}
-                      </p>
-
-                      <p className="mt-1 text-xs font-semibold">
-                        {product.price}
-                      </p>
-                    </div>
-                  ))}
+                        <p className="mt-1 text-base font-semibold">
+                          {formatPrice(
+                            product.price,
+                          )}
+                        </p>
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
             </section>
@@ -851,254 +1081,118 @@ export default function HomePage() {
         </main>
       </SwipeNav>
 
-      {/* ============================================================
-          AI SIDE PANEL
+      {/* AI 패널 */}
+      <AiChatPanel
+        open={showAiPanel}
+        onClose={
+          closeAiPanel
+        }
+        pageContext={
+          screenContext.screen
+        }
+      />
 
-          핵심:
-          - fixed
-          - 홈 콘텐츠를 밀지 않음
-          - 오른쪽에서 등장
-          - 홈 화면은 그대로 사용 가능
-          ============================================================ */}
+      {/* 장바구니 선택 */}
+      {cartPickerOpen &&
+        selectedProduct && (
+          <div className="fixed inset-0 z-[120]">
+            <button
+              type="button"
+              onClick={() => {
+                setCartPickerOpen(
+                  false,
+                );
+                setSelectedProduct(
+                  null,
+                );
+              }}
+              className="absolute inset-0 bg-black/30"
+              aria-label="닫기"
+            />
 
-      {showAiPanel && (
-        <>
-          {/* 모바일 / 패널 바깥 영역 */}
-          <button
-            type="button"
-            aria-label="AI 패널 닫기"
-            onClick={closeAiPanel}
-            className="fixed inset-0 z-[80] bg-black/20"
-          />
+            <div className="absolute bottom-0 left-0 right-0 rounded-t-sm bg-background px-5 pb-8 pt-5">
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold">
+                    장바구니에 담기
+                  </h2>
 
-          {/* ========================================================
-              AI PANEL
-          ======================================================== */}
-
-          <aside
-            className="
-              fixed
-              right-0
-              top-0
-              z-[90]
-              flex
-              h-[100dvh]
-              w-full
-              flex-col
-              border-l
-              border-border
-              bg-background
-              shadow-2xl
-              sm:w-[420px]
-              lg:w-[460px]
-            "
-          >
-            {/* ======================================================
-                PANEL HEADER
-            ====================================================== */}
-
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-[9px] font-bold text-background">
-                  AI
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">
-                    AI Chat
-                  </p>
-
-                  <p className="text-[10px] text-muted-foreground">
-                    지금 보고 있는 쇼핑 화면을 이해하고 있어요
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {
+                      selectedProduct.name
+                    }
                   </p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCartPickerOpen(
+                      false,
+                    );
+                    setSelectedProduct(
+                      null,
+                    );
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={closeAiPanel}
-                aria-label="AI Chat 닫기"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-muted"
-              >
-                <X size={19} />
-              </button>
-            </div>
-
-            {/* ======================================================
-                AI CONTEXT
-            ====================================================== */}
-
-            <div className="border-b border-border bg-muted/40 px-5 py-3">
-              <div className="flex items-center gap-2">
-                <Sparkles
-                  size={14}
-                  className="shrink-0"
-                />
-
-                <p className="text-[11px] text-muted-foreground">
-                  홈 화면을 바탕으로 답변할 수 있어요.
-                </p>
-              </div>
-            </div>
-
-            {/* ======================================================
-                CHAT
-            ====================================================== */}
-
-            <div className="flex-1 overflow-y-auto px-5 py-6">
-              {messages.length === 0 ? (
-                <div className="flex min-h-full flex-col justify-center">
-                  <div className="mb-8">
-                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-                      AI
-                    </div>
-
-                    <h2 className="text-xl font-semibold tracking-tight">
-                      지금 화면에서
-                      <br />
-                      무엇을 도와드릴까요?
-                    </h2>
-
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      현재 보고 있는 추천 상품,
-                      <br />
-                      장보기 상태와 브리핑을 기준으로
-                      답변해드릴게요.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    {suggestedPrompts.map(
-                      (prompt) => (
-                        <button
-                          key={prompt}
-                          type="button"
-                          onClick={() =>
-                            handleAiSend(prompt)
-                          }
-                          className="w-full rounded-2xl border border-border px-4 py-3.5 text-left text-sm transition hover:bg-muted"
-                        >
-                          {prompt}
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-7">
-                  {messages.map((chat) => (
-                    <div
-                      key={chat.id}
-                      className={
-                        chat.role === "user"
-                          ? "flex justify-end"
-                          : "flex justify-start"
+              <div className="space-y-2">
+                {cartGroups.map(
+                  (group) => (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() =>
+                        handleAddToCart(
+                          group.id,
+                        )
                       }
+                      className="flex w-full items-center justify-between rounded-sm border border-border px-4 py-3.5 text-left hover:bg-muted"
                     >
-                      {chat.role === "user" ? (
-                        <div className="max-w-[85%] rounded-3xl bg-muted px-4 py-3 text-sm leading-6">
-                          {chat.content}
-                        </div>
-                      ) : (
-                        <div className="w-full">
-                          <div className="mb-2 flex items-center gap-2">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[8px] font-bold text-background">
-                              AI
-                            </div>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {
+                            group.title
+                          }
+                        </p>
 
-                            <span className="text-xs font-medium text-muted-foreground">
-                              AI
-                            </span>
-                          </div>
-
-                          <div className="whitespace-pre-wrap text-sm leading-6">
-                            {chat.content}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {sending && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[8px] font-bold text-background">
-                        AI
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {
+                            group.products
+                              .length
+                          }
+                          개 상품
+                        </p>
                       </div>
 
-                      <div className="flex gap-1">
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                      <ChevronRight
+                        size={16}
+                        className="text-muted-foreground"
+                      />
+                    </button>
+                  ),
+                )}
 
-            {/* ======================================================
-                INPUT
-            ====================================================== */}
-
-            <div className="shrink-0 border-t border-border bg-background px-4 pb-5 pt-3">
-              <div className="rounded-3xl border border-border bg-background p-2 shadow-[0_4px_24px_rgba(0,0,0,0.08)]">
-                <textarea
-                  value={message}
-                  onChange={(e) =>
-                    setMessage(e.target.value)
+                <button
+                  type="button"
+                  onClick={
+                    handleCreateCart
                   }
-                  onKeyDown={handleAiKeyDown}
-                  rows={1}
-                  placeholder="현재 화면에 대해 물어보세요"
-                  className="max-h-32 min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
-                />
-
-                <div className="flex items-center justify-between px-1 pb-1 pt-1">
-                  <button
-                    type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
-                    aria-label="자료 추가"
-                  >
-                    <Plus
-                      size={18}
-                      strokeWidth={1.8}
-                    />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleAiSend()
-                    }
-                    disabled={
-                      !message.trim() ||
-                      sending
-                    }
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background transition disabled:opacity-30"
-                    aria-label="전송"
-                  >
-                    <ArrowUp
-                      size={18}
-                      strokeWidth={2.2}
-                    />
-                  </button>
-                </div>
+                  className="flex w-full items-center justify-center rounded-sm border border-dashed border-border px-4 py-3.5 text-sm font-medium hover:bg-muted"
+                >
+                  + 새 장바구니 만들기
+                </button>
               </div>
-
-              <p className="mt-2 text-center text-[9px] text-muted-foreground">
-                AI의 답변은 정확하지 않을 수 있어요.
-              </p>
             </div>
-          </aside>
-        </>
-      )}
+          </div>
+        )}
     </div>
   );
 }
-
-/* ===============================================================
-   SECTION TITLE
-================================================================ */
 
 function SectionTitle({
   eyebrow,
@@ -1112,40 +1206,33 @@ function SectionTitle({
   description?: string;
 }) {
   return (
-    <div className="mb-3 w-full min-w-0">
-      <div className="flex w-full min-w-0 items-end justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[9px] font-medium tracking-wide text-muted-foreground">
+    <div className="mb-3">
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground">
             {eyebrow}
           </p>
 
-          <h2 className="mt-1 break-keep text-lg font-semibold tracking-tight">
+          <h2 className="mt-1 text-lg font-semibold">
             {title}
           </h2>
 
           {description && (
-            <p className="mt-1 break-keep text-[10px] text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               {description}
             </p>
           )}
         </div>
 
         {action && (
-          <button
-            type="button"
-            className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground"
-          >
+          <span className="shrink-0 text-xs text-muted-foreground">
             {action}
-          </button>
+          </span>
         )}
       </div>
     </div>
   );
 }
-
-/* ===============================================================
-   STATUS ITEM
-================================================================ */
 
 function StatusItem({
   label,
@@ -1158,24 +1245,22 @@ function StatusItem({
 }) {
   return (
     <div
-      className={`min-w-0 px-2 ${
-        border ? "border-l border-border" : ""
+      className={`px-2 ${
+        border
+          ? "border-l border-border"
+          : ""
       }`}
     >
-      <p className="truncate text-[9px] text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {label}
       </p>
 
-      <p className="mt-1 truncate text-[13px] font-semibold">
+      <p className="mt-1 text-base font-semibold">
         {value}
       </p>
     </div>
   );
 }
-
-/* ===============================================================
-   AI GUIDE CARD
-================================================================ */
 
 function AiGuideCard({
   icon,
@@ -1191,23 +1276,23 @@ function AiGuideCard({
   onClick: () => void;
 }) {
   return (
-    <div className="w-[78vw] max-w-[280px] shrink-0 rounded-[8px] border border-border p-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-muted">
+    <div className="w-[78vw] max-w-[280px] shrink-0 rounded-sm border border-border p-4">
+      <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-muted">
         {icon}
       </div>
 
-      <h3 className="mt-4 whitespace-pre-line break-keep text-sm font-semibold leading-5">
+      <h3 className="mt-4 whitespace-pre-line text-md font-semibold leading-5">
         {title}
       </h3>
 
-      <p className="mt-2 h-10 break-keep text-[10px] leading-4 text-muted-foreground">
+      <p className="mt-2 h-10 text-sm leading-4 text-muted-foreground">
         {description}
       </p>
 
       <button
         type="button"
         onClick={onClick}
-        className="mt-4 flex items-center gap-1 whitespace-nowrap text-[10px] font-medium"
+        className="mt-4 flex items-center gap-1 text-sm font-medium"
       >
         {button}
         <ArrowRight size={11} />
@@ -1216,54 +1301,87 @@ function AiGuideCard({
   );
 }
 
-/* ===============================================================
-   RECOMMENDED PRODUCT
-================================================================ */
-
 function RecommendedProductCard({
   product,
+  onProductClick,
+  onSave,
 }: {
   product: (typeof recommendedProducts)[number];
+  onProductClick: () => void;
+  onSave: () => void;
 }) {
   return (
     <div className="w-full min-w-0">
-      <div className="relative aspect-square w-full min-w-0 overflow-hidden rounded-[8px] bg-muted">
-        <img
-          src={product.image}
-          alt={product.name}
-          className="h-full w-full object-cover"
-        />
+      <div className="relative">
+        <button
+          type="button"
+          onClick={
+            onProductClick
+          }
+          className="block w-full text-left"
+        >
+          <div className="relative aspect-square overflow-hidden rounded-sm bg-muted">
+            <img
+              src={
+                product.image
+              }
+              alt={
+                product.name
+              }
+              className="h-full w-full object-cover"
+            />
 
-        <div className="absolute left-2 top-2 max-w-[calc(100%-40px)] truncate rounded-[8px] bg-background/90 px-1.5 py-1 text-[8px] font-medium">
-          {product.badge}
-        </div>
+            <div className="absolute left-2 top-2 max-w-[calc(100%-40px)] truncate rounded-sm bg-background/90 px-1.5 py-1 text-[8px] font-medium">
+              {
+                product.badge
+              }
+            </div>
+          </div>
+        </button>
 
         <button
           type="button"
-          className="absolute right-2 top-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background/90"
+          onClick={
+            onSave
+          }
+          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/90"
+          aria-label={`${product.name} 장바구니 저장`}
         >
           <Heart size={13} />
         </button>
       </div>
 
-      <p className="mt-2 truncate text-xs font-medium">
-        {product.name}
-      </p>
+      <button
+        type="button"
+        onClick={
+          onProductClick
+        }
+        className="mt-2 block w-full text-left"
+      >
+        <p className="truncate text-base font-medium">
+          {product.name}
+        </p>
 
-      <p className="mt-1 truncate text-xs font-semibold">
-        {product.price}
-      </p>
+        <p className="mt-1 text-base font-semibold">
+          {formatPrice(
+            product.price,
+          )}
+        </p>
+      </button>
 
-      <div className="mt-2 w-full min-w-0 rounded-[8px] bg-muted/60 p-2">
-        <div className="flex w-full min-w-0 items-center gap-1">
-          <Sparkles size={9} className="shrink-0" />
+      <div className="mt-2 rounded-sm bg-muted/60 p-2">
+        <div className="flex items-center gap-1">
+          <Sparkles
+            size={9}
+            className="shrink-0"
+          />
 
-          <span className="min-w-0 truncate text-[8px] font-medium">
+          <span className="truncate text-xs font-medium">
             왜 추천했을까요?
           </span>
         </div>
-
-        <p className="mt-1 line-clamp-2 break-keep text-[8px] leading-3 text-muted-foreground">
+ 
+        <p className="mt-1 line-clamp-2 text-xs leading-3 text-muted-foreground">
           {product.reason}
         </p>
       </div>

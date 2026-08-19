@@ -16,7 +16,7 @@ export default function RecentPage() {
         {recentItems.map((item) => (
           <div key={item.id}>
             {/* TODO: 상품 이미지 자리 */}
-            <div className="mb-2 aspect-square rounded-md border border-border bg-muted" />
+            <div className="mb-2 aspect-square rounded-sm border border-border bg-muted" />
             <p className="text-sm">{item.name}</p>
             <p className="text-sm font-medium">{item.price.toLocaleString()}원</p>
           </div>

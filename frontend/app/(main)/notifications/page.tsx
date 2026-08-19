@@ -123,7 +123,7 @@ export default function NotificationsPage() {
                 <Icon size={20} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="mb-0.5 flex items-center gap-1.5">
-                    {!item.read && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                    {!item.read && <span className="h-1.5 w-1.5 shrink-0 rounded-sm bg-primary" />}
                     <p className={cn("truncate text-sm font-medium", item.read && "text-muted-foreground")}>
                       {item.title}
                     </p>
