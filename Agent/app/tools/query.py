@@ -1,5 +1,5 @@
 #===============================================
-# Agent 판단의 핵 - 조회형 도구 7종 실행부 (definitions.py의 짝)
+# Agent 하네스 - 조회형 도구 7종 실행부 (definitions.py의 짝)
 #===============================================
 # [역할] LLM이 "search_products를 이런 인자로 불러줘"라고 하면 그 요청을 실제 함수 호출로 바꿔 실행하고 결과를 LLM에게 돌려줄 형태로 다듬음.
 
@@ -92,8 +92,9 @@ def _get_change_events(sku_ids = None, within_hours:int =24) -> dict:
 # 디스패치 테이블
 # 키 = definitions.py에 선언한 도구이름
 # 값 = 도구를 실행할 함수 자체
+# 파이썬에서 함수는 숫자·문자열처럼 변수에 담고 dict의 값으로 넣을 수 있는 값
 # 루프는 이 표에서 함수를 꺼내 실행하므로, 도구가 늘어도 루프 코드는 바뀌지 않음
-
+# ()를 붙이면 실행, 안 붙이면 '함수 그 자체" / 이름 문자열로 함수를 꺼내 부를 수 있음
 REGISTRY = {
     "search_products": _search_products,
     "get_product": _get_product,
@@ -107,8 +108,10 @@ REGISTRY = {
 def run(tool_name: str, tool_input: dict) -> dict:
     fn = REGISTRY.get(tool_name)
     if fn is None:
-        return {"error": "unknown_tool", "message": f"'{tool_name}'은 없는 도구 입니다"}
+        return {"error": "unknown_tool", "message": f"'{tool_name}'은 없는 도구입니다"}
 
+    # 파이썬에서 함수는 객체, __code__는 그 함수를 컴파일한 __code__ 객체
+    # 앞뒤 밑줄 두개는 "파이썬이 관리하는 특수 속성"이라는 관례 / ()를 안 붙이는 이유는 실행이 아니라 꺼내보는 것이기 때문
     code = fn.__code__
     if code.co_flags & 0x08:
         clean = tool_input
@@ -116,6 +119,8 @@ def run(tool_name: str, tool_input: dict) -> dict:
         allowed = code.co_varnames[:code.co_argcount]
         clean = {k: v for k, v in tool_input.items() if k in allowed}
 
+    # 실패를 값으로
+    # 예외를 값으로 바꾸면 함수가 죽지 않음 → 대가로 죽은 걸 알아채기가 힘들어짐 ⇒ 검사할 때는 에러가 안 났나가 아니라 기대한 필드가 있나를 보아야함 (골든셋짜는 방식)
     try:
         return fn(**clean)
     except TypeError as e:

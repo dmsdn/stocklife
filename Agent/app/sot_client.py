@@ -1,5 +1,5 @@
 #===============================================
-# Agent 판단의 핵 - SoT 조회창구
+# Agent 하네스 - SoT 조회창구
 #===============================================
 
 # [역할] 백엔드(SoT)에 있는 사실을 "읽어오는" 함수 7개를 모아둔 파일
@@ -41,11 +41,13 @@ def _http_get(path: str, params:dict | None = None):
     import httpx
     r = httpx.get(config.BACKEND_BASE_URL + path, params=params,
                   timeout=config.BACKEND_TIMEOUT_SEC)
-    r.raise_for_status()
-    return r.json()
+    r.raise_for_status() # 응답이 실패 코드 (4XX/5XX)면 예외를 던짐. 응답 객체가 스스로 가진 기능(메서드)
+    # 실패는 실패로 터뜨려야 루프가 지어내지 않음
+    return r.json() # 응답 본문 (JSON 텍스트)을 파이썬 dict/list로 변환해 돌려줌
 
 
 def _parse_ms(ts: str) -> datetime:
+    # "14:04:12"는 문자열이라 빼기가 안 됨. datetime객체로 바꿔야 몇 초 차이인가를 계산할 수 있음
     return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S.%f")
 
 
@@ -118,6 +120,8 @@ def get_purchase_history(member_id: int) -> list[dict]:
     if not config.USE_MOCK_SOT:
         return _http_get(_API["get_purchase_history"].format(member_id = member_id))
     rows = [p for p in mock_data.PURCHASES if p["member_id"] == member_id]
+    # sorted(목록, key=함수): key 함수가 돌려주는 값을 기준으로 정렬한 새 목록을 만듦. 원본은 그대로 유지
+    # lambda r: r["purchased_at"]: 행 r을 받아 purchased_at 값을 돌려줌
     return sorted(rows, key=lambda r : r["purchased_at"])
 
 
