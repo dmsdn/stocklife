@@ -197,6 +197,33 @@ INSERT INTO _chk VALUES (27,'D','한글 왕복 저장','OK',
  (SELECT IF(COUNT(*)=1 AND MAX(LENGTH(name)) > MAX(CHAR_LENGTH(name)),'OK','깨짐')
     FROM products WHERE sku_id=103877 AND name='원두 커피 홀빈 1kg'));
 
+-- ── [S] v2.5 회원 축 컬럼 ────────────────────────────────────────────────
+-- 이 세 검사는 구조 검사지만 파일 끝에 붙였다 — 번호를 뒤에 이어 붙이면 기존 27개의
+-- 번호가 그대로 남아, 과거 실행 결과와 "몇 번이 깨졌나"를 대조할 수 있다.
+-- (앞에 끼워 넣으면 전 항목이 한 칸씩 밀려 이력 대조가 불가능해진다.)
+
+-- 28. 축 컬럼 4종이 있는가. 하나라도 빠지면 그 축을 게이트로 쓰는 기능이 조용히
+--     전원을 통과시킨다 — by_car가 없으면 도보 방문자에게도 대용량을 민다.
+INSERT INTO _chk VALUES (28,'S','members 축 컬럼 4종','by_car,has_child,has_pet,household_size',
+ (SELECT IFNULL(GROUP_CONCAT(COLUMN_NAME ORDER BY COLUMN_NAME),'(없음)')
+    FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
+     AND TABLE_NAME='members'
+     AND COLUMN_NAME IN ('household_size','has_pet','has_child','by_car')));
+
+-- 29. 구 라벨 컬럼이 남아 있지 않은가. 남으면 가입 INSERT가 예전 컬럼을 계속 채우고
+--     학습 필터가 두 기준(문자열 vs member_id 범위)으로 갈라진다.
+--     둘 다 에러 없이 도는데 결과만 다른 상태가 가장 잡기 어렵다.
+INSERT INTO _chk VALUES (29,'S','persona_type 제거됨','0',
+ (SELECT CAST(COUNT(*) AS CHAR) FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='members' AND COLUMN_NAME='persona_type'));
+
+-- 30. 축 4개가 NULL을 담을 수 있는가. NOT NULL이 하나라도 걸리면 NULL(안 물어봄)과
+--     FALSE(없다고 답함)의 구분이 무너지고, 기본값 0이 채워져 **전원이 "반려동물 없음"**이 된다.
+INSERT INTO _chk VALUES (30,'S','축 컬럼 NULL 허용','4',
+ (SELECT CAST(COUNT(*) AS CHAR) FROM information_schema.COLUMNS
+   WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='members' AND IS_NULLABLE='YES'
+     AND COLUMN_NAME IN ('household_size','has_pet','has_child','by_car')));
+
 -- ── 결과 ─────────────────────────────────────────────────────────────────
 SELECT '=== StoreFlow 계약 테스트 v2 ===' AS ``;
 
