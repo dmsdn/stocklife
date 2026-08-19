@@ -36,8 +36,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 같이 날아가므로, 적재 후 아래 한 줄로 복구합니다:
 
 ```sql
-INSERT INTO members (member_id, persona_type, household_size, created_at)
-SELECT 10000000 + consumer_id, '실사용자', NULL, created_at FROM consumer
+-- v2.5: persona_type 삭제 → 축 4개. 축 값은 가입 폼에서만 오므로 복구 시엔 전부 NULL이다
+-- (NULL = 안 물어봄. 임의 숫자로 채우면 그 회원에게 조용히 틀린 추천이 나간다).
+INSERT INTO members (member_id, household_size, has_pet, has_child, by_car, created_at)
+SELECT 10000000 + consumer_id, NULL, NULL, NULL, NULL, created_at FROM consumer
 ON DUPLICATE KEY UPDATE member_id = member_id;
 ```
 
@@ -48,9 +50,10 @@ docker exec -i storeflow_mysql mysql -uroot -p1234 --default-character-set=utf8m
 docker exec -i storeflow_mysql mysql -uroot -p1234 --default-character-set=utf8mb4 storeflow_db < db/verify_world.sql   # 세계 12종
 ```
 
-`verify_contract_v2.sql`(계약 27종)은 **샘플 데이터 기준**이라, 빈 DB에
-`sample_rows_v2.sql`을 넣고 돌려야 27/27이 나옵니다. 실사용 DB에서 돌리면
-이벤트·회원이 달라 일부가 FAIL로 뜨는데 정상입니다.
+`verify_contract_v2.sql`(계약 **30종**, v2.5에서 28~30 추가)은 일부가 **샘플 데이터 기준**이라,
+빈 DB에 `sample_rows_v2.sql`을 넣고 돌려야 30/30이 나옵니다. 실사용 DB에서 돌리면
+이벤트·회원이 달라 [D] 검사 일부가 FAIL로 뜨는데 정상입니다.
+**[S] 구조 검사(1~12, 28~30)는 어느 DB에서든 PASS여야 합니다** — 여기가 깨지면 진짜 계약 위반입니다.
 
 ## 파일 지도
 
@@ -77,9 +80,15 @@ docker exec -i storeflow_mysql mysql -uroot -p1234 --default-character-set=utf8m
 
 ## 알아두면 좋은 것
 
-- **`members`는 계정 테이블이 아닙니다.** 시뮬레이터가 만든 소비 주체(페르소나·가구 규모)이고,
+- **`members`는 계정 테이블이 아닙니다.** 시뮬레이터가 만든 소비 주체이고,
   로그인 회원(`consumer`)과는 **FK 없이 계산식으로** 이어집니다:
   `member_id = 10,000,000 + consumer_id`. 이유는 `스키마_변경규칙.md` 참조.
-- `household_size`가 **NULL이면 "모름"**입니다(실사용자 행). 임의 숫자로 채우지 마세요.
+- **[v2.5] `persona_type`이 없어지고 축 컬럼 4개가 됐습니다** —
+  `household_size` · `has_pet` · `has_child` · `by_car`. 가입 INSERT 변경점은
+  `스키마_변경규칙.md` 맨 아래 「v2.5 변경점」에 SQL 그대로 있습니다.
+- **NULL과 FALSE는 다릅니다.** NULL = 안 물어봄(일반 추천으로), FALSE = 없다고 답함(그 카테고리 제외).
+  안 받은 항목을 0/1로 채우지 마세요 — 에러 없이 조용히 틀립니다.
+- **학습 대상 필터는 `member_id < 10000000`**입니다(구: `persona_type != '실사용자'`).
+  문자열 비교는 오타 하나에 학습 데이터가 조용히 오염되지만, ID 범위는 구조라 안 틀립니다.
 - 상품 수가 5,000 → 4,970이 됐지만 **기존 sku_id는 하나도 바뀌지 않았습니다.**
   빠진 30개는 3F 홈·가전 "고급형" 변형입니다(맵 확정으로 그 존 매대 용량이 270이 됨).

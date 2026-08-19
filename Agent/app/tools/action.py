@@ -1,5 +1,5 @@
 #===============================================
-# Agent 판단 핵 - 액션형 도구 3종 실행부
+# Agent 하네스 - 액션형 도구 3종 실행부
 #===============================================
 
 # [역할] Agent가 "실제로 담기/수량변경/빼기"를 수행하는 파일
@@ -27,11 +27,14 @@ def set_consumer_id(consumer_id: int | None) -> None:
     global _CURRENT_CONSUMER_ID
     _CURRENT_CONSUMER_ID = consumer_id
 
+# 회원확인
 def _require_member() -> tuple[int | None, dict | None]:
     if _CURRENT_CONSUMER_ID is None:
+        # return 값을 쉽표로 여러개 돌려주면 파이썬이 튜플 하나로 묶음
         return None, {"ok": False, "error": "not_a_member", "message": "로그인한 회원만 장바구니를 사용할 수 있습니다."}
     return _CURRENT_CONSUMER_ID, None
 
+# 밑의 도구별 실행함수가 이 함수 하나를 공유 / 매개변수가 네개인 이유는 세 도구가 조금씩 다르게 부르기 때문
 def _call(method: str, path: str, json_body: dict | None = None, params: dict | None = None) -> dict:
     if not INTERNAL_SERVICE_KEY:
         return {"ok": False, "error": "no_service_key",
@@ -65,6 +68,7 @@ def _call(method: str, path: str, json_body: dict | None = None, params: dict | 
 # 도구별 실행 함수
 
 def _add_to_cart(sku_id: int, quantity: int = 1) -> dict:
+    # 튜플을 받는 쪽은 한 번에 쉼표로 풀어서 받음
     cid, err = _require_member()
     if err:
         return err
@@ -92,5 +96,6 @@ REGISTRY = {
     "update_cart_quantity": _update_cart_quantity,
     "remove_from_cart": _remove_from_cart,
 }
-
+# frozenset(dict)는 그 dict의 키만 모아 수정 불가능한 집합을 만듬. "상태를 바꾸는 도구 이름 세개"
+# 루프가 이 집합을 보고 "이번 턴에 상태를 바꿨는가"를 판단해, 응답의 actions 배열에 실어 프론트가 장바구니 화면을 갱신하게 함.
 MUTATING_TOOLS = frozenset(REGISTRY)

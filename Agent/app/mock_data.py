@@ -125,8 +125,8 @@ PROMOTIONS = [
 
 # ── 회원·구매 이력 (sample §8) — 장면 3의 근거 ──────────────────────────────
 MEMBERS = {
-    9001: {"persona_type": "4인가족", "household_size": 4},
-    9002: {"persona_type": "1인자취", "household_size": 1},
+    9001: {"household_size": 4, "has_pet": False, "has_child": True,  "by_car": True},
+    9002: {"household_size": 1, "has_pet": True,  "has_child": False, "by_car": False},
 }
 
 # 회원 9001이 물티슈A를 3/8 → 4/19 → 5/31 → 6/28 네 번 = 평균 주기 약 37일.

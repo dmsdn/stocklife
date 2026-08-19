@@ -1,6 +1,9 @@
 # ===============================================
-# Agent 판단 핵 - Agent 루프
+# Agent 하네스 - Agent 루프
 # ===============================================
+
+# "LLM은 함수를 실행할 수 없다." 도구 19개를 스키마로 보여줘도 LLM이 할 수 있는 것은  "get_inventory를 sku_id=101042로 불러줘"라고 말하는 것까지가 전부
+# 실제로 부르고, 결과를 다시 물어다 주는 심부름꾼이 필요함 (loop.py)
 
 # [역할] 자연어 입력을 받아, LLM이 도구를 골라 부르면 실행해 되먹이고, 더 부를 도구가 없어질 때까지 왕복한 뒤 최종 발화를 돌려줌
 # 자연어 입력이 전부 이 파일로 옴(반응형 채팅 + 자발형 개입의 문장생성)
@@ -29,7 +32,8 @@ from app.tools import definitions, query, action
 # ===============================================
 
 # 계산 및 추론 스텁
-# 실행부가 아직 없는 9종. 스키마(definitions)에는 있어서 LLM이 고를 수 있으므로,  골랐을 때 "아직 준비 안 됨"을 **값으로** 돌려줘야 gka
+# 실행부가 아직 없는 9종. 스키마(definitions)에는 있어서 LLM이 고를 수 있으므로,  골랐을 때 "아직 준비 안 됨"을 **값으로** 돌려줘야 함
+# 실행중에 증감되는 집합이 아니기 때문에 frozenset
 # 조용히 빼면 LLM이 unknown_tool을 맞고, 그렇다고 지어내게 둘 수도 없다. C단계에서 compute.py / infer.py 가 생기면 이 집합은 비고, 아래 _dispatch의 스텁 분기가 안 타게 됨
 _COMPUTE_STUB = frozenset({
     "optimize_route", "optimize_bundle", "compare_unit_price", "find_substitutes",
@@ -43,6 +47,8 @@ _INFER_STUB = frozenset({
 
 # 자체 검산: 도구 19전부에 실행경로(or 스텁)가 있는가
 # definitions에 선언만 있고 실행부가 없는 도구가 생기면, LLM이 그걸 고르는 순간 unknown_tool로 착지가 이상해짐. 조용히 망가지는 유형이므로 import시점에 잡음
+
+# set(특정_dict): 그 dict의 키만 모은 집합이 됨
 _EXECUTABLE = set(query.REGISTRY) | set(action.REGISTRY) | _COMPUTE_STUB | _INFER_STUB
 _DECLARED = {t["name"] for t in definitions.TOOLS}
 
@@ -61,6 +67,7 @@ def _get_client():
     global _client
     if _client is None:
         import anthropic
+        # API호출을 담당하는 객체를 만듦
         _client = anthropic.Anthropic()
     return _client
 
@@ -68,30 +75,38 @@ def _get_client():
 # ===============================================
 # 도구 실행 + 출처 판정
 
+# 이름을 실행으로 바꾸는 통역기
+# return 튜플의 두번째 값이 이 함수의 진짜 존재 이유 "출처라벨"
+# "sot": 도구유형[조회7·액션3] ⇒ 매장 사실: 가격·재고·위치는 여기서만 나올 수 있음
+# "compute": 도구유형[계산4] ⇒ 단위가격·방문순서
+# "infer": 도구유형[추론5] ⇒ "보충 확률·재구매 시점"
+# "web": 도구유형[웹검색] ⇒ "이 함수에 오지 않음, 응답블록에서 수확"
 def _dispatch(name: str, tool_input: dict) -> tuple[dict, str]:
     if name in query.REGISTRY:
         return query.run(name, tool_input), "sot"
 
     if name in action.REGISTRY:
         try:
+            # REGISTRY[name]은 함수 자체를 꺼낸 것, 뒤에 (...)를 붙여야 실행됨. **은 dict를 낱개 인자로 푸는 것
             return action.REGISTRY[name](**tool_input), "sot"
         except TypeError as e:
             return {"ok": False, "error": "bad_arguments", "message": str(e)}, "sot"
 
     if name in _COMPUTE_STUB:
-        return {"error": "not_implemented", "message": f"{name}은 아직 준비 중인 기능입니다." "이 기능 없이 답할 수 있는 부분만 답하세요"}, "compute"
+        return {"error": "not_implemented", "message": f"{name}은(는) 아직 준비 중인 기능입니다." "이 기능 없이 답할 수 있는 부분만 답하세요"}, "compute"
     if name in _INFER_STUB:
         return {"error": "not_implemented", "message": f"{name}은(는) 아직 준비 중인 기능입니다." "이 기능 없이 답할 수 있는 부분만 답하세요"}, "infer"
 
     return {"error": "unknown_tool", "message": f"'{name}'은 없는 도구입니다."}, "sot"
 
-
+# 웹에서 받은 데이터 다루기
 def _harvest_web_results(block) -> list[dict]:
     items = getattr(block, "content", None)
     if not isinstance(items, list):
         return []
     out = []
     for item in items:
+        # url:LLM이 어떤 출처를 봤는가 (본문 보관 X)
         url = getattr(item, "url", None)
         if url:
             out.append({"url": url, "title": getattr(item, "title", None)})
@@ -107,11 +122,11 @@ def run_chat(message: str,
              session_id: str | None = None,
              history: list[dict] | None = None) -> dict:
 
-    # 요청의 주인을 등록. 액션도구의 consumer_id는 LLM이 아닌 여기서 주입
+    # 요청의 주인을 등록. 액션도구의 consumer_id는 LLM이 아닌 여기서 주입 (보안설계)
     action.set_consumer_id(consumer_id)
 
     #대화목록 조립 .history는 프론트가 보낸 그대로 받되, 뒤에서 20건만 추출
-    messages = list(history or [])[-20:]
+    messages = list(history or [])[-20:]            # history가 None이면 빈리스트를 사용 / 새로운 리스트를 생성: 부르는 쪽이 준 리스트를 여기서 직접 고치면 남의 물건을 몰래 바꾸는 것이 됨
     messages.append({"role": "user", "content": message})
 
     system_prompt = prompts.build_system_prompt()
@@ -125,7 +140,7 @@ def run_chat(message: str,
     client = _get_client()
 
     for turn in range(config.MAX_TURNS):
-        # LLM 호출. 매번 도구 전체(ALL_TOOLS)를 줌.
+        # client.messages.create(...)가 실제 LLM API 호출. 매번 도구 전체(ALL_TOOLS)를 줌.
         # 대화에 tool_use 블록이 쌓인 뒤에는 tools없이 부르면 API가 거부하므로, 도구 목록은 왕복 내내 동일하게 유지
         response = client.messages.create(
             model=config.LLM_MODEL,
@@ -134,8 +149,10 @@ def run_chat(message: str,
             messages=messages,
             tools=definitions.ALL_TOOLS,
         )
-
         # LLM의 응답을 그대로 발화에 쌓음: 다음 호출 때 LLM이 자기가 어떤 도구를 왜 불렀는지 기억하는 유일한 방법
+        # response.content는 한 턴의 답변 조각들 ⇒ 매번 새 봉투
+        # messages가 지금까지의 모든 턴의 대화 전체 ⇒ 턴마다 쌓임
+        # ① LLM이 방금 한 말을 대화에 기록
         messages.append({"role": "assistant", "content": response.content})
 
         # 응답 블록 훑기
@@ -146,9 +163,9 @@ def run_chat(message: str,
             if block.type == "text":
                 last_text = block.text
             elif block.type == "web_search_tool_result":
-                ledgers["web"].extend(_harvest_web_results(block))
+                ledgers["web"].extend(_harvest_web_results(block))          # append를 쓰면 리스트안에 리스트가 들어감. 검색결과가 여러건이므로 extend 사용
             elif block.type == "tool_use":
-                if block.name in definitions.SERVER_TOOL_NAMES:
+                if block.name in definitions.SERVER_TOOL_NAMES:            # 서버도구가 이 타입으로 들어오면 여기서 실행하면 안 되므로 continue
                     continue
                 tool_calls.append(block)
 
@@ -166,6 +183,7 @@ def run_chat(message: str,
         results_content = []
         for call in tool_calls:
             result, source = _dispatch(call.name, dict(call.input))
+            # 출처 4칸 중 이번의 출처 칸을 골라 그 리스트에 한 줄 추가
             ledgers[source].append({"tool": call.name, "input": dict(call.input), "result": result})
             # 상태를 바꾼 액션은 성공했을 때만 프론트에 알림
             if call.name in action.MUTATING_TOOLS and result.get("ok"):
@@ -174,6 +192,7 @@ def run_chat(message: str,
                                     "tool_use_id": call.id,
                                     "content": json.dumps(result, ensure_ascii=False),
                                     })
+        # ② 우리가 실행한 도구 결과를 대화에 기록
         messages.append({"role": "user", "content": results_content})
 
     else:
