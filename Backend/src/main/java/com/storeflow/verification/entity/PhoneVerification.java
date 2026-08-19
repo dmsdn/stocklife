@@ -40,13 +40,16 @@ public class PhoneVerification {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    protected PhoneVerification() {}
+    protected PhoneVerification() {
+    }
 
-    public PhoneVerification(String phoneNumber, String verificationCode, VerificationPurpose purpose, LocalDateTime expiresAt) {
+    public PhoneVerification(String phoneNumber, String verificationCode,
+            VerificationPurpose purpose, LocalDateTime expiresAt) {
         this.phoneNumber = phoneNumber;
         this.verificationCode = verificationCode;
         this.purpose = purpose;
         this.expiresAt = expiresAt;
+        this.createdAt = LocalDateTime.now();
     }
 
     @PrePersist
@@ -73,12 +76,35 @@ public class PhoneVerification {
         this.verified = true;
     }
 
-    public Long getId() { return id; }
-    public String getPhoneNumber() { return phoneNumber; }
-    public String getVerificationCode() { return verificationCode; }
-    public VerificationPurpose getPurpose() { return purpose; }
-    public LocalDateTime getExpiresAt() { return expiresAt; }
-    public boolean isVerified() { return verified; }
-    public int getAttemptCount() { return attemptCount; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public String getVerificationCode() {
+        return verificationCode;
+    }
+
+    public VerificationPurpose getPurpose() {
+        return purpose;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public boolean isVerified() {
+        return verified;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 }
