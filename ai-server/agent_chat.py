@@ -219,6 +219,24 @@ def _call_orders_api_internal(action: str, tool_input: dict, consumer_id: int | 
         return {"ok": False, "error": f"주문 이력 서버 연결 실패: {e}"}
 
 
+def _call_purchase_stats_unavailable(name: str) -> dict:
+    """
+    compare_purchase_popularity / get_popular_products는 백엔드 PurchaseController가
+    @CurrentConsumer(Bearer JWT 필수)로만 열려 있고 /internal 대응 엔드포인트가 없다.
+    이 /agent/chat 경로는 Backend가 서버 대 서버로 호출해서 JWT가 없으므로 이 두 도구는
+    여기서는 쓸 수 없다 — ai_agent_shop.py(/api/ai/agent/shop, 프론트가 사용자 JWT를 직접
+    실어 호출하는 경로)에서는 정상 동작한다.
+    """
+    return {
+        "ok": False,
+        "status": 501,
+        "error": (
+            f"{name}은(는) 이 채팅 경로에서 아직 지원되지 않습니다. "
+            "판매량 비교는 로그인한 사용자가 /api/ai/agent/shop 경로로 물어봐야 합니다."
+        ),
+    }
+
+
 def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
@@ -228,6 +246,8 @@ def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict
         return _call_orders_api_internal(name, tool_input, consumer_id)
     if name in ("add_to_cart", "update_cart_item", "remove_from_cart", "get_cart"):
         return _call_cart_api_internal(name, tool_input, consumer_id)
+    if name in ("compare_purchase_popularity", "get_popular_products"):
+        return _call_purchase_stats_unavailable(name)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
 
 

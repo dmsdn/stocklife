@@ -109,6 +109,48 @@ def get_alternatives(sku_id: int) -> dict:
     return _get(f"/api/products/{sku_id}/alternatives/candidates")
 
 
+def compare_purchase_popularity(
+        sku_ids: list[int],
+        lookback_days: int | None,
+        bearer_token: str | None,
+) -> dict:
+    """
+    "A샴푸랑 B샴푸 중 뭐가 더 잘 나가?" 같은 질문용. GET /api/purchases/compare.
+    개인 구매내역이 아니라 전 회원 합계/구매자 수만 반환하는 공개 성격의 데이터지만,
+    백엔드 PurchaseController가 @CurrentConsumer로 Bearer 토큰을 요구하므로
+    (CurrentConsumerArgumentResolver가 토큰 없으면 예외) bearer_token이 반드시 있어야 한다.
+    """
+    if not sku_ids:
+        return {"ok": False, "error": "비교할 sku_id가 없습니다."}
+    if not bearer_token:
+        return {"ok": False, "error": "로그인이 필요합니다. (판매 집계 조회는 인증된 사용자만 가능)"}
+
+    params = {"skuIds": sku_ids}
+    if lookback_days:
+        params["lookbackDays"] = lookback_days
+    return _get("/api/purchases/compare", params=params, headers=_auth_headers(bearer_token))
+
+
+def get_popular_products(
+        category_l2: str | None,
+        lookback_days: int | None,
+        limit: int | None,
+        bearer_token: str | None,
+) -> dict:
+    """"요즘 뭐가 잘 나가?" 같은 질문용. GET /api/purchases/popular. 인증 필요(위와 동일 이유)."""
+    if not bearer_token:
+        return {"ok": False, "error": "로그인이 필요합니다. (판매 집계 조회는 인증된 사용자만 가능)"}
+
+    params = {}
+    if category_l2:
+        params["categoryL2"] = category_l2
+    if lookback_days:
+        params["lookbackDays"] = lookback_days
+    if limit:
+        params["limit"] = limit
+    return _get("/api/purchases/popular", params=params, headers=_auth_headers(bearer_token))
+
+
 # ---------------------------------------------------------------------------
 # 이벤트 기록 (내부 전용 쓰기 - 백엔드가 유일한 창구)
 # ---------------------------------------------------------------------------

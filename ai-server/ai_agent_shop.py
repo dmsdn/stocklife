@@ -182,6 +182,58 @@ TOOLS = [
         "description": "현재 사용자의 장바구니 전체 목록을 조회한다.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "compare_purchase_popularity",
+        "description": (
+            "'A샴푸랑 B샴푸 중에 뭐가 더 많이 팔려?', 'A랑 B 중 어떤 게 인기야?'처럼 "
+            "특정 상품 여러 개를 놓고 어느 쪽이 더 많이 팔렸는지 비교할 때 쓴다. "
+            "search_products로 먼저 sku_id를 찾은 뒤 이 도구에 넘겨라. "
+            "compare_products(가격 비교)와 다른 도구다 — 이건 가격이 아니라 판매량/구매자 수를 비교한다. "
+            "결과의 purchaser_count(구매한 서로 다른 회원 수)가 인기도의 기준 지표다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sku_ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "비교할 sku_id 목록 (search_products 결과에서 가져온 값, 2개 이상)",
+                },
+                "lookback_days": {
+                    "type": ["integer", "null"],
+                    "description": "최근 며칠 기준으로 집계할지. 모르면 null (기본 90일 적용).",
+                },
+            },
+            "required": ["sku_ids", "lookback_days"],
+        },
+    },
+    {
+        "name": "get_popular_products",
+        "description": (
+            "'요즘 뭐가 잘 나가?', '샴푸 중에 사람들이 많이 사는 거 추천해줘'처럼 "
+            "특정 상품을 안 짚고 카테고리(또는 전체) 안에서 인기 상품 순위를 물어볼 때 쓴다. "
+            "특정 상품 2개 이상을 이름으로 콕 짚어 비교하는 질문이면 이 도구 대신 "
+            "compare_purchase_popularity를 써라."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category_l2": {
+                    "type": ["string", "null"],
+                    "description": "소분류 카테고리명. 예: '샴푸'. 특정 카테고리를 안 짚었으면 null(전체 대상).",
+                },
+                "lookback_days": {
+                    "type": ["integer", "null"],
+                    "description": "최근 며칠 기준으로 집계할지. 모르면 null (기본 90일 적용).",
+                },
+                "limit": {
+                    "type": ["integer", "null"],
+                    "description": "상위 몇 개를 보여줄지. 모르면 null (기본 10개).",
+                },
+            },
+            "required": ["category_l2", "lookback_days", "limit"],
+        },
+    },
 ]
 
 SYSTEM_PROMPT = (
@@ -204,7 +256,13 @@ SYSTEM_PROMPT = (
     "3. 장바구니에 담기 전에 어떤 상품인지(sku_id) 명확하지 않으면 담지 말고 사용자에게 되물어라.\n"
     "4. cart_item_id가 필요한 수정/삭제인데 ID를 모르면 get_cart로 먼저 확인해라.\n"
     "5. 삭제나 큰 폭의 수량 변경은 실행 후 응답에서 무엇을 했는지 명확히 알려줘라.\n"
-    "6. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량만 근거로 "
+    "6. 'A랑 B 중에 뭐가 더 많이 팔려/인기 있어?'처럼 특정 상품 여러 개의 판매량을 비교하는 "
+    "질문은 compare_purchase_popularity로 답해라 — 가격 비교(compare_products)와 다른 도구다. "
+    "상품을 이름으로만 알고 있으면 search_products로 먼저 sku_id를 찾아라. "
+    "'요즘 뭐가 잘 나가?'처럼 특정 상품을 안 짚고 순위를 물어보면 get_popular_products를 써라. "
+    "두 도구 모두 구매자 수(purchaser_count)를 인기도 기준으로 삼되, 절대 눈대중으로 순서를 "
+    "판단하지 말고 도구가 돌려준 순서/숫자를 그대로 근거로 삼아라.\n"
+    "7. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량만 근거로 "
     "2~3문장 한국어로 요약해라. 도구 결과에 없는 가격이나 상품을 지어내지 마라."
 )
 
@@ -284,6 +342,51 @@ def _run_compare_products(tool_input: dict) -> dict:
     return {"ok": True, "sort_by": sort_by, "items": items}
 
 
+def _run_compare_purchase_popularity(tool_input: dict, bearer_token: str) -> dict:
+    result = backend_client.compare_purchase_popularity(
+        sku_ids=tool_input.get("sku_ids") or [],
+        lookback_days=tool_input.get("lookback_days"),
+        bearer_token=bearer_token,
+    )
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error") or "판매량 비교 조회에 실패했습니다."}
+
+    items = [
+        {
+            "sku_id": item.get("skuId"),
+            "name": item.get("productName"),
+            "total_qty": item.get("totalQty"),
+            "purchaser_count": item.get("purchaserCount"),
+        }
+        for item in (result.get("data") or [])
+    ]
+    # 인기도 기준 지표(purchaser_count) 내림차순 정렬 — Claude가 눈대중으로 비교하지 않게 여기서 확정.
+    items.sort(key=lambda x: x["purchaser_count"] or 0, reverse=True)
+    return {"ok": True, "items": items}
+
+
+def _run_get_popular_products(tool_input: dict, bearer_token: str) -> dict:
+    result = backend_client.get_popular_products(
+        category_l2=tool_input.get("category_l2"),
+        lookback_days=tool_input.get("lookback_days"),
+        limit=tool_input.get("limit"),
+        bearer_token=bearer_token,
+    )
+    if not result.get("ok"):
+        return {"ok": False, "error": result.get("error") or "인기 상품 조회에 실패했습니다."}
+
+    items = [
+        {
+            "sku_id": item.get("skuId"),
+            "name": item.get("productName"),
+            "total_qty": item.get("totalQty"),
+            "purchaser_count": item.get("purchaserCount"),
+        }
+        for item in (result.get("data") or [])
+    ]
+    return {"ok": True, "items": items}
+
+
 def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
@@ -293,6 +396,10 @@ def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
         return backend_client.find_frequent_purchase(tool_input, bearer_token=bearer_token, consumer_id=None)
     if name in ("add_to_cart", "update_cart_item", "remove_from_cart", "get_cart"):
         return backend_client.cart_action(name, tool_input, bearer_token=bearer_token, consumer_id=None)
+    if name == "compare_purchase_popularity":
+        return _run_compare_purchase_popularity(tool_input, bearer_token)
+    if name == "get_popular_products":
+        return _run_get_popular_products(tool_input, bearer_token)
     return {"ok": False, "error": f"알 수 없는 도구: {name}"}
 
 
