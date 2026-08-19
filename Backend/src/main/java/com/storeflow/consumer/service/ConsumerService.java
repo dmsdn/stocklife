@@ -47,7 +47,9 @@ public class ConsumerService {
 
     @Transactional
     public void signup(SignupRequest request) {
-        if (consumerRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+        // 전화번호는 필수 항목이 아니므로, 값이 있을 때만 중복 체크한다.
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()
+                && consumerRepository.existsByPhoneNumber(request.getPhoneNumber())) {
             throw new IllegalStateException("이미 가입된 전화번호입니다.");
         }
 
@@ -60,16 +62,30 @@ public class ConsumerService {
                 request.getBirthDate(),
                 request.isCameraConsent(),
                 request.isPersonalInfoConsent(),
-                request.isMicConsent()
+                request.isMicConsent(),
+                request.isMarketingConsent()
         );
 
         consumerRepository.save(consumer); // IDENTITY라 save 직후 consumerId가 채워짐
 
-        // member_id는 저장하지 않고 계산(Member.toMemberId). persona_type은 반드시 '실사용자'
-        // 문자열 그대로 — Agent 쪽이 학습 데이터에서 이 값으로 필터링함.
-        // household_size는 가입 폼에 없는 값이라 NULL — 나중에 마이페이지 등에서 채움.
+        // member_id는 저장하지 않고 계산(Member.toMemberId).
+        // 스키마 v2.5: persona_type 폐기 → household_size/has_pet/has_child/by_car.
+        // 전부 선택 입력이라 안 받은 값은 그대로 null로 저장한다.
+        // 주의: null을 임의로 0/1(=false)로 채우면 안 됨 — "안 물어봄"과 "아니오"는 다른 의미이고,
+        // 잘못 채우면 Agent 쪽 추천이 조용히 틀어진다.
+        Byte householdSize = request.getHouseholdSize() == null
+                ? null
+                : request.getHouseholdSize().byteValue();
+
         int memberId = Member.toMemberId(consumer.getConsumerId());
-        memberRepository.save(new Member(memberId, "실사용자", null, Instant.now()));
+        memberRepository.save(new Member(
+                memberId,
+                householdSize,
+                request.getHasPet(),
+                request.getHasChild(),
+                request.getByCar(),
+                Instant.now()
+        ));
     }
 
     @Transactional
