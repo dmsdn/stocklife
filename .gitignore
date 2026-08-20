@@ -45,3 +45,6 @@ CLAUDE.local.md
 .mcp.json
 
 src/main/resources/application-mysql.yml
+
+bin/
+build/
