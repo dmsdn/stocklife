@@ -17,6 +17,19 @@ from app import sot_client
 
 #===============================================
 
+# ── 현재 요청의 신원 (2026-08-20, 트러블슈팅_세션신원_미주입_되묻기) ─────────────────────────────────
+# action.py의 _CURRENT_CONSUMER_ID와 같은 설계를 조회 쪽으로 확장한 것.
+# member_id·session_id는 **LLM이 정하면 안 되는 값**이다 — 스키마에 칸을 두면 LLM이 채울 값이 없어 손님에게 되묻고(첫 골든셋 실호출 4케이스 FAIL),
+# 남의 번호를 불러달라면 그대로 부른다(남의 구매 이력이 새는 보안 구멍).그래서 definitions의 조회·추론 스키마에서 이 두 칸을 지우고,루프가 요청마다 등록한 값을 run()이 채운다.
+# LLM의 손이 닿지 않는 경로다.
+_CURRENT_MEMBER_ID: int | None = None
+_CURRENT_SESSION_ID: str | None = None
+
+def set_identity(member_id: int | None, session_id: str | None) -> None:
+    global _CURRENT_MEMBER_ID, _CURRENT_SESSION_ID
+    _CURRENT_MEMBER_ID = member_id
+    _CURRENT_SESSION_ID = session_id
+
 # 결과 크기 상한
 # 상수 절정: 'LLM컨텍스트 예산 vs 정보량'의 튜닝대상
 MAX_SEARCH_RESULTS = 8          # 검색결과: 사람이 한 화면에서 비교하는 개수 정도
@@ -112,12 +125,32 @@ def run(tool_name: str, tool_input: dict) -> dict:
 
     # 파이썬에서 함수는 객체, __code__는 그 함수를 컴파일한 __code__ 객체
     # 앞뒤 밑줄 두개는 "파이썬이 관리하는 특수 속성"이라는 관례 / ()를 안 붙이는 이유는 실행이 아니라 꺼내보는 것이기 때문
+    # 인자 정화: LLM이 보낸 키 중 이 함수가 실제로 받는 것만 남긴다.
+    # fn.__code__.co_varnames = 그 함수가 선언한 인자 이름들(파이썬이 함수 객체에 담아두는 정보). co_argcount만큼 자르는 이유는 뒤쪽에 지역 변수 이름도섞여 있기 때문.
+    # **kw로 받는 _search_products는 co_argcount가 0이라 이 필터를 통과하지 못하므로, 아래 예외 처리로 그대로 넘긴다.
     code = fn.__code__
     if code.co_flags & 0x08:
         clean = tool_input
     else:
         allowed = code.co_varnames[:code.co_argcount]
         clean = {k: v for k, v in tool_input.items() if k in allowed}
+
+        # ── 신원 주입: 이 함수가 member_id·session_id를 받는 함수라면,  LLM이 뭐라고 보냈든 **등록된 값으로 덮어쓴다.**(트러블슈팅_세션신원_미주입_되묻기)
+        # 스키마에 칸이 없어 보통은 보낼 일이 없지만, LLM이 지침을 무시하고 끼워 넣은 경우까지 여기서 막힌다 — 인자 정화가 신원에서는 보안 검문이 된다.
+        # 등록된 값이 없으면(비회원·세션 없음) 실행하지 않고 오류를 값으로 돌려준다 — LLM이 이 결과를 보고 로그인 안내로 착지한다.
+        if "member_id" in allowed:
+            if _CURRENT_MEMBER_ID is None:
+                return {"error": "no_member",
+                        "message": "비회원 세션이라 회원 정보를 쓸 수 없습니다. "
+                                   "손님에게 회원번호를 묻지 말고, 로그인하면 "
+                                   "이용할 수 있다고 안내하세요."}
+            clean["member_id"] = _CURRENT_MEMBER_ID
+        if "session_id" in allowed:
+            if _CURRENT_SESSION_ID is None:
+                return {"error": "no_session",
+                        "message": "장보기 세션이 없습니다. 앱에서 장보기를 "
+                                   "시작하면 자동으로 연결된다고 안내하세요."}
+            clean["session_id"] = _CURRENT_SESSION_ID
 
     # 실패를 값으로
     # 예외를 값으로 바꾸면 함수가 죽지 않음 → 대가로 죽은 걸 알아채기가 힘들어짐 ⇒ 검사할 때는 에러가 안 났나가 아니라 기대한 필드가 있나를 보아야함 (골든셋짜는 방식)

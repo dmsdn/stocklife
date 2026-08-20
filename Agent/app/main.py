@@ -2,27 +2,29 @@
 # Agent 하네스 - HTTP 입구 (FastAPI앱)
 #===============================================
 
+# [역할] 하네스를 세상에 노출하는 유일한 문
+# 백엔드가 이 서버의 /agent/chat을 부르고, 이 서버는 루프를 돌리고 가드로 검수한 답을 돌려줌
+
+# [가드 차단 정책 ]
+# guard.check()는 판정만 하고 정책을 정하지 않는다(그 파일의 경계). 정책은 여기다:
+# · web_only     → 1회 재생성. 근거가 원장에 있으니 다시 쓰면 맞출 수 있다.
+# · unsupported  → 안전 문구로 대체. 근거 자체가 없다 — 다시 시켜도 지어낼 뿐.
+# · 재생성 후에도 위반 → 안전 문구 (무한 재생성 방지).
+# [재생성 안전조건] 첫 패스에서 **장바구니를 건드렸다면(actions 있음) 재생성하지않는다.
+# ** 루프를 다시 돌리면 LLM이 add_to_cart를 또 부를 수 있고, 그러면 같은 상품이 **두 번 담긴다** — 잘못된 발화보다 잘못된 상태 변경이 더 나쁘다.
+
+#===============================================
+
 import os
 
 from app import config
 
 #===============================================
 
-# .env 로더
-def _load_env() -> None:
+# .env 적재
+from app.env import load_env
 
-    path = os.path.join(os.path.dirname(__file__), "..", ".env")
-    if not os.path.exists(path):
-        return
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
-
-_load_env()
+load_env()
 
 # .env를 읽은 뒤에 불러야 하는 것들
 from contextlib import asynccontextmanager
@@ -32,6 +34,8 @@ from pydantic import BaseModel, Field
 
 from app import guard, loop
 from app.tools import definitions
+
+#===============================================
 
 # 요청·응답모양 (백엔드 DTO계약 [ChatService])
 class HistoryItem(BaseModel):
