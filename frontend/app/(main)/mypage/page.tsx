@@ -1,7 +1,5 @@
 // app/(main)/mypage/page.tsx
-// ✅ 비로그인 상태에서는 포인트/쿠폰/리뷰 박스와 구매내역·전자영수증·찜·취소반품환불
-//   메뉴를 아예 숨깁니다 (로그인 안 해도 볼 수 있는 것: 최근 본/등급안내/공지사항/
-//   알림설정/이용약관/FAQ).
+// ✅ 찜, 최근 본 메뉴 삭제 (요청사항) — 남은 회원전용: 구매내역/전자영수증/취소반품환불
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,8 +9,6 @@ import {
   ChevronRight,
   ShoppingBag,
   Receipt,
-  Heart,
-  Clock,
   RotateCcw,
   Award,
   Megaphone,
@@ -27,17 +23,13 @@ import { Footer } from "@/components/layout/footer";
 import { isLoggedIn as checkLoggedIn, clearTokens } from "@/lib/api-client";
 import { logout } from "@/lib/auth";
 
-// 로그인해야만 보이는 메뉴
 const memberOnlyMenuItems = [
   { href: "/mypage/orders", label: "구매내역", icon: ShoppingBag },
   { href: "/mypage/receipts", label: "전자 영수증", icon: Receipt },
-  { href: "/mypage/wishlist", label: "찜", icon: Heart },
   { href: "/mypage/refunds", label: "취소 / 반품 / 환불 내역", icon: RotateCcw },
 ];
 
-// 로그인 여부와 무관하게 항상 보이는 메뉴
 const commonMenuItems = [
-  { href: "/mypage/recent", label: "최근 본", icon: Clock },
   { href: "/mypage/tier-guide", label: "등급 안내", icon: Award },
   { href: "/mypage/notices", label: "공지사항", icon: Megaphone },
   { href: "/mypage/notifications", label: "알림 설정", icon: Bell },
@@ -48,7 +40,7 @@ const commonMenuItems = [
 export default function MyPage() {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
-  const stats = { point: 1000, coupon: 21, review: 21 }; // ⚠ 여전히 목업
+  const stats = { point: 1000, coupon: 21, review: 21 };
 
   useEffect(() => {
     setLoggedIn(checkLoggedIn());
@@ -100,7 +92,6 @@ export default function MyPage() {
               </div>
             )}
 
-            {/* 비로그인 시 포인트/쿠폰/리뷰 박스 자체를 숨김 */}
             {loggedIn && (
               <Card className="grid grid-cols-3 divide-x divide-border p-4 text-center">
                 <div>

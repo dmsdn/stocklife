@@ -11,7 +11,6 @@ interface StoreMapDialogProps {
   open: boolean;
   onClose: () => void;
   groupId: number;
-  /** 이번 스캔 세션에서 이미 담은 상품 id들 — 동선 계산에서 제외(회색 핀으로만 표시) */
   collectedIds: Set<number>;
 }
 
@@ -26,6 +25,7 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
       return {
         id: item.id,
         name: item.name,
+        price: item.price,
         x: product.location.x,
         y: product.location.y,
         collected: collectedIds.has(item.id),
@@ -41,8 +41,8 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[95vh] w-[95vw] max-w-3xl flex-col gap-0 overflow-y-auto p-0">
+        <DialogHeader className="p-4 pb-2">
           <DialogTitle>동선 보기</DialogTitle>
         </DialogHeader>
 
@@ -51,7 +51,7 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
         ) : (
           <>
             <StoreMap floorNo={1} pins={pins} routeOrder={routeOrder} />
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="p-4 pt-2 text-xs text-muted-foreground">
               아직 안 담은 상품 {remainingPins.length}개 기준으로 동선을 계산했어요. 스캔해서 담으면 그 핀은
               동선에서 빠집니다.
             </p>

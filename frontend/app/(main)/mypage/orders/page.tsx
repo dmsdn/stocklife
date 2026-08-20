@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { apiFetch } from "@/lib/api-client";
 
@@ -41,7 +42,11 @@ export default function OrdersPage() {
 
       <div className="divide-y divide-border md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
         {orders.map((order) => (
-          <div key={order.orderId} className="py-4 md:rounded-sm md:border md:border-border md:p-4">
+          <Link
+            key={order.orderId}
+            href={`/mypage/orders/${order.orderId}`}
+            className="block py-4 md:rounded-sm md:border md:border-border md:p-4"
+          >
             <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>주문 #{order.orderId}</span>
               <span>{order.status === "PAID" ? "결제완료" : order.status}</span>
@@ -50,14 +55,7 @@ export default function OrdersPage() {
               <span className="text-sm">{order.items.length}개 품목</span>
               <span className="text-base font-medium">{order.totalAmount.toLocaleString()}원</span>
             </div>
-            <ul className="mt-2 space-y-1">
-              {order.items.map((item) => (
-                <li key={item.skuId} className="text-xs text-muted-foreground">
-                  {item.productName} × {item.quantity}
-                </li>
-              ))}
-            </ul>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

@@ -28,7 +28,9 @@ export function RecommendedProducts({
         title="브리핑에 맞춰 추천해요"
       />
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-5">
+      {/* ✅ 화면이 넓어질수록 열이 늘어나서 카드 하나의 최대 크기가 커지지 않게 함
+          (기존엔 grid-cols-2 고정이라 넓은 화면에서 카드 하나가 지나치게 커졌음) */}
+      <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {products.map((product) => (
           <RecommendedProductCard
             key={product.id}
@@ -63,7 +65,8 @@ function RecommendedProductCard({
   onSave: () => void;
 }) {
   return (
-    <div className="w-full min-w-0">
+    // ✅ 카드 자체에도 최대 폭을 걸어서, 컬럼 수가 안 늘어나는 중간 화면폭에서도 안전하게 캡
+    <div className="mx-auto w-full min-w-0 max-w-[220px]">
       <div className="relative">
         <button
           type="button"

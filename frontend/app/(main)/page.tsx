@@ -8,7 +8,6 @@ import {
 
 import { useRouter } from "next/navigation";
 
-import { HomeAiHeader } from "@/components/layout/home-ai-header";
 import { SwipeNav } from "@/components/layout/swipe-nav";
 import { AiChatPanel } from "@/components/ai/ai-chat-panel";
 
@@ -332,10 +331,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen w-full min-w-0 overflow-x-hidden bg-background">
-      <HomeAiHeader
-        active="home"
-        onAiChat={openAiPanel}
-      />
+
 
       <SwipeNav current={0}>
         <main className="w-[min(100%,100vw)] max-w-[100vw] min-w-0 overflow-x-hidden pb-28">
