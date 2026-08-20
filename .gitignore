@@ -11,6 +11,7 @@ __pycache__/
 # Gradle
 .gradle/
 build/
+bin/
 
 # IntelliJ IDEA
 .idea/
@@ -44,4 +45,3 @@ CLAUDE.local.md
 .claude/
 .mcp.json
 
-src/main/resources/application-mysql.yml

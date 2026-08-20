@@ -1,26 +1,48 @@
 // app/auth/reset-password/new-password/page.tsx
+// ✅ POST /api/consumers/password/reset 실제 연결.
+// ⚠ 백엔드 ResetPasswordRequest는 영문+특수문자(숫자는 필수 아님) 8~20자 — 회원가입
+//   비밀번호 규칙(영문+숫자+특수문자)과 조건이 다릅니다. 실제 정책과 맞춘 겁니다.
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { resetPassword } from "@/lib/auth";
 
 const underlineInput =
   "rounded-none border-0 border-b-2 border-border bg-transparent px-0 focus-visible:border-foreground";
 
 export default function ResetPasswordNewPasswordPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const phone = searchParams.get("phone") ?? "";
+
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = newPassword.length > 0 && newPassword === newPasswordConfirm;
+  const passwordValid = /^(?=.*[A-Za-z])(?=.*[^A-Za-z0-9]).{8,20}$/.test(newPassword);
+  const canSubmit = passwordValid && newPassword === newPasswordConfirm;
 
-  const handleSubmit = () => {
-    // TODO: 비밀번호 재설정 API 연동
-    setCompleteOpen(true);
+  const handleSubmit = async () => {
+    if (!phone) {
+      setError("인증 단계부터 다시 진행해주세요.");
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await resetPassword(phone, newPassword);
+      setCompleteOpen(true);
+    } catch {
+      setError("비밀번호 재설정에 실패했어요. 다시 시도해주세요.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -32,14 +54,19 @@ export default function ResetPasswordNewPasswordPage() {
       </p>
 
       <div className="space-y-3">
-        <Input
-          type="password"
-          autoComplete="new-password"
-          placeholder="새 비밀번호를 입력해주세요"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className={underlineInput}
-        />
+        <div className="space-y-1">
+          <Input
+            type="password"
+            autoComplete="new-password"
+            placeholder="새 비밀번호를 입력해주세요"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className={underlineInput}
+          />
+          {newPassword.length > 0 && !passwordValid && (
+            <p className="text-xs text-danger">영문과 특수문자를 포함해 8~20자로 입력해주세요</p>
+          )}
+        </div>
         <Input
           type="password"
           autoComplete="new-password"
@@ -48,10 +75,11 @@ export default function ResetPasswordNewPasswordPage() {
           onChange={(e) => setNewPasswordConfirm(e.target.value)}
           className={underlineInput}
         />
+        {error && <p className="text-xs text-danger">{error}</p>}
       </div>
 
-      <Button className="w-full" disabled={!canSubmit} onClick={handleSubmit}>
-        비밀번호 재설정
+      <Button className="w-full" disabled={!canSubmit || submitting} onClick={handleSubmit}>
+        {submitting ? "변경 중..." : "비밀번호 재설정"}
       </Button>
 
       <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>

@@ -3,13 +3,12 @@
 //   재정리 시 items 배열과 아래 링크된 라우트를 최종안 기준으로 교체하세요.
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Search, Barcode, Heart, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const items = [
+export const navigationItems = [
   { href: "/", label: "홈", icon: Home },
   { href: "/search", label: "검색", icon: Search },
   { href: "/saved", label: "저장", icon: Heart },
@@ -19,38 +18,12 @@ const items = [
 
 export function BottomTabBar() {
   const pathname = usePathname();
-  const hideOnScroll = pathname.startsWith("/mypage");
-
-  const [hidden, setHidden] = useState(false);
-  const lastScrollY = useRef(0);
-
-  useEffect(() => {
-    if (!hideOnScroll) {
-      setHidden(false);
-      return;
-    }
-
-    lastScrollY.current = window.scrollY;
-
-    const handleScroll = () => {
-      const currentY = window.scrollY;
-      const scrollingDown = currentY > lastScrollY.current;
-      setHidden(scrollingDown && currentY > 80);
-      lastScrollY.current = currentY;
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [hideOnScroll]);
 
   return (
     <nav
-      className={cn(
-        "fixed bottom-0 left-0 right-0 flex border-t border-border bg-card transition-transform duration-200 md:hidden",
-        hidden ? "translate-y-full" : "translate-y-0"
-      )}
+      className="fixed bottom-0 left-0 right-0 z-[100] flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      {items.map(({ href, label, icon: Icon }) => {
+      {navigationItems.map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link
@@ -63,6 +36,35 @@ export function BottomTabBar() {
           >
             <Icon size={20} />
             {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function DesktopTopNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="hidden items-center gap-1 md:flex" aria-label="주요 메뉴">
+      {navigationItems.map(({ href, label, icon: Icon }) => {
+        const active = pathname === href;
+
+        return (
+          <Link
+            key={href}
+            href={href}
+            aria-label={label}
+            title={label}
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-md transition-colors",
+              active
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Icon size={19} aria-hidden="true" />
           </Link>
         );
       })}

@@ -6,13 +6,12 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, Map as MapIcon, Trash2, MessageSquare, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RouteDialog } from "@/components/domain/route-dialog";
+import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
 import { getOrCreateSessionId, startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { readCartGroups, updateCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
-import type { RouteStop } from "@/lib/navigation";
 
 interface ChatSession {
   sessionId: string;
@@ -33,8 +32,7 @@ export default function SavedPage() {
   const [newGroupTitle, setNewGroupTitle] = useState("");
   const [showNewGroupInput, setShowNewGroupInput] = useState(false);
 
-  const [routeOpen, setRouteOpen] = useState(false);
-  const [routeStops, setRouteStops] = useState<RouteStop[]>([]);
+  const [routeGroupId, setRouteGroupId] = useState<number | null>(null);
 
   useEffect(() => {
     setGroups(readCartGroups());
@@ -80,14 +78,6 @@ export default function SavedPage() {
       gs.map((g) => (g.id !== groupId ? g : { ...g, products: g.products.filter((p) => p.id !== productId) }))
     );
     setGroups(next);
-  };
-
-  const handleOpenRoute = (group: CartGroup) => {
-    const stops: RouteStop[] = group.products
-      .filter((p) => p.checked)
-      .map((p) => ({ skuId: p.id, label: p.name }));
-    setRouteStops(stops);
-    setRouteOpen(true);
   };
 
   const handleStartShopping = (groupId: number) => {
@@ -203,7 +193,7 @@ export default function SavedPage() {
                       <Button
                         variant="outline"
                         className="flex items-center gap-1.5"
-                        onClick={() => handleOpenRoute(group)}
+                        onClick={() => setRouteGroupId(group.id)}
                       >
                         <MapIcon size={16} />
                         동선 보기
@@ -265,7 +255,14 @@ export default function SavedPage() {
         </div>
       )}
 
-      <RouteDialog open={routeOpen} onClose={() => setRouteOpen(false)} stops={routeStops} />
+      {routeGroupId !== null && (
+        <StoreMapDialog
+          open={routeGroupId !== null}
+          onClose={() => setRouteGroupId(null)}
+          groupId={routeGroupId}
+          collectedIds={new Set()}
+        />
+      )}
     </div>
   );
 }
