@@ -44,6 +44,7 @@ from dotenv import load_dotenv
 import anthropic
 
 import backend_client
+from budget_bundle import optimize_bundle as _run_optimize_bundle
 
 load_dotenv()
 
@@ -91,6 +92,26 @@ TOOLS = [
                 },
             },
             "required": ["keywords", "category_hints"],
+        },
+    },
+    {
+        "name": "optimize_bundle",
+        "description": (
+            "정해진 예산 안에서 목적에 맞는 실제 매장 상품 세트를 계산한다. "
+            "'5만원으로 우리 매장에서 캠핑 준비 세트 짜줘'처럼 목적+총예산이 함께 있는 요청에 사용한다. "
+            "이 도구가 Backend 상품검색과 위치별 재고 확인을 직접 수행하고, 재고가 있는 상품만 대상으로 "
+            "조합 최적화를 하므로 search_products를 품목마다 여러 번 먼저 호출할 필요가 없다. "
+            "총액과 남은 예산을 LLM이 직접 더하거나 빼지 말고 이 결과를 그대로 사용한다. "
+            "현재 목적형 템플릿은 캠핑을 지원한다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "budget_krw": {"type": "integer", "description": "총 예산(원). 예: 5만원 -> 50000"},
+                "purpose": {"type": "string", "description": "준비 목적. 현재는 '캠핑'"},
+                "max_items": {"type": ["integer", "null"], "description": "최대 품목 수. 모르면 null(기본 8)"},
+            },
+            "required": ["budget_krw", "purpose", "max_items"],
         },
     },
     {
@@ -353,7 +374,12 @@ SYSTEM_PROMPT = (
     "만든 뒤, 과거 반복구매 여부·행사·실판매가·반응 지표를 붙여 정렬한 것이다. 후보에 없는 상품을 "
     "임의로 대체상품이라고 만들지 마라. personalized=true 후보는 사용자가 과거 반복 구매한 이력이 있는 "
     "상품이라는 뜻이므로 추천 이유에 활용해라.\n"
-    "10. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량/지표만 근거로 "
+    "10. '5만원으로 캠핑 준비 세트', '예산 3만원 안에서 캠핑 갈 물건 골라줘'처럼 목적과 총예산이 "
+    "함께 있으면 optimize_bundle을 호출해라. 이 경우 품목별 search_products를 여러 번 호출하지 말고 "
+    "optimize_bundle 하나가 실제 상품검색+재고확인+조합 계산을 맡게 해라. 반환된 total_krw, remaining_krw, "
+    "items만 사용하고 총액을 직접 계산하지 마라. 예산 때문에 빠진 필요품목(not_selected_needs)이 있으면 "
+    "그 사실도 짧게 알려라.\n"
+    "11. 모든 도구 호출이 끝나면, 실제 도구 결과에 있는 상품명/가격/수량/지표만 근거로 "
     "2~3문장 한국어로 요약해라. 도구 결과에 없는 가격이나 상품을 지어내지 마라."
 )
 
@@ -715,6 +741,8 @@ def _run_recommend_by_preference(tool_input: dict, bearer_token: str | None, con
 def _dispatch_tool(name: str, tool_input: dict, bearer_token: str) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
+    if name == "optimize_bundle":
+        return _run_optimize_bundle(tool_input)
     if name == "compare_products":
         return _run_compare_products(tool_input)
     if name == "find_frequent_purchase":

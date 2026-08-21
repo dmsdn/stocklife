@@ -35,6 +35,7 @@ import anthropic
 from ai_agent_shop import (
     TOOLS as SHOP_TOOLS,
     _run_search_products,
+    _run_optimize_bundle,
     _run_compare_products,
     _run_recommend_by_preference,
     _run_get_product_metrics,
@@ -90,7 +91,11 @@ SYSTEM_PROMPT = (
     "9. '대체상품 추천', '이거 대신 살 거', '품절인데 비슷한 거' 요청이면 상품명이 있을 때 "
     "search_products로 원래 sku_id를 확정한 뒤 find_substitutes를 호출해라. 결과에 없는 상품을 "
     "대체상품이라고 지어내지 말고, personalized/reasons/행사/가격/반응 지표를 근거로 설명해라.\n"
-    "모든 도구 호출이 끝나면 실제 결과만 근거로 2~3문장 한국어로 답해라."
+    "10. '5만원으로 우리 매장에서 캠핑 준비 세트 짜줘'처럼 목적+총예산 요청은 optimize_bundle을 "
+    "호출해라. 이 도구가 실제 Backend 상품검색, 재고 확인, 예산 조합 계산을 한 번에 한다. "
+    "반환된 total_krw와 remaining_krw를 그대로 쓰고 직접 산술하지 마라. 예산 때문에 빠진 품목은 "
+    "not_selected_needs를 근거로 알려라.\n"
+    "모든 도구 호출이 끝나면 실제 결과만 근거로 한국어로 답해라."
 )
 
 # system도 블록으로 만들어서 캐싱 breakpoint를 찍는다. SYSTEM_PROMPT 정의 이후에 만들어야 함.
@@ -254,6 +259,8 @@ def _call_purchase_stats_unavailable(name: str) -> dict:
 def _dispatch_tool(name: str, tool_input: dict, consumer_id: int | None) -> dict:
     if name == "search_products":
         return _run_search_products(tool_input)
+    if name == "optimize_bundle":
+        return _run_optimize_bundle(tool_input)
     if name == "compare_products":
         return _run_compare_products(tool_input)
     if name == "find_frequent_purchase":

@@ -128,6 +128,11 @@ def get_product_detail(sku_id: int) -> dict:
     return _get(f"/api/products/{sku_id}")
 
 
+def get_inventory(sku_id: int) -> dict:
+    """상품의 위치별 재고. 예산 세트는 실제 구매 가능한(재고 > 0) 상품만 고를 때 사용한다."""
+    return _get(f"/api/products/{sku_id}/inventory")
+
+
 def get_alternatives(sku_id: int) -> dict:
     return _get(f"/api/products/{sku_id}/alternatives/candidates")
 
