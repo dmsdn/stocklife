@@ -1,25 +1,24 @@
 // lib/auth.ts
-// ConsumerController(/api/consumers) 실제 스펙 기준.
-//
-// ⚠ 백엔드 SignupRequest에는 household(가구원 수) 필드가 아예 없고, "나이"가 아니라
-//   birthDate(생년월일, LocalDate)를 받습니다. 지금 프론트 회원가입 2단계 화면은
-//   가구원 수/나이를 입력받고 있는데, 나이→생년월일은 정확히 변환할 수 없어서
-//   birthDate는 일단 안 보냅니다 (백엔드에는 null로 들어감). 가구원 수는 저장할 곳 자체가
-//   없어서 로컬 상태로만 남고 서버에는 전송되지 않습니다.
-//   → 실제 생년월일을 입력받는 화면으로 바꾸거나, 백엔드에 age/householdSize 컬럼 추가를
-//     요청하는 것 중 하나로 정리가 필요합니다.
+// ✅ 2026-08-19 백엔드 스키마 v2.5 반영:
+//   - SignupRequest에 householdSize/hasPet/hasChild/byCar/marketingConsent 추가됨
+//   - 전화번호 인증(SMS), 비밀번호 재설정 API 전부 추가됨 → 실제 연결
 "use client";
 
 import { apiFetch, setTokens, clearTokens } from "./api-client";
 
 export interface SignupPayload {
-  phoneNumber: string; // 01012345678 형식 (하이픈 없이)
+  phoneNumber: string;
   password: string;
   gender?: string;
-  birthDate?: string; // "YYYY-MM-DD" — 현재 프론트에는 입력 UI 없음 (위 설명 참고)
+  birthDate?: string; // "YYYY-MM-DD"
   cameraConsent: boolean;
   personalInfoConsent: boolean;
   micConsent: boolean;
+  marketingConsent?: boolean;
+  householdSize?: number; // 1~5 (5 = "5명 이상")
+  hasPet?: boolean;
+  hasChild?: boolean;
+  byCar?: boolean;
 }
 
 export async function signup(payload: SignupPayload): Promise<void> {
@@ -48,6 +47,50 @@ export async function logout(): Promise<void> {
   } finally {
     clearTokens();
   }
+}
+
+// ---------- 회원가입 전화번호 인증 ----------
+
+export async function sendSignupCode(phoneNumber: string): Promise<void> {
+  await apiFetch("/api/consumers/signup/send-code", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber }),
+  });
+}
+
+export async function verifySignupCode(phoneNumber: string, code: string): Promise<void> {
+  await apiFetch("/api/consumers/signup/verify-code", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber, code }),
+  });
+}
+
+// ---------- 비밀번호 재설정 ----------
+
+export async function sendPasswordResetCode(phoneNumber: string): Promise<void> {
+  await apiFetch("/api/consumers/password/reset/send-code", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber }),
+  });
+}
+
+export async function verifyPasswordResetCode(phoneNumber: string, code: string): Promise<void> {
+  await apiFetch("/api/consumers/password/reset/verify-code", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber, code }),
+  });
+}
+
+export async function resetPassword(phoneNumber: string, newPassword: string): Promise<void> {
+  await apiFetch("/api/consumers/password/reset", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber, newPassword }),
+  });
 }
 
 /** 하이픈 포함 화면 표시용 전화번호("010 - 0000 - 0000")를 백엔드 형식("01000000000")으로 변환 */
