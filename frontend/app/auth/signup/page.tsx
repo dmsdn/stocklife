@@ -115,6 +115,7 @@ export default function SignupPage() {
             placeholder="010 - 0000 - 0000"
             value={phone}
             onChange={handlePhoneChange}
+            onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
             disabled={codeSent}
             className={`flex-1 ${underlineInput}`}
           />
@@ -136,6 +137,7 @@ export default function SignupPage() {
               placeholder="인증번호를 입력해주세요"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
               readOnly={stage !== "code"}
               className={underlineInput}
             />
@@ -155,6 +157,7 @@ export default function SignupPage() {
                 placeholder="비밀번호를 입력해주세요"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
                 className={underlineInput}
               />
               {password.length > 0 && !passwordValid && (
@@ -172,6 +175,7 @@ export default function SignupPage() {
                 placeholder="비밀번호를 한 번 더 입력해주세요"
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
                 className={underlineInput}
               />
               {passwordConfirm.length > 0 && !passwordMatches && (

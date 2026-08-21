@@ -1,71 +1,91 @@
 // components/domain/product-detail-dialog.tsx
-// 홈/검색/AI챗 등 어디서든 상품을 누르면 여는 상세 모달. 실제 백엔드 ProductDetailResponse
-// 필드(brand/specRaw/discount/imageUrl/discontinued)와 이름을 맞춘 목업 데이터를 씁니다.
+// ✅ 실제 GET /api/products/{skuId} 연동.
 "use client";
 
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { MapPin } from "lucide-react";
-import { getMockProductById, getFinalPrice } from "@/lib/mock-products";
 import { SaveToListDialog } from "./save-to-list-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
-import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 
-interface ProductDetailDialogProps {
-  productId: number | null;
-  onClose: () => void;
+interface ProductDetail {
+  skuId: number;
+  name: string;
+  brand: string;
+  categoryL1: string;
+  priceKrw: number;
+  onPromo: boolean;
+  finalPriceKrw: number;
+  specRaw: string;
+  imageUrl: string | null;
+  discontinued: boolean;
 }
 
-export function ProductDetailDialog({ productId, onClose }: ProductDetailDialogProps) {
+export function ProductDetailDialog({ productId, onClose }: { productId: number | null; onClose: () => void }) {
+  const [product, setProduct] = useState<ProductDetail | null>(null);
+  const [loading, setLoading] = useState(false);
   const [savePickerOpen, setSavePickerOpen] = useState(false);
-  const product = productId ? getMockProductById(productId) : undefined;
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    if (!productId) return;
+    setLoading(true);
+    setImageError(false);
+    apiFetch<ProductDetail>(`/api/products/${productId}`, { auth: false })
+      .then(setProduct)
+      .catch(() => setProduct(null))
+      .finally(() => setLoading(false));
+  }, [productId]);
 
   if (!productId) return null;
-
-  const finalPrice = product ? getFinalPrice(product) : 0;
 
   return (
     <>
       <Dialog open={!!productId} onOpenChange={(v) => !v && onClose()}>
         <DialogContent className="max-h-[85vh] overflow-y-auto p-0">
-          {!product ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">상품을 찾을 수 없어요.</p>
-          ) : (
+          {loading && <p className="p-8 text-center text-sm text-muted-foreground">불러오는 중...</p>}
+          {!loading && !product && <p className="p-8 text-center text-sm text-muted-foreground">상품을 찾을 수 없어요.</p>}
+
+          {!loading && product && (
             <>
-              {/* TODO: 실제 상품 이미지(product.imageUrl) 있으면 img로 교체 */}
-              <div className="aspect-square w-full bg-muted" />
+              {/* ✅ 실제 이미지(imageUrl) 연결. 주소가 없거나 로드 실패하면 회색 박스로 대체 */}
+              {product.imageUrl && !imageError ? (
+                // eslint-disable-next-line @next/next/no-img-element -- 외부/미확정 도메인이라 next/image 대신 일반 img 사용
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  className="aspect-square w-full bg-muted object-cover"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center bg-muted text-xs text-muted-foreground">
+                  이미지 없음
+                </div>
+              )}
 
               <div className="space-y-4 p-5">
                 <div>
-                  <p className="text-xs text-muted-foreground">{product.brand} · {product.category}</p>
+                  <p className="text-xs text-muted-foreground">{product.brand} · {product.categoryL1}</p>
                   <p className="mt-1 text-lg font-semibold">{product.name}</p>
                   <p className="text-xs text-muted-foreground">{product.specRaw}</p>
                 </div>
 
                 <div>
-                  {product.discountPercent > 0 && (
-                    <p className="text-xs text-muted-foreground line-through">{product.price.toLocaleString()}원</p>
+                  {product.onPromo && (
+                    <p className="text-xs text-muted-foreground line-through">{product.priceKrw.toLocaleString()}원</p>
                   )}
-                  <p className="flex items-baseline gap-1.5">
-                    {product.discountPercent > 0 && (
-                      <span className="text-base font-semibold text-danger">{product.discountPercent}%</span>
-                    )}
-                    <span className="text-xl font-bold">{finalPrice.toLocaleString()}원</span>
-                  </p>
-                  {!product.inStock && <p className="mt-1 text-xs text-danger">현재 품절이에요</p>}
+                  <p className="text-xl font-bold">{product.finalPriceKrw.toLocaleString()}원</p>
                   {product.discontinued && <p className="mt-1 text-xs text-danger">단종된 상품이에요</p>}
                 </div>
 
                 <div className="flex items-center gap-1.5 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
                   <MapPin size={14} />
-                  {product.location.floorNo}층 매장 위치 정보
+                  매장 위치 정보
                 </div>
 
-                <Button
-                  className="w-full"
-                  disabled={!product.inStock || product.discontinued}
-                  onClick={() => setSavePickerOpen(true)}
-                >
+                <Button className="w-full" disabled={product.discontinued} onClick={() => setSavePickerOpen(true)}>
                   저장하기
                 </Button>
               </div>
@@ -80,10 +100,10 @@ export function ProductDetailDialog({ productId, onClose }: ProductDetailDialogP
         onSelect={(groupId) => {
           if (!product) return;
           addProductToCartGroup(groupId, {
-            id: product.id,
+            id: product.skuId,
             name: product.name,
-            category: product.category,
-            price: finalPrice,
+            category: product.categoryL1,
+            price: product.finalPriceKrw,
           });
         }}
       />

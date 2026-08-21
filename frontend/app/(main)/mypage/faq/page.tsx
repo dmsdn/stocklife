@@ -33,7 +33,7 @@ const faqGroups = [
 
 export default function FaqPage() {
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <SubpageHeader title="FAQ" />
 
       <div className="space-y-6">

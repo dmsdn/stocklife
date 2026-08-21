@@ -1,0 +1,13 @@
+import { SubpageHeader } from "@/components/domain/subpage-header";
+
+// ⚠ 백엔드에 전화번호 변경 API가 없습니다. 화면만 자리잡아두고, API 생기면 연결하면 됩니다.
+export default function AccountPhonePage() {
+  return (
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
+      <SubpageHeader title="계정" />
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        전화번호 변경 기능은 준비 중이에요.
+      </p>
+    </div>
+  );
+}

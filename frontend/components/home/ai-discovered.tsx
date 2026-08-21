@@ -1,12 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Sparkles,
   TrendingDown,
 } from "lucide-react";
 
 import {
-  discoveredProducts,
+  fetchDiscoveredProducts,
   formatPrice,
   type DiscoveredProduct,
 } from "@/lib/home-data";
@@ -19,10 +20,20 @@ type AiDiscoveredProps = {
 export function AiDiscovered({
   onProductClick,
 }: AiDiscoveredProps) {
+  // ✅ 실제 GET /api/products/search?onPromo=true 연동 (목업 배열 대신)
+  const [discoveredProducts, setDiscoveredProducts] = useState<DiscoveredProduct[]>([]);
+
+  useEffect(() => {
+    fetchDiscoveredProducts()
+      .then(setDiscoveredProducts)
+      .catch(() => setDiscoveredProducts([]));
+  }, []);
+
+  if (discoveredProducts.length === 0) return null;
+
   return (
     <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
       <SectionTitle
-        eyebrow="AI DISCOVERED"
         title="AI가 발견한 것"
         description="OO님의 쇼핑 기록에서 찾았어요."
       />

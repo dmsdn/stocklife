@@ -44,7 +44,7 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
             width={120}
             height={40}
             priority
-            className="h-6 w-auto md:h-8"
+            className="h-10 w-auto md:h-8"
           />
         </Link>
         <span className="text-muted-foreground">|</span>
@@ -60,7 +60,7 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
             width={120}
             height={40}
             priority
-            className="h-6 w-auto md:h-8"
+            className="h-10 w-auto md:h-8"
           />
         </button>
       </div>

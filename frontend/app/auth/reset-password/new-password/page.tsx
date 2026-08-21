@@ -4,7 +4,7 @@
 //   비밀번호 규칙(영문+숫자+특수문자)과 조건이 다릅니다. 실제 정책과 맞춘 겁니다.
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { resetPassword } from "@/lib/auth";
 const underlineInput =
   "rounded-none border-0 border-b-2 border-border bg-transparent px-0 focus-visible:border-foreground";
 
-export default function ResetPasswordNewPasswordPage() {
+function ResetPasswordNewPasswordInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get("phone") ?? "";
@@ -61,6 +61,7 @@ export default function ResetPasswordNewPasswordPage() {
             placeholder="새 비밀번호를 입력해주세요"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             className={underlineInput}
           />
           {newPassword.length > 0 && !passwordValid && (
@@ -73,6 +74,7 @@ export default function ResetPasswordNewPasswordPage() {
           placeholder="새 비밀번호를 한 번 더 입력해주세요"
           value={newPasswordConfirm}
           onChange={(e) => setNewPasswordConfirm(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           className={underlineInput}
         />
         {error && <p className="text-xs text-danger">{error}</p>}
@@ -94,5 +96,13 @@ export default function ResetPasswordNewPasswordPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function ResetPasswordNewPasswordPage() {
+  return (
+    <Suspense fallback={<div className="space-y-8" />}>
+      <ResetPasswordNewPasswordInner />
+    </Suspense>
   );
 }

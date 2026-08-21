@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import {
+  fetchPopularProducts,
   formatPrice,
-  popularProducts,
+  type HomeProduct,
 } from "@/lib/home-data";
 import { SectionTitle } from "./section-title";
 
@@ -15,13 +18,24 @@ type DiscoverProps = {
 export function Discover({
   onProductClick,
 }: DiscoverProps) {
+  const router = useRouter();
+  // ✅ 실제 GET /api/products/search 연동, 실패/빈 결과면 목업으로 자동 대체.
+  // ⚠ "인기순" 정렬 API가 따로 없어서, 검색 결과 앞쪽 8개를 그대로 씁니다.
+  const [popularProducts, setPopularProducts] = useState<HomeProduct[]>([]);
+
+  useEffect(() => {
+    fetchPopularProducts().then(setPopularProducts);
+  }, []);
+
+  if (popularProducts.length === 0) return null;
+
   return (
     <section className="w-full pt-10">
       <div className="px-4 sm:px-6 lg:px-8">
         <SectionTitle
-          eyebrow="DISCOVER"
           title="발견해보세요"
           action="더보기"
+          onAction={() => router.push("/search")}
         />
       </div>
 

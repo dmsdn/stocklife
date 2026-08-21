@@ -10,7 +10,7 @@ const refunds = [
 
 export default function RefundsPage() {
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <SubpageHeader title="취소 / 반품 / 환불 내역" />
       <div className="divide-y divide-border md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
         {refunds.map((r) => (

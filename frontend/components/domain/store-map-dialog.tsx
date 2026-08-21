@@ -19,7 +19,7 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
   const items = group?.products ?? [];
 
   const pins: MapPin[] = items
-    .map((item) => {
+    .map((item): MapPin | null => {
       const product = getMockProductById(item.id);
       if (!product) return null;
       return {
@@ -31,7 +31,7 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
         collected: collectedIds.has(item.id),
       };
     })
-    .filter((p): p is MapPin => !!p);
+    .filter((p): p is MapPin => p !== null);
 
   const remainingPins = pins.filter((p) => !p.collected);
   const routeOrder = computeNearestNeighborOrder(

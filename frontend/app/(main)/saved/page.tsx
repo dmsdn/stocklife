@@ -72,7 +72,7 @@ export default function SavedPage() {
   };
 
   return (
-    <div className="mx-auto max-w-md p-4 pb-24 md:max-w-4xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 pb-24 sm:max-w-xl md:max-w-4xl md:p-8">
       <p className="mb-4 text-base">저장</p>
 
       <div className="mb-4 flex gap-2 border-b border-border">
