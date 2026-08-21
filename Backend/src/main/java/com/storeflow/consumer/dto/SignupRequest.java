@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 public class SignupRequest {
@@ -15,6 +16,10 @@ public class SignupRequest {
     @Pattern(regexp = "^01[0-9]{8,9}$", message = "전화번호 형식이 올바르지 않습니다.")
     private String phoneNumber;
 
+    @NotBlank(message = "이름은 필수입니다.")
+    @Size(max = 50, message = "이름은 50자 이하여야 합니다.")
+    private String name;
+
     // 영문 최소 1자 + 숫자 최소 1자 + 특수문자 최소 1자 포함, 8~20자
     @NotBlank(message = "비밀번호는 필수입니다.")
     @Pattern(
@@ -23,7 +28,7 @@ public class SignupRequest {
     )
     private String password;
 
-    // 선택 입력
+    // 선택 입력 — 프론트에서 생략하거나 null로 보내도 가입 가능.
     private String gender;
     private LocalDate birthDate;
 
@@ -39,6 +44,7 @@ public class SignupRequest {
 
     // 스키마 v2.5 (2026-08-19) — persona_type(라벨 1개) 폐기, 속성 컬럼 4개로 분리.
     // 전부 선택 입력이며 안 받은 항목은 null 그대로 보낸다(0/1로 채우지 말 것 — NULL과 FALSE는 다른 의미).
+    // householdSize(가구원 수)도 필수가 아니며, 건너뛰면 null로 저장한다.
     // household_size: 1~5 (5 = "5명 이상"), has_pet/has_child/by_car: 예/아니오
     @Min(value = 1, message = "가구원 수는 1 이상이어야 합니다.")
     @Max(value = 5, message = "가구원 수는 5 이하로 입력해주세요(5명 이상은 5).")
@@ -53,6 +59,9 @@ public class SignupRequest {
     // getter/setter
     public String getPhoneNumber() { return phoneNumber; }
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }

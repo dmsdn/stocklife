@@ -16,6 +16,9 @@ public class Consumer {
     @Column(name = "phone_number", nullable = false, unique = true, length = 20)
     private String phoneNumber;
 
+    @Column(name = "name", nullable = false, length = 50)
+    private String name;
+
     @Column(name = "password", nullable = false)
     private String password;
 
@@ -56,10 +59,11 @@ public class Consumer {
 
     protected Consumer() {}
 
-    public Consumer(String phoneNumber, String password, String gender, LocalDate birthDate,
+    public Consumer(String phoneNumber, String name, String password, String gender, LocalDate birthDate,
                     boolean cameraConsent, boolean personalInfoConsent, boolean micConsent,
                     boolean marketingConsent) {
         this.phoneNumber = phoneNumber;
+        this.name = name;
         this.password = password;
         this.gender = gender;
         this.birthDate = birthDate;
@@ -84,7 +88,7 @@ public class Consumer {
         this.refreshToken = refreshToken;
     }
 
-        // 비밀번호 재설정 — 호출하는 쪽(ConsumerService)에서 이미 인코딩된 비밀번호를 넘겨야 한다.
+    // 비밀번호 재설정 — 호출하는 쪽(ConsumerService)에서 이미 인코딩된 비밀번호를 넘겨야 한다.
     public void updatePassword(String encodedPassword) {
         this.password = encodedPassword;
         this.refreshToken = null; // 재설정 후 기존 로그인 세션은 전부 무효화
@@ -92,6 +96,7 @@ public class Consumer {
 
     public Long getConsumerId() { return consumerId; }
     public String getPhoneNumber() { return phoneNumber; }
+    public String getName() { return name; }
     public String getPassword() { return password; }
     public String getGender() { return gender; }
     public LocalDate getBirthDate() { return birthDate; }
