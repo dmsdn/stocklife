@@ -38,6 +38,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))          # .../sim
 sys.path.insert(0, os.path.join(_HERE, "..", "catalog"))    # 형제 catalog/
 sys.path.insert(0, _HERE)                                   # sim/ 자신 (map_layout)
 
+# ⚠ 이름 충돌 방어 (08-20 추가, members_gen.py와 동일)
+# 폴더 `catalog/`와 그 안의`catalog.py`가 같은 이름이라, 부모 폴더가 경로에 있으면 파이썬이 `catalog`를 **네임스페이스 패키지**(__init__.py 없는 빈 폴더 모듈)로 잡을 수 있다.
+# 그러면 `import catalog as cat`은 조용히 성공하고 나중에 `cat.generate()`에서 AttributeError로 죽는다 — 원인에서 먼 자리라 더 찾기 어렵다.
+# 이미 캐시된 것을 걷어내야 방금 끼운 경로(맨 앞)로 다시 찾는다.
+sys.modules.pop("catalog", None)
 from map_layout import (BAYS, FACILITIES, FLOOR_W, FLOOR_H, BAY_CELLS,   # noqa: E402
                         ZONE_LABELS)
 from taxonomy import TAXONOMY                                          # noqa: E402
