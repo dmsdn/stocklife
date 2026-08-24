@@ -30,3 +30,19 @@ ALTER TABLE consumer
 
 ALTER TABLE consumer
     MODIFY COLUMN mic_consent BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+
+
+-- 회원탈퇴(withdraw) 기능 — 백엔드 고유 영역(consumer 테이블). Agent 세계 시드(schema_v2.sql)는 건드리지 않음.
+-- consumer는 이미 존재하는 테이블이므로 CREATE가 아니라 ALTER로 변경한다.
+
+-- 1) 탈퇴 시각. NULL이면 정상 회원, 값이 있으면 탈퇴한 회원(로그인 차단 + phone_number는 tombstone 값으로 교체됨).
+--    완전 삭제 대신 소프트 삭제를 쓰는 이유: purchases 등 구매/이벤트 이력이 consumer_id를 참조하고 있어서,
+--    행을 지우면 재구매 주기 계산·매출 통계 같은 다른 기능이 참조하는 이력이 끊긴다.
+ALTER TABLE consumer
+    ADD COLUMN withdrawn_at DATETIME NULL AFTER refresh_token;
+
+-- 2) 탈퇴한 회원을 조회에서 걸러낼 일이 많을 것 같아 인덱스 추가(선택이지만 미리 추가).
+ALTER TABLE consumer
+    ADD INDEX idx_consumer_withdrawn_at (withdrawn_at);

@@ -9,153 +9,97 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { fetchMyProfile, updateMyProfile, type ConsumerProfile } from "@/lib/consumer-profile";
+import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { LogoutButton } from "@/components/domain/logout-button";
+import { WithdrawButton } from "@/components/domain/withdraw-button";
+import { getMyProfile, type ConsumerMe } from "@/lib/consumer-api";
 
-const HOUSEHOLD_OPTIONS = [1, 2, 3, 4, 5];
+function maskPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return phone;
+  return `${digits.slice(0, 3)}-****-${digits.slice(-4)}`;
+}
+
+function genderLabel(gender: string | null) {
+  if (gender === "M" || gender === "MALE") return "남성";
+  if (gender === "F" || gender === "FEMALE") return "여성";
+  return "미입력";
+}
+
+function ageLabel(birthDate: string | null) {
+  if (!birthDate) return "미입력";
+  const birthYear = Number(birthDate.slice(0, 4));
+  if (!birthYear) return "미입력";
+  const age = new Date().getFullYear() - birthYear + 1;
+  return `${age}세`;
+}
+
+function householdLabel(size: number | null) {
+  if (!size) return "미입력";
+  return size >= 5 ? "5명 이상" : `${size}명`;
+}
 
 export default function AccountPage() {
-  const [profile, setProfile] = useState<ConsumerProfile | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState("");
-  const [gender, setGender] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [householdSize, setHouseholdSize] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [profile, setProfile] = useState<ConsumerMe | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchMyProfile().then((p) => {
-      setProfile(p);
-      setName(p?.name ?? "");
-      setGender(p?.gender ?? "");
-      setBirthDate(p?.birthDate ?? "");
-      setHouseholdSize(p?.householdSize ?? null);
-      setLoaded(true);
-    });
+    getMyProfile()
+        .then(setProfile)
+        .catch(() => setProfile(null))
+        .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
-    const ok = await updateMyProfile({ name, gender: gender || null, birthDate: birthDate || null, householdSize });
-    setSaving(false);
-    if (ok) setEditing(false);
-  };
+  const infoRows = [
+    { href: "/mypage/account/phone", label: "계정", value: profile ? maskPhone(profile.phoneNumber) : "" },
+    { href: "/mypage/account/password", label: "비밀번호 변경", value: "" },
+    { href: "/mypage/account/household", label: "가구원 수", value: profile ? householdLabel(profile.householdSize) : "" },
+    { href: "/mypage/account/gender", label: "성별", value: profile ? genderLabel(profile.gender) : "" },
+    { href: "/mypage/account/age", label: "나이", value: profile ? ageLabel(profile.birthDate) : "" },
+  ];
 
   return (
-    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/mypage">
-            <ChevronLeft size={20} />
-          </Link>
-          <p className="text-base">내 정보</p>
-        </div>
-        {!editing && (
-          <button type="button" onClick={() => setEditing(true)} className="text-sm text-muted-foreground">
-            회원정보 수정
-          </button>
-        )}
-      </div>
-
-      {!loaded && <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>}
-
-      {loaded && !editing && (
-        <div className="divide-y divide-border">
-          <Row label="이름" value={name || "미입력"} />
-          <Row label="휴대폰" value={profile?.phoneNumber ?? "-"} />
-          <Row label="생년월일" value={birthDate || "미입력"} />
-          <Row label="성별" value={gender || "미입력"} />
-          <Row label="가구원 수" value={householdSize ? `${householdSize}명` : "미입력"} />
-          <Link href="/mypage/account/password" className="flex items-center justify-between py-3 text-sm">
-            <span>비밀번호 변경</span>
-            <ChevronRight size={16} className="text-muted-foreground" />
-          </Link>
-        </div>
-      )}
-
-      {loaded && editing && (
-        <div className="space-y-5">
-          <Field label="이름">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="이름을 입력해주세요" />
-          </Field>
-
-          <Field label="휴대폰">
-            <p className="py-2 text-sm text-muted-foreground">
-              {profile?.phoneNumber ?? "미입력"} {profile?.phoneNumber && "(변경 불가)"}
-            </p>
-          </Field>
-
-          <Field label="생년월일">
-            {profile?.birthDate ? (
-              <p className="py-2 text-sm text-muted-foreground">{profile.birthDate} (변경 불가)</p>
-            ) : (
-              <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-            )}
-          </Field>
-
-          <Field label="성별">
-            {profile?.gender ? (
-              <p className="py-2 text-sm text-muted-foreground">{profile.gender} (변경 불가)</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {["남성", "여성"].map((g) => (
-                  <Button key={g} variant={gender === g ? "default" : "outline"} onClick={() => setGender(g)}>
-                    {g}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </Field>
-
-          <Field label="가구원 수">
-            <div className="grid grid-cols-5 gap-2">
-              {HOUSEHOLD_OPTIONS.map((n) => (
-                <Button
-                  key={n}
-                  variant={householdSize === n ? "default" : "outline"}
-                  onClick={() => setHouseholdSize(n)}
-                >
-                  {n}
-                </Button>
-              ))}
-            </div>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-2 pt-2">
-            <Button variant="outline" onClick={() => setEditing(false)}>
-              취소
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "저장 중..." : "저장하기"}
-            </Button>
+      <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/mypage">
+              <ChevronLeft size={20} />
+            </Link>
+            <p className="text-base">내 정보</p>
           </div>
         </div>
-      )}
 
-      <button type="button" className="mt-8 block text-sm text-muted-foreground">
-        회원탈퇴
-      </button>
-    </div>
-  );
-}
+        {/* TODO: 프로필 사진 자리 — 백엔드에 프로필 이미지 업로드 API가 없어 자리만 유지 */}
+        <div className="mb-2 flex items-center gap-3">
+          <div className="h-20 w-20 rounded-full bg-muted" />
+          <div>
+            <p className="text-base font-medium">{profile?.name ?? (loading ? "불러오는 중..." : "")}</p>
+            <p className="text-xs text-muted-foreground">
+              {profile ? `${profile.grade} 등급 · 이번 달 ${profile.monthlySpendAmount.toLocaleString()}원` : ""}
+            </p>
+          </div>
+        </div>
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-3 text-sm">
-      <span>{label}</span>
-      <span className="text-muted-foreground">{value}</span>
-    </div>
-  );
-}
+        <div className="mt-6 divide-y divide-border">
+          {infoRows.map((row) => (
+              <Link key={row.href} href={row.href} className="flex items-center justify-between py-3 text-sm">
+                <span>{row.label}</span>
+                <span className="flex items-center gap-1 text-muted-foreground">
+              {row.value}
+                  <ChevronRight size={16} />
+            </span>
+              </Link>
+          ))}
+        </div>
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="mb-1.5 text-xs text-muted-foreground">{label}</p>
-      {children}
-    </div>
+        <LogoutButton className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
+          <LogOut size={16} />
+          로그아웃
+        </LogoutButton>
+
+        <WithdrawButton className="mt-4 block text-sm text-muted-foreground">
+          회원탈퇴
+        </WithdrawButton>
+      </div>
   );
 }
