@@ -1,12 +1,12 @@
-#===============================================
-# Agent 하네스 - 도구 19종 정의 (LLM이 읽는 계약서)
-#===============================================
+# ===============================================
+# Agent 하네스 - 도구 23종 정의 (LLM이 읽는 계약서)
+# ===============================================
 
-# [역할] 루프가 LLM에게 "너는 이 19개 도구를 쓸 수 있다"고 건네는 목록
+# [역할] 루프가 LLM에게 "너는 이 23개 도구를 쓸 수 있다"고 건네는 목록
 # name / description / input_schema가 API 요청에 그대로 실려 나가고, LLM은  description만 읽고 어느 도구를 부를지 정함
 #  definitions.TOOLS가 API요청에 실려나감. API는 "어느 도구를 부를까"를 결정하는 것이고, 그 API를 LLM이 읽음
 
-# [구성] 조회 7 + 계산 4 + 추론 5 + 액션 3 = 19종
+# [구성] 조회 10 + 계산 5 + 추론 5 + 액션 3 = 23종
 
 # [description 작법 - 중요]
 # 무엇을 반환하는가만 쓰면 안되고 "언제 쓰고, 언제 쓰지 않는가"까지 씀
@@ -17,7 +17,7 @@
 # 정의: 무엇을 할 수 있는가 (설명·입력양식) / 실행: 실제로 어떻게 하는가 (함수 본문)
 # 문구를 고칠 때 실행코드를 건드리지 않아야 "프롬프트 실험"과 "로직 변경"이 git에서 섞이지 않음
 
-#==============================================
+# ==============================================
 
 # 대분류 12종 - enum에 쓰려고 상수로 뺌,
 # 소분류 60종은 여기 넣지 않음: 목록이 길어 스키마가 비대해지므로 시스템 프롬프트(prompts.py)에 전문을 싣고ㅗ, 스키마에서는 "프롬프트의 목록에서 고르라"고 지시
@@ -31,13 +31,13 @@ TOOLS = [
     # ════════════════════════════════════════════════════════════════════
     {
         "name": "search_products",
-        "description": (   # ⑪: 괄호 안에서 문자열이 자동으로 이어 붙는다
+        "description": (  # ⑪: 괄호 안에서 문자열이 자동으로 이어 붙는다
             "상품을 조건으로 검색한다(키워드·카테고리·가격 상한·행사 여부·신상 여부, 전부 AND 결합). "
             "쓸 때: 사용자가 상품을 이름·조건으로 찾을 때('물티슈 있어?', '2만원 이하 세제', '요즘 새로 들어온 거'). "
             "쓰지 말 때: sku_id를 이미 알면 get_product로 바로 가고, 특정 상품의 재고·위치가 궁금하면 "
             "먼저 이걸로 sku를 찾은 뒤 get_inventory를 이어 부른다 — 검색 결과에는 재고가 없다."
         ),
-        "input_schema": {   # ⑨: LLM이 채울 빈칸 양식지
+        "input_schema": {  # ⑨: LLM이 채울 빈칸 양식지
             "type": "object",
             "properties": {
                 "keyword": {"type": "string",
@@ -154,8 +154,67 @@ TOOLS = [
             "required": ["sku_ids"],
         },
     },
+
+    # ── 조회 +3 (2026-08-21 ai-server 인수) — 백엔드가 집계한 수치를 받아온다 ──
+    {
+        "name": "get_product_metrics",
+        "description": (
+            "상품의 실제 반응 지표 묶음 — 최근 30일 판매량, 누적 판매량, 장바구니 담기 횟수, "
+            "조회수, 전체 구매자 수, 재구매자 수, 재구매율(%)을 가져온다. "
+            "쓸 때: 'A랑 B 중 실제 반응이 좋은 건?'·'재구매율까지 비교해줘'처럼 여러 지표를 함께 물을 때. "
+            "먼저 search_products로 sku_id를 확정한 뒤 부른다. "
+            "쓰지 말 때: 단순 판매량 순위(compare_purchase_popularity·get_popular_products가 담당), "
+            "웹 평판(이 지표에 없다 — 있는 것처럼 지어내지 말 것). 수치는 그대로 인용하고 재계산하지 않는다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"sku_ids": {"type": "array", "items": {"type": "integer"},
+                                       "description": "지표를 볼 상품들(최대 20개)"}},
+            "required": ["sku_ids"],
+        },
+    },
+    {
+        "name": "compare_purchase_popularity",
+        "description": (
+            "특정 상품 여러 개를 놓고 어느 쪽이 더 많이 팔렸는지 비교한다 — "
+            "'A샴푸랑 B샴푸 중 뭐가 인기야?' 같은 질문. 결과는 구매자 수(purchaser_count) "
+            "내림차순으로 이미 정렬되어 오므로 그 순서를 그대로 쓴다(직접 순위를 매기지 말 것). "
+            "먼저 search_products로 sku_id를 확정한다. "
+            "쓰지 말 때: 가격 비교(compare_products), 상품을 안 짚은 순위 질문(get_popular_products)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sku_ids": {"type": "array", "items": {"type": "integer"},
+                            "description": "비교할 상품들(2개 이상)"},
+                "lookback_days": {"type": "integer",
+                                  "description": "최근 며칠 기준 집계인지. 모르면 90"},
+            },
+            "required": ["sku_ids"],
+        },
+    },
+    {
+        "name": "get_popular_products",
+        "description": (
+            "카테고리(또는 매장 전체)에서 사람들이 많이 사는 상품 순위 — "
+            "'요즘 뭐가 잘 나가?'·'샴푸 중에 많이들 사는 거 추천해줘'처럼 상품을 콕 짚지 않은 "
+            "인기 질문에 쓴다. 특정 상품 2개 이상을 이름으로 짚어 비교하는 질문이면 "
+            "이 도구 대신 compare_purchase_popularity를 쓴다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category_l2": {"type": "string",
+                                "description": "소분류명(시스템 프롬프트의 목록에서). 전체 대상이면 비워둘 것"},
+                "lookback_days": {"type": "integer", "description": "최근 며칠 기준. 모르면 90"},
+                "limit": {"type": "integer", "description": "상위 몇 개. 모르면 10"},
+            },
+            "required": [],
+        },
+    },
+
     # ════════════════════════════════════════════════════════════════════
-    # 계산형 4종 — 규칙·솔버가 결정적으로 계산한다. 실행부는 tools/compute.py
+    # 계산형 5종 — 규칙·솔버가 결정적으로 계산한다. 실행부는 tools/compute.py
     # LLM은 이 결과의 숫자를 절대 스스로 만들지 않는다(헌법 2).
     # ════════════════════════════════════════════════════════════════════
     {
@@ -171,8 +230,15 @@ TOOLS = [
             "properties": {
                 "sku_ids": {"type": "array", "items": {"type": "integer"},
                             "description": "방문할 상품들(2개 이상)"},
+                # 08-21(jmy): 출발점은 location_id 문자열보다 get_position이 주는
+                # 좌표 3종(floor/x/y)이 정확하다 — 실물에서 location_id는 '매대'지
+                # '사람이 선 자리'가 아니기 때문. 셋 다 비우면 입구 기준.
+                "start_floor": {"type": "integer",
+                                "description": "현재 층. get_position 결과의 floor_no"},
+                "start_x": {"type": "integer", "description": "현재 x 격자좌표. get_position 결과"},
+                "start_y": {"type": "integer", "description": "현재 y 격자좌표. get_position 결과"},
                 "start_location_id": {"type": "string",
-                                      "description": "출발 위치. 모르면 비워둘 것(get_position 결과를 쓰거나 입구 기준)"},
+                                      "description": "출발 위치 id(좌표를 모를 때의 차선). 둘 다 모르면 비워둘 것"},
             },
             "required": ["sku_ids"],
         },
@@ -180,21 +246,46 @@ TOOLS = [
     {
         "name": "optimize_bundle",
         "description": (
-            "예산·수량 제약 안에서 최적의 상품 조합을 계산한다(조합 최적화 솔버). "
-            "쓸 때: '5만원으로 캠핑 준비'·'예산 안에서 이것저것' 같은 조합 질문. "
-            "쓰지 말 때: 단순 합계(get_session_cart에 이미 있음), 두 상품 가격 비교(compare_unit_price). "
-            "조합의 총액·구성을 직접 계산하지 말 것 — 후보 선정과 산술은 전부 솔버가 한다."
+            "예산 제약 안에서 최적의 상품 조합을 계산한다(조합 최적화 솔버 — 재고 확인 포함). "
+            "쓸 때: '5만원으로 캠핑 준비 세트 짜줘'처럼 목적+예산 요청이면 purpose에 목적을 넣는다 "
+            "— 품목 검색·재고 확인·조합 계산을 이 도구 하나가 다 하므로 search_products를 먼저 "
+            "여러 번 부를 필요가 없다. '이 후보들 중에서 예산 안에 골라줘'면 candidate_sku_ids를 넣는다. "
+            "쓰지 말 때: 단순 합계(get_session_cart에 이미 있음), 가격 비교(compare_products). "
+            "반환된 total_krw·remaining_krw를 그대로 쓰고 총액을 직접 더하지 말 것. "
+            "예산 때문에 빠진 품목(not_selected_needs)이 있으면 그 사실도 짧게 알린다."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "budget_krw": {"type": "integer", "description": "예산(원)"},
+                "budget_krw": {"type": "integer", "description": "총예산(원). 예: 5만원 → 50000"},
+                "purpose": {"type": "string",
+                            "description": "준비 목적(현재 '캠핑' 지원). 목적형 요청일 때만"},
                 "candidate_sku_ids": {"type": "array", "items": {"type": "integer"},
-                                      "description": "조합 후보 상품들(먼저 search_products로 모을 것)"},
-                "must_include": {"type": "array", "items": {"type": "integer"},
-                                 "description": "반드시 포함할 상품. 없으면 비워둘 것"},
+                                      "description": "직접 고른 후보들로 조합할 때만(그 외엔 비워둘 것)"},
+                "max_items": {"type": "integer", "description": "최대 품목 수. 모르면 비워둘 것(기본 8)"},
             },
-            "required": ["budget_krw", "candidate_sku_ids"],
+            "required": ["budget_krw"],
+        },
+    },
+    {
+        "name": "compare_products",
+        "description": (
+            "상품 여러 개를 실판매가(행사가 반영) 기준으로 정렬해 준다 — '제일 싼 거'·'가장 비싼 거'· "
+            "'이 중에 골라줘' 같은 총액 비교. 정렬은 파이썬이 하므로 결과 순서를 그대로 쓴다 "
+            "— search_products 결과만 보고 눈대중으로 가격을 비교해 add_to_cart로 넘어가지 말 것. "
+            "행사 중인 상품은 '원래 O원인데 O원 할인된 O원'처럼 행사 사실을 함께 알린다. "
+            "쓰지 말 때: 용량 대비 이득 비교(compare_unit_price — 단위가격은 그쪽 몫), "
+            "판매량·인기 비교(compare_purchase_popularity)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sku_ids": {"type": "array", "items": {"type": "integer"},
+                            "description": "비교할 상품들(search_products 결과에서, 2개 이상)"},
+                "sort_by": {"type": "string", "enum": ["price_asc", "price_desc"],
+                            "description": "price_asc=싼 순(기본), price_desc=비싼 순"},
+            },
+            "required": ["sku_ids"],
         },
     },
     {
@@ -370,7 +461,6 @@ TOOLS = [
     },
 ]
 
-
 # ==============================================
 # 서버 사이드 도구
 # [위 TOOLS와 무엇이 다른가] 위의 19개는 **우리가 구현**한다 — input_schema를 우리가 쓰고, query.py·compute.py·infer.py·action.py가 실행
@@ -410,20 +500,20 @@ ALL_TOOLS = TOOLS + SERVER_TOOLS
 # 이 판정이 없으면 루프가 web_search를 REGISTRY에서 찾다가 실패해 "unknown_tool" 에러를 LLM에게 돌려주는 사고가 난다.
 SERVER_TOOL_NAMES = frozenset(t["name"] for t in SERVER_TOOLS)
 
-#===============================================
+# ===============================================
 # 자체 검산
 
 # 선언적 데이터 파일의 약점은 오타가 실행 전까지 조용함
 # 여기서 어기면 서버가 뜨는 순간 죽게 만들어서, 배포 후가 아니라 개발 중에 잡음
 # assert 조건, 메세지 ⇒ 조건이 거짓이면 그 자리에서 프로그램을 멈추고 메시지를 보여줌
 # f문자열 ⇒ 문자열 앞에 f를 붙이면 중괄호 안의 식이 값으로 바뀜
-assert len(TOOLS) == 19, f"도구는 19개여야 한다(조회7+계산4+추론5+액션3): {len(TOOLS)}"
+assert len(TOOLS) == 23, f"도구는 23개여야 한다(조회10+계산5+추론5+액션3): {len(TOOLS)}"
 
 _names = [t["name"] for t in TOOLS]
 
 # set은 중복을 자동으로 버린다. 그래서 집합 크기가 19보다 작으면 같은 이름을 두 번 적었다는 뜻이다.
 # 왜 치명적인가: 이름이 겹치면 실행부(REGISTRY)에서 하나가 다른 하나를 덮어써서,  LLM이 A를 부르려는데 B가 실행되는 사고가 조용히 난다.
-assert len(set(_names)) == 19, f"도구 이름 중복: {_names}"
+assert len(set(_names)) == 23, f"도구 이름 중복: {_names}"
 
 for _t in TOOLS:
     # set(dict)는 키만 모은다(⑭). 즉 이 도구 dict가 정확히 이 세 키만 갖고 있는지 검사하는 것 — 오타로 "descripton"이라 적었다면 여기서 걸린다.
@@ -440,4 +530,4 @@ for _s in SERVER_TOOLS:
     assert "input_schema" not in _s and "description" not in _s, f"{_s['name']}: 서버 도구에는 input_schema·description을 쓸 수 없다"
 
 assert not (set(_names) & SERVER_TOOL_NAMES), "우리 도구와 서버 도구의 이름 충돌"
-assert len(ALL_TOOLS) == 19 + len(SERVER_TOOLS)
+assert len(ALL_TOOLS) == 23 + len(SERVER_TOOLS)

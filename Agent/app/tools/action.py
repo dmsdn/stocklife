@@ -46,10 +46,10 @@ def _call(method: str, path: str, json_body: dict | None = None, params: dict | 
         r = httpx.request(
             method,
             config.BACKEND_BASE_URL + path,
-            json = json_body,
-            params = params,
-            headers = {"X-Internal-Service-Key": INTERNAL_SERVICE_KEY},
-            timeout = config.BACKEND_TIMEOUT_SEC,
+            json=json_body,
+            params=params,
+            headers={"X-Internal-Service-Key": INTERNAL_SERVICE_KEY},
+            timeout=config.BACKEND_TIMEOUT_SEC,
         )
     except Exception as e:
         return {"ok": False, "error": type(e).__name__, "message": str(e)}
@@ -73,13 +73,13 @@ def _add_to_cart(sku_id: int, quantity: int = 1) -> dict:
     if err:
         return err
     return _call("POST", INTERNAL_CART_PATH,
-                 json_body = {"consumerId": cid, "skuId": sku_id, "quantity": quantity})
+                 json_body={"consumerId": cid, "skuId": sku_id, "quantity": quantity})
 
 def _update_cart_quantity(cart_item_id: int, quantity: int) -> dict:
     cid, err = _require_member()
     if err:
         return err
-    return _call("PATCH", f"{INTERNAL_CART_PATH}/{cart_item_id}", json_body = {"consumerId": cid, "quantity": quantity})
+    return _call("PATCH", f"{INTERNAL_CART_PATH}/{cart_item_id}", json_body={"consumerId": cid, "quantity": quantity})
 
 def _remove_from_cart(cart_item_id: int) -> dict:
     cid, err = _require_member()

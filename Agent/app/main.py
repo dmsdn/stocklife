@@ -1,6 +1,6 @@
-#===============================================
+# ===============================================
 # Agent 하네스 - HTTP 입구 (FastAPI앱)
-#===============================================
+# ===============================================
 
 # [역할] 하네스를 세상에 노출하는 유일한 문
 # 백엔드가 이 서버의 /agent/chat을 부르고, 이 서버는 루프를 돌리고 가드로 검수한 답을 돌려줌
@@ -13,13 +13,13 @@
 # [재생성 안전조건] 첫 패스에서 **장바구니를 건드렸다면(actions 있음) 재생성하지않는다.
 # ** 루프를 다시 돌리면 LLM이 add_to_cart를 또 부를 수 있고, 그러면 같은 상품이 **두 번 담긴다** — 잘못된 발화보다 잘못된 상태 변경이 더 나쁘다.
 
-#===============================================
+# ===============================================
 
 import os
 
 from app import config
 
-#===============================================
+# ===============================================
 
 # .env 적재
 from app.env import load_env
@@ -35,12 +35,14 @@ from pydantic import BaseModel, Field
 from app import guard, loop
 from app.tools import definitions
 
-#===============================================
+
+# ===============================================
 
 # 요청·응답모양 (백엔드 DTO계약 [ChatService])
 class HistoryItem(BaseModel):
     role: str
     content: str
+
 
 class ChatRequest(BaseModel):
     sessionId: str
@@ -48,9 +50,11 @@ class ChatRequest(BaseModel):
     message: str
     history: list[HistoryItem] = Field(default_factory=list)
 
+
 class ChatResponse(BaseModel):
     reply: str
     actions: list[dict] = Field(default_factory=list)
+
 
 # 앱과 lifespan
 @asynccontextmanager
@@ -59,8 +63,25 @@ async def lifespan(app: FastAPI):
           f"도구 {len(definitions.TOOLS)}+서버 {len(definitions.SERVER_TOOLS)} · "
           f"LLM키={'있음' if os.environ.get('ANTHROPIC_API_KEY') else '**없음**'} · "
           f"내부키={'있음' if os.environ.get('INTERNAL_SERVICE_KEY') else '없음(액션 불가)'}")
+
+    # 자발형 감시자 기동. asyncio.create_task = 이 코루틴을 "배경에서 돌려라"로 등록만 하고 지나간다 — await로 기다리면 감시자가 무한 루프라 서버가 영영 안 뜬다.
+    # behavior.run()은 mock 모드면 스스로 즉시 끝나므로 (SSE 줄 백엔드가 없다) 여기서 모드 분기를 중복하지 않는다.
+    import asyncio
+    from app.watchers import behavior
+    watcher_task = asyncio.create_task(behavior.run(), name="behavior-watcher")
+
     yield
-    print("[agent] 종료")
+
+    # 내려가는 길: 감시자에게 종료 신호를 주고, 일감이 정리될 때까지 기다린다.
+    # cancel까지 부르는 이유: stop 신호만으로는 SSE 수신 대기(await) 한가운데를 못 깨울 수 있다 — 신호(협조 종료)와 취소(강제 종료)를 순서대로 쓴다.
+    behavior.stop()
+    watcher_task.cancel()
+    try:
+        await watcher_task
+    except asyncio.CancelledError:
+        pass  # 취소로 끝난 것은 정상 종료다
+    print("[agent] 종료")  # yield 뒤 = 내릴 때 1회
+
 
 app = FastAPI(title=config.SERVICE_NAME, lifespan=lifespan)
 
@@ -79,16 +100,16 @@ _RETRY_MSG = {
                            "도구 결과를 다시 보고 같은 질문에 답해 주세요."),
 }
 
+
 @app.post("/agent/chat", response_model=ChatResponse)
 def agent_chat(body: ChatRequest) -> ChatResponse:
     history = [h.model_dump() for h in body.history]
 
-    result = loop.run_chat(body.message, consumer_id = body.consumerId, session_id = body.sessionId, history = history)
+    result = loop.run_chat(body.message, consumer_id=body.consumerId, session_id=body.sessionId, history=history)
 
     verdict = guard.check(result["reply"], result["ledgers"])
     if verdict["ok"]:
-        return ChatResponse(reply=result["reply"], actions = result["actions"])
-
+        return ChatResponse(reply=result["reply"], actions=result["actions"])
 
     # ── 여기부터 정책 ⓒ ────────────────────────────────────────────────────
     # 위반 사유들을 집합으로 모은다. **고칠 재료가 원장에 있는 실패**만 재생성한다.
@@ -115,8 +136,8 @@ def agent_chat(body: ChatRequest) -> ChatResponse:
                               session_id=body.sessionId, history=retry_history)
         if guard.check(retry["reply"], retry["ledgers"])["ok"]:
             return ChatResponse(reply=retry["reply"], actions=retry["actions"])
-        result = retry            # 재생성도 실패 → 아래 안전 문구로 (그 패스의
-                                  # actions를 보존해야 프론트 화면이 실상과 맞는다)
+        result = retry  # 재생성도 실패 → 아래 안전 문구로 (그 패스의
+        # actions를 보존해야 프론트 화면이 실상과 맞는다)
 
     # 안전 문구로 대체하되 actions는 그대로 — 이미 일어난 상태 변경(담기 성공)을
     # 프론트에 숨기면 화면과 장바구니가 어긋난다. 발화만 바꾸고 사실은 전한다.
@@ -131,8 +152,9 @@ def health() -> dict:
 
 
 # ── 직접 실행 (개발용) ──────────────────────────────────────────────────────
-if __name__ == "__main__":                                     # ㊼
+if __name__ == "__main__":  # ㊼
     import uvicorn
+
     # reload=True: 파일을 저장하면 서버가 스스로 재시작한다(개발 편의).
     # 문자열 "app.main:app"으로 주는 이유 — reload가 새 프로세스에서 앱을 다시
     # import해야 해서, 객체가 아니라 "찾아가는 주소"가 필요하다.

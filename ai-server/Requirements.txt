@@ -1,6 +1,0 @@
-fastapi
-uvicorn[standard]
-anthropic
-python-dotenv
-httpx
-requests

@@ -176,7 +176,8 @@ def _locations(ledgers: dict) -> set:
     # repr: ()안의 값을 코드로 어떻게 쓰냐(representation) [print(x) → str / 파이썬 대화형 셸에서 값만치면 나오는 것 → repr]
     # 중첩구조를 통째로 문자열화 (모호함 없이. 가능하면 그대로 코드에 붙여넣을 수 있게)
     # str을 사용해도 되지만, "사람에게 보여주려는게 아니라 기계가 훑을 문자열을 만든다"는 의도로서 repr사용
-    text = repr(ledgers)
+    ours = {k: v for k, v in ledgers.items() if k != "web"}
+    text = repr(ours)
     for floor, zone in re.findall(r"F(\d)-([A-H])", text):
         found.add((floor, zone))
     return found
