@@ -86,18 +86,24 @@ TOOLS = [
             "required": ["sku_id"],
         },
     },
+    # ── 신원 자동 주입 (2026-08-20, 트러블슈팅_세션신원_미주입_되묻기) ──────────────────────────────
+    # 아래 조회·추론 도구들의 스키마에 member_id·session_id 칸이 **없다.**
+    # 액션 3종과 같은 이유다(아래 액션 절의 주석 참조) — 회원 번호는 LLM이 정하면 안 되는 값이라, 루프가 등록한 값을 query.run이 채운다.
+    # 처음엔 스키마에 칸이 있었는데, 첫 골든셋 실호출에서 LLM이 그 칸을 채울 값이 없어 손님에게 "회원번호 알려주시겠어요?"라고 **되묻는** 문제(4케이스 FAIL)와,
+    # 남의 번호를 불러달라면 그대로 부르는 보안 구멍이 함께 드러나 액션과 같은 방식으로 옮겼다.
     {
         "name": "get_purchase_history",
         "description": (
-            "회원의 과거 구매 이력 전체를 시간순으로 가져온다. "
+            "현재 로그인한 회원의 과거 구매 이력 전체를 시간순으로 가져온다. "
+            "회원 번호는 서버가 자동으로 채우므로 손님에게 묻지 않는다. "
             "쓸 때: '늘 사던 거'·'지난번에 산 거'·재구매 시점·개인화 추천의 근거가 필요할 때. "
-            "쓰지 말 때: 비회원 세션(member_id가 없으면 부를 수 없다 — 이력 기반 답변 대신 일반 답변으로), "
-            "지금 장바구니 질문(get_session_cart가 담당)."
+            "쓰지 말 때: 비회원 세션(no_member 오류가 돌아온다 — 로그인하면 이력 기반 안내가 "
+            "가능하다고 답할 것), 지금 장바구니 질문(get_session_cart가 담당)."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"member_id": {"type": "integer", "description": "회원 번호"}},
-            "required": ["member_id"],
+            "properties": {},
+            "required": [],
         },
     },
     {
@@ -107,25 +113,27 @@ TOOLS = [
             "총액(total_krw)으로 들어 있다 — 직접 더하지 말고 그 값을 그대로 읽을 것. "
             "쓸 때: '지금 얼마 담았지?'·예산 대비 현황·담은 것 기준 제안. 그리고 "
             "**수량 변경·빼기 전에 cart_item_id를 알아내려고** 먼저 이걸 부른다. "
+            "세션은 서버가 자동으로 잡으므로 손님에게 세션 ID를 묻지 않는다. "
             "쓰지 말 때: 과거 구매(get_purchase_history), 위시리스트(get_wishlist)."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"session_id": {"type": "string", "description": "장보기 세션 식별자"}},
-            "required": ["session_id"],
+            "properties": {},
+            "required": [],
         },
     },
     {
         "name": "get_wishlist",
         "description": (
-            "회원의 위시리스트(찜 목록)를 가져온다. "
+            "현재 로그인한 회원의 위시리스트(찜 목록)를 가져온다. 회원 번호는 서버가 자동으로 채운다. "
             "쓸 때: '찜해둔 거'·'사려고 저장한 거' 질문, 위시리스트 상품의 입고 여부 확인의 시작점. "
-            "쓰지 말 때: 장바구니(get_session_cart)와 혼동 금지 — 위시리스트는 세션과 무관한 저장 목록이다."
+            "쓰지 말 때: 비회원 세션(no_member 오류 — 로그인 안내로), "
+            "장바구니(get_session_cart)와 혼동 금지 — 위시리스트는 세션과 무관한 저장 목록이다."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"member_id": {"type": "integer", "description": "회원 번호"}},
-            "required": ["member_id"],
+            "properties": {},
+            "required": [],
         },
     },
     {
@@ -242,18 +250,19 @@ TOOLS = [
     {
         "name": "predict_repurchase",
         "description": (
-            "회원의 소비주기로 '지금이 다시 살 때인지'를 확률로 판정한다(마지막 구매 후 경과일 반영). "
+            "현재 로그인한 회원의 소비주기로 '지금이 다시 살 때인지'를 확률로 판정한다"
+            "(마지막 구매 후 경과일 반영). 회원 번호는 서버가 자동으로 채운다. "
             "쓸 때: '뭐 사야 되지?'·살 때가 된 품목 선별. "
-            "쓰지 말 때: 비회원(이력이 없다), 이력이 2회 미만인 품목(주기가 정의 안 됨 — 결과에 표시되어 나온다)."
+            "쓰지 말 때: 비회원(no_member 오류 — 로그인 안내로), "
+            "이력이 2회 미만인 품목(주기가 정의 안 됨 — 결과에 표시되어 나온다)."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "member_id": {"type": "integer", "description": "회원 번호"},
                 "sku_ids": {"type": "array", "items": {"type": "integer"},
                             "description": "판정할 품목들. 비우면 이력 전 품목을 판정"},
             },
-            "required": ["member_id"],
+            "required": [],
         },
     },
     {
@@ -262,29 +271,31 @@ TOOLS = [
             "사용자의 현재 매장 내 위치를 추정한다(최근 스캔 위치 앵커 기반, 층·좌표·신뢰도 반환). "
             "쓸 때: 길안내의 출발점이 필요할 때('여기서 어떻게 가?'), optimize_route의 start 인자 채우기. "
             "쓰지 말 때: 매장 밖으로 추정되는 세션(결과의 in_store가 false면 길안내 대신 "
-            "'매장에서 스캔을 시작하면 안내해드려요'로), 상품 위치 질문(그건 get_inventory)."
+            "'매장에서 스캔을 시작하면 안내해드려요'로), 상품 위치 질문(그건 get_inventory). "
+            "세션은 서버가 자동으로 잡는다."
         ),
         "input_schema": {
             "type": "object",
-            "properties": {"session_id": {"type": "string", "description": "장보기 세션 식별자"}},
-            "required": ["session_id"],
+            "properties": {},
+            "required": [],
         },
     },
     {
         "name": "match_preferences",
         "description": (
-            "회원의 구매 성향과 신상·행사 상품을 매칭해 '취향에 맞을 후보'를 점수와 근거로 돌려준다. "
+            "현재 로그인한 회원의 구매 성향과 신상·행사 상품을 매칭해 '취향에 맞을 후보'를 "
+            "점수와 근거로 돌려준다. 회원 번호는 서버가 자동으로 채운다. "
             "쓸 때: '내가 좋아할 만한 신상 있어?' 같은 열린 추천 요청. "
-            "쓰지 말 때: 조건이 명시된 검색('2만원 이하 세제' — search_products), 품절 대체(find_substitutes). "
+            "쓰지 말 때: 비회원(no_member 오류 — 로그인 안내로), "
+            "조건이 명시된 검색('2만원 이하 세제' — search_products), 품절 대체(find_substitutes). "
             "추천 이유는 반환된 근거만 사용할 것."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "member_id": {"type": "integer", "description": "회원 번호"},
                 "top_k": {"type": "integer", "description": "후보 개수(기본 3)"},
             },
-            "required": ["member_id"],
+            "required": [],
         },
     },
     {

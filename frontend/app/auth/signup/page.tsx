@@ -1,5 +1,6 @@
 // app/auth/signup/page.tsx
-
+// ✅ 인증번호 발송/확인을 실제 API(POST /api/consumers/signup/send-code, .../verify-code)로 연결.
+// ✅ 비밀번호 규칙이 백엔드에서 "영문+숫자+특수문자" 3종 포함으로 바뀌어서 정규식도 맞춤.
 "use client";
 
 import { useState } from "react";
@@ -8,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { toBackendPhone } from "@/lib/auth";
+import { toBackendPhone, sendSignupCode, verifySignupCode } from "@/lib/auth";
 import { writeSignupDraft } from "@/lib/signup-draft";
 
 const PHONE_LENGTH = 11;
@@ -20,13 +21,7 @@ type Stage = "phone" | "code" | "password";
 
 function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
-
-  const parts = [
-    digits.slice(0, 3),
-    digits.slice(3, 7),
-    digits.slice(7, 11),
-  ].filter(Boolean);
-
+  const parts = [digits.slice(0, 3), digits.slice(3, 7), digits.slice(7, 11)].filter(Boolean);
   return parts.join(" - ");
 }
 
@@ -35,132 +30,71 @@ export default function SignupPage() {
 
   const [phone, setPhone] = useState("");
   const [codeSent, setCodeSent] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [sendCodeError, setSendCodeError] = useState<string | null>(null);
 
   const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
 
   const [stage, setStage] = useState<Stage>("phone");
 
-  /*
-   * 전화번호
-   */
-  const phoneValid =
-    toBackendPhone(phone).length === PHONE_LENGTH;
-
-  /*
-   * 인증번호
-   */
+  const phoneValid = toBackendPhone(phone).length === PHONE_LENGTH;
   const codeValid = /^\d{6}$/.test(code);
 
-  /*
-   * 비밀번호
-   *
-   * - 8~20자
-   * - 영문 1자 이상
-   * - 특수문자 1자 이상
-   */
-  const passwordValid =
-    /^(?=.*[A-Za-z])(?=.*[^A-Za-z0-9]).{8,20}$/.test(
-      password
-    );
+  // 백엔드 규칙(2026-08-19 변경): 영문 1자 이상 + 숫자 1자 이상 + 특수문자 1자 이상, 8~20자
+  const passwordValid = /^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$/.test(password);
+  const passwordMatches = passwordConfirm.length > 0 && passwordConfirm === password;
+  const passwordStepValid = passwordValid && passwordMatches;
 
-  /*
-   * 비밀번호 확인
-   */
-  const passwordMatches =
-    passwordConfirm.length > 0 &&
-    passwordConfirm === password;
-
-  /*
-   * 비밀번호 단계에서 다음 버튼을 활성화할 수 있는지
-   */
-  const passwordStepValid =
-    passwordValid && passwordMatches;
-
-  /*
-   * 전화번호 입력
-   */
-  const handlePhoneChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
   };
 
-  /*
-   * 인증번호 요청
-   *
-   * TODO:
-   * 백엔드 SMS API 연결
-   *
-   * POST /api/consumers/phone/send-code
-   */
-  const handleSendCode = () => {
+  const handleSendCode = async () => {
     if (!phoneValid) return;
-
-    setCodeSent(true);
-    setCode("");
-    setStage("code");
+    setSendCodeError(null);
+    setSendingCode(true);
+    try {
+      await sendSignupCode(toBackendPhone(phone));
+      setCodeSent(true);
+      setCode("");
+      setStage("code");
+    } catch {
+      setSendCodeError("인증번호 발송에 실패했어요. 전화번호를 확인해주세요.");
+    } finally {
+      setSendingCode(false);
+    }
   };
 
-  /*
-   * 하단 다음 버튼
-   */
-  const handleBottomButton = () => {
-    /*
-     * -----------------------------------------
-     * 인증번호 단계
-     * -----------------------------------------
-     */
+  const handleBottomButton = async () => {
     if (stage === "code") {
       if (!codeValid) return;
-
-      /*
-       * TODO:
-       * 백엔드 인증번호 검증 API 연결
-       *
-       * POST /api/consumers/phone/verify-code
-       *
-       * 실제 인증 성공 후에만
-       * password 단계로 이동해야 함.
-       */
-
-      setStage("password");
+      setVerifyError(null);
+      setVerifying(true);
+      try {
+        await verifySignupCode(toBackendPhone(phone), code);
+        setStage("password");
+      } catch {
+        setVerifyError("인증번호가 올바르지 않거나 만료됐어요.");
+      } finally {
+        setVerifying(false);
+      }
       return;
     }
 
-    /*
-     * -----------------------------------------
-     * 비밀번호 단계
-     * -----------------------------------------
-     */
     if (stage === "password") {
       if (!passwordStepValid) return;
-
-      /*
-       * 전화번호 + 비밀번호 임시 저장
-       */
-      writeSignupDraft({
-        phoneNumber: toBackendPhone(phone),
-        password,
-      });
-
-      /*
-       * 추가정보 페이지로 이동
-       *
-       * 추가정보는 선택사항이므로
-       * 여기서 입력하지 않아도 다음 단계로 갈 수 있음.
-       */
+      writeSignupDraft({ phoneNumber: toBackendPhone(phone), password });
       router.push("/auth/signup/profile");
     }
   };
 
-  /*
-   * 현재 단계에 따른 버튼 활성화
-   */
   const bottomButtonDisabled =
-    (stage === "code" && !codeValid) ||
+    (stage === "code" && (!codeValid || verifying)) ||
     (stage === "password" && !passwordStepValid);
 
   return (
@@ -172,11 +106,6 @@ export default function SignupPage() {
       </p>
 
       <div className="space-y-4">
-
-        {/* =====================================================
-            전화번호
-        ====================================================== */}
-
         <div className="flex gap-2">
           <Input
             type="text"
@@ -189,20 +118,16 @@ export default function SignupPage() {
             disabled={codeSent}
             className={`flex-1 ${underlineInput}`}
           />
-
           <Button
             type="button"
             variant="outline"
-            disabled={!phoneValid || codeSent}
+            disabled={!phoneValid || codeSent || sendingCode}
             onClick={handleSendCode}
           >
-            인증번호
+            {sendingCode ? "발송 중..." : "인증번호"}
           </Button>
         </div>
-
-        {/* =====================================================
-            인증번호
-        ====================================================== */}
+        {sendCodeError && <p className="text-xs text-danger">{sendCodeError}</p>}
 
         {codeSent && (
           <div className="space-y-1">
@@ -210,64 +135,35 @@ export default function SignupPage() {
               inputMode="numeric"
               placeholder="인증번호를 입력해주세요"
               value={code}
-              onChange={(e) =>
-                setCode(
-                  e.target.value
-                    .replace(/\D/g, "")
-                    .slice(0, 6)
-                )
-              }
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               readOnly={stage !== "code"}
               className={underlineInput}
             />
-
-            {stage === "code" && (
-              <p className="text-xs text-muted-foreground">
-                인증번호를 발송했어요
-              </p>
+            {stage === "code" && !verifyError && (
+              <p className="text-xs text-muted-foreground">인증번호를 발송했어요</p>
             )}
+            {verifyError && <p className="text-xs text-danger">{verifyError}</p>}
           </div>
         )}
 
-        {/* =====================================================
-            비밀번호
-            인증번호 확인 후 두 입력창을 한 번에 보여줌
-        ====================================================== */}
-
         {stage === "password" && (
           <div className="space-y-5">
-
-            {/* 비밀번호 */}
-
             <div className="space-y-1">
               <Input
                 type="password"
                 autoComplete="new-password"
                 placeholder="비밀번호를 입력해주세요"
                 value={password}
-                onChange={(e) =>
-                  setPassword(e.target.value)
-                }
+                onChange={(e) => setPassword(e.target.value)}
                 className={underlineInput}
               />
-
-              {password.length > 0 &&
-                !passwordValid && (
-                  <p className="text-xs text-danger">
-                    영문과 특수문자를 포함해
-                    8~20자로 입력해주세요
-                  </p>
-                )}
-
-              {password.length > 0 &&
-                passwordValid && (
-                  <p className="text-xs text-muted-foreground">
-                    사용 가능한 비밀번호예요
-                  </p>
-                )}
+              {password.length > 0 && !passwordValid && (
+                <p className="text-xs text-danger">영문, 숫자, 특수문자를 모두 포함해 8~20자로 입력해주세요</p>
+              )}
+              {password.length > 0 && passwordValid && (
+                <p className="text-xs text-muted-foreground">사용 가능한 비밀번호예요</p>
+              )}
             </div>
-
-            {/* 비밀번호 재입력 */}
 
             <div className="space-y-1">
               <Input
@@ -275,32 +171,17 @@ export default function SignupPage() {
                 autoComplete="new-password"
                 placeholder="비밀번호를 한 번 더 입력해주세요"
                 value={passwordConfirm}
-                onChange={(e) =>
-                  setPasswordConfirm(e.target.value)
-                }
+                onChange={(e) => setPasswordConfirm(e.target.value)}
                 className={underlineInput}
               />
-
-              {passwordConfirm.length > 0 &&
-                !passwordMatches && (
-                  <p className="text-xs text-danger">
-                    비밀번호가 일치하지 않아요
-                  </p>
-                )}
-
-              {passwordMatches && (
-                <p className="text-xs text-muted-foreground">
-                  비밀번호가 일치해요
-                </p>
+              {passwordConfirm.length > 0 && !passwordMatches && (
+                <p className="text-xs text-danger">비밀번호가 일치하지 않아요</p>
               )}
+              {passwordMatches && <p className="text-xs text-muted-foreground">비밀번호가 일치해요</p>}
             </div>
           </div>
         )}
       </div>
-
-      {/* =====================================================
-          다음 버튼
-      ====================================================== */}
 
       {stage !== "phone" && (
         <Button
@@ -310,7 +191,7 @@ export default function SignupPage() {
           disabled={bottomButtonDisabled}
           onClick={handleBottomButton}
         >
-          다음
+          {verifying ? "확인 중..." : "다음"}
         </Button>
       )}
     </div>

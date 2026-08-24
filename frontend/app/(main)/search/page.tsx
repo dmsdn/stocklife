@@ -1,15 +1,15 @@
 // app/(main)/search/page.tsx
-// ✅ 검색바 포커스하면 최근 검색어가 바로 아래에 뜹니다(검색 결과 유무와 무관).
-// ✅ 필터에 가격(1,000원 단위 이중 슬라이더) 추가, 카테고리/재고여부/가격 전부 실제 필터링에 반영.
-// ✅ 하트 = 담기 = 저장, 전부 같은 동작입니다. 누르면 어느 리스트에 담을지 고르고 그 리스트로
-//   들어갑니다. 별도 "담기" 버튼과 "담았어요" 상태는 없앴습니다.
+// ✅ 상품 행을 누르면 상세 모달이 뜹니다. 홈 화면의 goProduct()가 /search?productId=로
+//   보내는 것도 그대로 받아서 자동으로 모달을 엽니다.
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Search as SearchIcon, X, Heart } from "lucide-react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
+import { ProductDetailDialog } from "@/components/domain/product-detail-dialog";
 import { searchMockProducts, MOCK_CATEGORIES, type MockProduct } from "@/lib/mock-products";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
@@ -19,6 +19,8 @@ const PRICE_MIN = 0;
 const PRICE_MAX = 20000;
 
 export default function SearchPage() {
+  const searchParams = useSearchParams();
+
   const [keyword, setKeyword] = useState("");
   const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [recent, setRecent] = useState<string[]>(() => readSearchHistory());
@@ -27,6 +29,12 @@ export default function SearchPage() {
 
   const [savePickerProduct, setSavePickerProduct] = useState<MockProduct | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [detailProductId, setDetailProductId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fromQuery = searchParams.get("productId");
+    if (fromQuery) setDetailProductId(Number(fromQuery));
+  }, [searchParams]);
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>("카테고리");
@@ -86,7 +94,6 @@ export default function SearchPage() {
     setRecent(readSearchHistory());
   };
 
-  // blur가 클릭보다 먼저 발생해서 목록이 사라지는 걸 막기 위해 살짝 지연
   const handleBlur = () => {
     blurTimeout.current = setTimeout(() => setInputFocused(false), 150);
   };
@@ -124,7 +131,6 @@ export default function SearchPage() {
           />
         </div>
 
-        {/* 검색창 포커스하면 결과 상태와 무관하게 바로 아래에 뜨는 최근 검색어 */}
         {inputFocused && recent.length > 0 && (
           <div className="absolute left-8 right-0 top-full z-20 mt-2 rounded-md border border-border bg-card p-3 shadow-sm">
             <p className="mb-2 text-xs text-muted-foreground">최근 검색어</p>
@@ -178,19 +184,25 @@ export default function SearchPage() {
       <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0">
         {results.map((product) => (
           <div key={product.id} className="flex gap-3 py-3">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
-              IMG
-            </div>
-            <div className="flex flex-1 flex-col justify-between">
-              <div>
-                <p className="text-sm">{product.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {product.category} · {product.unit}
-                </p>
-                {!product.inStock && <p className="text-xs text-danger">품절</p>}
+            <button
+              type="button"
+              onClick={() => setDetailProductId(product.id)}
+              className="flex flex-1 gap-3 text-left"
+            >
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+                IMG
               </div>
-              <p className="text-base font-semibold">{product.price.toLocaleString()}원</p>
-            </div>
+              <div className="flex flex-1 flex-col justify-between">
+                <div>
+                  <p className="text-sm">{product.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {product.category} · {product.unit}
+                  </p>
+                  {!product.inStock && <p className="text-xs text-danger">품절</p>}
+                </div>
+                <p className="text-base font-semibold">{product.price.toLocaleString()}원</p>
+              </div>
+            </button>
             <button
               type="button"
               disabled={!product.inStock}
@@ -226,6 +238,8 @@ export default function SearchPage() {
         onClose={() => setSavePickerProduct(null)}
         onSelect={handleSaveSelect}
       />
+
+      <ProductDetailDialog productId={detailProductId} onClose={() => setDetailProductId(null)} />
     </div>
   );
 }

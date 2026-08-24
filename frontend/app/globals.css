@@ -121,16 +121,10 @@
   --text-sm--line-height: 21px;
   --text-base: 15px; /* text-sm과 거의 동일값 — Tailwind 기본 text-base를 덮어써서 실수로 더 작은 폰트 안 쓰게 방지 */
   --text-base--line-height: 21px;
-  --text-md: 18px;   /* 부제목 */
+  --text-md: 16px;   /* 부제목 */
   --text-md--line-height: 25px;
-  --text-lg: 24px;   /* 화면 제목 */
+  --text-lg: 18px;   /* 화면 제목 */
   --text-lg--line-height: 32px;
-
-  /* ✅ 새로 추가 — 코드에 이미 text-xl(5건)·text-2xl(13건)이 쓰이고 있는데 이 스케일에
-     정의가 안 되어 있어서 Tailwind 기본값(xl=20px, 2xl=24px)이 그대로 새고 있었습니다.
-     기존 렌더링과 똑같은 값으로 그대로 등록만 해서, 화면은 안 바뀌고 토큰 관리 안으로
-     들어옵니다. text-2xl은 사실상 text-lg와 같은 값이라, 새로 쓸 때는 text-lg를
-     우선 쓰는 걸 권장합니다. */
   --text-xl: 20px;
   --text-xl--line-height: 28px;
   --text-2xl: 24px;

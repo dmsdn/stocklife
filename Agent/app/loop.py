@@ -124,12 +124,16 @@ def run_chat(message: str,
 
     # 요청의 주인을 등록. 액션도구의 consumer_id는 LLM이 아닌 여기서 주입 (보안설계)
     action.set_consumer_id(consumer_id)
+    query.set_identity(consumer_id, session_id)
 
     #대화목록 조립 .history는 프론트가 보낸 그대로 받되, 뒤에서 20건만 추출
     messages = list(history or [])[-20:]            # history가 None이면 빈리스트를 사용 / 새로운 리스트를 생성: 부르는 쪽이 준 리스트를 여기서 직접 고치면 남의 물건을 몰래 바꾸는 것이 됨
     messages.append({"role": "user", "content": message})
 
-    system_prompt = prompts.build_system_prompt()
+    system_prompt = prompts.build_system_prompt(
+        is_member=consumer_id is not None,
+        has_session=session_id is not None,
+    )
 
     # 이번 대화의 장부들. 함수 안 지역 변수인 이유: 요청마다 새로 시작해야 함. 모듈 전역에 두면 앞 사람의 원장이 다음 사람에게 새어들어감.
     ledgers = {"sot": [], "compute": [], "infer": [], "web": []}

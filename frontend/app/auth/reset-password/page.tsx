@@ -1,10 +1,13 @@
 // app/auth/reset-password/page.tsx
+// ✅ 인증번호 발송/확인을 실제 API로 연결. 전화번호는 다음 단계(new-password)로
+//   쿼리 파라미터로 넘깁니다.
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { sendPasswordResetCode, verifyPasswordResetCode, toBackendPhone } from "@/lib/auth";
 
 function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -20,15 +23,34 @@ export default function ResetPasswordPage() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSendCode = () => {
-    // TODO: 인증번호 발송 API 연동
-    setCodeSent(true);
+  const handleSendCode = async () => {
+    setError(null);
+    setSending(true);
+    try {
+      await sendPasswordResetCode(toBackendPhone(phone));
+      setCodeSent(true);
+    } catch {
+      setError("인증번호 발송에 실패했어요. 가입된 전화번호인지 확인해주세요.");
+    } finally {
+      setSending(false);
+    }
   };
 
-  const handleSubmit = () => {
-    // TODO: 인증번호 확인 API 연동
-    router.push("/auth/reset-password/new-password");
+  const handleSubmit = async () => {
+    setError(null);
+    setVerifying(true);
+    try {
+      await verifyPasswordResetCode(toBackendPhone(phone), code);
+      router.push(`/auth/reset-password/new-password?phone=${toBackendPhone(phone)}`);
+    } catch {
+      setError("인증번호가 올바르지 않거나 만료됐어요.");
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -48,10 +70,17 @@ export default function ResetPasswordPage() {
             placeholder="010 - 0000 - 0000"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
+            disabled={codeSent}
             className={`flex-1 ${underlineInput}`}
           />
-          <Button type="button" variant="secondary" className="shrink-0" onClick={handleSendCode}>
-            인증번호
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0"
+            disabled={sending || codeSent}
+            onClick={handleSendCode}
+          >
+            {sending ? "발송 중..." : "인증번호"}
           </Button>
         </div>
 
@@ -67,10 +96,12 @@ export default function ResetPasswordPage() {
             className={underlineInput}
           />
         )}
+
+        {error && <p className="text-xs text-danger">{error}</p>}
       </div>
 
-      <Button className="w-full" disabled={code.length !== 6} onClick={handleSubmit}>
-        확인
+      <Button className="w-full" disabled={code.length !== 6 || verifying} onClick={handleSubmit}>
+        {verifying ? "확인 중..." : "확인"}
       </Button>
     </div>
   );
