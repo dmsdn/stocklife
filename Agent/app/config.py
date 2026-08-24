@@ -6,7 +6,7 @@
 # 튜닝 대상이 코드 곳곳에 흩어지면 실험 한번에 파일 다섯개를 고치게 되는 상황 발생
 # 설정이 한 파일이면 "이 실험에서 바꾼 것"이 diff한 곳에 모임
 
-from  datetime import datetime
+from datetime import datetime
 
 
 # 관제 시계
@@ -14,7 +14,7 @@ from  datetime import datetime
 # 실제 시계를 사용하면 n+1일 이후에 실행할때, "46일 경과"가 47일이 되어 골든셋 기대 응답이 매일 틀어짐
 # 평가의 재현성이 시계 고정에 달려 있음
 # 백엔드 연동을 할 때 datetime.now()로 교체
-DEMO_NOW = datetime(2026, 8 ,13, 14 ,20, 0)
+DEMO_NOW = datetime(2026, 8, 13, 14, 20, 0)
 
 
 # 서버
@@ -31,7 +31,7 @@ AGENT_PORT = 8000
 # True면 sot_client가 mock_data를 읽고, False면 백엔드 HTTP를 부름
 # 스위치를 sot_client "내부"가 아니라 여기 둔 이유: 루프 및 도구 코드는 mock인지 실물인지 몰라야 함
 # 알면 분기가 새어감
-USE_MOCK_SOT=True
+USE_MOCK_SOT = True
 # SpringBoot. 팀계약 API 8종의 뿌리
 BACKEND_BASE_URL = "http://localhost:8080"
 # SoT조회가 3초를 넘으면 사용자 발화가 멈춘 것으로 보임 - 짧게 실패 및 "지금 확인 어려움"으로 착지하는게 나음
@@ -66,3 +66,15 @@ INTERVENTION_PRIORITY = {
     "REPURCHASE_DUE": 15,  # 이번에 놓쳐도 다음 방문에 다시 온다
     "BUDGET_WARNING": 10,  # 정보성 — 가장 먼저 밀린다
 }
+
+# ── 행동 감시자: 망설임 감지 ──
+# 규칙: "90초 창 안에 VIEW 3회 이상 + 서로 다른 상품 2개 이상 + 마지막 행동 뒤
+# 12초 무행동"이면 망설임 후보. SCAN_ADD·PURCHASE가 오면 후보 취소(결정을 내렸다).
+# LLM이 매 이벤트마다 판단하지 않는다 — 규칙이 거르고, LLM은 걸러진 순간의
+# 문장만 만든다(비용·지연·일관성 모두 이쪽이 낫다)
+HESITATION_WINDOW_SEC = 90        # 이 창 밖의 VIEW는 잊는다 — 아까 본 것은 지금의 망설임이 아니다
+HESITATION_IDLE_SEC = 12          # 무행동 판정 — 너무 짧으면 화면 넘기는 중에 끼어든다
+HESITATION_MIN_VIEWS = 3          # 반복 관찰의 최소 횟수
+HESITATION_MIN_DISTINCT_SKUS = 2  # "여러 개를 번갈아" — 1개 반복은 상세를 읽는 중일 뿐
+WATCH_TICK_SEC = 2.0              # 감시자가 규칙을 재평가하는 주기(초)
+WATCH_SESSION_TTL_SEC = 1800      # 30분 무소식 세션은 잊는다 — 상태가 무한히 쌓이면 메모리 누수
