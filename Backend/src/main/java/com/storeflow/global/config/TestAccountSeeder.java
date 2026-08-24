@@ -24,8 +24,8 @@ public class TestAccountSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
 
     public TestAccountSeeder(ConsumerRepository consumerRepository,
-                              MemberRepository memberRepository,
-                              PasswordEncoder passwordEncoder) {
+                             MemberRepository memberRepository,
+                             PasswordEncoder passwordEncoder) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
@@ -39,6 +39,7 @@ public class TestAccountSeeder implements CommandLineRunner {
 
         Consumer consumer = new Consumer(
                 TEST_PHONE,
+                "로컬테스트",
                 passwordEncoder.encode(TEST_PASSWORD),
                 null,                       // gender — 선택 입력이라 비워둠
                 LocalDate.of(2000, 1, 1),   // birthDate — 임의값, 의미 없음

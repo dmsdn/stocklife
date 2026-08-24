@@ -1,6 +1,6 @@
 // components/domain/price-range-slider.tsx
-// ✅ 신규. 겹친 range input 2개를 쓰는 표준적인 방식의 이중 핸들 슬라이더.
-// value는 [min, max] 원 단위, step 단위로 스냅됩니다.
+// ✅ 값 말풍선이 양 끝(0%, 100%)에서 화면 밖으로 튀어나가던 문제를 clamp()로 고치고,
+//   슬라이더 대신 숫자를 직접 입력할 수 있는 칸을 추가했습니다.
 "use client";
 
 export interface PriceRangeSliderProps {
@@ -11,15 +11,22 @@ export interface PriceRangeSliderProps {
   onChange: (value: [number, number]) => void;
 }
 
+// 말풍선 너비의 절반만큼 안쪽으로 여백을 둬서 0%/100% 근처에서도 화면 밖으로 안 나가게 함
+const BUBBLE_HALF_WIDTH = "28px";
+
 export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: PriceRangeSliderProps) {
   const [low, high] = value;
   const toPercent = (v: number) => ((v - min) / (max - min)) * 100;
+  const clampedLeft = (percent: number) =>
+    `clamp(${BUBBLE_HALF_WIDTH}, ${percent}%, calc(100% - ${BUBBLE_HALF_WIDTH}))`;
 
   const handleLowChange = (next: number) => {
-    onChange([Math.min(next, high - step), high]);
+    const clamped = Math.min(Math.max(next, min), high - step);
+    onChange([clamped, high]);
   };
   const handleHighChange = (next: number) => {
-    onChange([low, Math.max(next, low + step)]);
+    const clamped = Math.max(Math.min(next, max), low + step);
+    onChange([low, clamped]);
   };
 
   return (
@@ -30,16 +37,16 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
           style={{ left: `${toPercent(low)}%`, right: `${100 - toPercent(high)}%` }}
         />
 
-        {/* 값 말풍선 */}
+        {/* 값 말풍선 — clamp()로 화면 밖으로 안 나가게 */}
         <span
-          className="absolute -top-9 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs text-background"
-          style={{ left: `${toPercent(low)}%` }}
+          className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background"
+          style={{ left: clampedLeft(toPercent(low)) }}
         >
           {low.toLocaleString()}원
         </span>
         <span
-          className="absolute -top-9 -translate-x-1/2 rounded-md bg-foreground px-2 py-1 text-xs text-background"
-          style={{ left: `${toPercent(high)}%` }}
+          className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background"
+          style={{ left: clampedLeft(toPercent(high)) }}
         >
           {high.toLocaleString()}원
         </span>
@@ -69,7 +76,32 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
         <span>{max.toLocaleString()}원</span>
       </div>
 
-      {/* 슬라이더 손잡이(thumb)만 클릭 가능하게 — 트랙 자체는 pointer-events-none이라 겹쳐도 됨 */}
+      {/* ✅ 직접 입력 */}
+      <div className="mt-4 flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={high - step}
+          step={step}
+          value={low}
+          onChange={(e) => handleLowChange(Number(e.target.value) || min)}
+          className="w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+        />
+        <span className="shrink-0 text-muted-foreground">~</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={low + step}
+          max={max}
+          step={step}
+          value={high}
+          onChange={(e) => handleHighChange(Number(e.target.value) || max)}
+          className="w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+        />
+        <span className="shrink-0 text-sm text-muted-foreground">원</span>
+      </div>
+
       <style jsx>{`
         .range-thumb::-webkit-slider-thumb {
           pointer-events: auto;
@@ -89,6 +121,14 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
           background: var(--background);
           border: 2px solid var(--foreground);
           cursor: pointer;
+        }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type="number"] {
+          -moz-appearance: textfield;
         }
       `}</style>
     </div>

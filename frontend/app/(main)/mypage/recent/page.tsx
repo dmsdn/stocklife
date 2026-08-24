@@ -10,7 +10,7 @@ const recentItems = [
 
 export default function RecentPage() {
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <SubpageHeader title="최근 본" />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {recentItems.map((item) => (

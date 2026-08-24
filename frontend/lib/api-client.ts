@@ -69,7 +69,12 @@ export async function apiFetch<T = unknown>(path: string, options: ApiOptions = 
     throw new ApiError(res.status, `요청 실패 (${res.status})`);
   }
 
+  // ⚠ 201(예: 회원가입)처럼 몸통 없이 성공만 알리는 응답이 있어서, 204뿐 아니라
+  //   Content-Length가 0이거나 아예 없는 경우도 파싱 없이 통과시킵니다.
+  //   (안 그러면 빈 바디를 res.json()이 파싱하다 에러를 던져서, 실제로는 성공했는데
+  //   프론트에서는 실패로 잡히는 문제가 생깁니다 — 회원가입에서 실제로 있었던 버그)
   if (res.status === 204) return undefined as T;
-
-  return res.json();
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }

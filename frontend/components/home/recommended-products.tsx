@@ -24,7 +24,6 @@ export function RecommendedProducts({
   return (
     <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
       <SectionTitle
-        eyebrow="FOR YOU"
         title="브리핑에 맞춰 추천해요"
       />
 

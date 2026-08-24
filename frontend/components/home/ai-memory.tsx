@@ -17,7 +17,6 @@ export function AiMemory({
   return (
     <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
       <SectionTitle
-        eyebrow="AI MEMORY"
         title="AI가 기억하고 있어요"
       />
 

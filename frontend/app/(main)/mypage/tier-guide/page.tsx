@@ -20,7 +20,7 @@ export default function TierGuidePage() {
     : 100;
 
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <SubpageHeader title="등급 안내" />
 
       {/* 현재 등급 카드 */}

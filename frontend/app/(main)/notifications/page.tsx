@@ -80,18 +80,21 @@ export default function NotificationsPage() {
   const filtered = notifications.filter((n) => tab === "전체" || n.type === tab);
 
   return (
-    <div className="mx-auto max-w-md md:max-w-2xl">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <button type="button" onClick={() => router.back()} aria-label="뒤로가기">
-          <ChevronLeft size={20} />
-        </button>
-        <h1 className="flex-1 text-base font-medium">알림</h1>
+    // ✅ 다른 서브페이지들과 동일한 폭/여백(mx-auto max-w-lg ... md:p-8)으로 통일
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => router.back()} aria-label="뒤로가기">
+            <ChevronLeft size={20} />
+          </button>
+          <p className="text-base">알림</p>
+        </div>
         <Link href="/mypage/notifications" aria-label="알림 설정" className="text-muted-foreground">
           <Settings size={20} />
         </Link>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3">
+      <div className="mb-4 flex gap-2 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t}
@@ -108,9 +111,9 @@ export default function NotificationsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="px-4 py-16 text-center text-sm text-muted-foreground">알림이 없어요.</p>
+        <p className="py-16 text-center text-sm text-muted-foreground">알림이 없어요.</p>
       ) : (
-        <div className="flex flex-col px-4">
+        <div className="divide-y divide-border">
           {filtered.map((item) => {
             const Icon = TYPE_ICON[item.type];
             return (
@@ -118,7 +121,7 @@ export default function NotificationsPage() {
                 key={item.id}
                 type="button"
                 onClick={() => handleClick(item)}
-                className="flex items-start gap-3 border-b border-border py-4 text-left"
+                className="flex w-full items-start gap-3 py-4 text-left"
               >
                 <Icon size={20} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">

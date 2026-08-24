@@ -70,6 +70,7 @@ export default function ResetPasswordPage() {
             placeholder="010 - 0000 - 0000"
             value={phone}
             onChange={(e) => setPhone(formatPhone(e.target.value))}
+            onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
             disabled={codeSent}
             className={`flex-1 ${underlineInput}`}
           />
@@ -93,6 +94,7 @@ export default function ResetPasswordPage() {
             placeholder="인증번호를 입력하세요"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             className={underlineInput}
           />
         )}

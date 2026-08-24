@@ -5,7 +5,7 @@ import { legalDocs, allTermsOrder } from "@/lib/legal-content";
 
 export default function TermsFullPage() {
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <div className="mb-6 flex items-center gap-3">
         <Link href="/mypage">
           <ChevronLeft size={20} />

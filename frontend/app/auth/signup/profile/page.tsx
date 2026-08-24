@@ -87,15 +87,11 @@ export default function SignupProfilePage() {
     }
 
     /*
-     * 백엔드 수정 전 임시 조건.
-     * 카메라 / 마이크가 선택사항으로 바뀌면
-     * 이 부분도 수정한다.
+     * 필수 동의는 개인정보 수집(personalInfoConsent)뿐입니다.
+     * 카메라/마이크는 백엔드에서 선택 동의로 바뀌었는데(2026-08-19),
+     * 여기서 예전 기준으로 필수 취급하던 걸 수정.
      */
-    if (
-      draft.personalInfoConsent !== true ||
-      draft.cameraConsent !== true ||
-      draft.micConsent !== true
-    ) {
+    if (draft.personalInfoConsent !== true) {
       setError(
         "필수 동의 항목을 확인해주세요."
       );
@@ -116,13 +112,16 @@ export default function SignupProfilePage() {
           draft.birthDate || undefined,
 
         cameraConsent:
-          draft.cameraConsent,
+          !!draft.cameraConsent,
 
         personalInfoConsent:
           draft.personalInfoConsent,
 
         micConsent:
-          draft.micConsent,
+          !!draft.micConsent,
+
+        marketingConsent:
+          !!draft.marketingConsent,
       });
 
       clearSignupDraft();
