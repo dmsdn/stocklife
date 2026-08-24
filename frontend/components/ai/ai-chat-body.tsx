@@ -43,6 +43,8 @@ import {
 } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { AttachListPickerDialog } from "@/components/domain/attach-list-picker-dialog";
+import { usePermissionStatus } from "@/lib/use-permission-status";
+import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -97,6 +99,8 @@ export function AiChatBody({
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const micPermission = usePermissionStatus("microphone");
+  const [showMicModal, setShowMicModal] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -268,6 +272,16 @@ export function AiChatBody({
       return;
     }
 
+    // ✅ 이미 허용돼있으면 바로 녹음 시작, 아직 안 물어봤으면 설명 모달부터
+    if (micPermission === "prompt") {
+      setShowMicModal(true);
+      return;
+    }
+
+    await startRecording();
+  };
+
+  const startRecording = async () => {
     try {
       const stream =
         await navigator.mediaDevices.getUserMedia({
@@ -573,6 +587,15 @@ export function AiChatBody({
         open={listPickerOpen}
         onClose={() => setListPickerOpen(false)}
         onSelect={handleAttachList}
+      />
+      <PermissionRequestDialog
+        open={showMicModal}
+        kind="microphone"
+        onConfirm={() => {
+          setShowMicModal(false);
+          startRecording();
+        }}
+        onClose={() => setShowMicModal(false)}
       />
     </div>
   );

@@ -39,6 +39,7 @@ export default function SignupPage() {
 
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [name, setName] = useState("");
 
   const [stage, setStage] = useState<Stage>("phone");
 
@@ -48,7 +49,7 @@ export default function SignupPage() {
   // 백엔드 규칙(2026-08-19 변경): 영문 1자 이상 + 숫자 1자 이상 + 특수문자 1자 이상, 8~20자
   const passwordValid = /^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$/.test(password);
   const passwordMatches = passwordConfirm.length > 0 && passwordConfirm === password;
-  const passwordStepValid = passwordValid && passwordMatches;
+  const passwordStepValid = passwordValid && passwordMatches && name.trim().length > 0;
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
@@ -94,7 +95,7 @@ export default function SignupPage() {
 
     if (stage === "password") {
       if (!passwordStepValid) return;
-      writeSignupDraft({ phoneNumber: toBackendPhone(phone), password });
+      writeSignupDraft({ phoneNumber: toBackendPhone(phone), password, name: name.trim() });
       router.push("/auth/signup/profile");
     }
   };
@@ -188,6 +189,18 @@ export default function SignupPage() {
                 <p className="text-xs text-danger">비밀번호가 일치하지 않아요</p>
               )}
               {passwordMatches && <p className="text-xs text-muted-foreground">비밀번호가 일치해요</p>}
+            </div>
+
+            <div className="space-y-1">
+              <Input
+                autoComplete="name"
+                placeholder="이름을 입력해주세요"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
+                className={underlineInput}
+                maxLength={50}
+              />
             </div>
           </div>
         )}

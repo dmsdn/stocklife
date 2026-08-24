@@ -5,6 +5,7 @@ const DRAFT_KEY = "storeflow_signup_draft";
 export interface SignupDraft {
   phoneNumber?: string;
   password?: string;
+  name?: string;
 
   // 추가정보
   gender?: string | null;

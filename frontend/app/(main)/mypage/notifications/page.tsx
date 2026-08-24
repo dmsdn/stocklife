@@ -1,10 +1,10 @@
 // app/(main)/mypage/notifications/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { Checkbox } from "@/components/ui/checkbox";
-import { readNotificationPrefs, writeNotificationPrefs, type NotificationPrefs } from "@/lib/notification-prefs";
+import { readNotificationPrefs, writeNotificationPrefs, syncNotificationPrefsFromServer, type NotificationPrefs } from "@/lib/notification-prefs";
 
 const items: { key: keyof Omit<NotificationPrefs, "all">; label: string }[] = [
   { key: "stock", label: "재고 입고 알림" },
@@ -17,6 +17,11 @@ const items: { key: keyof Omit<NotificationPrefs, "all">; label: string }[] = [
 
 export default function NotificationSettingsPage() {
   const [prefs, setPrefs] = useState<NotificationPrefs>(() => readNotificationPrefs());
+
+  // ✅ 서버에 저장된 값이 있으면(다른 기기 등) 동기화
+  useEffect(() => {
+    syncNotificationPrefsFromServer().then(setPrefs);
+  }, []);
 
   const update = (patch: Partial<NotificationPrefs>) => {
     const next = { ...prefs, ...patch };
