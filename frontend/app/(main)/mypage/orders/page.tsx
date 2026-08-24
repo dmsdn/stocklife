@@ -32,7 +32,7 @@ export default function OrdersPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <SubpageHeader title="구매내역" />
 
       {loading && <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>}

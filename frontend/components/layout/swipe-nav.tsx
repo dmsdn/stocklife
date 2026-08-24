@@ -8,9 +8,13 @@ const ROUTES = ["/", "/ai"] as const;
 export function SwipeNav({
   current,
   children,
+  className = "min-h-full",
 }: {
   current: 0 | 1;
   children: React.ReactNode;
+  /** ✅ 기본은 기존과 동일(min-h-full). /ai 모바일 전체화면처럼
+   *  고정 높이 flex 컨테이너 안에서 써야 할 때만 다른 값을 넘긴다. */
+  className?: string;
 }) {
   const router = useRouter();
   const startX = useRef<number | null>(null);
@@ -30,7 +34,7 @@ export function SwipeNav({
   };
 
   return (
-    <div onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} className="min-h-full">
+    <div onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} className={className}>
       {children}
     </div>
   );

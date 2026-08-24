@@ -1,3 +1,6 @@
+import { apiFetch, isLoggedIn } from "./api-client";
+import { MOCK_PRODUCTS, getFinalPrice, type MockProduct } from "./mock-products";
+
 export type HomeProduct = {
   id: number;
   name: string;
@@ -21,125 +24,155 @@ export type DiscoveredProduct = {
   reason: string;
 };
 
-export const recommendedProducts: RecommendedProduct[] = [
-  {
-    id: 1,
-    name: "서울우유 1L",
-    category: "유제품",
-    price: 2490,
-    image: "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=400",
-    reason: "지난 구매 후 23일이 지났어요.",
-    badge: "다시 살 때",
-  },
-  {
-    id: 2,
-    name: "동원 참치 150g",
-    category: "가공식품",
-    price: 3280,
-    image: "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400",
-    reason: "이번 주 식단에 필요한 재료예요.",
-    badge: "식단 추천",
-  },
-  {
-    id: 3,
-    name: "CJ 햇반 210g × 6",
-    category: "즉석식품",
-    price: 7980,
-    image: "https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400",
-    reason: "최근 장보기에서 함께 구매했어요.",
-    badge: "함께 구매",
-  },
-  {
-    id: 4,
-    name: "크리넥스 3겹 화장지",
-    category: "생활용품",
-    price: 12900,
-    image: "https://images.unsplash.com/photo-1584556812952-905ffd0c611a?w=400",
-    reason: "최근 구매 주기가 가까워졌어요.",
-    badge: "구매 시기",
-  },
-  {
-    id: 5,
-    name: "오뚜기 진라면 5입",
-    category: "라면",
-    price: 3980,
-    image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400",
-    reason: "평소 자주 구매하는 상품이에요.",
-    badge: "취향 추천",
-  },
-  {
-    id: 6,
-    name: "계란 30구",
-    category: "신선식품",
-    price: 8990,
-    image: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400",
-    reason: "이번 주 식재료로 활용하기 좋아요.",
-    badge: "식재료",
-  },
-  {
-    id: 7,
-    name: "섬유유연제 2L",
-    category: "생활용품",
-    price: 9800,
-    image: "https://images.unsplash.com/photo-1626806787461-102c1bfaaea1?w=400",
-    reason: "지난 구매일을 기준으로 추천했어요.",
-    badge: "재구매",
-  },
-  {
-    id: 8,
-    name: "생수 2L × 6",
-    category: "음료",
-    price: 5980,
-    image: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400",
-    reason: "최근 소비량을 기준으로 추천했어요.",
-    badge: "생활필수",
-  },
-];
+interface BackendProduct {
+  skuId: number;
+  name: string;
+  categoryL1: string;
+  priceKrw: number;
+  finalPriceKrw: number;
+  onPromo: boolean;
+  imageUrl: string | null;
+}
 
-export const discoveredProducts: DiscoveredProduct[] = [
-  {
-    id: 1,
-    name: "오뚜기 진라면 순한맛",
-    category: "라면",
-    price: 3980,
-    originalPrice: 4800,
-    discount: "17%",
-    reason: "평소보다 820원 저렴해요.",
-  },
-  {
-    id: 2,
-    name: "크리넥스 3겹 화장지",
-    category: "생활용품",
-    price: 12900,
-    originalPrice: 16900,
-    discount: "24%",
-    reason: "최근 구매한 상품과 같은 브랜드예요.",
-  },
-];
+// ⚠ "지난 구매 후 23일 지났어요" 같은 개인화 사유는 백엔드에 추천 API가 따로 없어서
+//   만들어낼 수 없습니다. reason/badge는 실제 데이터(카테고리 등) 기반의 일반적인 문구로
+//   대체했습니다 — 진짜 개인화하려면 백엔드에 추천 엔드포인트가 필요합니다.
+//
+// ✅ 실제 API가 비어있거나 실패하면(백엔드 미기동, 시드데이터 없음 등) lib/mock-products.ts
+//   목업으로 자동 대체됩니다. mock-products.ts는 실제 ProductDetailResponse 필드명
+//   (brand/specRaw/discontinued/imageUrl)에 맞춰져 있는 카탈로그라 형태가 실제 DB와 같습니다.
 
-export const popularProducts: HomeProduct[] = [
-  {
-    id: 1,
-    name: "신라면 5입",
-    category: "라면",
-    price: 4980,
-    image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400",
-  },
-  {
-    id: 2,
-    name: "동원 참치",
-    category: "가공식품",
-    price: 3280,
-    image: "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=400",
-  },
-  {
-    id: 3,
-    name: "계란 30구",
-    category: "신선식품",
-    price: 8990,
-    image: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=400",
-  },
-];
+function mockToRecommended(p: MockProduct): RecommendedProduct {
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    price: getFinalPrice(p),
+    image: p.imageUrl ?? "",
+    reason: `${p.category} 카테고리 인기 상품이에요.`,
+    badge: p.discountPercent > 0 ? "할인 중" : "추천",
+  };
+}
+
+function mockToDiscovered(p: MockProduct): DiscoveredProduct {
+  const finalPrice = getFinalPrice(p);
+  return {
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    price: finalPrice,
+    originalPrice: p.price,
+    discount: `${p.discountPercent}%`,
+    reason: `정가보다 ${(p.price - finalPrice).toLocaleString()}원 저렴해요.`,
+  };
+}
+
+/** 홈 "FOR YOU" — 실제 GET /api/products/search, 없으면 목업 카탈로그 */
+export async function fetchRecommendedProducts(): Promise<RecommendedProduct[]> {
+  try {
+    const products = await apiFetch<BackendProduct[]>("/api/products/search", { auth: false });
+    if (products.length === 0) throw new Error("empty");
+    return products.slice(0, 8).map((p) => ({
+      id: p.skuId,
+      name: p.name,
+      category: p.categoryL1,
+      price: p.finalPriceKrw,
+      image: p.imageUrl ?? "",
+      reason: `${p.categoryL1} 카테고리 인기 상품이에요.`,
+      badge: p.onPromo ? "할인 중" : "추천",
+    }));
+  } catch {
+    return MOCK_PRODUCTS.slice(0, 8).map(mockToRecommended);
+  }
+}
+
+/** 홈 "AI DISCOVERED" — 실제 할인 중(onPromo)인 상품, 없으면 목업 중 할인 상품 */
+export async function fetchDiscoveredProducts(): Promise<DiscoveredProduct[]> {
+  try {
+    const products = await apiFetch<BackendProduct[]>("/api/products/search?onPromo=true", { auth: false });
+    if (products.length === 0) throw new Error("empty");
+    return products.slice(0, 6).map((p) => ({
+      id: p.skuId,
+      name: p.name,
+      category: p.categoryL1,
+      price: p.finalPriceKrw,
+      originalPrice: p.priceKrw,
+      discount:
+        p.priceKrw > 0 ? `${Math.round(((p.priceKrw - p.finalPriceKrw) / p.priceKrw) * 100)}%` : "0%",
+      reason: `정가보다 ${(p.priceKrw - p.finalPriceKrw).toLocaleString()}원 저렴해요.`,
+    }));
+  } catch {
+    return MOCK_PRODUCTS.filter((p) => p.discountPercent > 0).slice(0, 6).map(mockToDiscovered);
+  }
+}
+
+/** 홈 "DISCOVER" — 실제 GET /api/products/search, 없으면 목업 카탈로그 */
+export async function fetchPopularProducts(): Promise<HomeProduct[]> {
+  try {
+    const products = await apiFetch<BackendProduct[]>("/api/products/search", { auth: false });
+    if (products.length === 0) throw new Error("empty");
+    return products.slice(0, 8).map((p) => ({
+      id: p.skuId,
+      name: p.name,
+      category: p.categoryL1,
+      price: p.finalPriceKrw,
+      image: p.imageUrl ?? "",
+    }));
+  } catch {
+    return MOCK_PRODUCTS.slice(0, 8).map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      price: getFinalPrice(p),
+      image: p.imageUrl ?? "",
+    }));
+  }
+}
+
+export interface RecentOrderSummary {
+  orderId: number;
+  totalAmount: number;
+  status: string;
+  itemCount: number;
+}
+
+interface BackendOrder {
+  orderId: number;
+  totalAmount: number;
+  status: string;
+  items: unknown[];
+}
+
+/** 홈 "마이 쇼핑" — 로그인한 회원의 실제 최근 주문(GET /api/orders).
+ *  로그인 전이면(개인정보라 아예 조회 자체를 안 함) null, 조회했는데 주문이 없어도 null. */
+export async function fetchRecentOrder(): Promise<RecentOrderSummary | null> {
+  if (!isLoggedIn()) return null;
+  try {
+    const orders = await apiFetch<BackendOrder[]>("/api/orders");
+    if (orders.length === 0) return null;
+    const [latest] = orders;
+    return {
+      orderId: latest.orderId,
+      totalAmount: latest.totalAmount,
+      status: latest.status,
+      itemCount: latest.items.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 홈 "마이 쇼핑" — 실제 찜 목록 개수(GET /api/wishlist). 비로그인/실패면 null(=로그인 유도),
+ *  로그인했는데 0개면 0(=진짜 없음)으로 구분해서 반환. */
+export async function fetchWishlistCount(): Promise<number | null> {
+  if (!isLoggedIn()) return null;
+  try {
+    const items = await apiFetch<unknown[]>("/api/wishlist");
+    return items.length;
+  } catch {
+    return null;
+  }
+}
 
 export const suggestedPrompts = [
   "이번주 장보기 계획 세워줘",

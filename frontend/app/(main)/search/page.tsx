@@ -1,40 +1,57 @@
 // app/(main)/search/page.tsx
-// ✅ 상품 행을 누르면 상세 모달이 뜹니다. 홈 화면의 goProduct()가 /search?productId=로
-//   보내는 것도 그대로 받아서 자동으로 모달을 엽니다.
+// ✅ 목업 대신 실제 GET /api/products/search 연동. finalPriceKrw/discountKrw/onPromo 등
+//   실제 할인 필드를 그대로 씁니다. 재고여부는 백엔드 응답에 없어서(단종 여부만 있음)
+//   "재고 있음/품절" 대신 "일반/단종"으로 필터를 맞췄습니다.
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, Search as SearchIcon, X, Heart } from "lucide-react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { ProductDetailDialog } from "@/components/domain/product-detail-dialog";
-import { searchMockProducts, MOCK_CATEGORIES, type MockProduct } from "@/lib/mock-products";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
+import { apiFetch } from "@/lib/api-client";
 
-const STATUSES = ["재고 있음", "품절"] as const;
+const STATUSES = ["일반", "단종"] as const;
 const PRICE_MIN = 0;
-const PRICE_MAX = 20000;
+// ⚠ 예전엔 20,000원으로 막아뒀는데, 실제 상품 중 이보다 비싼 것도 있을 수 있어서
+//   넉넉하게 올렸습니다. 정확한 "가장 비싼 상품 가격"은 백엔드에 최대값 조회 API가
+//   없어서 알 수 없어요 — 이 값(50만원) 이상인 상품이 있으면 필터에서 최대값을
+//   더 올려야 합니다. 직접 입력 칸으로도 이 범위 밖 값을 넣을 수 있게 해뒀습니다.
+const PRICE_MAX = 500000;
 
-export default function SearchPage() {
+interface Product {
+  skuId: number;
+  name: string;
+  category: string;
+  categoryL1: string;
+  brand: string;
+  priceKrw: number;
+  onPromo: boolean;
+  discountKrw: number;
+  finalPriceKrw: number;
+  unit: string;
+  discontinued: boolean;
+}
+
+function SearchPageInner() {
   const searchParams = useSearchParams();
 
   const [keyword, setKeyword] = useState("");
-  const [submittedKeyword, setSubmittedKeyword] = useState("");
   const [recent, setRecent] = useState<string[]>(() => readSearchHistory());
   const [inputFocused, setInputFocused] = useState(false);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [savePickerProduct, setSavePickerProduct] = useState<MockProduct | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<string[]>([]);
+
+  const [savePickerProduct, setSavePickerProduct] = useState<Product | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [detailProductId, setDetailProductId] = useState<number | null>(null);
-
-  useEffect(() => {
-    const fromQuery = searchParams.get("productId");
-    if (fromQuery) setDetailProductId(Number(fromQuery));
-  }, [searchParams]);
 
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>("카테고리");
@@ -42,49 +59,73 @@ export default function SearchPage() {
     categories: string[];
     statuses: string[];
     priceRange: [number, number];
-  }>({
-    categories: [],
-    statuses: [],
-    priceRange: [PRICE_MIN, PRICE_MAX],
-  });
+  }>({ categories: [], statuses: [], priceRange: [PRICE_MIN, PRICE_MAX] });
 
-  const openFilter = (tab: FilterTab) => {
-    setFilterTab(tab);
-    setFilterOpen(true);
+  useEffect(() => {
+    const fromQuery = searchParams.get("productId");
+    if (fromQuery) setDetailProductId(Number(fromQuery));
+
+    // ✅ 홈 화면 "최근 검색어" 칩에서 ?keyword=로 들어오면 바로 그 검색어로 실행
+    const keywordFromQuery = searchParams.get("keyword");
+    if (keywordFromQuery) {
+      setKeyword(keywordFromQuery);
+      runSearch(keywordFromQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const runSearch = async (kw?: string) => {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (kw) qs.set("keyword", kw);
+      if (filters.categories[0]) qs.set("categoryL1", filters.categories[0]);
+      if (filters.priceRange[1] !== PRICE_MAX) qs.set("maxPrice", String(filters.priceRange[1]));
+      const res = await apiFetch<Product[]>(`/api/products/search?${qs.toString()}`, { auth: false });
+      setProducts(res);
+      if (categories.length === 0) {
+        setCategories([...new Set(res.map((p) => p.categoryL1).filter(Boolean))]);
+      }
+    } catch {
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const onlyInStock = filters.statuses.includes("재고 있음") && !filters.statuses.includes("품절");
-  const priceActive = filters.priceRange[0] !== PRICE_MIN || filters.priceRange[1] !== PRICE_MAX;
+  useEffect(() => {
+    runSearch(); // 초기 전체 목록 + 카테고리 목록 확보용
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const results = useMemo(
-    () =>
-      searchMockProducts({
-        keyword: submittedKeyword,
-        categories: filters.categories,
-        onlyInStock,
-        minPrice: filters.priceRange[0],
-        maxPrice: filters.priceRange[1],
-      }),
-    [submittedKeyword, filters, onlyInStock]
-  );
+  const results = useMemo(() => {
+    return products.filter((p) => {
+      const matchesStatus =
+        filters.statuses.length === 0 ||
+        (filters.statuses.includes("단종") && p.discontinued) ||
+        (filters.statuses.includes("일반") && !p.discontinued);
+      const matchesPriceMin = p.finalPriceKrw >= filters.priceRange[0];
+      return matchesStatus && matchesPriceMin;
+    });
+  }, [products, filters]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = keyword.trim();
-    setSubmittedKeyword(trimmed);
     if (trimmed) {
       addSearchHistory(trimmed);
       setRecent(readSearchHistory());
     }
     setInputFocused(false);
+    runSearch(trimmed);
   };
 
   const handleRecentClick = (word: string) => {
     setKeyword(word);
-    setSubmittedKeyword(word);
     addSearchHistory(word);
     setRecent(readSearchHistory());
     setInputFocused(false);
+    runSearch(word);
   };
 
   const handleRemoveRecent = (word: string, e: React.MouseEvent) => {
@@ -105,13 +146,15 @@ export default function SearchPage() {
   const handleSaveSelect = (groupId: number) => {
     if (!savePickerProduct) return;
     addProductToCartGroup(groupId, {
-      id: savePickerProduct.id,
+      id: savePickerProduct.skuId,
       name: savePickerProduct.name,
-      category: savePickerProduct.category,
-      price: savePickerProduct.price,
+      category: savePickerProduct.categoryL1,
+      price: savePickerProduct.finalPriceKrw,
     });
-    setSavedIds((prev) => new Set(prev).add(savePickerProduct.id));
+    setSavedIds((prev) => new Set(prev).add(savePickerProduct.skuId));
   };
+
+  const priceActive = filters.priceRange[0] !== PRICE_MIN || filters.priceRange[1] !== PRICE_MAX;
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-5xl md:p-8">
@@ -155,21 +198,21 @@ export default function SearchPage() {
       <div className="mb-2 flex items-center gap-2 text-sm">
         <button
           type="button"
-          onClick={() => openFilter("카테고리")}
+          onClick={() => { setFilterTab("카테고리"); setFilterOpen(true); }}
           className={`rounded-full border px-3 py-1.5 ${filters.categories.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
         >
           카테고리
         </button>
         <button
           type="button"
-          onClick={() => openFilter("재고여부")}
+          onClick={() => { setFilterTab("재고여부"); setFilterOpen(true); }}
           className={`rounded-full border px-3 py-1.5 ${filters.statuses.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
         >
-          재고여부
+          상태
         </button>
         <button
           type="button"
-          onClick={() => openFilter("가격")}
+          onClick={() => { setFilterTab("가격"); setFilterOpen(true); }}
           className={`rounded-full border px-3 py-1.5 ${priceActive ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
         >
           가격
@@ -177,69 +220,68 @@ export default function SearchPage() {
       </div>
 
       <div className="mb-2 flex items-center justify-between text-sm">
-        <span>{results.length}개 결과</span>
-        <span className="text-muted-foreground">랭킹순</span>
+        <span>{loading ? "불러오는 중..." : `${results.length}개 결과`}</span>
       </div>
 
       <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0">
         {results.map((product) => (
-          <div key={product.id} className="flex gap-3 py-3">
-            <button
-              type="button"
-              onClick={() => setDetailProductId(product.id)}
-              className="flex flex-1 gap-3 text-left"
-            >
+          <div key={product.skuId} className="flex gap-3 py-3">
+            <button type="button" onClick={() => setDetailProductId(product.skuId)} className="flex flex-1 gap-3 text-left">
               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
                 IMG
               </div>
-              <div className="flex flex-1 flex-col justify-between">
+              <div className="flex min-w-0 flex-1 flex-col justify-between">
                 <div>
-                  <p className="text-sm">{product.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {product.category} · {product.unit}
-                  </p>
-                  {!product.inStock && <p className="text-xs text-danger">품절</p>}
+                  <p className="truncate text-sm">{product.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{product.categoryL1} · {product.unit}</p>
+                  {product.discontinued && <p className="text-xs text-danger">단종</p>}
                 </div>
-                <p className="text-base font-semibold">{product.price.toLocaleString()}원</p>
+                <p className="truncate text-base font-semibold">
+                  {product.onPromo && <span className="mr-1 text-danger">할인</span>}
+                  {product.finalPriceKrw.toLocaleString()}원
+                </p>
               </div>
             </button>
             <button
               type="button"
-              disabled={!product.inStock}
+              disabled={product.discontinued}
               onClick={() => setSavePickerProduct(product)}
               aria-label="저장하기"
               className="flex h-8 w-8 shrink-0 items-center justify-center self-start text-muted-foreground disabled:opacity-30"
             >
-              <Heart size={20} fill={savedIds.has(product.id) ? "currentColor" : "none"} />
+              <Heart size={20} fill={savedIds.has(product.skuId) ? "currentColor" : "none"} />
             </button>
           </div>
         ))}
       </div>
 
-      {results.length === 0 && (
+      {!loading && results.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">검색 결과가 없어요.</p>
       )}
 
       {filterOpen && (
         <FilterPanel
           initialTab={filterTab}
-          categories={MOCK_CATEGORIES}
+          categories={categories}
           statuses={STATUSES}
           selectedCategories={filters.categories}
           selectedStatuses={filters.statuses}
           selectedPriceRange={filters.priceRange}
-          onApply={(next) => setFilters(next)}
+          onApply={(next) => { setFilters(next); runSearch(keyword); }}
           onClose={() => setFilterOpen(false)}
         />
       )}
 
-      <SaveToListDialog
-        open={!!savePickerProduct}
-        onClose={() => setSavePickerProduct(null)}
-        onSelect={handleSaveSelect}
-      />
-
+      <SaveToListDialog open={!!savePickerProduct} onClose={() => setSavePickerProduct(null)} onSelect={handleSaveSelect} />
       <ProductDetailDialog productId={detailProductId} onClose={() => setDetailProductId(null)} />
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="p-4" />}>
+      <SearchPageInner />
+    </Suspense>
   );
 }

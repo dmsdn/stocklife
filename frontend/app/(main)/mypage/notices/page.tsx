@@ -10,7 +10,7 @@ export const notices = [
 
 export default function NoticesPage() {
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <SubpageHeader title="공지사항" />
       <div className="divide-y divide-border">
         {notices.map((n) => (

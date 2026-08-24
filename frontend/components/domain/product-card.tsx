@@ -1,6 +1,7 @@
 import { Trash2, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QuantityStepper } from "./quantity-stepper";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export interface ProductCardProps {
   skuId: number;
@@ -43,12 +44,9 @@ export function ProductCard({
   return (
     <div className={cn("flex gap-3 py-3", className)}>
       {showSelect && (
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onCheckedChange?.(e.target.checked)}
-          className="mt-1 h-4 w-4 shrink-0 rounded border-border"
-        />
+        <span className="mt-1">
+          <Checkbox checked={checked} onChange={() => onCheckedChange?.(!checked)} />
+        </span>
       )}
 
       {/* TODO: 실제 상품 이미지 자리 — 지금은 자리만 표시 */}

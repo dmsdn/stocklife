@@ -1,5 +1,6 @@
 // components/domain/checkbox.tsx
 // 이전 popup-store-project의 components/ui/Checkbox.tsx를 이식 — 색상만 이 프로젝트 토큰으로 교체
+// ✅ 선택 전: 흰 배경 + 테두리 / 선택 후: 검은 배경 + 흰 체크
 "use client";
 
 export function Checkbox({
@@ -11,8 +12,8 @@ export function Checkbox({
 }) {
   return (
     <span
-      className={`relative inline-flex h-5 w-5 flex-none items-center justify-center rounded ${
-        checked ? "bg-primary" : "bg-muted"
+      className={`relative inline-flex h-5 w-5 flex-none items-center justify-center rounded border ${
+        checked ? "border-primary bg-primary" : "border-border bg-background"
       }`}
     >
       <input

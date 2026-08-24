@@ -1,35 +1,40 @@
 // app/(main)/mypage/receipts/page.tsx
-// ✅ 별도 목업 대신 실제 주문 데이터(GET /api/orders)를 영수증 목록으로 보여주고, 상세는
-//   구매내역 상세 화면(/mypage/orders/[id])을 그대로 재사용합니다 — 영수증도 결국 그 주문의
-//   내역이라 화면을 따로 둘 필요가 없었습니다.
+// ✅ 구매내역과 별개 화면이 아니라 이게 유일한 목록입니다(실제 주문 데이터 GET /api/orders).
+//   누르면 전자 영수증을 모달로 바로 띄워서 보여줍니다(페이지 이동 없음).
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
+import { ReceiptDialog } from "@/components/domain/receipt-dialog";
 import { apiFetch } from "@/lib/api-client";
+import { MOCK_ORDERS } from "@/lib/mock-orders";
 
 interface Order {
   orderId: number;
   totalAmount: number;
   status: string;
   items: { skuId: number; productName: string; priceKrw: number; quantity: number }[];
+  orderedAt?: string;
+  paymentMethod?: string;
 }
 
 export default function ReceiptsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
+    // ✅ 실제 GET /api/orders 연동. 결과가 비어있거나(시드데이터 없음) 요청이 실패하면
+    //   (백엔드 미기동 등) 목업 영수증 3건으로 자동 대체 — 화면을 바로 확인할 수 있게.
     apiFetch<Order[]>("/api/orders")
-      .then(setOrders)
-      .catch(() => setOrders([]))
+      .then((data) => setOrders(data.length > 0 ? data : MOCK_ORDERS))
+      .catch(() => setOrders(MOCK_ORDERS))
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <SubpageHeader title="전자 영수증" />
 
       {loading && <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>}
@@ -39,10 +44,11 @@ export default function ReceiptsPage() {
 
       <div className="divide-y divide-border md:grid md:grid-cols-2 md:gap-4 md:divide-y-0">
         {orders.map((order) => (
-          <Link
+          <button
             key={order.orderId}
-            href={`/mypage/orders/${order.orderId}`}
-            className="flex items-center gap-3 py-4 md:rounded-sm md:border md:border-border md:p-4"
+            type="button"
+            onClick={() => setSelectedOrder(order)}
+            className="flex w-full items-center gap-3 py-4 text-left md:rounded-sm md:border md:border-border md:p-4"
           >
             <Receipt size={20} className="text-muted-foreground" />
             <div className="flex-1">
@@ -50,9 +56,11 @@ export default function ReceiptsPage() {
               <p className="text-xs text-muted-foreground">{order.items.length}개 품목</p>
             </div>
             <span className="text-sm font-medium">{order.totalAmount.toLocaleString()}원</span>
-          </Link>
+          </button>
         ))}
       </div>
+
+      <ReceiptDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} />
     </div>
   );
 }

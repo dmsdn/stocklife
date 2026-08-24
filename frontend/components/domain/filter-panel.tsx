@@ -13,7 +13,7 @@ export type FilterTab = "카테고리" | "재고여부" | "가격";
 
 const ALL_LABEL = "전체";
 const PRICE_MIN = 0;
-const PRICE_MAX = 20000;
+const PRICE_MAX = 500000;
 
 export function FilterPanel({
   initialTab,

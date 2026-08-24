@@ -9,17 +9,26 @@ import { SectionTitle } from "./section-title";
 
 type CartSummaryProps = {
   onClick: () => void;
+  /** ✅ 하드코딩된 "상품 7개 · 예상 38,200원 · 70%" 대신 실제 담은 리스트(lib/cart-storage.ts) 기준 */
+  itemCount: number;
+  estimatedPrice: number;
+  checkedRatio: number; // 0~100
 };
 
 export function CartSummary({
   onClick,
+  itemCount,
+  estimatedPrice,
+  checkedRatio,
 }: CartSummaryProps) {
+  if (itemCount === 0) return null;
+
   return (
     <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
       <SectionTitle
-        eyebrow="MY SHOPPING"
         title="나의 장바구니"
-        action="전체보기"
+        action="더보기"
+        onAction={onClick}
       />
 
       <button
@@ -34,11 +43,11 @@ export function CartSummary({
 
           <div className="min-w-0 flex-1">
             <p className="text-base font-semibold">
-              이번주 장보기
+              담은 리스트
             </p>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              상품 7개 · 예상 38,200원
+              상품 {itemCount}개 · 예상 {estimatedPrice.toLocaleString()}원
             </p>
           </div>
 
@@ -51,16 +60,16 @@ export function CartSummary({
         <div className="mt-4">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              준비 진행률
+              담기 완료율
             </span>
 
             <span className="text-sm font-medium">
-              70%
+              {checkedRatio}%
             </span>
           </div>
 
           <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-muted">
-            <div className="h-full w-[70%] rounded-sm bg-foreground" />
+            <div className="h-full rounded-sm bg-foreground" style={{ width: `${checkedRatio}%` }} />
           </div>
         </div>
       </button>

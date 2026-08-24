@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/domain/checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { login, toBackendPhone } from "@/lib/auth";
 import { ApiError } from "@/lib/api-client";
 
@@ -30,7 +30,8 @@ export default function LoginPage() {
     setPhone(formatPhone(e.target.value));
   };
 
-  const handleLogin = async () => {
+  const handleLogin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setLoginError(false);
     setSubmitting(true);
     try {
@@ -63,7 +64,7 @@ export default function LoginPage() {
             전화번호와 비밀번호를 입력하여 로그인 해 주세요
           </p>
 
-          <div className="mt-10 space-y-3">
+          <form id="login-form" onSubmit={handleLogin} className="mt-10 space-y-3">
             <Input
               type="text"
               inputMode="numeric"
@@ -97,7 +98,7 @@ export default function LoginPage() {
             {loginError && (
               <p className="text-sm text-danger">입력하신 정보를 다시 확인해주세요</p>
             )}
-          </div>
+          </form>
 
           <div className="mt-4 flex items-center justify-between text-sm">
             <label className="flex items-center gap-2 text-foreground">
@@ -110,10 +111,11 @@ export default function LoginPage() {
           </div>
 
           <Button
+            type="submit"
+            form="login-form"
             variant="secondary"
             className="mt-8 w-full rounded-sm text-base"
             disabled={submitting}
-            onClick={handleLogin}
           >
             {submitting ? "로그인 중..." : "로그인하기"}
           </Button>

@@ -14,7 +14,6 @@ export function TodayBriefing({
   return (
     <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
       <SectionTitle
-        eyebrow="TODAY'S BRIEFING"
         title="오늘의 쇼핑 브리핑"
       />
 

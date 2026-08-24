@@ -5,7 +5,7 @@ export default function NoticeDetailPage({ params }: { params: { noticeId: strin
   const notice = notices.find((n) => n.id === params.noticeId);
 
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <SubpageHeader title="공지사항" />
       {!notice ? (
         <p className="py-10 text-center text-sm text-muted-foreground">공지를 찾을 수 없어요.</p>
