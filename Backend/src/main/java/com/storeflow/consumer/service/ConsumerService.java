@@ -1,11 +1,13 @@
 package com.storeflow.consumer.service;
 
 import com.storeflow.cart.service.CartService;
+import com.storeflow.consumer.dto.ConsumerMeResponse;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.ResetPasswordRequest;
 import com.storeflow.consumer.dto.RegistrationStatusResponse;
 import com.storeflow.consumer.dto.SignupRequest;
+import com.storeflow.consumer.dto.UpdateConsumerRequest;
 import com.storeflow.consumer.entity.Consumer;
 import com.storeflow.consumer.entity.Member;
 import com.storeflow.consumer.exception.InvalidCredentialsException;
@@ -137,6 +139,43 @@ public class ConsumerService {
         }
 
         return new LoginResponse(accessToken, refreshToken);
+    }
+
+    /** 마이페이지 "내 정보". Member 행이 없는 구가입자도 조회는 되어야 하므로 findById는 optional 그대로 둔다. */
+    @Transactional(readOnly = true)
+    public ConsumerMeResponse getMe(Long consumerId) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+        Member member = memberRepository.findById(Member.toMemberId(consumerId)).orElse(null);
+        return new ConsumerMeResponse(consumer, member);
+    }
+
+    /**
+     * 마이페이지 회원정보 수정. Consumer(성별/생년월일)와 Member(가구원수/반려동물/자녀/차량) 양쪽을
+     * 한 트랜잭션에서 갱신한다. Member 행이 아직 없는 구가입자가 처음 수정하는 경우도 있으므로
+     * 없으면 새로 만든다.
+     */
+    @Transactional
+    public ConsumerMeResponse updateMe(Long consumerId, UpdateConsumerRequest request) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+        consumer.updateProfile(request.getGender(), request.getBirthDate());
+        if (request.getMarketingConsent() != null) {
+            consumer.updateMarketingConsent(request.getMarketingConsent());
+        }
+
+        Byte householdSize = request.getHouseholdSize() == null ? null : request.getHouseholdSize().byteValue();
+        int memberId = Member.toMemberId(consumerId);
+        Member member = memberRepository.findById(memberId).orElse(null);
+        if (member == null) {
+            member = new Member(memberId, householdSize, request.getHasPet(), request.getHasChild(),
+                    request.getByCar(), Instant.now());
+            memberRepository.save(member);
+        } else {
+            member.updateProfile(householdSize, request.getHasPet(), request.getHasChild(), request.getByCar());
+        }
+
+        return new ConsumerMeResponse(consumer, member);
     }
 
     @Transactional

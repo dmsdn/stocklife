@@ -88,6 +88,16 @@ public class Consumer {
         this.refreshToken = refreshToken;
     }
 
+    /** 마이페이지 회원정보 수정(성별/생년월일). null이 오면 해당 필드는 바꾸지 않는다. */
+    public void updateProfile(String gender, LocalDate birthDate) {
+        if (gender != null) this.gender = gender;
+        if (birthDate != null) this.birthDate = birthDate;
+    }
+
+    public void updateMarketingConsent(boolean marketingConsent) {
+        this.marketingConsent = marketingConsent;
+    }
+
     // 비밀번호 재설정 — 호출하는 쪽(ConsumerService)에서 이미 인코딩된 비밀번호를 넘겨야 한다.
     public void updatePassword(String encodedPassword) {
         this.password = encodedPassword;
