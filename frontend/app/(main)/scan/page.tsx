@@ -9,7 +9,7 @@
 //   - h-dvh 대신 공용 하단탭바 높이(4rem)를 뺀 높이로 고쳐서 버튼이 화면 밖으로 안 밀려남
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronDown, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
@@ -20,6 +20,7 @@ import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
 import { apiFetch } from "@/lib/api-client";
 import { addProductToCartGroup, updateCartGroups, readCartGroups } from "@/lib/cart-storage";
+import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
 
 const DEFAULT_GROUP_ID = 1;
 
@@ -59,9 +60,8 @@ function ScanPageInner() {
   }, [product, selectedGroup]);
 
   // ✅ 실제 GET /api/products/barcode/{barcode} 연동
-  const handleLookup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!barcode.trim()) return;
+  const lookupByCode = async (code: string) => {
+    if (!code.trim()) return;
     setError(null);
     setJustAdded(null);
 
@@ -72,7 +72,7 @@ function ScanPageInner() {
         priceKrw: number;
         finalPriceKrw?: number;
         categoryL1?: string;
-      }>(`/api/products/barcode/${barcode.trim()}`, { auth: false });
+      }>(`/api/products/barcode/${code.trim()}`, { auth: false });
       setProduct({
         skuId: found.skuId,
         name: found.name,
@@ -84,6 +84,22 @@ function ScanPageInner() {
       setError("해당 바코드의 상품을 찾을 수 없어요.");
     }
   };
+
+  const handleLookup = (e: React.FormEvent) => {
+    e.preventDefault();
+    lookupByCode(barcode);
+  };
+
+  // ✅ 카메라로 실제 바코드 스캔 — 화면 들어오자마자 바로 켜짐, 인식되면 자동 조회
+  const { videoRef, permission, supported, start } = useBarcodeScanner((code) => {
+    setBarcode(code);
+    lookupByCode(code);
+  });
+
+  useEffect(() => {
+    start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleConfirmAdd = () => {
     if (!product) return;
@@ -149,18 +165,30 @@ function ScanPageInner() {
           </Button>
         </form>
 
-        <div className="relative min-h-0 flex-1 shrink">
-          <span className="absolute left-8 top-8 h-10 w-10 border-l-2 border-t-2 border-foreground" />
-          <span className="absolute right-8 top-8 h-10 w-10 border-r-2 border-t-2 border-foreground" />
-          <span className="absolute bottom-8 left-8 h-10 w-10 border-b-2 border-l-2 border-foreground" />
-          <span className="absolute bottom-8 right-8 h-10 w-10 border-b-2 border-r-2 border-foreground" />
+        <div className="relative min-h-0 flex-1 shrink overflow-hidden bg-black">
+          {permission !== "granted" && (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-sm text-white">
+                {permission === "denied"
+                  ? "카메라 권한이 거부됐어요. 브라우저 설정에서 허용해주세요."
+                  : "카메라를 여는 중..."}
+              </p>
+            </div>
+          )}
+          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
+
+          {permission === "granted" && !supported && (
+            <p className="absolute inset-x-4 bottom-4 text-center text-xs text-white/80">
+              이 브라우저는 자동 바코드 인식을 지원하지 않아요. 숫자를 직접 입력해주세요.
+            </p>
+          )}
+
+          <span className="absolute left-8 top-8 h-10 w-10 border-l-2 border-t-2 border-white" />
+          <span className="absolute right-8 top-8 h-10 w-10 border-r-2 border-t-2 border-white" />
+          <span className="absolute bottom-8 left-8 h-10 w-10 border-b-2 border-l-2 border-white" />
+          <span className="absolute bottom-8 right-8 h-10 w-10 border-b-2 border-r-2 border-white" />
           {error && (
             <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-danger">{error}</p>
-          )}
-          {!product && !error && (
-            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-muted-foreground">
-              바코드를 스캔하거나 숫자를 입력해주세요
-            </p>
           )}
           {justAdded && (
             <p className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 items-center justify-center gap-1 text-sm text-success">
