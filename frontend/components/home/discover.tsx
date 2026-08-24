@@ -9,7 +9,15 @@ import {
   formatPrice,
   type HomeProduct,
 } from "@/lib/home-data";
+import { apiFetch } from "@/lib/api-client";
 import { SectionTitle } from "./section-title";
+
+interface PopularityItem {
+  skuId: number;
+  productName: string;
+  imageUrl: string | null;
+  purchaserCount: number;
+}
 
 type DiscoverProps = {
   onProductClick: (productId: number) => void;
@@ -19,12 +27,25 @@ export function Discover({
   onProductClick,
 }: DiscoverProps) {
   const router = useRouter();
-  // ✅ 실제 GET /api/products/search 연동, 실패/빈 결과면 목업으로 자동 대체.
-  // ⚠ "인기순" 정렬 API가 따로 없어서, 검색 결과 앞쪽 8개를 그대로 씁니다.
+  // ✅ 실제 구매이력 기반 인기상품(GET /api/purchases/popular)로 교체.
+  //   로그인 안 했거나 실패하면 검색 결과 기반 목업(fetchPopularProducts)으로 대체.
   const [popularProducts, setPopularProducts] = useState<HomeProduct[]>([]);
 
   useEffect(() => {
-    fetchPopularProducts().then(setPopularProducts);
+    apiFetch<PopularityItem[]>("/api/purchases/popular?limit=8")
+      .then((list) => {
+        if (list.length === 0) throw new Error("empty");
+        setPopularProducts(
+          list.map((p) => ({
+            id: p.skuId,
+            name: p.productName,
+            category: "",
+            price: 0,
+            image: p.imageUrl ?? "",
+          }))
+        );
+      })
+      .catch(() => fetchPopularProducts().then(setPopularProducts));
   }, []);
 
   if (popularProducts.length === 0) return null;
@@ -62,9 +83,11 @@ export function Discover({
                 {product.name}
               </p>
 
-              <p className="mt-1 text-base font-semibold">
-                {formatPrice(product.price)}
-              </p>
+              {product.price > 0 && (
+                <p className="mt-1 text-base font-semibold">
+                  {formatPrice(product.price)}
+                </p>
+              )}
             </button>
           ))}
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Award,
@@ -13,6 +13,7 @@ import {
 
 import { GRADE_TIERS } from "@/lib/grade";
 import { readSearchHistory } from "@/lib/search-history";
+import { apiFetch, getAccessToken } from "@/lib/api-client";
 import type { RecentOrderSummary } from "@/lib/home-data";
 import { LoginRequiredDialog } from "@/components/domain/login-required-dialog";
 import { SectionTitle } from "./section-title";
@@ -69,6 +70,21 @@ export function HomeDashboard({
 }: HomeDashboardProps) {
   const recentSearches = readSearchHistory().slice(0, 5);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [topCategories, setTopCategories] = useState<{ categoryL2: string; purchaseCount: number }[]>([]);
+  const [frequentPurchases, setFrequentPurchases] = useState<{ skuId: number; productName: string; purchaseCount: number }[]>([]);
+
+  useEffect(() => {
+    if (getAccessToken()) {
+      apiFetch<{ categoryL2: string; purchaseCount: number }[]>("/api/purchases/top-categories?limit=5")
+        .then(setTopCategories)
+        .catch(() => setTopCategories([]));
+
+      // ✅ 실제 GET /api/orders/frequent 연동
+      apiFetch<{ skuId: number; productName: string; purchaseCount: number }[]>("/api/orders/frequent")
+        .then((list) => setFrequentPurchases(list.slice(0, 5)))
+        .catch(() => setFrequentPurchases([]));
+    }
+  }, []);
 
   const guardedClick = (needsLogin: boolean, action: () => void) => () => {
     if (needsLogin) {
@@ -81,6 +97,24 @@ export function HomeDashboard({
   return (
     <section className="w-full px-4 pt-7 sm:px-6 lg:px-8">
       <SectionTitle title="마이 쇼핑" />
+
+      {frequentPurchases.length > 0 && (
+        <div className="mb-3">
+          <p className="mb-2 text-sm font-semibold">자주 구매하는 상품</p>
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+            {frequentPurchases.map((p) => (
+              <Link
+                key={p.skuId}
+                href={`/search?keyword=${encodeURIComponent(p.productName)}`}
+                className="flex shrink-0 flex-col gap-1 rounded-sm border border-border px-3 py-2.5"
+              >
+                <span className="text-sm">{p.productName}</span>
+                <span className="text-xs text-muted-foreground">{p.purchaseCount}번 구매</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         {/* 담은 리스트 — 가장 이어서 하기 쉬운 것 먼저 */}
@@ -186,6 +220,22 @@ export function HomeDashboard({
         </div>
         <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
       </button>
+
+      {/* ✅ 실제 구매이력 기반 자주 사는 카테고리 (GET /api/purchases/top-categories) */}
+      {topCategories.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+          <span className="shrink-0 text-xs text-muted-foreground">자주 사는 카테고리</span>
+          {topCategories.map((c) => (
+            <Link
+              key={c.categoryL2}
+              href={`/search?keyword=${encodeURIComponent(c.categoryL2)}`}
+              className="shrink-0 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground"
+            >
+              {c.categoryL2} {c.purchaseCount}회
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* 최근 검색어 — 있을 때만 */}
       {recentSearches.length > 0 && (

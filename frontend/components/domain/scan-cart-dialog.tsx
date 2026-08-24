@@ -61,8 +61,12 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
                 <div key={p.id}>
                   {i > 0 && <div className="mb-3 border-t border-dashed border-border" />}
                   <div className="flex items-center gap-3">
-                    {/* TODO: 실제 상품 이미지 있으면 이 자리에 렌더링 */}
-                    <div className="h-10 w-10 shrink-0 rounded-sm border border-border bg-muted" />
+                    {/* ✅ 담을 때 저장된 상품 이미지(CartProduct.image) 사용 */}
+                    {p.image ? (
+                      <img src={p.image} alt={p.name} className="h-10 w-10 shrink-0 rounded-sm border border-border object-cover" />
+                    ) : (
+                      <div className="h-10 w-10 shrink-0 rounded-sm border border-border bg-muted" />
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-sans text-sm">{p.name}</p>
                       <div className="flex justify-between text-muted-foreground">

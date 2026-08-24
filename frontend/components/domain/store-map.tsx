@@ -4,9 +4,9 @@
 //   보여주지 않고, 눌렀을 때만 이미지+이름+가격 팝업이 뜹니다.
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { getFloorMap } from "@/lib/map-config";
+import { getFloorMap, fetchRealFloorMap } from "@/lib/map-config";
 import { findPath, type GridPoint } from "@/lib/pathfinding";
 
 export interface MapPin {
@@ -37,6 +37,12 @@ export function StoreMap({ floorNo, pins, routeOrder }: StoreMapProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [activePinId, setActivePinId] = useState<number | null>(null);
+  // ✅ 실제 GET /api/map/floors/{floorNo} 로딩 완료 후 재계산되도록 트리거용 상태
+  const [realMapReady, setRealMapReady] = useState(false);
+
+  useEffect(() => {
+    fetchRealFloorMap(floorNo).then(() => setRealMapReady(true));
+  }, [floorNo]);
 
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   const pinchRef = useRef<{ startDist: number; startZoom: number } | null>(null);

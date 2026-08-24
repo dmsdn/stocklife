@@ -51,6 +51,14 @@ export async function logout(): Promise<void> {
 
 // ---------- 회원가입 전화번호 인증 ----------
 
+export async function checkRegistrationStatus(phoneNumber: string): Promise<{ registered: boolean }> {
+  return apiFetch<{ registered: boolean; nextAction: string }>("/api/consumers/registration-status", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber }),
+  });
+}
+
 export async function sendSignupCode(phoneNumber: string): Promise<void> {
   await apiFetch("/api/consumers/signup/send-code", {
     method: "POST",
