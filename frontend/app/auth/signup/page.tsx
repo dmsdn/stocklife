@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { toBackendPhone, sendSignupCode, verifySignupCode } from "@/lib/auth";
+import { toBackendPhone, sendSignupCode, verifySignupCode, checkRegistrationStatus } from "@/lib/auth";
 import { writeSignupDraft } from "@/lib/signup-draft";
 
 const PHONE_LENGTH = 11;
@@ -59,6 +59,12 @@ export default function SignupPage() {
     setSendCodeError(null);
     setSendingCode(true);
     try {
+      // ✅ 이미 가입된 번호면 인증번호를 보내지 않고 여기서 막습니다.
+      const { registered } = await checkRegistrationStatus(toBackendPhone(phone));
+      if (registered) {
+        setSendCodeError("이미 가입된 번호예요. 로그인해주세요.");
+        return;
+      }
       await sendSignupCode(toBackendPhone(phone));
       setCodeSent(true);
       setCode("");

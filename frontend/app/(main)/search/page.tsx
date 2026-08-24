@@ -41,6 +41,7 @@ function SearchPageInner() {
   const searchParams = useSearchParams();
 
   const [keyword, setKeyword] = useState("");
+  const [aiMode, setAiMode] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => readSearchHistory());
   const [inputFocused, setInputFocused] = useState(false);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +78,18 @@ function SearchPageInner() {
   const runSearch = async (kw?: string) => {
     setLoading(true);
     try {
+      // ✅ AI 자연어 검색 모드면 실제 POST /api/ai/search로 보냅니다.
+      if (aiMode && kw) {
+        const res = await apiFetch<{ results?: Product[] } | Product[]>("/api/ai/search", {
+          method: "POST",
+          body: JSON.stringify({ query: kw }),
+        });
+        const list = Array.isArray(res) ? res : res.results ?? [];
+        setProducts(list);
+        setLoading(false);
+        return;
+      }
+
       const qs = new URLSearchParams();
       if (kw) qs.set("keyword", kw);
       if (filters.categories[0]) qs.set("categoryL1", filters.categories[0]);
@@ -158,6 +171,15 @@ function SearchPageInner() {
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-5xl md:p-8">
+      {/* ✅ 실제 POST /api/ai/search 연동 — 켜면 자연어로 검색됨 */}
+      <button
+        type="button"
+        onClick={() => setAiMode((v) => !v)}
+        className={`mb-2 rounded-full border px-3 py-1 text-xs ${aiMode ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
+      >
+        {aiMode ? "AI 검색 켜짐" : "AI로 검색하기"}
+      </button>
+
       <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
         <Link href="/">
           <ChevronLeft size={20} />

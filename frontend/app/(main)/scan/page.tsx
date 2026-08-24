@@ -29,6 +29,7 @@ interface ScannedProduct {
   name: string;
   price: number;
   category: string;
+  image?: string;
 }
 
 // ✅ useSearchParams()가 Suspense 경계 없이 쓰이면 next build의 정적 프리렌더가 실패해서
@@ -72,12 +73,14 @@ function ScanPageInner() {
         priceKrw: number;
         finalPriceKrw?: number;
         categoryL1?: string;
+        imageUrl?: string | null;
       }>(`/api/products/barcode/${code.trim()}`, { auth: false });
       setProduct({
         skuId: found.skuId,
         name: found.name,
         price: found.finalPriceKrw ?? found.priceKrw,
         category: found.categoryL1 ?? "",
+        image: found.imageUrl ?? undefined,
       });
     } catch {
       setProduct(null);
@@ -108,6 +111,7 @@ function ScanPageInner() {
       name: product.name,
       category: product.category,
       price: product.price,
+      image: product.image,
     });
     setSessionScans((prev) => new Set(prev).add(product.skuId));
     refreshGroups();

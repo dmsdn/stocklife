@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
-import { readCartGroups, updateCartGroups, type CartGroup } from "@/lib/cart-storage";
+import { readCartGroups, updateCartGroups, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup } from "@/lib/cart-storage";
 
 export default function SavedGroupDetailPage() {
   const router = useRouter();
@@ -30,6 +30,7 @@ export default function SavedGroupDetailPage() {
       )
     );
     setGroup(next.find((g) => g.id === groupId) ?? null);
+    syncUpdateServerCart(productId, quantity); // ✅ 실제 서버 장바구니 PATCH
   };
 
   const handleToggleChecked = (productId: number) => {
@@ -48,6 +49,7 @@ export default function SavedGroupDetailPage() {
       gs.map((g) => (g.id !== groupId ? g : { ...g, products: g.products.filter((p) => p.id !== productId) }))
     );
     setGroup(next.find((g) => g.id === groupId) ?? null);
+    syncRemoveFromServerCart(productId); // ✅ 실제 서버 장바구니 DELETE
   };
 
   if (!group) {
@@ -66,10 +68,23 @@ export default function SavedGroupDetailPage() {
         <Link href="/saved">
           <ChevronLeft size={20} />
         </Link>
-        <div>
+        <div className="flex-1">
           <p className="text-base font-medium">{group.title}</p>
           <p className="text-xs text-muted-foreground">{group.products.length}개 · {total.toLocaleString()}원</p>
         </div>
+        <button
+          type="button"
+          aria-label="리스트 삭제"
+          onClick={() => {
+            if (confirm(`"${group.title}" 리스트를 삭제할까요?`)) {
+              deleteCartGroup(group.id);
+              router.push("/saved");
+            }
+          }}
+          className="text-muted-foreground"
+        >
+          <Trash2 size={18} />
+        </button>
       </div>
 
       <div className="divide-y divide-border">

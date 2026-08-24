@@ -18,6 +18,24 @@ import {
   ListChecks,
   Square,
 } from "lucide-react";
+
+// ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
+//   비슷한 상품을 찾아옵니다.
+interface PhotoSearchResult {
+  productName?: string;
+  results?: { skuId: number; productName: string }[];
+}
+async function sendPhotoSearch(file: File): Promise<PhotoSearchResult | null> {
+  try {
+    const form = new FormData();
+    form.append("photo", file);
+    const res = await fetch("/api/ai/photo-search", { method: "POST", body: form });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 import { apiFetch, getAccessToken } from "@/lib/api-client";
 import {
   getOrCreateSessionId,
@@ -202,6 +220,17 @@ export function AiChatBody({
           kind,
         },
       ]);
+
+      // 카메라/이미지는 실제로 서버에 보내서 비슷한 상품을 찾아옵니다.
+      if (kind === "camera" || kind === "image") {
+        sendPhotoSearch(file).then((result) => {
+          if (!result) return;
+          const found = result.productName ?? result.results?.[0]?.productName;
+          if (found) {
+            setTurns((prev) => [...prev, { role: "assistant", content: `사진에서 "${found}"와(과) 비슷한 상품을 찾았어요.` }]);
+          }
+        });
+      }
 
       e.target.value = "";
       setAttachOpen(false);

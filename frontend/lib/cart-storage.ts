@@ -1,7 +1,40 @@
 // lib/cart-storage.ts
-// ⚠ 저장(saved) 화면 전용 로컬 목업 스토리지. 실제 백엔드 장바구니(GET /api/cart)와는
-//   별개입니다 — 지금은 검색·스캔·저장 화면이 전부 이 스토리지 하나를 공유합니다.
+// ✅ 로컬 저장이 기본이지만, 이제 실제 서버 장바구니(POST /api/cart)에도 같이 저장합니다
+//   (fire-and-forget — 서버 저장 실패해도 화면엔 영향 없음).
 "use client";
+
+import { apiFetch, getAccessToken } from "./api-client";
+import { getClientId } from "./client-id";
+
+function cartHeaders(): Record<string, string> {
+  return getAccessToken() ? {} : { "X-Session-Id": getClientId() };
+}
+
+function syncAddToServerCart(skuId: number) {
+  apiFetch("/api/cart", {
+    method: "POST",
+    headers: cartHeaders(),
+    body: JSON.stringify({ skuId, quantity: 1 }),
+  }).catch(() => {});
+}
+
+/** ✅ 실제 서버 장바구니 수량 변경(PATCH). cartItemId는 서버 응답 기준이 아니라 로컬
+ *  skuId를 그대로 씁니다 — 서버-로컬 id가 정확히 매핑되어 있지 않아 최선의 동기화입니다. */
+export function syncUpdateServerCart(skuId: number, quantity: number) {
+  apiFetch(`/api/cart/${skuId}`, {
+    method: "PATCH",
+    headers: cartHeaders(),
+    body: JSON.stringify({ quantity }),
+  }).catch(() => {});
+}
+
+/** ✅ 실제 서버 장바구니 삭제(DELETE) */
+export function syncRemoveFromServerCart(skuId: number) {
+  apiFetch(`/api/cart/${skuId}`, {
+    method: "DELETE",
+    headers: cartHeaders(),
+  }).catch(() => {});
+}
 
 export interface CartProduct {
   id: number;
@@ -120,6 +153,7 @@ export function addProductToCartGroup(
     };
   });
   writeCartGroups(nextGroups);
+  syncAddToServerCart(product.id);
   return nextGroups;
 }
 
@@ -137,6 +171,16 @@ export function createCartGroup(title: string) {
   const nextGroups = [...groups, newGroup];
   writeCartGroups(nextGroups);
   return newGroup;
+}
+
+/** ✅ 리스트(그룹) 통째로 삭제 — 안에 담긴 상품들도 서버 장바구니에서 같이 제거 */
+export function deleteCartGroup(groupId: number) {
+  const groups = readCartGroups();
+  const target = groups.find((g) => g.id === groupId);
+  target?.products.forEach((p) => syncRemoveFromServerCart(p.id));
+  const nextGroups = groups.filter((g) => g.id !== groupId);
+  writeCartGroups(nextGroups);
+  return nextGroups;
 }
 
 export function updateCartGroups(updater: (groups: CartGroup[]) => CartGroup[]) {
