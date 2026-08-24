@@ -190,10 +190,14 @@ def run_chat(message: str,
         # 응답 블록 훑기
         # 한 응답(LLM 1번 호출) 안에 여러 블록이 섞여 들어올 수 있는데, 블록 마다 type이 있고, 그 type에 따라 할 일이 갈림
         last_text = None
+        text_parts = []                 # 한 응답의 text 블록 조각들(순서대로)
         tool_calls = []
         for block in response.content:
             if block.type == "text":
-                last_text = block.text
+                # 덮어쓰지 않고 모은다. 블록 경계가 낱말 한가운데("6,900원"|"으로")에
+                # 떨어지므로 구분자 없이 붙여야 원문이 복원된다.
+                text_parts.append(block.text)
+                last_text = "".join(text_parts)
             elif block.type == "web_search_tool_result":
                 ledgers["web"].extend(_harvest_web_results(block))          # append를 쓰면 리스트안에 리스트가 들어감. 검색결과가 여러건이므로 extend 사용
             elif block.type == "tool_use":
@@ -245,9 +249,9 @@ def run_chat(message: str,
             tools=_CACHED_TOOLS,  # 대화에 tool 블록이 있어 목록은 필수
             tool_choice={"type": "none"},
         )
-        for block in response.content:
-            if block.type == "text":
-                reply = block.text
+        landing_parts = [b.text for b in response.content if b.type == "text"]
+        if landing_parts:
+            reply = "".join(landing_parts)
         trace.append({"turn": config.MAX_TURNS, "stop_reason": "forced_landing", "tools": [],
                       "web_results": len(ledgers["web"])})
 
