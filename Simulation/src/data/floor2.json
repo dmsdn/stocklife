@@ -1,0 +1,6614 @@
+{
+ "floor": 2,
+ "floorLabel": "2F",
+ "gridWidth": 54,
+ "gridHeight": 43,
+ "pitchPx": 20,
+ "zones": [
+  {
+   "zoneId": "F2-A",
+   "letter": "A",
+   "label": "반려용품 구역",
+   "color": "#bce0c0"
+  },
+  {
+   "zoneId": "F2-B",
+   "letter": "B",
+   "label": "뷰티·헬스 구역",
+   "color": "#f5b4b8"
+  },
+  {
+   "zoneId": "F2-C",
+   "letter": "C",
+   "label": "수납·생활잡화 구역",
+   "color": "#f2ceb5"
+  },
+  {
+   "zoneId": "F2-D",
+   "letter": "D",
+   "label": "화장지·위생 구역",
+   "color": "#edecbc"
+  },
+  {
+   "zoneId": "F2-E",
+   "letter": "E",
+   "label": "주방용품 구역",
+   "color": "#d4cfe9"
+  },
+  {
+   "zoneId": "F2-F",
+   "letter": "F",
+   "label": "세탁·청소 구역",
+   "color": "#c7e2ed"
+  }
+ ],
+ "locations": [
+  {
+   "locationId": "F2-A-R01-B01-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 1,
+   "x": 42,
+   "y": 26
+  },
+  {
+   "locationId": "F2-A-R01-B02-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 2,
+   "x": 43,
+   "y": 26
+  },
+  {
+   "locationId": "F2-A-R01-B03-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 3,
+   "x": 42,
+   "y": 27
+  },
+  {
+   "locationId": "F2-A-R01-B04-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 4,
+   "x": 43,
+   "y": 27
+  },
+  {
+   "locationId": "F2-A-R01-B05-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 5,
+   "x": 42,
+   "y": 28
+  },
+  {
+   "locationId": "F2-A-R01-B06-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 6,
+   "x": 43,
+   "y": 28
+  },
+  {
+   "locationId": "F2-A-R01-B07-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 7,
+   "x": 42,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R01-B08-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 8,
+   "x": 43,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R01-B09-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 9,
+   "x": 42,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R01-B10-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 10,
+   "x": 43,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R01-B11-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 11,
+   "x": 42,
+   "y": 31
+  },
+  {
+   "locationId": "F2-A-R01-B12-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 12,
+   "x": 43,
+   "y": 31
+  },
+  {
+   "locationId": "F2-A-R01-B13-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 13,
+   "x": 42,
+   "y": 32
+  },
+  {
+   "locationId": "F2-A-R01-B14-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 14,
+   "x": 43,
+   "y": 32
+  },
+  {
+   "locationId": "F2-A-R01-B15-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 15,
+   "x": 42,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R01-B16-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 16,
+   "x": 43,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R01-B17-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 17,
+   "x": 42,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R01-B18-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 18,
+   "x": 43,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R01-B19-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 19,
+   "x": 42,
+   "y": 35
+  },
+  {
+   "locationId": "F2-A-R01-B20-L2",
+   "zoneId": "F2-A",
+   "rack": 1,
+   "bay": 20,
+   "x": 43,
+   "y": 35
+  },
+  {
+   "locationId": "F2-A-R02-B01-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 1,
+   "x": 25,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B02-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 2,
+   "x": 26,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B03-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 3,
+   "x": 27,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B04-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 4,
+   "x": 28,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B05-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 5,
+   "x": 29,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B06-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 6,
+   "x": 30,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B07-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 7,
+   "x": 31,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B08-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 8,
+   "x": 32,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B09-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 9,
+   "x": 33,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B10-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 10,
+   "x": 34,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B11-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 11,
+   "x": 35,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B12-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 12,
+   "x": 36,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B13-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 13,
+   "x": 37,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B14-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 14,
+   "x": 38,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B15-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 15,
+   "x": 39,
+   "y": 29
+  },
+  {
+   "locationId": "F2-A-R02-B16-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 16,
+   "x": 25,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B17-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 17,
+   "x": 26,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B18-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 18,
+   "x": 27,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B19-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 19,
+   "x": 28,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B20-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 20,
+   "x": 29,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B21-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 21,
+   "x": 30,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B22-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 22,
+   "x": 31,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B23-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 23,
+   "x": 32,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B24-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 24,
+   "x": 33,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B25-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 25,
+   "x": 34,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B26-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 26,
+   "x": 35,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B27-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 27,
+   "x": 36,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B28-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 28,
+   "x": 37,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B29-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 29,
+   "x": 38,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R02-B30-L2",
+   "zoneId": "F2-A",
+   "rack": 2,
+   "bay": 30,
+   "x": 39,
+   "y": 30
+  },
+  {
+   "locationId": "F2-A-R03-B01-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 1,
+   "x": 25,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B02-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 2,
+   "x": 26,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B03-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 3,
+   "x": 27,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B04-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 4,
+   "x": 28,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B05-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 5,
+   "x": 29,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B06-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 6,
+   "x": 30,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B07-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 7,
+   "x": 31,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B08-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 8,
+   "x": 32,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B09-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 9,
+   "x": 33,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B10-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 10,
+   "x": 34,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B11-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 11,
+   "x": 35,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B12-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 12,
+   "x": 36,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B13-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 13,
+   "x": 37,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B14-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 14,
+   "x": 38,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B15-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 15,
+   "x": 39,
+   "y": 33
+  },
+  {
+   "locationId": "F2-A-R03-B16-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 16,
+   "x": 25,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B17-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 17,
+   "x": 26,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B18-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 18,
+   "x": 27,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B19-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 19,
+   "x": 28,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B20-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 20,
+   "x": 29,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B21-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 21,
+   "x": 30,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B22-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 22,
+   "x": 31,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B23-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 23,
+   "x": 32,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B24-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 24,
+   "x": 33,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B25-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 25,
+   "x": 34,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B26-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 26,
+   "x": 35,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B27-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 27,
+   "x": 36,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B28-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 28,
+   "x": 37,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B29-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 29,
+   "x": 38,
+   "y": 34
+  },
+  {
+   "locationId": "F2-A-R03-B30-L2",
+   "zoneId": "F2-A",
+   "rack": 3,
+   "bay": 30,
+   "x": 39,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R01-B01-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 1,
+   "x": 2,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B02-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 2,
+   "x": 3,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B03-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 3,
+   "x": 4,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B04-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 4,
+   "x": 5,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B05-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 5,
+   "x": 6,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B06-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 6,
+   "x": 7,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B07-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 7,
+   "x": 8,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B08-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 8,
+   "x": 9,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B09-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 9,
+   "x": 10,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B10-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 10,
+   "x": 11,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B11-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 11,
+   "x": 12,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B12-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 12,
+   "x": 13,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B13-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 13,
+   "x": 14,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B14-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 14,
+   "x": 15,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B15-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 15,
+   "x": 16,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B16-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 16,
+   "x": 17,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B17-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 17,
+   "x": 18,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B18-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 18,
+   "x": 19,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B19-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 19,
+   "x": 20,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B20-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 20,
+   "x": 21,
+   "y": 26
+  },
+  {
+   "locationId": "F2-B-R01-B21-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 21,
+   "x": 2,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B22-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 22,
+   "x": 3,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B23-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 23,
+   "x": 4,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B24-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 24,
+   "x": 5,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B25-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 25,
+   "x": 6,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B26-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 26,
+   "x": 7,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B27-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 27,
+   "x": 8,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B28-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 28,
+   "x": 9,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B29-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 29,
+   "x": 10,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B30-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 30,
+   "x": 11,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B31-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 31,
+   "x": 12,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B32-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 32,
+   "x": 13,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B33-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 33,
+   "x": 14,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B34-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 34,
+   "x": 15,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B35-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 35,
+   "x": 16,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B36-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 36,
+   "x": 17,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B37-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 37,
+   "x": 18,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B38-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 38,
+   "x": 19,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B39-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 39,
+   "x": 20,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R01-B40-L2",
+   "zoneId": "F2-B",
+   "rack": 1,
+   "bay": 40,
+   "x": 21,
+   "y": 27
+  },
+  {
+   "locationId": "F2-B-R02-B01-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 1,
+   "x": 2,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B02-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 2,
+   "x": 3,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B03-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 3,
+   "x": 4,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B04-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 4,
+   "x": 5,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B05-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 5,
+   "x": 6,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B06-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 6,
+   "x": 7,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B07-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 7,
+   "x": 8,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B08-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 8,
+   "x": 9,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B09-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 9,
+   "x": 10,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B10-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 10,
+   "x": 11,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B11-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 11,
+   "x": 12,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B12-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 12,
+   "x": 13,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B13-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 13,
+   "x": 14,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B14-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 14,
+   "x": 15,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B15-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 15,
+   "x": 16,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B16-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 16,
+   "x": 17,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B17-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 17,
+   "x": 18,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B18-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 18,
+   "x": 19,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B19-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 19,
+   "x": 20,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B20-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 20,
+   "x": 21,
+   "y": 29
+  },
+  {
+   "locationId": "F2-B-R02-B21-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 21,
+   "x": 2,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B22-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 22,
+   "x": 3,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B23-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 23,
+   "x": 4,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B24-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 24,
+   "x": 5,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B25-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 25,
+   "x": 6,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B26-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 26,
+   "x": 7,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B27-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 27,
+   "x": 8,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B28-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 28,
+   "x": 9,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B29-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 29,
+   "x": 10,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B30-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 30,
+   "x": 11,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B31-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 31,
+   "x": 12,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B32-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 32,
+   "x": 13,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B33-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 33,
+   "x": 14,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B34-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 34,
+   "x": 15,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B35-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 35,
+   "x": 16,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B36-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 36,
+   "x": 17,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B37-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 37,
+   "x": 18,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B38-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 38,
+   "x": 19,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B39-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 39,
+   "x": 20,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R02-B40-L2",
+   "zoneId": "F2-B",
+   "rack": 2,
+   "bay": 40,
+   "x": 21,
+   "y": 30
+  },
+  {
+   "locationId": "F2-B-R03-B01-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 1,
+   "x": 2,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B02-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 2,
+   "x": 3,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B03-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 3,
+   "x": 4,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B04-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 4,
+   "x": 5,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B05-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 5,
+   "x": 6,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B06-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 6,
+   "x": 7,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B07-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 7,
+   "x": 8,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B08-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 8,
+   "x": 9,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B09-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 9,
+   "x": 10,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B10-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 10,
+   "x": 11,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B11-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 11,
+   "x": 12,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B12-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 12,
+   "x": 13,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B13-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 13,
+   "x": 14,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B14-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 14,
+   "x": 15,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B15-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 15,
+   "x": 16,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B16-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 16,
+   "x": 17,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B17-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 17,
+   "x": 18,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B18-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 18,
+   "x": 19,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B19-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 19,
+   "x": 20,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B20-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 20,
+   "x": 21,
+   "y": 33
+  },
+  {
+   "locationId": "F2-B-R03-B21-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 21,
+   "x": 2,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B22-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 22,
+   "x": 3,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B23-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 23,
+   "x": 4,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B24-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 24,
+   "x": 5,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B25-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 25,
+   "x": 6,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B26-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 26,
+   "x": 7,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B27-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 27,
+   "x": 8,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B28-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 28,
+   "x": 9,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B29-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 29,
+   "x": 10,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B30-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 30,
+   "x": 11,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B31-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 31,
+   "x": 12,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B32-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 32,
+   "x": 13,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B33-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 33,
+   "x": 14,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B34-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 34,
+   "x": 15,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B35-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 35,
+   "x": 16,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B36-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 36,
+   "x": 17,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B37-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 37,
+   "x": 18,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B38-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 38,
+   "x": 19,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B39-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 39,
+   "x": 20,
+   "y": 34
+  },
+  {
+   "locationId": "F2-B-R03-B40-L2",
+   "zoneId": "F2-B",
+   "rack": 3,
+   "bay": 40,
+   "x": 21,
+   "y": 34
+  },
+  {
+   "locationId": "F2-C-R01-B01-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 1,
+   "x": 25,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B02-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 2,
+   "x": 26,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B03-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 3,
+   "x": 27,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B04-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 4,
+   "x": 28,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B05-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 5,
+   "x": 29,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B06-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 6,
+   "x": 30,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B07-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 7,
+   "x": 31,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B08-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 8,
+   "x": 32,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B09-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 9,
+   "x": 33,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B10-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 10,
+   "x": 34,
+   "y": 18
+  },
+  {
+   "locationId": "F2-C-R01-B11-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 11,
+   "x": 25,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B12-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 12,
+   "x": 26,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B13-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 13,
+   "x": 27,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B14-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 14,
+   "x": 28,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B15-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 15,
+   "x": 29,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B16-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 16,
+   "x": 30,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B17-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 17,
+   "x": 31,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B18-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 18,
+   "x": 32,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B19-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 19,
+   "x": 33,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R01-B20-L2",
+   "zoneId": "F2-C",
+   "rack": 1,
+   "bay": 20,
+   "x": 34,
+   "y": 19
+  },
+  {
+   "locationId": "F2-C-R02-B01-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 1,
+   "x": 25,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B02-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 2,
+   "x": 26,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B03-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 3,
+   "x": 27,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B04-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 4,
+   "x": 28,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B05-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 5,
+   "x": 29,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B06-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 6,
+   "x": 30,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B07-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 7,
+   "x": 31,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B08-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 8,
+   "x": 32,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B09-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 9,
+   "x": 33,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B10-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 10,
+   "x": 34,
+   "y": 21
+  },
+  {
+   "locationId": "F2-C-R02-B11-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 11,
+   "x": 25,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B12-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 12,
+   "x": 26,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B13-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 13,
+   "x": 27,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B14-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 14,
+   "x": 28,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B15-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 15,
+   "x": 29,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B16-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 16,
+   "x": 30,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B17-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 17,
+   "x": 31,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B18-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 18,
+   "x": 32,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B19-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 19,
+   "x": 33,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R02-B20-L2",
+   "zoneId": "F2-C",
+   "rack": 2,
+   "bay": 20,
+   "x": 34,
+   "y": 22
+  },
+  {
+   "locationId": "F2-C-R03-B01-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 1,
+   "x": 25,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B02-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 2,
+   "x": 26,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B03-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 3,
+   "x": 27,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B04-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 4,
+   "x": 28,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B05-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 5,
+   "x": 29,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B06-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 6,
+   "x": 30,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B07-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 7,
+   "x": 31,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B08-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 8,
+   "x": 32,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B09-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 9,
+   "x": 33,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B10-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 10,
+   "x": 34,
+   "y": 25
+  },
+  {
+   "locationId": "F2-C-R03-B11-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 11,
+   "x": 25,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B12-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 12,
+   "x": 26,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B13-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 13,
+   "x": 27,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B14-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 14,
+   "x": 28,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B15-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 15,
+   "x": 29,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B16-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 16,
+   "x": 30,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B17-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 17,
+   "x": 31,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B18-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 18,
+   "x": 32,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B19-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 19,
+   "x": 33,
+   "y": 26
+  },
+  {
+   "locationId": "F2-C-R03-B20-L2",
+   "zoneId": "F2-C",
+   "rack": 3,
+   "bay": 20,
+   "x": 34,
+   "y": 26
+  },
+  {
+   "locationId": "F2-D-R01-B01-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 1,
+   "x": 2,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B02-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 2,
+   "x": 3,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B03-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 3,
+   "x": 4,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B04-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 4,
+   "x": 5,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B05-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 5,
+   "x": 6,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B06-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 6,
+   "x": 7,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B07-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 7,
+   "x": 8,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B08-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 8,
+   "x": 9,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B09-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 9,
+   "x": 10,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B10-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 10,
+   "x": 11,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B11-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 11,
+   "x": 12,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B12-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 12,
+   "x": 13,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B13-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 13,
+   "x": 14,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B14-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 14,
+   "x": 15,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B15-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 15,
+   "x": 16,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B16-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 16,
+   "x": 17,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B17-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 17,
+   "x": 18,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B18-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 18,
+   "x": 19,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B19-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 19,
+   "x": 20,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B20-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 20,
+   "x": 21,
+   "y": 18
+  },
+  {
+   "locationId": "F2-D-R01-B21-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 21,
+   "x": 2,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B22-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 22,
+   "x": 3,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B23-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 23,
+   "x": 4,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B24-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 24,
+   "x": 5,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B25-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 25,
+   "x": 6,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B26-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 26,
+   "x": 7,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B27-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 27,
+   "x": 8,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B28-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 28,
+   "x": 9,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B29-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 29,
+   "x": 10,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B30-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 30,
+   "x": 11,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B31-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 31,
+   "x": 12,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B32-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 32,
+   "x": 13,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B33-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 33,
+   "x": 14,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B34-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 34,
+   "x": 15,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B35-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 35,
+   "x": 16,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B36-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 36,
+   "x": 17,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B37-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 37,
+   "x": 18,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B38-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 38,
+   "x": 19,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B39-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 39,
+   "x": 20,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R01-B40-L2",
+   "zoneId": "F2-D",
+   "rack": 1,
+   "bay": 40,
+   "x": 21,
+   "y": 19
+  },
+  {
+   "locationId": "F2-D-R02-B01-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 1,
+   "x": 2,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B02-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 2,
+   "x": 3,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B03-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 3,
+   "x": 4,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B04-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 4,
+   "x": 5,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B05-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 5,
+   "x": 6,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B06-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 6,
+   "x": 7,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B07-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 7,
+   "x": 8,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B08-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 8,
+   "x": 9,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B09-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 9,
+   "x": 10,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B10-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 10,
+   "x": 11,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B11-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 11,
+   "x": 12,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B12-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 12,
+   "x": 13,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B13-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 13,
+   "x": 14,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B14-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 14,
+   "x": 15,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B15-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 15,
+   "x": 16,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B16-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 16,
+   "x": 17,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B17-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 17,
+   "x": 18,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B18-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 18,
+   "x": 19,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B19-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 19,
+   "x": 20,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B20-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 20,
+   "x": 21,
+   "y": 21
+  },
+  {
+   "locationId": "F2-D-R02-B21-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 21,
+   "x": 2,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B22-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 22,
+   "x": 3,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B23-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 23,
+   "x": 4,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B24-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 24,
+   "x": 5,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B25-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 25,
+   "x": 6,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B26-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 26,
+   "x": 7,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B27-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 27,
+   "x": 8,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B28-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 28,
+   "x": 9,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B29-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 29,
+   "x": 10,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B30-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 30,
+   "x": 11,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B31-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 31,
+   "x": 12,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B32-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 32,
+   "x": 13,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B33-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 33,
+   "x": 14,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B34-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 34,
+   "x": 15,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B35-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 35,
+   "x": 16,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B36-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 36,
+   "x": 17,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B37-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 37,
+   "x": 18,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B38-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 38,
+   "x": 19,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B39-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 39,
+   "x": 20,
+   "y": 22
+  },
+  {
+   "locationId": "F2-D-R02-B40-L2",
+   "zoneId": "F2-D",
+   "rack": 2,
+   "bay": 40,
+   "x": 21,
+   "y": 22
+  },
+  {
+   "locationId": "F2-E-R01-B01-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 1,
+   "x": 22,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B02-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 2,
+   "x": 23,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B03-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 3,
+   "x": 24,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B04-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 4,
+   "x": 25,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B05-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 5,
+   "x": 26,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B06-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 6,
+   "x": 27,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B07-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 7,
+   "x": 28,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B08-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 8,
+   "x": 29,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B09-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 9,
+   "x": 30,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B10-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 10,
+   "x": 31,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B11-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 11,
+   "x": 32,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B12-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 12,
+   "x": 33,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B13-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 13,
+   "x": 34,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B14-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 14,
+   "x": 35,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B15-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 15,
+   "x": 36,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B16-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 16,
+   "x": 37,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B17-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 17,
+   "x": 38,
+   "y": 7
+  },
+  {
+   "locationId": "F2-E-R01-B18-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 18,
+   "x": 22,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B19-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 19,
+   "x": 23,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B20-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 20,
+   "x": 24,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B21-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 21,
+   "x": 25,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B22-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 22,
+   "x": 26,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B23-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 23,
+   "x": 27,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B24-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 24,
+   "x": 28,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B25-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 25,
+   "x": 29,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B26-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 26,
+   "x": 30,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B27-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 27,
+   "x": 31,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B28-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 28,
+   "x": 32,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B29-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 29,
+   "x": 33,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B30-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 30,
+   "x": 34,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B31-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 31,
+   "x": 35,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B32-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 32,
+   "x": 36,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B33-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 33,
+   "x": 37,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R01-B34-L2",
+   "zoneId": "F2-E",
+   "rack": 1,
+   "bay": 34,
+   "x": 38,
+   "y": 8
+  },
+  {
+   "locationId": "F2-E-R02-B01-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 1,
+   "x": 22,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B02-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 2,
+   "x": 23,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B03-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 3,
+   "x": 24,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B04-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 4,
+   "x": 25,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B05-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 5,
+   "x": 26,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B06-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 6,
+   "x": 27,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B07-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 7,
+   "x": 28,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B08-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 8,
+   "x": 29,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B09-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 9,
+   "x": 30,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B10-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 10,
+   "x": 31,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B11-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 11,
+   "x": 32,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B12-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 12,
+   "x": 33,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B13-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 13,
+   "x": 34,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B14-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 14,
+   "x": 35,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B15-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 15,
+   "x": 36,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B16-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 16,
+   "x": 37,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B17-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 17,
+   "x": 38,
+   "y": 10
+  },
+  {
+   "locationId": "F2-E-R02-B18-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 18,
+   "x": 22,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B19-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 19,
+   "x": 23,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B20-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 20,
+   "x": 24,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B21-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 21,
+   "x": 25,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B22-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 22,
+   "x": 26,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B23-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 23,
+   "x": 27,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B24-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 24,
+   "x": 28,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B25-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 25,
+   "x": 29,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B26-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 26,
+   "x": 30,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B27-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 27,
+   "x": 31,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B28-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 28,
+   "x": 32,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B29-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 29,
+   "x": 33,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B30-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 30,
+   "x": 34,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B31-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 31,
+   "x": 35,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B32-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 32,
+   "x": 36,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B33-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 33,
+   "x": 37,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R02-B34-L2",
+   "zoneId": "F2-E",
+   "rack": 2,
+   "bay": 34,
+   "x": 38,
+   "y": 11
+  },
+  {
+   "locationId": "F2-E-R03-B01-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 1,
+   "x": 22,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B02-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 2,
+   "x": 23,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B03-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 3,
+   "x": 24,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B04-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 4,
+   "x": 25,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B05-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 5,
+   "x": 26,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B06-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 6,
+   "x": 27,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B07-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 7,
+   "x": 28,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B08-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 8,
+   "x": 29,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B09-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 9,
+   "x": 30,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B10-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 10,
+   "x": 31,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B11-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 11,
+   "x": 32,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B12-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 12,
+   "x": 33,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B13-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 13,
+   "x": 34,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B14-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 14,
+   "x": 35,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B15-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 15,
+   "x": 36,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B16-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 16,
+   "x": 37,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B17-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 17,
+   "x": 38,
+   "y": 13
+  },
+  {
+   "locationId": "F2-E-R03-B18-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 18,
+   "x": 22,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B19-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 19,
+   "x": 23,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B20-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 20,
+   "x": 24,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B21-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 21,
+   "x": 25,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B22-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 22,
+   "x": 26,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B23-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 23,
+   "x": 27,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B24-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 24,
+   "x": 28,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B25-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 25,
+   "x": 29,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B26-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 26,
+   "x": 30,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B27-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 27,
+   "x": 31,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B28-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 28,
+   "x": 32,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B29-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 29,
+   "x": 33,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B30-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 30,
+   "x": 34,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B31-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 31,
+   "x": 35,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B32-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 32,
+   "x": 36,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B33-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 33,
+   "x": 37,
+   "y": 14
+  },
+  {
+   "locationId": "F2-E-R03-B34-L2",
+   "zoneId": "F2-E",
+   "rack": 3,
+   "bay": 34,
+   "x": 38,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R01-B01-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 1,
+   "x": 2,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B02-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 2,
+   "x": 3,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B03-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 3,
+   "x": 4,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B04-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 4,
+   "x": 5,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B05-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 5,
+   "x": 6,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B06-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 6,
+   "x": 7,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B07-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 7,
+   "x": 8,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B08-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 8,
+   "x": 9,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B09-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 9,
+   "x": 10,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B10-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 10,
+   "x": 11,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B11-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 11,
+   "x": 12,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B12-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 12,
+   "x": 13,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B13-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 13,
+   "x": 14,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B14-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 14,
+   "x": 15,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B15-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 15,
+   "x": 16,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B16-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 16,
+   "x": 17,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B17-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 17,
+   "x": 18,
+   "y": 7
+  },
+  {
+   "locationId": "F2-F-R01-B18-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 18,
+   "x": 2,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B19-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 19,
+   "x": 3,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B20-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 20,
+   "x": 4,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B21-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 21,
+   "x": 5,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B22-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 22,
+   "x": 6,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B23-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 23,
+   "x": 7,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B24-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 24,
+   "x": 8,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B25-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 25,
+   "x": 9,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B26-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 26,
+   "x": 10,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B27-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 27,
+   "x": 11,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B28-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 28,
+   "x": 12,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B29-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 29,
+   "x": 13,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B30-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 30,
+   "x": 14,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B31-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 31,
+   "x": 15,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B32-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 32,
+   "x": 16,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B33-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 33,
+   "x": 17,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R01-B34-L2",
+   "zoneId": "F2-F",
+   "rack": 1,
+   "bay": 34,
+   "x": 18,
+   "y": 8
+  },
+  {
+   "locationId": "F2-F-R02-B01-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 1,
+   "x": 2,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B02-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 2,
+   "x": 3,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B03-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 3,
+   "x": 4,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B04-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 4,
+   "x": 5,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B05-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 5,
+   "x": 6,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B06-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 6,
+   "x": 7,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B07-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 7,
+   "x": 8,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B08-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 8,
+   "x": 9,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B09-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 9,
+   "x": 10,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B10-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 10,
+   "x": 11,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B11-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 11,
+   "x": 12,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B12-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 12,
+   "x": 13,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B13-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 13,
+   "x": 14,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B14-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 14,
+   "x": 15,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B15-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 15,
+   "x": 16,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B16-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 16,
+   "x": 17,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B17-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 17,
+   "x": 18,
+   "y": 10
+  },
+  {
+   "locationId": "F2-F-R02-B18-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 18,
+   "x": 2,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B19-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 19,
+   "x": 3,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B20-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 20,
+   "x": 4,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B21-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 21,
+   "x": 5,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B22-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 22,
+   "x": 6,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B23-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 23,
+   "x": 7,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B24-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 24,
+   "x": 8,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B25-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 25,
+   "x": 9,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B26-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 26,
+   "x": 10,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B27-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 27,
+   "x": 11,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B28-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 28,
+   "x": 12,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B29-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 29,
+   "x": 13,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B30-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 30,
+   "x": 14,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B31-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 31,
+   "x": 15,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B32-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 32,
+   "x": 16,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B33-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 33,
+   "x": 17,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R02-B34-L2",
+   "zoneId": "F2-F",
+   "rack": 2,
+   "bay": 34,
+   "x": 18,
+   "y": 11
+  },
+  {
+   "locationId": "F2-F-R03-B01-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 1,
+   "x": 2,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B02-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 2,
+   "x": 3,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B03-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 3,
+   "x": 4,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B04-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 4,
+   "x": 5,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B05-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 5,
+   "x": 6,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B06-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 6,
+   "x": 7,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B07-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 7,
+   "x": 8,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B08-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 8,
+   "x": 9,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B09-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 9,
+   "x": 10,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B10-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 10,
+   "x": 11,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B11-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 11,
+   "x": 12,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B12-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 12,
+   "x": 13,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B13-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 13,
+   "x": 14,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B14-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 14,
+   "x": 15,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B15-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 15,
+   "x": 16,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B16-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 16,
+   "x": 17,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B17-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 17,
+   "x": 18,
+   "y": 14
+  },
+  {
+   "locationId": "F2-F-R03-B18-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 18,
+   "x": 2,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B19-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 19,
+   "x": 3,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B20-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 20,
+   "x": 4,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B21-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 21,
+   "x": 5,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B22-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 22,
+   "x": 6,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B23-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 23,
+   "x": 7,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B24-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 24,
+   "x": 8,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B25-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 25,
+   "x": 9,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B26-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 26,
+   "x": 10,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B27-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 27,
+   "x": 11,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B28-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 28,
+   "x": 12,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B29-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 29,
+   "x": 13,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B30-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 30,
+   "x": 14,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B31-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 31,
+   "x": 15,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B32-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 32,
+   "x": 16,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B33-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 33,
+   "x": 17,
+   "y": 15
+  },
+  {
+   "locationId": "F2-F-R03-B34-L2",
+   "zoneId": "F2-F",
+   "rack": 3,
+   "bay": 34,
+   "x": 18,
+   "y": 15
+  }
+ ],
+ "occupied": [
+  [
+   2,
+   7
+  ],
+  [
+   2,
+   8
+  ],
+  [
+   2,
+   10
+  ],
+  [
+   2,
+   11
+  ],
+  [
+   2,
+   14
+  ],
+  [
+   2,
+   15
+  ],
+  [
+   2,
+   18
+  ],
+  [
+   2,
+   19
+  ],
+  [
+   2,
+   21
+  ],
+  [
+   2,
+   22
+  ],
+  [
+   2,
+   26
+  ],
+  [
+   2,
+   27
+  ],
+  [
+   2,
+   29
+  ],
+  [
+   2,
+   30
+  ],
+  [
+   2,
+   33
+  ],
+  [
+   2,
+   34
+  ],
+  [
+   3,
+   7
+  ],
+  [
+   3,
+   8
+  ],
+  [
+   3,
+   10
+  ],
+  [
+   3,
+   11
+  ],
+  [
+   3,
+   14
+  ],
+  [
+   3,
+   15
+  ],
+  [
+   3,
+   18
+  ],
+  [
+   3,
+   19
+  ],
+  [
+   3,
+   21
+  ],
+  [
+   3,
+   22
+  ],
+  [
+   3,
+   26
+  ],
+  [
+   3,
+   27
+  ],
+  [
+   3,
+   29
+  ],
+  [
+   3,
+   30
+  ],
+  [
+   3,
+   33
+  ],
+  [
+   3,
+   34
+  ],
+  [
+   4,
+   7
+  ],
+  [
+   4,
+   8
+  ],
+  [
+   4,
+   10
+  ],
+  [
+   4,
+   11
+  ],
+  [
+   4,
+   14
+  ],
+  [
+   4,
+   15
+  ],
+  [
+   4,
+   18
+  ],
+  [
+   4,
+   19
+  ],
+  [
+   4,
+   21
+  ],
+  [
+   4,
+   22
+  ],
+  [
+   4,
+   26
+  ],
+  [
+   4,
+   27
+  ],
+  [
+   4,
+   29
+  ],
+  [
+   4,
+   30
+  ],
+  [
+   4,
+   33
+  ],
+  [
+   4,
+   34
+  ],
+  [
+   5,
+   7
+  ],
+  [
+   5,
+   8
+  ],
+  [
+   5,
+   10
+  ],
+  [
+   5,
+   11
+  ],
+  [
+   5,
+   14
+  ],
+  [
+   5,
+   15
+  ],
+  [
+   5,
+   18
+  ],
+  [
+   5,
+   19
+  ],
+  [
+   5,
+   21
+  ],
+  [
+   5,
+   22
+  ],
+  [
+   5,
+   26
+  ],
+  [
+   5,
+   27
+  ],
+  [
+   5,
+   29
+  ],
+  [
+   5,
+   30
+  ],
+  [
+   5,
+   33
+  ],
+  [
+   5,
+   34
+  ],
+  [
+   6,
+   7
+  ],
+  [
+   6,
+   8
+  ],
+  [
+   6,
+   10
+  ],
+  [
+   6,
+   11
+  ],
+  [
+   6,
+   14
+  ],
+  [
+   6,
+   15
+  ],
+  [
+   6,
+   18
+  ],
+  [
+   6,
+   19
+  ],
+  [
+   6,
+   21
+  ],
+  [
+   6,
+   22
+  ],
+  [
+   6,
+   26
+  ],
+  [
+   6,
+   27
+  ],
+  [
+   6,
+   29
+  ],
+  [
+   6,
+   30
+  ],
+  [
+   6,
+   33
+  ],
+  [
+   6,
+   34
+  ],
+  [
+   7,
+   7
+  ],
+  [
+   7,
+   8
+  ],
+  [
+   7,
+   10
+  ],
+  [
+   7,
+   11
+  ],
+  [
+   7,
+   14
+  ],
+  [
+   7,
+   15
+  ],
+  [
+   7,
+   18
+  ],
+  [
+   7,
+   19
+  ],
+  [
+   7,
+   21
+  ],
+  [
+   7,
+   22
+  ],
+  [
+   7,
+   26
+  ],
+  [
+   7,
+   27
+  ],
+  [
+   7,
+   29
+  ],
+  [
+   7,
+   30
+  ],
+  [
+   7,
+   33
+  ],
+  [
+   7,
+   34
+  ],
+  [
+   8,
+   7
+  ],
+  [
+   8,
+   8
+  ],
+  [
+   8,
+   10
+  ],
+  [
+   8,
+   11
+  ],
+  [
+   8,
+   14
+  ],
+  [
+   8,
+   15
+  ],
+  [
+   8,
+   18
+  ],
+  [
+   8,
+   19
+  ],
+  [
+   8,
+   21
+  ],
+  [
+   8,
+   22
+  ],
+  [
+   8,
+   26
+  ],
+  [
+   8,
+   27
+  ],
+  [
+   8,
+   29
+  ],
+  [
+   8,
+   30
+  ],
+  [
+   8,
+   33
+  ],
+  [
+   8,
+   34
+  ],
+  [
+   9,
+   7
+  ],
+  [
+   9,
+   8
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   11
+  ],
+  [
+   9,
+   14
+  ],
+  [
+   9,
+   15
+  ],
+  [
+   9,
+   18
+  ],
+  [
+   9,
+   19
+  ],
+  [
+   9,
+   21
+  ],
+  [
+   9,
+   22
+  ],
+  [
+   9,
+   26
+  ],
+  [
+   9,
+   27
+  ],
+  [
+   9,
+   29
+  ],
+  [
+   9,
+   30
+  ],
+  [
+   9,
+   33
+  ],
+  [
+   9,
+   34
+  ],
+  [
+   10,
+   7
+  ],
+  [
+   10,
+   8
+  ],
+  [
+   10,
+   10
+  ],
+  [
+   10,
+   11
+  ],
+  [
+   10,
+   14
+  ],
+  [
+   10,
+   15
+  ],
+  [
+   10,
+   18
+  ],
+  [
+   10,
+   19
+  ],
+  [
+   10,
+   21
+  ],
+  [
+   10,
+   22
+  ],
+  [
+   10,
+   26
+  ],
+  [
+   10,
+   27
+  ],
+  [
+   10,
+   29
+  ],
+  [
+   10,
+   30
+  ],
+  [
+   10,
+   33
+  ],
+  [
+   10,
+   34
+  ],
+  [
+   11,
+   7
+  ],
+  [
+   11,
+   8
+  ],
+  [
+   11,
+   10
+  ],
+  [
+   11,
+   11
+  ],
+  [
+   11,
+   14
+  ],
+  [
+   11,
+   15
+  ],
+  [
+   11,
+   18
+  ],
+  [
+   11,
+   19
+  ],
+  [
+   11,
+   21
+  ],
+  [
+   11,
+   22
+  ],
+  [
+   11,
+   26
+  ],
+  [
+   11,
+   27
+  ],
+  [
+   11,
+   29
+  ],
+  [
+   11,
+   30
+  ],
+  [
+   11,
+   33
+  ],
+  [
+   11,
+   34
+  ],
+  [
+   12,
+   7
+  ],
+  [
+   12,
+   8
+  ],
+  [
+   12,
+   10
+  ],
+  [
+   12,
+   11
+  ],
+  [
+   12,
+   14
+  ],
+  [
+   12,
+   15
+  ],
+  [
+   12,
+   18
+  ],
+  [
+   12,
+   19
+  ],
+  [
+   12,
+   21
+  ],
+  [
+   12,
+   22
+  ],
+  [
+   12,
+   26
+  ],
+  [
+   12,
+   27
+  ],
+  [
+   12,
+   29
+  ],
+  [
+   12,
+   30
+  ],
+  [
+   12,
+   33
+  ],
+  [
+   12,
+   34
+  ],
+  [
+   13,
+   7
+  ],
+  [
+   13,
+   8
+  ],
+  [
+   13,
+   10
+  ],
+  [
+   13,
+   11
+  ],
+  [
+   13,
+   14
+  ],
+  [
+   13,
+   15
+  ],
+  [
+   13,
+   18
+  ],
+  [
+   13,
+   19
+  ],
+  [
+   13,
+   21
+  ],
+  [
+   13,
+   22
+  ],
+  [
+   13,
+   26
+  ],
+  [
+   13,
+   27
+  ],
+  [
+   13,
+   29
+  ],
+  [
+   13,
+   30
+  ],
+  [
+   13,
+   33
+  ],
+  [
+   13,
+   34
+  ],
+  [
+   14,
+   7
+  ],
+  [
+   14,
+   8
+  ],
+  [
+   14,
+   10
+  ],
+  [
+   14,
+   11
+  ],
+  [
+   14,
+   14
+  ],
+  [
+   14,
+   15
+  ],
+  [
+   14,
+   18
+  ],
+  [
+   14,
+   19
+  ],
+  [
+   14,
+   21
+  ],
+  [
+   14,
+   22
+  ],
+  [
+   14,
+   26
+  ],
+  [
+   14,
+   27
+  ],
+  [
+   14,
+   29
+  ],
+  [
+   14,
+   30
+  ],
+  [
+   14,
+   33
+  ],
+  [
+   14,
+   34
+  ],
+  [
+   15,
+   7
+  ],
+  [
+   15,
+   8
+  ],
+  [
+   15,
+   10
+  ],
+  [
+   15,
+   11
+  ],
+  [
+   15,
+   14
+  ],
+  [
+   15,
+   15
+  ],
+  [
+   15,
+   18
+  ],
+  [
+   15,
+   19
+  ],
+  [
+   15,
+   21
+  ],
+  [
+   15,
+   22
+  ],
+  [
+   15,
+   26
+  ],
+  [
+   15,
+   27
+  ],
+  [
+   15,
+   29
+  ],
+  [
+   15,
+   30
+  ],
+  [
+   15,
+   33
+  ],
+  [
+   15,
+   34
+  ],
+  [
+   16,
+   7
+  ],
+  [
+   16,
+   8
+  ],
+  [
+   16,
+   10
+  ],
+  [
+   16,
+   11
+  ],
+  [
+   16,
+   14
+  ],
+  [
+   16,
+   15
+  ],
+  [
+   16,
+   18
+  ],
+  [
+   16,
+   19
+  ],
+  [
+   16,
+   21
+  ],
+  [
+   16,
+   22
+  ],
+  [
+   16,
+   26
+  ],
+  [
+   16,
+   27
+  ],
+  [
+   16,
+   29
+  ],
+  [
+   16,
+   30
+  ],
+  [
+   16,
+   33
+  ],
+  [
+   16,
+   34
+  ],
+  [
+   17,
+   7
+  ],
+  [
+   17,
+   8
+  ],
+  [
+   17,
+   10
+  ],
+  [
+   17,
+   11
+  ],
+  [
+   17,
+   14
+  ],
+  [
+   17,
+   15
+  ],
+  [
+   17,
+   18
+  ],
+  [
+   17,
+   19
+  ],
+  [
+   17,
+   21
+  ],
+  [
+   17,
+   22
+  ],
+  [
+   17,
+   26
+  ],
+  [
+   17,
+   27
+  ],
+  [
+   17,
+   29
+  ],
+  [
+   17,
+   30
+  ],
+  [
+   17,
+   33
+  ],
+  [
+   17,
+   34
+  ],
+  [
+   18,
+   7
+  ],
+  [
+   18,
+   8
+  ],
+  [
+   18,
+   10
+  ],
+  [
+   18,
+   11
+  ],
+  [
+   18,
+   14
+  ],
+  [
+   18,
+   15
+  ],
+  [
+   18,
+   18
+  ],
+  [
+   18,
+   19
+  ],
+  [
+   18,
+   21
+  ],
+  [
+   18,
+   22
+  ],
+  [
+   18,
+   26
+  ],
+  [
+   18,
+   27
+  ],
+  [
+   18,
+   29
+  ],
+  [
+   18,
+   30
+  ],
+  [
+   18,
+   33
+  ],
+  [
+   18,
+   34
+  ],
+  [
+   19,
+   18
+  ],
+  [
+   19,
+   19
+  ],
+  [
+   19,
+   21
+  ],
+  [
+   19,
+   22
+  ],
+  [
+   19,
+   26
+  ],
+  [
+   19,
+   27
+  ],
+  [
+   19,
+   29
+  ],
+  [
+   19,
+   30
+  ],
+  [
+   19,
+   33
+  ],
+  [
+   19,
+   34
+  ],
+  [
+   20,
+   18
+  ],
+  [
+   20,
+   19
+  ],
+  [
+   20,
+   21
+  ],
+  [
+   20,
+   22
+  ],
+  [
+   20,
+   26
+  ],
+  [
+   20,
+   27
+  ],
+  [
+   20,
+   29
+  ],
+  [
+   20,
+   30
+  ],
+  [
+   20,
+   33
+  ],
+  [
+   20,
+   34
+  ],
+  [
+   21,
+   18
+  ],
+  [
+   21,
+   19
+  ],
+  [
+   21,
+   21
+  ],
+  [
+   21,
+   22
+  ],
+  [
+   21,
+   26
+  ],
+  [
+   21,
+   27
+  ],
+  [
+   21,
+   29
+  ],
+  [
+   21,
+   30
+  ],
+  [
+   21,
+   33
+  ],
+  [
+   21,
+   34
+  ],
+  [
+   22,
+   7
+  ],
+  [
+   22,
+   8
+  ],
+  [
+   22,
+   10
+  ],
+  [
+   22,
+   11
+  ],
+  [
+   22,
+   13
+  ],
+  [
+   22,
+   14
+  ],
+  [
+   23,
+   7
+  ],
+  [
+   23,
+   8
+  ],
+  [
+   23,
+   10
+  ],
+  [
+   23,
+   11
+  ],
+  [
+   23,
+   13
+  ],
+  [
+   23,
+   14
+  ],
+  [
+   24,
+   7
+  ],
+  [
+   24,
+   8
+  ],
+  [
+   24,
+   10
+  ],
+  [
+   24,
+   11
+  ],
+  [
+   24,
+   13
+  ],
+  [
+   24,
+   14
+  ],
+  [
+   25,
+   7
+  ],
+  [
+   25,
+   8
+  ],
+  [
+   25,
+   10
+  ],
+  [
+   25,
+   11
+  ],
+  [
+   25,
+   13
+  ],
+  [
+   25,
+   14
+  ],
+  [
+   25,
+   18
+  ],
+  [
+   25,
+   19
+  ],
+  [
+   25,
+   21
+  ],
+  [
+   25,
+   22
+  ],
+  [
+   25,
+   25
+  ],
+  [
+   25,
+   26
+  ],
+  [
+   25,
+   29
+  ],
+  [
+   25,
+   30
+  ],
+  [
+   25,
+   33
+  ],
+  [
+   25,
+   34
+  ],
+  [
+   26,
+   7
+  ],
+  [
+   26,
+   8
+  ],
+  [
+   26,
+   10
+  ],
+  [
+   26,
+   11
+  ],
+  [
+   26,
+   13
+  ],
+  [
+   26,
+   14
+  ],
+  [
+   26,
+   18
+  ],
+  [
+   26,
+   19
+  ],
+  [
+   26,
+   21
+  ],
+  [
+   26,
+   22
+  ],
+  [
+   26,
+   25
+  ],
+  [
+   26,
+   26
+  ],
+  [
+   26,
+   29
+  ],
+  [
+   26,
+   30
+  ],
+  [
+   26,
+   33
+  ],
+  [
+   26,
+   34
+  ],
+  [
+   27,
+   7
+  ],
+  [
+   27,
+   8
+  ],
+  [
+   27,
+   10
+  ],
+  [
+   27,
+   11
+  ],
+  [
+   27,
+   13
+  ],
+  [
+   27,
+   14
+  ],
+  [
+   27,
+   18
+  ],
+  [
+   27,
+   19
+  ],
+  [
+   27,
+   21
+  ],
+  [
+   27,
+   22
+  ],
+  [
+   27,
+   25
+  ],
+  [
+   27,
+   26
+  ],
+  [
+   27,
+   29
+  ],
+  [
+   27,
+   30
+  ],
+  [
+   27,
+   33
+  ],
+  [
+   27,
+   34
+  ],
+  [
+   28,
+   7
+  ],
+  [
+   28,
+   8
+  ],
+  [
+   28,
+   10
+  ],
+  [
+   28,
+   11
+  ],
+  [
+   28,
+   13
+  ],
+  [
+   28,
+   14
+  ],
+  [
+   28,
+   18
+  ],
+  [
+   28,
+   19
+  ],
+  [
+   28,
+   21
+  ],
+  [
+   28,
+   22
+  ],
+  [
+   28,
+   25
+  ],
+  [
+   28,
+   26
+  ],
+  [
+   28,
+   29
+  ],
+  [
+   28,
+   30
+  ],
+  [
+   28,
+   33
+  ],
+  [
+   28,
+   34
+  ],
+  [
+   29,
+   7
+  ],
+  [
+   29,
+   8
+  ],
+  [
+   29,
+   10
+  ],
+  [
+   29,
+   11
+  ],
+  [
+   29,
+   13
+  ],
+  [
+   29,
+   14
+  ],
+  [
+   29,
+   18
+  ],
+  [
+   29,
+   19
+  ],
+  [
+   29,
+   21
+  ],
+  [
+   29,
+   22
+  ],
+  [
+   29,
+   25
+  ],
+  [
+   29,
+   26
+  ],
+  [
+   29,
+   29
+  ],
+  [
+   29,
+   30
+  ],
+  [
+   29,
+   33
+  ],
+  [
+   29,
+   34
+  ],
+  [
+   30,
+   7
+  ],
+  [
+   30,
+   8
+  ],
+  [
+   30,
+   10
+  ],
+  [
+   30,
+   11
+  ],
+  [
+   30,
+   13
+  ],
+  [
+   30,
+   14
+  ],
+  [
+   30,
+   18
+  ],
+  [
+   30,
+   19
+  ],
+  [
+   30,
+   21
+  ],
+  [
+   30,
+   22
+  ],
+  [
+   30,
+   25
+  ],
+  [
+   30,
+   26
+  ],
+  [
+   30,
+   29
+  ],
+  [
+   30,
+   30
+  ],
+  [
+   30,
+   33
+  ],
+  [
+   30,
+   34
+  ],
+  [
+   31,
+   7
+  ],
+  [
+   31,
+   8
+  ],
+  [
+   31,
+   10
+  ],
+  [
+   31,
+   11
+  ],
+  [
+   31,
+   13
+  ],
+  [
+   31,
+   14
+  ],
+  [
+   31,
+   18
+  ],
+  [
+   31,
+   19
+  ],
+  [
+   31,
+   21
+  ],
+  [
+   31,
+   22
+  ],
+  [
+   31,
+   25
+  ],
+  [
+   31,
+   26
+  ],
+  [
+   31,
+   29
+  ],
+  [
+   31,
+   30
+  ],
+  [
+   31,
+   33
+  ],
+  [
+   31,
+   34
+  ],
+  [
+   32,
+   7
+  ],
+  [
+   32,
+   8
+  ],
+  [
+   32,
+   10
+  ],
+  [
+   32,
+   11
+  ],
+  [
+   32,
+   13
+  ],
+  [
+   32,
+   14
+  ],
+  [
+   32,
+   18
+  ],
+  [
+   32,
+   19
+  ],
+  [
+   32,
+   21
+  ],
+  [
+   32,
+   22
+  ],
+  [
+   32,
+   25
+  ],
+  [
+   32,
+   26
+  ],
+  [
+   32,
+   29
+  ],
+  [
+   32,
+   30
+  ],
+  [
+   32,
+   33
+  ],
+  [
+   32,
+   34
+  ],
+  [
+   33,
+   7
+  ],
+  [
+   33,
+   8
+  ],
+  [
+   33,
+   10
+  ],
+  [
+   33,
+   11
+  ],
+  [
+   33,
+   13
+  ],
+  [
+   33,
+   14
+  ],
+  [
+   33,
+   18
+  ],
+  [
+   33,
+   19
+  ],
+  [
+   33,
+   21
+  ],
+  [
+   33,
+   22
+  ],
+  [
+   33,
+   25
+  ],
+  [
+   33,
+   26
+  ],
+  [
+   33,
+   29
+  ],
+  [
+   33,
+   30
+  ],
+  [
+   33,
+   33
+  ],
+  [
+   33,
+   34
+  ],
+  [
+   34,
+   7
+  ],
+  [
+   34,
+   8
+  ],
+  [
+   34,
+   10
+  ],
+  [
+   34,
+   11
+  ],
+  [
+   34,
+   13
+  ],
+  [
+   34,
+   14
+  ],
+  [
+   34,
+   18
+  ],
+  [
+   34,
+   19
+  ],
+  [
+   34,
+   21
+  ],
+  [
+   34,
+   22
+  ],
+  [
+   34,
+   25
+  ],
+  [
+   34,
+   26
+  ],
+  [
+   34,
+   29
+  ],
+  [
+   34,
+   30
+  ],
+  [
+   34,
+   33
+  ],
+  [
+   34,
+   34
+  ],
+  [
+   35,
+   7
+  ],
+  [
+   35,
+   8
+  ],
+  [
+   35,
+   10
+  ],
+  [
+   35,
+   11
+  ],
+  [
+   35,
+   13
+  ],
+  [
+   35,
+   14
+  ],
+  [
+   35,
+   29
+  ],
+  [
+   35,
+   30
+  ],
+  [
+   35,
+   33
+  ],
+  [
+   35,
+   34
+  ],
+  [
+   36,
+   7
+  ],
+  [
+   36,
+   8
+  ],
+  [
+   36,
+   10
+  ],
+  [
+   36,
+   11
+  ],
+  [
+   36,
+   13
+  ],
+  [
+   36,
+   14
+  ],
+  [
+   36,
+   29
+  ],
+  [
+   36,
+   30
+  ],
+  [
+   36,
+   33
+  ],
+  [
+   36,
+   34
+  ],
+  [
+   37,
+   7
+  ],
+  [
+   37,
+   8
+  ],
+  [
+   37,
+   10
+  ],
+  [
+   37,
+   11
+  ],
+  [
+   37,
+   13
+  ],
+  [
+   37,
+   14
+  ],
+  [
+   37,
+   29
+  ],
+  [
+   37,
+   30
+  ],
+  [
+   37,
+   33
+  ],
+  [
+   37,
+   34
+  ],
+  [
+   38,
+   7
+  ],
+  [
+   38,
+   8
+  ],
+  [
+   38,
+   10
+  ],
+  [
+   38,
+   11
+  ],
+  [
+   38,
+   13
+  ],
+  [
+   38,
+   14
+  ],
+  [
+   38,
+   29
+  ],
+  [
+   38,
+   30
+  ],
+  [
+   38,
+   33
+  ],
+  [
+   38,
+   34
+  ],
+  [
+   39,
+   29
+  ],
+  [
+   39,
+   30
+  ],
+  [
+   39,
+   33
+  ],
+  [
+   39,
+   34
+  ],
+  [
+   42,
+   26
+  ],
+  [
+   42,
+   27
+  ],
+  [
+   42,
+   28
+  ],
+  [
+   42,
+   29
+  ],
+  [
+   42,
+   30
+  ],
+  [
+   42,
+   31
+  ],
+  [
+   42,
+   32
+  ],
+  [
+   42,
+   33
+  ],
+  [
+   42,
+   34
+  ],
+  [
+   42,
+   35
+  ],
+  [
+   43,
+   26
+  ],
+  [
+   43,
+   27
+  ],
+  [
+   43,
+   28
+  ],
+  [
+   43,
+   29
+  ],
+  [
+   43,
+   30
+  ],
+  [
+   43,
+   31
+  ],
+  [
+   43,
+   32
+  ],
+  [
+   43,
+   33
+  ],
+  [
+   43,
+   34
+  ],
+  [
+   43,
+   35
+  ]
+ ],
+ "facilities": [
+  {
+   "type": "family_restroom",
+   "x": 52,
+   "y": 19
+  },
+  {
+   "type": "restroom_male",
+   "x": 52,
+   "y": 22
+  },
+  {
+   "type": "water",
+   "x": 52,
+   "y": 25
+  },
+  {
+   "type": "restroom_female",
+   "x": 52,
+   "y": 28
+  },
+  {
+   "type": "escalator_up",
+   "x": 51,
+   "y": 37
+  },
+  {
+   "type": "escalator_down",
+   "x": 52,
+   "y": 37
+  },
+  {
+   "type": "elevator",
+   "x": 50,
+   "y": 37
+  }
+ ]
+}

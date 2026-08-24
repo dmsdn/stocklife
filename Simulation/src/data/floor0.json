@@ -1,0 +1,698 @@
+{
+ "floor": 0,
+ "floorLabel": "B1",
+ "gridWidth": 48,
+ "gridHeight": 45,
+ "pitchPx": 20,
+ "zones": [
+  {
+   "zoneId": "B1-W",
+   "letter": "W",
+   "label": "중앙창고 (백룸)",
+   "color": "#8a8a8a"
+  }
+ ],
+ "locations": [
+  {
+   "locationId": "B1-W-R01-B01-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 1,
+   "x": 5,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B02-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 2,
+   "x": 6,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B03-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 3,
+   "x": 7,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B04-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 4,
+   "x": 8,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B05-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 5,
+   "x": 9,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B06-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 6,
+   "x": 10,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B07-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 7,
+   "x": 11,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B08-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 8,
+   "x": 12,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B09-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 9,
+   "x": 13,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B10-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 10,
+   "x": 14,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B11-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 11,
+   "x": 15,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B12-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 12,
+   "x": 16,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B13-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 13,
+   "x": 17,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R01-B14-L2",
+   "zoneId": "B1-W",
+   "rack": 1,
+   "bay": 14,
+   "x": 18,
+   "y": 10
+  },
+  {
+   "locationId": "B1-W-R02-B01-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 1,
+   "x": 5,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B02-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 2,
+   "x": 6,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B03-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 3,
+   "x": 7,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B04-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 4,
+   "x": 8,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B05-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 5,
+   "x": 9,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B06-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 6,
+   "x": 10,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B07-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 7,
+   "x": 11,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B08-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 8,
+   "x": 12,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B09-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 9,
+   "x": 13,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B10-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 10,
+   "x": 14,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B11-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 11,
+   "x": 15,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B12-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 12,
+   "x": 16,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B13-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 13,
+   "x": 17,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R02-B14-L2",
+   "zoneId": "B1-W",
+   "rack": 2,
+   "bay": 14,
+   "x": 18,
+   "y": 13
+  },
+  {
+   "locationId": "B1-W-R03-B01-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 1,
+   "x": 5,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B02-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 2,
+   "x": 6,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B03-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 3,
+   "x": 7,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B04-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 4,
+   "x": 8,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B05-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 5,
+   "x": 9,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B06-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 6,
+   "x": 10,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B07-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 7,
+   "x": 11,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B08-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 8,
+   "x": 12,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B09-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 9,
+   "x": 13,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B10-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 10,
+   "x": 14,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B11-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 11,
+   "x": 15,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B12-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 12,
+   "x": 16,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B13-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 13,
+   "x": 17,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R03-B14-L2",
+   "zoneId": "B1-W",
+   "rack": 3,
+   "bay": 14,
+   "x": 18,
+   "y": 16
+  },
+  {
+   "locationId": "B1-W-R04-B01-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 1,
+   "x": 5,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B02-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 2,
+   "x": 6,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B03-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 3,
+   "x": 7,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B04-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 4,
+   "x": 8,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B05-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 5,
+   "x": 9,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B06-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 6,
+   "x": 10,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B07-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 7,
+   "x": 11,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B08-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 8,
+   "x": 12,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B09-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 9,
+   "x": 13,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B10-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 10,
+   "x": 14,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B11-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 11,
+   "x": 15,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B12-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 12,
+   "x": 16,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B13-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 13,
+   "x": 17,
+   "y": 19
+  },
+  {
+   "locationId": "B1-W-R04-B14-L2",
+   "zoneId": "B1-W",
+   "rack": 4,
+   "bay": 14,
+   "x": 18,
+   "y": 19
+  }
+ ],
+ "occupied": [
+  [
+   5,
+   10
+  ],
+  [
+   5,
+   13
+  ],
+  [
+   5,
+   16
+  ],
+  [
+   5,
+   19
+  ],
+  [
+   6,
+   10
+  ],
+  [
+   6,
+   13
+  ],
+  [
+   6,
+   16
+  ],
+  [
+   6,
+   19
+  ],
+  [
+   7,
+   10
+  ],
+  [
+   7,
+   13
+  ],
+  [
+   7,
+   16
+  ],
+  [
+   7,
+   19
+  ],
+  [
+   8,
+   10
+  ],
+  [
+   8,
+   13
+  ],
+  [
+   8,
+   16
+  ],
+  [
+   8,
+   19
+  ],
+  [
+   9,
+   10
+  ],
+  [
+   9,
+   13
+  ],
+  [
+   9,
+   16
+  ],
+  [
+   9,
+   19
+  ],
+  [
+   10,
+   10
+  ],
+  [
+   10,
+   13
+  ],
+  [
+   10,
+   16
+  ],
+  [
+   10,
+   19
+  ],
+  [
+   11,
+   10
+  ],
+  [
+   11,
+   13
+  ],
+  [
+   11,
+   16
+  ],
+  [
+   11,
+   19
+  ],
+  [
+   12,
+   10
+  ],
+  [
+   12,
+   13
+  ],
+  [
+   12,
+   16
+  ],
+  [
+   12,
+   19
+  ],
+  [
+   13,
+   10
+  ],
+  [
+   13,
+   13
+  ],
+  [
+   13,
+   16
+  ],
+  [
+   13,
+   19
+  ],
+  [
+   14,
+   10
+  ],
+  [
+   14,
+   13
+  ],
+  [
+   14,
+   16
+  ],
+  [
+   14,
+   19
+  ],
+  [
+   15,
+   10
+  ],
+  [
+   15,
+   13
+  ],
+  [
+   15,
+   16
+  ],
+  [
+   15,
+   19
+  ],
+  [
+   16,
+   10
+  ],
+  [
+   16,
+   13
+  ],
+  [
+   16,
+   16
+  ],
+  [
+   16,
+   19
+  ],
+  [
+   17,
+   10
+  ],
+  [
+   17,
+   13
+  ],
+  [
+   17,
+   16
+  ],
+  [
+   17,
+   19
+  ],
+  [
+   18,
+   10
+  ],
+  [
+   18,
+   13
+  ],
+  [
+   18,
+   16
+  ],
+  [
+   18,
+   19
+  ]
+ ],
+ "facilities": [
+  {
+   "type": "elevator",
+   "x": 44,
+   "y": 37
+  }
+ ]
+}
