@@ -2067,3 +2067,9 @@ WHERE phone_number LIKE '010-8000-%'
    OR phone_number LIKE '010-8001-%';
 
 SET SQL_SAFE_UPDATES = 1;
+
+UPDATE consumer
+
+SET phone_number = REPLACE(phone_number, '-', '')
+WHERE consumer_id > 0
+  AND phone_number LIKE '%-%';

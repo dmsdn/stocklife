@@ -3,6 +3,8 @@ package com.storeflow.consumer.controller;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.ResetPasswordRequest;
+import com.storeflow.consumer.dto.RegistrationCheckRequest;
+import com.storeflow.consumer.dto.RegistrationStatusResponse;
 import com.storeflow.consumer.dto.SignupRequest;
 import com.storeflow.consumer.service.ConsumerService;
 import com.storeflow.global.security.CurrentConsumer; // JWT에서 consumerId 꺼내는 커스텀 애노테이션 (아래 참고)
@@ -70,6 +72,18 @@ public class ConsumerController {
     public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         consumerService.resetPassword(request);
         return ResponseEntity.ok(new MessageResponse("비밀번호가 변경되었습니다."));
+    }
+
+    /**
+     * 전화번호 기준 기존 회원 여부 확인.
+     * registered=true  -> 로그인 화면
+     * registered=false -> 회원가입 화면
+     */
+    @PostMapping("/registration-status")
+    public ResponseEntity<RegistrationStatusResponse> registrationStatus(
+            @Valid @RequestBody RegistrationCheckRequest request
+    ) {
+        return ResponseEntity.ok(consumerService.getRegistrationStatus(request.getPhoneNumber()));
     }
 
     @PostMapping("/login")
