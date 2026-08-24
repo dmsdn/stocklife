@@ -3,14 +3,20 @@
 //   실제로는 서버가 매달 계산하는 값이라, 생기면 이 값만 API로 교체하면 됩니다.
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { GRADE_TIERS, calculateGrade } from "@/lib/grade";
-
-const MOCK_MONTHLY_SPEND = 68_000; // TODO: 실제 이번 달 누적 결제금액 API 연동
+import { fetchMyGrade } from "@/lib/consumer-benefits";
 
 export default function TierGuidePage() {
-  const [monthlySpend] = useState(MOCK_MONTHLY_SPEND);
+  // ✅ 실제 GET /api/consumers/grade 연동. 실패하면(API 아직 없음) 0원 기준(BASIC)으로 표시.
+  const [monthlySpend, setMonthlySpend] = useState(0);
+
+  useEffect(() => {
+    fetchMyGrade().then((g) => {
+      if (g) setMonthlySpend(g.monthlySpendAmount);
+    });
+  }, []);
   const currentTier = calculateGrade(monthlySpend);
   const currentIndex = GRADE_TIERS.findIndex((t) => t.key === currentTier.key);
   const nextTier = GRADE_TIERS[currentIndex + 1];

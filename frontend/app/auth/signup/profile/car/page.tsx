@@ -168,6 +168,9 @@ export default function SignupCarPage() {
         phoneNumber:
           draft.phoneNumber,
 
+        name:
+          draft.name ?? "",
+
         password:
           draft.password,
 

@@ -9,6 +9,7 @@ import { apiFetch, setTokens, clearTokens } from "./api-client";
 export interface SignupPayload {
   phoneNumber: string;
   password: string;
+  name: string;
   gender?: string;
   birthDate?: string; // "YYYY-MM-DD"
   cameraConsent: boolean;

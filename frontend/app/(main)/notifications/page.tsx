@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Settings, Bell, Gift, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-client";
 
 type NotificationType = "공지" | "혜택" | "주문";
 type Tab = "전체" | NotificationType;
@@ -71,9 +72,17 @@ export default function NotificationsPage() {
   const [tab, setTab] = useState<Tab>("전체");
   const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
 
+  // ✅ 실제 GET /api/notifications 우선 시도, 실패하면(백엔드 아직 없음) 목업 유지
+  useEffect(() => {
+    apiFetch<AppNotification[]>("/api/notifications")
+      .then((list) => list.length > 0 && setNotifications(list))
+      .catch(() => {});
+  }, []);
+
   const handleClick = (item: AppNotification) => {
-    // TODO: 실제 읽음 처리 API 연동
     setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+    // ✅ 실제 읽음 처리 API — 백엔드 없으면 조용히 실패(화면 상태는 이미 반영됨)
+    apiFetch(`/api/notifications/${item.id}/read`, { method: "PATCH" }).catch(() => {});
     if (item.href) router.push(item.href);
   };
 

@@ -21,6 +21,8 @@ import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
 import { apiFetch } from "@/lib/api-client";
 import { addProductToCartGroup, updateCartGroups, readCartGroups } from "@/lib/cart-storage";
 import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
+import { usePermissionStatus } from "@/lib/use-permission-status";
+import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
 
 const DEFAULT_GROUP_ID = 1;
 
@@ -93,16 +95,25 @@ function ScanPageInner() {
     lookupByCode(barcode);
   };
 
-  // ✅ 카메라로 실제 바코드 스캔 — 화면 들어오자마자 바로 켜짐, 인식되면 자동 조회
-  const { videoRef, permission, supported, start } = useBarcodeScanner((code) => {
+  // ✅ 카메라로 실제 바코드 스캔 — 이미 허용돼있으면 바로 켜지고, 아직 안 물어봤으면
+  //   브라우저 기본 팝업 전에 설명 모달을 먼저 보여줍니다.
+  const { videoRef, permission: cameraStreamState, supported, start } = useBarcodeScanner((code) => {
     setBarcode(code);
     lookupByCode(code);
   });
+  const cameraPermission = usePermissionStatus("camera");
+  const [showCameraModal, setShowCameraModal] = useState(false);
 
   useEffect(() => {
-    start();
+    if (cameraPermission === "granted") {
+      start();
+    } else if (cameraPermission === "prompt") {
+      setShowCameraModal(true);
+    } else if (cameraPermission === "unsupported") {
+      start(); // Permissions API 미지원 브라우저는 그냥 바로 시도(브라우저 기본 팝업이 뜸)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cameraPermission]);
 
   const handleConfirmAdd = () => {
     if (!product) return;
@@ -170,10 +181,10 @@ function ScanPageInner() {
         </form>
 
         <div className="relative min-h-0 flex-1 shrink overflow-hidden bg-black">
-          {permission !== "granted" && (
+          {cameraStreamState !== "granted" && (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <p className="text-sm text-white">
-                {permission === "denied"
+                {cameraStreamState === "denied"
                   ? "카메라 권한이 거부됐어요. 브라우저 설정에서 허용해주세요."
                   : "카메라를 여는 중..."}
               </p>
@@ -181,7 +192,7 @@ function ScanPageInner() {
           )}
           <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
 
-          {permission === "granted" && !supported && (
+          {cameraStreamState === "granted" && !supported && (
             <p className="absolute inset-x-4 bottom-4 text-center text-xs text-white/80">
               이 브라우저는 자동 바코드 인식을 지원하지 않아요. 숫자를 직접 입력해주세요.
             </p>
@@ -264,6 +275,15 @@ function ScanPageInner() {
         onClose={() => setGroupPickerOpen(false)}
         onSelect={setGroupId}
         onGroupsChange={refreshGroups}
+      />
+      <PermissionRequestDialog
+        open={showCameraModal}
+        kind="camera"
+        onConfirm={() => {
+          setShowCameraModal(false);
+          start();
+        }}
+        onClose={() => setShowCameraModal(false)}
       />
     </div>
   );

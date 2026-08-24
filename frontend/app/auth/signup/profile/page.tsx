@@ -103,6 +103,7 @@ export default function SignupProfilePage() {
 
       await signup({
         phoneNumber: draft.phoneNumber,
+        name: draft.name ?? "",
         password: draft.password,
 
         gender:
