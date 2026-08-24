@@ -55,6 +55,14 @@ public class Member {
         return OFFSET + consumerId.intValue();
     }
 
+    /** 마이페이지 회원정보 수정. null이 오면 해당 필드는 바꾸지 않는다(안 물어봄 vs 아니오 구분 유지). */
+    public void updateProfile(Byte householdSize, Boolean hasPet, Boolean hasChild, Boolean byCar) {
+        if (householdSize != null) this.householdSize = householdSize;
+        if (hasPet != null) this.hasPet = hasPet;
+        if (hasChild != null) this.hasChild = hasChild;
+        if (byCar != null) this.byCar = byCar;
+    }
+
     public Integer getMemberId() { return memberId; }
     public Byte getHouseholdSize() { return householdSize; }
     public Boolean getHasPet() { return hasPet; }
