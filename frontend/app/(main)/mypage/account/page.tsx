@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { LogoutButton } from "@/components/domain/logout-button";
 
 const infoRows = [
   { href: "/mypage/account/phone", label: "계정", value: "010-****-****" },
@@ -11,7 +12,7 @@ const infoRows = [
 
 export default function AccountPage() {
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/mypage">
@@ -39,7 +40,13 @@ export default function AccountPage() {
         ))}
       </div>
 
-      <button type="button" className="mt-6 text-sm text-muted-foreground">
+      {/* ✅ 마이페이지 메인에 있던 로그아웃 버튼을 여기로 옮겼습니다 */}
+      <LogoutButton className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
+        <LogOut size={16} />
+        로그아웃
+      </LogoutButton>
+
+      <button type="button" className="mt-4 block text-sm text-muted-foreground">
         회원탈퇴
       </button>
     </div>

@@ -32,7 +32,7 @@ export default function WishlistPage() {
   };
 
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-3xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <div className="mb-4 flex items-center gap-3">
         <Link href="/mypage">
           <ChevronLeft size={20} />

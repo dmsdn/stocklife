@@ -1,6 +1,5 @@
 // components/domain/scan-cart-dialog.tsx
-// "카트 내역 보기" — 저장(saved) 화면과는 다른, 지금 이 리스트에 실제로 담긴 상품만 보여주는
-// 결제 직전용 화면입니다. 수량/삭제는 여기서 직접 못 건드리고 스캔으로만 바뀝니다(요청사항).
+// ✅ 영수증 느낌으로: 각 줄에 상품 이미지(왼쪽) + 이름/수량/가격, 점선 구분선.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -31,7 +30,6 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
 
   const handleCheckout = () => {
     setCheckingOut(true);
-    // ⚠ 실제 결제 API 없음 — 목업으로 이 리스트를 비우는 걸로 "결제 완료" 처리
     updateCartGroups((gs) => gs.map((g) => (g.id === groupId ? { ...g, products: [] } : g)));
     setCheckingOut(false);
     setDone(true);
@@ -58,16 +56,23 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
           </p>
         ) : (
           <>
-            <div className="max-h-[50vh] divide-y divide-border overflow-y-auto">
-              {group.products.map((p) => (
-                <div key={p.id} className="flex items-center justify-between py-3 text-sm">
-                  <div>
-                    <p>{p.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {p.price.toLocaleString()}원 × {p.quantity}
-                    </p>
+            <div className="max-h-[50vh] space-y-3 overflow-y-auto rounded-sm border border-dashed border-border p-3 font-mono text-xs">
+              {group.products.map((p, i) => (
+                <div key={p.id}>
+                  {i > 0 && <div className="mb-3 border-t border-dashed border-border" />}
+                  <div className="flex items-center gap-3">
+                    {/* TODO: 실제 상품 이미지 있으면 이 자리에 렌더링 */}
+                    <div className="h-10 w-10 shrink-0 rounded-sm border border-border bg-muted" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-sans text-sm">{p.name}</p>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>{p.price.toLocaleString()} × {p.quantity}</span>
+                        <span className="font-semibold text-foreground">
+                          {(p.price * p.quantity).toLocaleString()}원
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="font-medium">{(p.price * p.quantity).toLocaleString()}원</span>
                 </div>
               ))}
             </div>

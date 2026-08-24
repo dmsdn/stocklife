@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { apiFetch } from "@/lib/api-client";
@@ -97,7 +98,7 @@ export default function CartPage() {
     try {
       await apiFetch("/api/orders/checkout", { method: "POST" });
       trackConsumerEvent({ event_type: "PURCHASE" });
-      router.push("/mypage/orders");
+      router.push("/mypage/receipts");
     } catch {
       setCheckoutError("결제할 상품이 선택되지 않았거나 처리 중 오류가 발생했어요.");
     } finally {
@@ -131,12 +132,9 @@ export default function CartPage() {
             const product = products[item.skuId];
             return (
               <div key={item.cartItemId} className="flex gap-3 py-3">
-                <input
-                  type="checkbox"
-                  checked={item.checked}
-                  onChange={() => handleToggleChecked(item)}
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-border"
-                />
+                <span className="mt-1">
+                  <Checkbox checked={item.checked} onChange={() => handleToggleChecked(item)} />
+                </span>
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
                   IMG
                 </div>

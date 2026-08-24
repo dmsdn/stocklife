@@ -20,6 +20,7 @@ export interface SignupDraft {
   personalInfoConsent?: boolean;
   cameraConsent?: boolean;
   micConsent?: boolean;
+  marketingConsent?: boolean;
 }
 
 export function readSignupDraft(): SignupDraft {
@@ -72,6 +73,9 @@ export function clearSignupProfileDraft() {
 
     micConsent:
       current.micConsent,
+
+    marketingConsent:
+      current.marketingConsent,
   };
 
   window.sessionStorage.setItem(

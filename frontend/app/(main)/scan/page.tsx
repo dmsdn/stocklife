@@ -9,20 +9,30 @@
 //   - h-dvh 대신 공용 하단탭바 높이(4rem)를 뺀 높이로 고쳐서 버튼이 화면 밖으로 안 밀려남
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
+import { ChevronLeft, ChevronDown, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScanCartDialog } from "@/components/domain/scan-cart-dialog";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
-import { findMockProductByBarcode, type MockProduct } from "@/lib/mock-products";
+import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
+import { apiFetch } from "@/lib/api-client";
 import { addProductToCartGroup, updateCartGroups, readCartGroups } from "@/lib/cart-storage";
 
 const DEFAULT_GROUP_ID = 1;
 
-export default function ScanPage() {
+interface ScannedProduct {
+  skuId: number;
+  name: string;
+  price: number;
+  category: string;
+}
+
+// ✅ useSearchParams()가 Suspense 경계 없이 쓰이면 next build의 정적 프리렌더가 실패해서
+//   내부 로직을 별도 컴포넌트로 분리하고 아래 default export에서 Suspense로 감쌌습니다.
+function ScanPageInner() {
   const searchParams = useSearchParams();
   const initialGroupId = Number(searchParams.get("group") ?? DEFAULT_GROUP_ID);
 
@@ -31,7 +41,7 @@ export default function ScanPage() {
   const selectedGroup = groups.find((g) => g.id === groupId);
 
   const [barcode, setBarcode] = useState("");
-  const [product, setProduct] = useState<MockProduct | null>(null);
+  const [product, setProduct] = useState<ScannedProduct | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [justAdded, setJustAdded] = useState<number | null>(null); // 방금 담긴 상품 id (아이콘 잠깐 표시용)
 
@@ -39,40 +49,53 @@ export default function ScanPage() {
 
   const [cartOpen, setCartOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
   const refreshGroups = () => setGroups(readCartGroups());
 
   const existingQty = useMemo(() => {
     if (!product || !selectedGroup) return 0;
-    return selectedGroup.products.find((p) => p.id === product.id)?.quantity ?? 0;
+    return selectedGroup.products.find((p) => p.id === product.skuId)?.quantity ?? 0;
   }, [product, selectedGroup]);
 
-  const handleLookup = (e: React.FormEvent) => {
+  // ✅ 실제 GET /api/products/barcode/{barcode} 연동
+  const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcode.trim()) return;
     setError(null);
     setJustAdded(null);
 
-    const found = findMockProductByBarcode(barcode.trim());
-    if (!found) {
+    try {
+      const found = await apiFetch<{
+        skuId: number;
+        name: string;
+        priceKrw: number;
+        finalPriceKrw?: number;
+        categoryL1?: string;
+      }>(`/api/products/barcode/${barcode.trim()}`, { auth: false });
+      setProduct({
+        skuId: found.skuId,
+        name: found.name,
+        price: found.finalPriceKrw ?? found.priceKrw,
+        category: found.categoryL1 ?? "",
+      });
+    } catch {
       setProduct(null);
       setError("해당 바코드의 상품을 찾을 수 없어요.");
-      return;
     }
-    setProduct(found);
   };
 
   const handleConfirmAdd = () => {
     if (!product) return;
     addProductToCartGroup(groupId, {
-      id: product.id,
+      id: product.skuId,
       name: product.name,
       category: product.category,
       price: product.price,
     });
-    setSessionScans((prev) => new Set(prev).add(product.id));
+    setSessionScans((prev) => new Set(prev).add(product.skuId));
     refreshGroups();
-    setJustAdded(product.id);
+    setJustAdded(product.skuId);
     setBarcode("");
     setProduct(null);
   };
@@ -80,11 +103,11 @@ export default function ScanPage() {
   const handleRemoveEntirely = () => {
     if (!product) return;
     updateCartGroups((gs) =>
-      gs.map((g) => (g.id !== groupId ? g : { ...g, products: g.products.filter((p) => p.id !== product.id) }))
+      gs.map((g) => (g.id !== groupId ? g : { ...g, products: g.products.filter((p) => p.id !== product.skuId) }))
     );
     setSessionScans((prev) => {
       const next = new Set(prev);
-      next.delete(product.id);
+      next.delete(product.skuId);
       return next;
     });
     refreshGroups();
@@ -95,28 +118,23 @@ export default function ScanPage() {
   return (
     // 공용 하단탭바(h-16=4rem)를 뺀 높이로 고정 — 이전엔 h-dvh를 그대로 써서 버튼이 탭바 밑으로 밀려나던 문제 수정
     <div className="flex h-[calc(100dvh-4rem)] flex-col overflow-hidden">
-      <div className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden md:max-w-sm">
+      <div className="mx-auto flex h-full w-full flex-col overflow-hidden md:max-w-4xl">
         <div className="flex shrink-0 items-center gap-3 p-4">
-          <Link href="/saved">
-            <ChevronLeft size={20} />
-          </Link>
           <p className="text-base">상품 담기</p>
         </div>
 
         {/* 담는 곳(리스트) 직접 선택 */}
         <div className="shrink-0 px-4 pb-2">
-          <label className="mb-1 block text-xs text-muted-foreground">담는 곳</label>
-          <select
-            value={groupId}
-            onChange={(e) => setGroupId(Number(e.target.value))}
-            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+          <button
+            type="button"
+            onClick={() => setGroupPickerOpen(true)}
+            className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2.5 text-left text-sm"
           >
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.title} ({g.products.length}개)
-              </option>
-            ))}
-          </select>
+            <span className="min-w-0 truncate">
+              {selectedGroup ? `${selectedGroup.title} (${selectedGroup.products.length}개)` : "리스트 선택"}
+            </span>
+            <ChevronDown size={16} className="shrink-0 text-muted-foreground" />
+          </button>
         </div>
 
         <form onSubmit={handleLookup} className="flex shrink-0 gap-2 px-4 pb-2">
@@ -183,7 +201,7 @@ export default function ScanPage() {
         <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-border p-4">
           <Button variant="outline" className="flex w-full items-center gap-1.5" onClick={() => setCartOpen(true)}>
             <ShoppingCart size={16} />
-            카트 내역 보기
+            카트 내역 보기{selectedGroup && ` (${selectedGroup.products.length}개)`}
           </Button>
           <Button variant="outline" className="flex w-full items-center gap-1.5" onClick={() => setRouteOpen(true)}>
             <MapIcon size={16} />
@@ -207,6 +225,22 @@ export default function ScanPage() {
         groupId={groupId}
         collectedIds={sessionScans}
       />
+      <GroupPickerDialog
+        open={groupPickerOpen}
+        groups={groups}
+        selectedGroupId={groupId}
+        onClose={() => setGroupPickerOpen(false)}
+        onSelect={setGroupId}
+        onGroupsChange={refreshGroups}
+      />
     </div>
+  );
+}
+
+export default function ScanPage() {
+  return (
+    <Suspense fallback={<div className="h-dvh" />}>
+      <ScanPageInner />
+    </Suspense>
   );
 }

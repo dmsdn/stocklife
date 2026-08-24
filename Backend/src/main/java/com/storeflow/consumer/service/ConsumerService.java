@@ -4,6 +4,7 @@ import com.storeflow.cart.service.CartService;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.ResetPasswordRequest;
+import com.storeflow.consumer.dto.RegistrationStatusResponse;
 import com.storeflow.consumer.dto.SignupRequest;
 import com.storeflow.consumer.entity.Consumer;
 import com.storeflow.consumer.entity.Member;
@@ -68,6 +69,7 @@ public class ConsumerService {
 
         Consumer consumer = new Consumer(
                 request.getPhoneNumber(),
+                request.getName().trim(),
                 encodedPassword,
                 request.getGender(),
                 request.getBirthDate(),
@@ -97,6 +99,11 @@ public class ConsumerService {
                 request.getByCar(),
                 Instant.now()
         ));
+    }
+
+    @Transactional(readOnly = true)
+    public RegistrationStatusResponse getRegistrationStatus(String phoneNumber) {
+        return new RegistrationStatusResponse(consumerRepository.existsByPhoneNumber(phoneNumber));
     }
 
     @Transactional

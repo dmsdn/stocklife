@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/domain/checkbox";
+import { Checkbox } from "@/components/ui/checkbox";
 import { TermsModal } from "@/components/domain/terms-modal";
 import { legalDocs, signupTermsOrder } from "@/lib/legal-content";
 import { writeSignupDraft } from "@/lib/signup-draft";
@@ -16,11 +16,13 @@ export default function SignupTermsPage() {
   const [agreed, setAgreed] = useState<Record<string, boolean>>({});
   const [cameraConsent, setCameraConsent] = useState(false);
   const [micConsent, setMicConsent] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
 
   const allAgreed =
     signupTermsOrder.every((id) => agreed[id]) &&
     cameraConsent &&
-    micConsent;
+    micConsent &&
+    marketingConsent;
 
   const requiredMet = REQUIRED_LEGAL_IDS.every(
     (id) => agreed[id]
@@ -35,6 +37,7 @@ export default function SignupTermsPage() {
 
     setCameraConsent(checked);
     setMicConsent(checked);
+    setMarketingConsent(checked);
   };
 
   const toggleOne = (id: string) => {
@@ -58,6 +61,7 @@ export default function SignupTermsPage() {
       personalInfoConsent: !!agreed["privacy"],
       cameraConsent,
       micConsent,
+      marketingConsent,
     });
 
     router.push("/auth/signup");
@@ -133,6 +137,23 @@ export default function SignupTermsPage() {
               <br />
               <span className="text-xs text-muted-foreground/70">
                 음성 질의 기능에 사용
+              </span>
+            </span>
+          </div>
+          {/* 마케팅 */}
+          <div className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              checked={marketingConsent}
+              onChange={() =>
+                setMarketingConsent((v) => !v)
+              }
+            />
+
+            <span>
+              [선택] 마케팅 정보 수신 동의
+              <br />
+              <span className="text-xs text-muted-foreground/70">
+                할인/이벤트 알림 등에 사용
               </span>
             </span>
           </div>

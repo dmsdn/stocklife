@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   description: "창고형 마트 AI 쇼핑 도우미",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className={`${pretendard.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">

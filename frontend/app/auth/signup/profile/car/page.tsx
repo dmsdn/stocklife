@@ -145,13 +145,11 @@ export default function SignupCarPage() {
     }
 
     /*
-     * 백엔드 수정 전 현재 조건
+     * 필수 동의는 개인정보 수집(personalInfoConsent)뿐입니다.
+     * 카메라/마이크/마케팅은 백엔드에서 선택 동의로 바뀌었는데(2026-08-19),
+     * 여기서 예전 기준으로 카메라·마이크까지 필수로 막고 있던 걸 수정.
      */
-    if (
-      draft.personalInfoConsent !== true ||
-      draft.cameraConsent !== true ||
-      draft.micConsent !== true
-    ) {
+    if (draft.personalInfoConsent !== true) {
       setError(
         "필수 동의 항목을 확인해주세요."
       );
@@ -162,11 +160,9 @@ export default function SignupCarPage() {
       setSubmitting(true);
 
       /*
-       * 현재 SignupRequest에 있는 필드만 전송.
-       *
-       * householdSize / hasPet /
-       * hasChild / byCar는
-       * 백엔드 DTO 추가 후 연결.
+       * 백엔드 스키마 v2.5 기준 전체 필드 전송.
+       * (householdSize/hasPet/hasChild/byCar가 예전엔 백엔드에 없어서 빠져있었는데,
+       *  지금은 백엔드가 다 받고 있어서 같이 보냄)
        */
       await signup({
         phoneNumber:
@@ -184,13 +180,32 @@ export default function SignupCarPage() {
           undefined,
 
         cameraConsent:
-          draft.cameraConsent,
+          !!draft.cameraConsent,
 
         personalInfoConsent:
           draft.personalInfoConsent,
 
         micConsent:
-          draft.micConsent,
+          !!draft.micConsent,
+
+        marketingConsent:
+          !!draft.marketingConsent,
+
+        householdSize:
+          draft.householdSize ??
+          undefined,
+
+        hasPet:
+          draft.hasPet ??
+          undefined,
+
+        hasChild:
+          draft.hasChild ??
+          undefined,
+
+        byCar:
+          draft.byCar ??
+          undefined,
       });
 
       clearSignupDraft();

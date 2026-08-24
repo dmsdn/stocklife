@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Map as MapIcon, PlayCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { readCartGroups, updateCartGroups, type CartGroup } from "@/lib/cart-storage";
@@ -51,7 +52,7 @@ export default function SavedGroupDetailPage() {
 
   if (!group) {
     return (
-      <div className="mx-auto max-w-md p-4">
+      <div className="mx-auto max-w-lg p-4 sm:max-w-xl">
         <p className="py-10 text-center text-sm text-muted-foreground">리스트를 찾을 수 없어요.</p>
       </div>
     );
@@ -60,7 +61,7 @@ export default function SavedGroupDetailPage() {
   const total = group.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
 
   return (
-    <div className="mx-auto max-w-md p-4 pb-24 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 pb-24 sm:max-w-xl md:max-w-2xl md:p-8">
       <div className="mb-4 flex items-center gap-3">
         <Link href="/saved">
           <ChevronLeft size={20} />
@@ -79,12 +80,7 @@ export default function SavedGroupDetailPage() {
         )}
         {group.products.map((product) => (
           <div key={product.id} className="flex items-center gap-3 py-3">
-            <input
-              type="checkbox"
-              checked={product.checked}
-              onChange={() => handleToggleChecked(product.id)}
-              className="h-4 w-4 rounded border-border"
-            />
+            <Checkbox checked={product.checked} onChange={() => handleToggleChecked(product.id)} />
             <div className="h-14 w-14 shrink-0 rounded-md border border-border bg-muted" />
             <div className="flex-1">
               <p className="text-sm">{product.name}</p>

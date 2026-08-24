@@ -36,7 +36,7 @@ export default function OrderDetailPage() {
   }, [orderId]);
 
   return (
-    <div className="mx-auto max-w-md p-4 md:max-w-2xl md:p-8">
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <SubpageHeader title={`주문 #${orderId}`} />
 
       {order === undefined && <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>}

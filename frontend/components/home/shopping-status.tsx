@@ -1,22 +1,33 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { Award } from "lucide-react";
 
+import { GRADE_TIERS, type GradeTier } from "@/lib/grade";
 import { SectionTitle } from "./section-title";
 
 type ShoppingStatusProps = {
   onClick: () => void;
+  /** 로그인한 회원의 등급. 백엔드에 "내 정보 조회(GET /me)" API가 아직 없어서
+   *  현재 실시간 값(월 누적 결제금액 등)은 못 받아옵니다 — 로그인 여부만으로
+   *  등급 체계를 안내하는 카드로 단순화했습니다. */
+  currentTier?: GradeTier;
 };
 
+// ⚠ 예전엔 "보유 포인트/이번 달 절약/AI 활용 횟수/다음 등급까지 남은 포인트"를 보여줬는데,
+//   전부 백엔드에 없는 값(포인트 자체가 없고, 등급 진행률을 조회하는 API도 없음)이라
+//   지웠습니다. 대신 실제로 있는 등급 체계(lib/grade.ts, 백엔드 Grade enum 기준)를
+//   소개하는 카드로 바꿨습니다. onClick은 마이페이지 전체가 아니라 등급 안내
+//   페이지(/mypage/tier-guide)로 바로 연결하는 걸 권장합니다.
 export function ShoppingStatus({
   onClick,
+  currentTier,
 }: ShoppingStatusProps) {
   return (
     <section className="w-full px-4 pt-7 sm:px-6 lg:px-8">
       <SectionTitle
-        eyebrow="MY SHOPPING"
-        title="나의 쇼핑 상태"
-        action="자세히 보기"
+        title="나의 등급"
+        action="더보기"
+        onAction={onClick}
       />
 
       <button
@@ -26,83 +37,37 @@ export function ShoppingStatus({
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-muted-foreground">
-              안녕하세요, OO님
+            <p className="text-sm text-muted-foreground">
+              현재 등급
             </p>
 
             <p className="mt-1 text-base font-semibold">
-              SHOPPER
+              {currentTier?.label ?? "로그인하고 등급 확인하기"}
             </p>
           </div>
 
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-            <Star size={18} />
+            <Award size={18} />
           </div>
         </div>
 
         <div className="my-4 h-px bg-border" />
 
-        <div className="grid grid-cols-3">
-          <StatusItem
-            label="보유 포인트"
-            value="2,840P"
-          />
-
-          <StatusItem
-            label="이번 달 절약"
-            value="18,400원"
-            border
-          />
-
-          <StatusItem
-            label="AI 활용"
-            value="12회"
-            border
-          />
-        </div>
-
-        <div className="mt-4 rounded-sm bg-muted/60 px-3 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">
-              다음 등급까지
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          {GRADE_TIERS.map((tier) => (
+            <span
+              key={tier.key}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-xs ${
+                currentTier?.key === tier.key
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border text-muted-foreground"
+              }`}
+            >
+              {tier.label}
             </span>
-
-            <span className="text-base font-medium">
-              160P
-            </span>
-          </div>
-
-          <div className="mt-2 h-1.5 overflow-hidden rounded-sm bg-border">
-            <div className="h-full w-[78%] rounded-sm bg-foreground" />
-          </div>
+          ))}
         </div>
       </button>
     </section>
-  );
-}
-
-function StatusItem({
-  label,
-  value,
-  border = false,
-}: {
-  label: string;
-  value: string;
-  border?: boolean;
-}) {
-  return (
-    <div
-      className={`px-2 ${
-        border ? "border-l border-border" : ""
-      }`}
-    >
-      <p className="text-xs text-muted-foreground">
-        {label}
-      </p>
-
-      <p className="mt-1 text-base font-semibold">
-        {value}
-      </p>
-    </div>
   );
 }
