@@ -27,10 +27,10 @@ from eval.golden_set import GOLDEN
 #===============================================
 
 def _is_subsequence(expected: list, actual: list) -> bool:
-    i=0
+    i = 0
     for name in actual:
         if i < len(expected) and name == expected[i]:
-            i+=1
+            i += 1
     return i == len(expected)
 
 def _check_includes(reply: str, items: list) -> list:
@@ -48,7 +48,7 @@ def run_one(case: dict) -> dict:
                            history=[])
     reply = result["reply"] or ""
 
-    tools = [t for turn in result["trace"] for  t in turn["tools"]]
+    tools = [t for turn in result["trace"] for t in turn["tools"]]
 
     fails = []
 

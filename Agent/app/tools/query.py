@@ -1,5 +1,5 @@
 #===============================================
-# Agent 하네스 - 조회형 도구 7종 실행부 (definitions.py의 짝)
+# Agent 하네스 - 조회형 도구 10종 실행부 (definitions.py의 짝)
 #===============================================
 # [역할] LLM이 "search_products를 이런 인자로 불러줘"라고 하면 그 요청을 실제 함수 호출로 바꿔 실행하고 결과를 LLM에게 돌려줄 형태로 다듬음.
 
@@ -30,6 +30,16 @@ def set_identity(member_id: int | None, session_id: str | None) -> None:
     _CURRENT_MEMBER_ID = member_id
     _CURRENT_SESSION_ID = session_id
 
+def current_member_id() -> int | None:
+    """지금 요청의 회원 번호(없으면 None) — 읽기 전용 공개 창구.
+
+    compute.py의 find_substitutes가 '개인 반복구매 가중'에 쓴다(08-21 인수).
+    _CURRENT_MEMBER_ID를 직접 import하게 두지 않는 이유: 밑줄 변수를 다른
+    모듈이 집어 쓰기 시작하면 '내부용'이라는 신호가 죽고, 나중에 이 변수의
+    형태를 바꿀 때 어디가 물려 있는지 알 수 없게 된다. 함수 한 겹이 그 경계다.
+    """
+    return _CURRENT_MEMBER_ID
+
 # 결과 크기 상한
 # 상수 절정: 'LLM컨텍스트 예산 vs 정보량'의 튜닝대상
 MAX_SEARCH_RESULTS = 8          # 검색결과: 사람이 한 화면에서 비교하는 개수 정도
@@ -54,7 +64,7 @@ def _search_products(**kw) -> dict:
     trimmed = [_pick(r, _SEARCH_FIELDS) for r in rows[:MAX_SEARCH_RESULTS]]
     return {
         "total_found": total,
-        "returned" : len(trimmed),
+        "returned": len(trimmed),
         "truncated": total > len(trimmed),
         "products": trimmed,
     }
@@ -87,7 +97,7 @@ def _get_purchase_history(member_id: int) -> dict:
 def _get_session_cart(session_id: str) -> dict:
     return sot_client.get_session_cart(session_id)
 
-def _get_wishlist(member_id:int) -> dict:
+def _get_wishlist(member_id: int) -> dict:
     rows = sot_client.get_wishlist(member_id)
     out = []
     for w in rows:
@@ -95,33 +105,69 @@ def _get_wishlist(member_id:int) -> dict:
         out.append({**w, "name": p["name"] if p else None})
     return {"member_id": member_id, "items": out}
 
-def _get_change_events(sku_ids = None, within_hours:int =24) -> dict:
+def _get_change_events(sku_ids=None, within_hours: int = 24) -> dict:
     rows = sot_client.get_change_events(sku_ids=sku_ids, within_hours=within_hours)
     total = len(rows)
     recent = rows[-MAX_CHANGE_EVENTS:]
-    return{"total_rows": total, "truncated": total > len(recent), "events": recent}
+    return {"total_rows": total, "truncated": total > len(recent), "events": recent}
 
-#===============================================
-# 디스패치 테이블
-# 키 = definitions.py에 선언한 도구이름
-# 값 = 도구를 실행할 함수 자체
-# 파이썬에서 함수는 숫자·문자열처럼 변수에 담고 dict의 값으로 넣을 수 있는 값
-# 루프는 이 표에서 함수를 꺼내 실행하므로, 도구가 늘어도 루프 코드는 바뀌지 않음
-# ()를 붙이면 실행, 안 붙이면 '함수 그 자체" / 이름 문자열로 함수를 꺼내 부를 수 있음
+# ── 조회 +3 ─────────────────────────────────────
+# 셋 다 sot_client가 집계·정렬·표기 통일을 끝낸 것을 받아 상한만 건다.
+# 계산이 여기 없는 이유: 지표의 정의(재구매율 = 2회 이상 구매자/전체 구매자)는 **세계의 사실**이라 SoT 쪽(백엔드, mock에선 sot_client)이 소유해야 한다.
+# 도구층이 정의를 갖기 시작하면 mock과 실물의 숫자가 다른 이유를 찾을 수 없게 된다.
+
+MAX_METRIC_SKUS = 20     # 지표 조회 상한 — 백엔드 API의 상한(README)과 같은 값
+
+
+def _get_product_metrics(sku_ids: list) -> dict:
+    """상품 반응 지표 묶음. 웹 평판은 여기 없다 — 그건 서버 도구(웹 검색)의 몫.
+
+    상한을 앞에서 자르는 이유: 지표는 "비교"의 재료라 20개를 넘게 부를 일이
+    정상 흐름엔 없고, LLM이 검색 결과 전체를 통째로 넘기는 실수를 했을 때
+    백엔드에 20개 초과 요청이 나가 거부당하는 것보다 여기서 조용히 자르고
+    사실(truncated)을 알리는 쪽이 낫다.
+    """
+    total = len(sku_ids)
+    result = sot_client.get_product_metrics(sku_ids[:MAX_METRIC_SKUS])
+    return {**result, "truncated": total > MAX_METRIC_SKUS}
+
+
+def _compare_purchase_popularity(sku_ids: list, lookback_days: int = 90) -> dict:
+    """상품 간 판매량 비교. 정렬은 sot_client가 이미 끝냈다(구매자 수 내림차순)."""
+    return sot_client.compare_purchase_popularity(sku_ids, lookback_days=lookback_days)
+
+
+def _get_popular_products(category_l2: str | None = None,
+                          lookback_days: int = 90, limit: int = 10) -> dict:
+    """카테고리(또는 전체) 인기 순위. limit 상한만 여기서 한 번 더 죈다."""
+    # min(limit, 20): LLM이 limit=100을 보내도 20개까지만 — 순위표가 길어질수록
+    # 답변이 목록 낭독이 되고 토큰만 탄다. 사람에게 유효한 순위는 상위 몇 개다.
+    return sot_client.get_popular_products(category_l2=category_l2,
+                                           lookback_days=lookback_days,
+                                           limit=min(limit, 20))
+
+
+# ── 디스패치 테이블 (개념 ⑲) ────────────────────────────────────────────────
+# 키 = definitions.py에 선언한 도구 이름(반드시 철자가 같아야 한다).
+# 값 = 그 도구를 실행할 함수 "자체"(() 없음 — 지금 부르는 게 아니라 나중에 부른다).
+# 루프는 이 표에서 함수를 꺼내 실행하므로, 도구가 늘어도 루프 코드는 안 바뀐다.
 REGISTRY = {
-    "search_products": _search_products,
-    "get_product": _get_product,
-    "get_inventory": _get_inventory,
-    "get_purchase_history": _get_purchase_history,
-    "get_session_cart": _get_session_cart,
-    "get_wishlist": _get_wishlist,
-    "get_change_events": _get_change_events,
+    "search_products":             _search_products,
+    "get_product":                 _get_product,
+    "get_inventory":               _get_inventory,
+    "get_purchase_history":        _get_purchase_history,
+    "get_session_cart":            _get_session_cart,
+    "get_wishlist":                _get_wishlist,
+    "get_change_events":           _get_change_events,
+    "get_product_metrics":         _get_product_metrics,          # 08-21 인수
+    "compare_purchase_popularity": _compare_purchase_popularity,  # 08-21 인수
+    "get_popular_products":        _get_popular_products,         # 08-21 인수
 }
 
 def run(tool_name: str, tool_input: dict) -> dict:
     fn = REGISTRY.get(tool_name)
     if fn is None:
-        return {"error": "unknown_tool", "message": f"'{tool_name}'은 없는 도구입니다"}
+        return {"error": "unknown_tool", "message": f"'{tool_name}'은 없는 도구입니다."}
 
     # 파이썬에서 함수는 객체, __code__는 그 함수를 컴파일한 __code__ 객체
     # 앞뒤 밑줄 두개는 "파이썬이 관리하는 특수 속성"이라는 관례 / ()를 안 붙이는 이유는 실행이 아니라 꺼내보는 것이기 때문

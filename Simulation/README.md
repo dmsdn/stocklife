@@ -114,14 +114,22 @@ npm run dev
    실제로는 매대 사이 통로 폭, 벽, 기둥 등을 반영한 정밀한 격자가 필요하면
    `occupied` 배열을 확장하거나 스키마의 `map_cells` 테이블을 그대로 가져와야 함.
 
-8. **NPC 직원**: 아직 없음. 붙일 때는:
-   - `src/api/locations.ts`의 `fetchLowStockTargets` (지금 빈 배열 반환하는 스텁)를
-     실제 `GET /api/inventory/low-stock`로 연결
-   - NPC도 플레이어와 동일하게 `findPath` + 애니메이션 tween 사용 가능 (StoreScene에
-     플레이어 이동 로직을 그대로 재사용/복제)
-   - 매대 도착 시 `confirmRestock()` 호출 → 실제 DB 수량 반영 (지금은 콘솔 로그만 찍는 스텁)
+8. **NPC 직원**: 프론트 시뮬레이션 수준으로는 구현됨 (`StoreScene.ts`) — 층마다 "직원"
+   태그를 단 주황색 NPC 2명이 자동으로 돌아다니며 재고가 `LOW_STOCK_THRESHOLD`(5개)
+   미만인 매대를 찾아 `findPath`로 걸어가서 `RESTOCK_QTY`(15개)만큼 채워 넣고,
+   재입고할 곳이 없으면 잠깐 배회하다 다시 확인하는 루프를 돈다. 여러 NPC가 동시에
+   같은 매대로 몰리지 않도록 스캔+선점을 큐로 직렬화(`claimLowStockTarget`)해뒀다.
+   다만 아래는 여전히 실제 백엔드 연동이 필요한 부분:
+   - `src/api/products.ts`의 재고 자체가 여전히 위치 시드 기반 가짜 데이터라, NPC가
+     "채우는" 재고도 실제 DB 수량이 아니라 프론트 메모리(`stockOverlay`)일 뿐임
+   - `src/api/locations.ts`의 `fetchLowStockTargets`는 실제로 로컬 데이터를 스캔해서
+     동작하지만, 백엔드가 준비되면 `GET /api/inventory/low-stock` 한 줄로 교체하면 됨
+   - 매대 도착 시 `confirmRestock()`을 호출하긴 하지만 지금은 콘솔 로그만 찍는 스텁 —
+     실제 DB 수량 반영은 안 됨
    - 스키마의 `shelf_events` 8종(BELOW_PAR→TASK_QUEUED→TASK_STARTED→ITEM_CONFIRMED)
      흐름과 이름을 맞춰뒀으니 백엔드 이벤트 발행 순서와 그대로 대응시키면 됨
+   - NPC 수/속도/임계값은 `StoreScene.ts` 상단의 `NPC_COUNT`/`NPC_SPEED`/
+     `LOW_STOCK_THRESHOLD`/`RESTOCK_QTY` 상수로 조절 가능
 
 9. **다중 경유지 쇼핑 경로** (예: "1층에서 고기 담고 화장실 들렀다가 2층에서 다른거
    구매"): 지금 구현된 건 "층 이동" 자체(엘리베이터/에스컬레이터를 실제로 타는 것)뿐이고,
