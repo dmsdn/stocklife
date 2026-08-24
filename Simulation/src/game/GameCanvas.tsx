@@ -71,11 +71,31 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
       backgroundColor: '#f4f1ea',
       scene: [scene],
       physics: { default: undefined },
+      // 캔버스 크기를 컨테이너에 맞춰 늘였다 줄였다 할 수 있게(고정 크기로 박아두면
+      // 창이 좁아졌을 때 매장 오른쪽이 캔버스 밖으로 잘려서 안 보이게 된다).
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.NO_CENTER,
+      },
     });
     gameRef.current.scene.start('StoreScene', { floorData, events });
     sceneReadyRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorData]);
+
+  // 컨테이너(div) 크기가 바뀔 때마다(창 크기 변경, 사이드패널 토글 등) Phaser 캔버스 자체의
+  // 픽셀 크기도 같이 맞춰준다 — Scale.RESIZE 모드는 캔버스 크기를 바꿔주긴 하지만 그 트리거는
+  // 우리가 명시적으로 game.scale.resize()를 불러줘야 한다(윈도우 resize 이벤트만으론
+  // 부모가 flex로 줄어드는 경우까지 못 잡을 수 있어서 ResizeObserver로 컨테이너 자체를 본다).
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      gameRef.current?.scale.resize(el.clientWidth, el.clientHeight);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     return () => {
