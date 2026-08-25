@@ -141,11 +141,18 @@ def run_chat(message: str,
              consumer_id: int | None = None,
              session_id: str | None = None,
              history: list[dict] | None = None,
-             allow_actions: bool = True) -> dict:
+             allow_actions: bool = True,
+             position: tuple[int, int, int] | None = None) -> dict:
 
     # 요청의 주인을 등록. 액션도구의 consumer_id는 LLM이 아닌 여기서 주입 (보안설계)
     action.set_consumer_id(consumer_id)
     query.set_identity(consumer_id, session_id)
+    # 위치도 같은 부류다(08-25). LLM이 좌표를 옮겨 적게 두지 않는다 —
+    # optimize_route의 start_* 칸은 남아 있지만 **비우는 것이 기본**이고
+    # compute._resolve_start가 이 값을 채운다. 자세히는 compute.py의 주입 블록.
+    # position이 None이면 등록도 None — 그 경우 경로 도구가 "위치를 모른다"고
+    # 답하고, 손님에게 되묻는다(입구를 추측하지 않는다).
+    compute.set_position(*(position or (None, None, None)))
 
     #대화목록 조립 .history는 프론트가 보낸 그대로 받되, 뒤에서 20건만 추출
     messages = list(history or [])[-20:]            # history가 None이면 빈리스트를 사용 / 새로운 리스트를 생성: 부르는 쪽이 준 리스트를 여기서 직접 고치면 남의 물건을 몰래 바꾸는 것이 됨

@@ -49,6 +49,16 @@ class ChatRequest(BaseModel):
     consumerId: int | None = None
     message: str
     history: list[HistoryItem] = Field(default_factory=list)
+    # ── 현재 위치 (2026-08-25 추가) ──────────────────────────────────────
+    # 마지막 스캔 좌표. 경로 도구의 **기본 출발점**으로 주입된다(compute.set_position).
+    # ⚠ **선택 필드다.** 백엔드가 아직 안 보내도 기존 요청이 그대로 통과한다 —
+    #   pydantic은 기본값이 있는 칸을 요구하지 않는다. 그래서 계약을 깨지 않고
+    #   먼저 자리를 만들어 둘 수 있다(백엔드 합의 전에 우리 쪽만 준비).
+    # 셋 중 하나라도 없으면 위치 없음으로 본다 — 반쪽 좌표로 경로를 짜면
+    # "같은 층 아무 데나"에서 출발한 답이 나온다(compute.set_position 주석).
+    posFloor: int | None = None
+    posX: int | None = None
+    posY: int | None = None
 
 
 class ChatResponse(BaseModel):
@@ -105,7 +115,17 @@ _RETRY_MSG = {
 def agent_chat(body: ChatRequest) -> ChatResponse:
     history = [h.model_dump() for h in body.history]
 
-    result = loop.run_chat(body.message, consumer_id=body.consumerId, session_id=body.sessionId, history=history)
+    # 위치 셋이 다 있을 때만 튜플로 넘긴다. 하나라도 없으면 None —
+
+    # 판정을 여기서 한 번에 하고 아래로는 "있다/없다"만 내려보낸다.
+
+    pos = ((body.posFloor, body.posX, body.posY)
+
+           if None not in (body.posFloor, body.posX, body.posY) else None)
+
+    
+
+    result = loop.run_chat(body.message, consumer_id=body.consumerId, position=pos, session_id=body.sessionId, history=history)
 
     verdict = guard.check(result["reply"], result["ledgers"])
     if verdict["ok"]:
@@ -132,7 +152,7 @@ def agent_chat(body: ChatRequest) -> ChatResponse:
         # 고칠 방향이 다르므로, 뭉뚱그린 한 문장보다 사유별 문구가 잘 먹는다.
         # 둘 다 걸렸으면 web_only 쪽을 쓴다(사실 출처 문제가 더 무겁다).
         msg = _RETRY_MSG["web_only"] if "web_only" in reasons else _RETRY_MSG["contradicts_ledger"]
-        retry = loop.run_chat(msg, consumer_id=body.consumerId,
+        retry = loop.run_chat(msg, consumer_id=body.consumerId, position=pos,
                               session_id=body.sessionId, history=retry_history)
         if guard.check(retry["reply"], retry["ledgers"])["ok"]:
             return ChatResponse(reply=retry["reply"], actions=retry["actions"])
