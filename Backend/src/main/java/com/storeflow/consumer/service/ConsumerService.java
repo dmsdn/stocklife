@@ -1,6 +1,5 @@
 package com.storeflow.consumer.service;
 
-import com.storeflow.cart.service.CartService;
 import com.storeflow.consumer.dto.ConsumerMeResponse;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
@@ -36,7 +35,6 @@ public class ConsumerService {
     private final PasswordEncoder passwordEncoder;
     private final ConsumerJwtUtil jwtUtil;
     private final ConsumerEventRepository consumerEventRepository;
-    private final CartService cartService;
     private final PhoneVerificationService phoneVerificationService;
 
     public ConsumerService(ConsumerRepository consumerRepository,
@@ -44,14 +42,12 @@ public class ConsumerService {
                            PasswordEncoder passwordEncoder,
                            ConsumerJwtUtil jwtUtil,
                            ConsumerEventRepository consumerEventRepository,
-                           CartService cartService,
                            PhoneVerificationService phoneVerificationService) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.consumerEventRepository = consumerEventRepository;
-        this.cartService = cartService;
         this.phoneVerificationService = phoneVerificationService;
     }
 
@@ -138,8 +134,6 @@ public class ConsumerService {
                         claimedEvents, request.getSessionId(), memberId);
             }
 
-            // 요구사항: 비회원 → 회원 장바구니 승계. 동일 SKU는 수량 병합(claimGuestCart 내부 처리).
-            cartService.claimGuestCart(request.getSessionId(), consumer.getConsumerId());
         }
 
         return new LoginResponse(accessToken, refreshToken);

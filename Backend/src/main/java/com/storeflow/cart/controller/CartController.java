@@ -1,9 +1,6 @@
 package com.storeflow.cart.controller;
 
-import com.storeflow.cart.dto.AddCartItemRequest;
-import com.storeflow.cart.dto.CartItemResponse;
-import com.storeflow.cart.dto.SessionCartResponse;
-import com.storeflow.cart.dto.UpdateCartItemRequest;
+import com.storeflow.cart.dto.*;
 import com.storeflow.cart.service.CartService;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
 import jakarta.validation.Valid;
@@ -12,17 +9,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * 요구사항 30: 장바구니는 "비회원은 세션 기준, 회원은 계정 기준"으로 담긴다.
- *
- * Authorization: Bearer 헤더가 유효하면 회원(consumerId) 로직을,
- * 없거나 유효하지 않으면 X-Session-Id 헤더를 요구해 비회원(sessionId) 로직을 탄다.
- * ConsumerEventController.resolveMemberIdOrNull()과 동일한 패턴.
- */
+/** 회원 장바구니 DB API. 비회원 장바구니는 프론트 localStorage만 사용한다. */
 @RestController
 @RequestMapping("/api/cart")
 public class CartController {
-
     private final CartService cartService;
     private final ConsumerJwtUtil jwtUtil;
 
@@ -31,84 +21,76 @@ public class CartController {
         this.jwtUtil = jwtUtil;
     }
 
+    @GetMapping
+    public ResponseEntity<List<CartItemResponse>> getCart(@RequestHeader("Authorization") String authorization) {
+        return ResponseEntity.ok(cartService.getCart(requireConsumerId(authorization)));
+    }
+
     @PostMapping
-    public ResponseEntity<Void> addItem(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                        @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
+    public ResponseEntity<Void> addItem(@RequestHeader("Authorization") String authorization,
                                         @Valid @RequestBody AddCartItemRequest request) {
-        Long consumerId = resolveConsumerIdOrNull(authorization);
-        if (consumerId != null) {
-            cartService.addItem(consumerId, request);
-        } else {
-            cartService.addItemForGuest(requireSessionId(sessionId), request);
-        }
+        cartService.addItem(requireConsumerId(authorization), request);
         return ResponseEntity.status(201).build();
     }
 
-    @GetMapping
-    public ResponseEntity<List<CartItemResponse>> getCart(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                                          @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
-        Long consumerId = resolveConsumerIdOrNull(authorization);
-        if (consumerId != null) {
-            return ResponseEntity.ok(cartService.getCart(consumerId));
-        }
-        return ResponseEntity.ok(cartService.getCartForGuest(requireSessionId(sessionId)));
+    @GetMapping("/groups")
+    public ResponseEntity<List<CartGroupResponse>> getGroups(@RequestHeader("Authorization") String authorization) {
+        return ResponseEntity.ok(cartService.getGroups(requireConsumerId(authorization)));
     }
 
-    /** get_session_cart(요구사항 12번) — 회원/비회원 공용. 합계는 백엔드가 계산해서 반환. */
-    @GetMapping("/session")
-    public ResponseEntity<SessionCartResponse> getSessionCart(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                                              @RequestHeader(value = "X-Session-Id", required = false) String sessionId) {
-        Long consumerId = resolveConsumerIdOrNull(authorization);
-        if (consumerId != null) {
-            return ResponseEntity.ok(cartService.getSessionCart(consumerId));
-        }
-        return ResponseEntity.ok(cartService.getSessionCartForGuest(requireSessionId(sessionId)));
+    @PostMapping("/groups")
+    public ResponseEntity<CartGroupResponse> createGroup(@RequestHeader("Authorization") String authorization,
+                                                          @Valid @RequestBody CreateCartGroupRequest request) {
+        return ResponseEntity.status(201).body(cartService.createGroup(requireConsumerId(authorization), request));
+    }
+
+    @DeleteMapping("/groups/{groupId}")
+    public ResponseEntity<Void> deleteGroup(@RequestHeader("Authorization") String authorization,
+                                            @PathVariable Long groupId) {
+        cartService.deleteGroup(requireConsumerId(authorization), groupId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/groups/{groupId}/items")
+    public ResponseEntity<CartItemResponse> addItemToGroup(@RequestHeader("Authorization") String authorization,
+                                                            @PathVariable Long groupId,
+                                                            @Valid @RequestBody AddCartItemRequest request) {
+        return ResponseEntity.status(201).body(
+                cartService.addItemToGroup(requireConsumerId(authorization), groupId, request));
     }
 
     @PatchMapping("/{cartItemId}")
-    public ResponseEntity<Void> updateItem(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                           @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
+    public ResponseEntity<Void> updateItem(@RequestHeader("Authorization") String authorization,
                                            @PathVariable Long cartItemId,
                                            @Valid @RequestBody UpdateCartItemRequest request) {
-        Long consumerId = resolveConsumerIdOrNull(authorization);
-        if (consumerId != null) {
-            cartService.updateItem(consumerId, cartItemId, request);
-        } else {
-            cartService.updateItemForGuest(requireSessionId(sessionId), cartItemId, request);
-        }
+        cartService.updateItem(requireConsumerId(authorization), cartItemId, request);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{cartItemId}")
-    public ResponseEntity<Void> deleteItem(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                           @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
+    public ResponseEntity<Void> deleteItem(@RequestHeader("Authorization") String authorization,
                                            @PathVariable Long cartItemId) {
-        Long consumerId = resolveConsumerIdOrNull(authorization);
-        if (consumerId != null) {
-            cartService.deleteItem(consumerId, cartItemId);
-        } else {
-            cartService.deleteItemForGuest(requireSessionId(sessionId), cartItemId);
-        }
+        cartService.deleteItem(requireConsumerId(authorization), cartItemId);
         return ResponseEntity.noContent().build();
     }
 
-    // ------------------------------------------------------------------
-
-    private Long resolveConsumerIdOrNull(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return null;
-        }
-        String token = authorization.substring(7);
-        if (!jwtUtil.validateToken(token)) {
-            return null;
-        }
-        return jwtUtil.getConsumerIdFromToken(token);
+    @PostMapping("/migrate")
+    public ResponseEntity<List<CartGroupResponse>> migrate(@RequestHeader("Authorization") String authorization,
+                                                            @RequestBody MigrateGuestCartRequest request) {
+        return ResponseEntity.ok(cartService.migrateGuestCart(requireConsumerId(authorization), request));
     }
 
-    private String requireSessionId(String sessionId) {
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new IllegalStateException("비회원 장바구니는 X-Session-Id 헤더가 필수입니다.");
+    @GetMapping("/session")
+    public ResponseEntity<SessionCartResponse> getSessionCart(@RequestHeader("Authorization") String authorization) {
+        return ResponseEntity.ok(cartService.getSessionCart(requireConsumerId(authorization)));
+    }
+
+    private Long requireConsumerId(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            throw new IllegalStateException("로그인이 필요합니다.");
         }
-        return sessionId;
+        String token = authorization.substring(7);
+        if (!jwtUtil.validateToken(token)) throw new IllegalStateException("유효하지 않은 로그인입니다.");
+        return jwtUtil.getConsumerIdFromToken(token);
     }
 }

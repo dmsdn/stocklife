@@ -37,9 +37,9 @@ export function GroupPickerDialog({
     }
   }, [open]);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newTitle.trim()) return;
-    const group = createCartGroup(newTitle.trim());
+    const group = await createCartGroup(newTitle.trim());
     onGroupsChange();
     onSelect(group.id);
     onClose();

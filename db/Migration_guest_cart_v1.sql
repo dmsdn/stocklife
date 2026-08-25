@@ -33,3 +33,66 @@ ALTER TABLE cart_item
 --    MySQL 8.0.16+ CHECK 제약 지원 전제.
 ALTER TABLE cart_item
     ADD CONSTRAINT chk_cart_owner CHECK (consumer_id IS NOT NULL OR session_id IS NOT NULL);
+
+
+-- =========================================
+-- 1. 장바구니 그룹 생성
+-- =========================================
+
+CREATE TABLE cart_group (
+                            cart_group_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            consumer_id BIGINT NOT NULL,
+                            title VARCHAR(100) NOT NULL,
+                            description VARCHAR(255) NULL,
+
+                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                ON UPDATE CURRENT_TIMESTAMP,
+
+                            INDEX idx_cart_group_consumer_id (consumer_id)
+);
+
+
+-- =========================================
+-- 2. 기존 cart_item에 그룹 FK 추가
+-- =========================================
+
+ALTER TABLE cart_item
+    ADD COLUMN cart_group_id BIGINT NULL AFTER cart_item_id;
+
+
+-- =========================================
+-- 3. 외래키 추가
+-- =========================================
+
+ALTER TABLE cart_item
+    ADD CONSTRAINT fk_cart_item_cart_group
+        FOREIGN KEY (cart_group_id)
+            REFERENCES cart_group(cart_group_id)
+            ON DELETE CASCADE;
+
+
+-- =========================================
+-- 4. 기존 비회원 DB용 session_id 제거
+-- =========================================
+
+ALTER TABLE cart_item
+DROP COLUMN session_id;
+
+
+-- =========================================
+-- 5. consumer_id 제거
+-- cart_group을 통해 회원을 찾도록 변경
+-- =========================================
+
+ALTER TABLE cart_item
+DROP COLUMN consumer_id;
+
+
+-- =========================================
+-- 6. 마이그레이션 완료 후
+-- cart_group_id 필수화
+-- =========================================
+
+ALTER TABLE cart_item
+    MODIFY cart_group_id BIGINT NOT NULL;

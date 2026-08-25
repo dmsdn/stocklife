@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
 import { getOrCreateSessionId, startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
-import { readCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
+import { readCartGroups, loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
 
 interface ChatSession {
   sessionId: string;
@@ -34,15 +34,15 @@ export default function SavedPage() {
   const [newGroupTitle, setNewGroupTitle] = useState("");
 
   useEffect(() => {
-    setGroups(readCartGroups());
+    loadCartGroups().then(setGroups).catch(() => setGroups(readCartGroups()));
   }, []);
 
   const groupTotal = (group: CartGroup) =>
     group.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (!newGroupTitle.trim()) return;
-    const group = createCartGroup(newGroupTitle.trim());
+    const group = await createCartGroup(newGroupTitle.trim());
     setNewGroupTitle("");
     setShowNewGroupInput(false);
     router.push(`/saved/${group.id}`);
