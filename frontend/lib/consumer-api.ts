@@ -42,3 +42,8 @@ export function updateMyProfile(payload: UpdateConsumerPayload) {
         body: JSON.stringify(payload),
     });
 }
+
+/** 회원탈퇴. 성공하면(204) 호출한 쪽에서 토큰을 지우고 로그인 화면으로 보내야 한다. */
+export function withdrawMyAccount() {
+    return apiFetch<void>("/api/consumers/me", { method: "DELETE" });
+}

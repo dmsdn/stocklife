@@ -112,4 +112,11 @@ public class ConsumerController {
                                                        @Valid @RequestBody UpdateConsumerRequest request) {
         return ResponseEntity.ok(consumerService.updateMe(consumerId, request));
     }
+
+    /** 회원탈퇴. 성공하면 프론트는 토큰을 지우고 로그인 화면으로 보내면 된다. */
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> withdraw(@CurrentConsumer Long consumerId) {
+        consumerService.withdraw(consumerId);
+        return ResponseEntity.noContent().build();
+    }
 }

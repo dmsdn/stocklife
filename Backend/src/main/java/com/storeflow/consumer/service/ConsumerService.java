@@ -113,6 +113,10 @@ public class ConsumerService {
         Consumer consumer = consumerRepository.findByPhoneNumber(request.getPhoneNumber())
                 .orElseThrow(() -> new InvalidCredentialsException("전화번호 또는 비밀번호가 일치하지 않습니다."));
 
+        if (consumer.isWithdrawn()) {
+            throw new InvalidCredentialsException("전화번호 또는 비밀번호가 일치하지 않습니다.");
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), consumer.getPassword())) {
             throw new InvalidCredentialsException("전화번호 또는 비밀번호가 일치하지 않습니다.");
         }
@@ -176,6 +180,24 @@ public class ConsumerService {
         }
 
         return new ConsumerMeResponse(consumer, member);
+    }
+
+    /**
+     * 회원탈퇴. 전화번호를 tombstone 값으로 바꿔서 원래 번호는 재가입에 쓸 수 있게 풀어주고,
+     * 비밀번호도 랜덤값으로 덮어써서 재로그인을 원천 차단한다. 구매내역(purchases)·리뷰 등
+     * 과거 기록은 그대로 남긴다 — 삭제하면 다른 도메인(재구매 주기 계산 등)이 참조하는 이력이
+     * 끊기므로, "계정만 잠그고 데이터는 보존"하는 소프트 삭제 방식을 쓴다.
+     */
+    @Transactional
+    public void withdraw(Long consumerId) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+        if (consumer.isWithdrawn()) {
+            return; // 이미 탈퇴한 회원 — 멱등하게 처리
+        }
+        String tombstonePhoneNumber = "WITHDRAWN_" + consumerId + "_" + consumer.getPhoneNumber();
+        String randomizedPassword = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
+        consumer.withdraw(tombstonePhoneNumber, randomizedPassword);
     }
 
     @Transactional
