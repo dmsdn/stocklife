@@ -96,3 +96,6 @@ DROP COLUMN consumer_id;
 
 ALTER TABLE cart_item
     MODIFY cart_group_id BIGINT NOT NULL;
+
+ALTER TABLE consumer
+    ADD COLUMN withdrawn_at DATETIME NULL;
