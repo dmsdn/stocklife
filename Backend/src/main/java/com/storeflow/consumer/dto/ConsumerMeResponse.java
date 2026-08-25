@@ -22,6 +22,7 @@ public class ConsumerMeResponse {
     private Boolean byCar;
     private Grade grade;
     private int monthlySpendAmount;
+    private int pointBalance;
     private boolean marketingConsent;
     private boolean cameraConsent;
     private boolean micConsent;
@@ -39,6 +40,7 @@ public class ConsumerMeResponse {
         this.byCar = member != null ? member.getByCar() : null;
         this.grade = consumer.getGrade();
         this.monthlySpendAmount = consumer.getMonthlySpendAmount();
+        this.pointBalance = consumer.getPointBalance();
         this.marketingConsent = consumer.isMarketingConsent();
         this.cameraConsent = consumer.isCameraConsent();
         this.micConsent = consumer.isMicConsent();
@@ -55,6 +57,7 @@ public class ConsumerMeResponse {
     public Boolean getByCar() { return byCar; }
     public Grade getGrade() { return grade; }
     public int getMonthlySpendAmount() { return monthlySpendAmount; }
+    public int getPointBalance() { return pointBalance; }
     public boolean isMarketingConsent() { return marketingConsent; }
     public boolean isCameraConsent() { return cameraConsent; }
     public boolean isMicConsent() { return micConsent; }

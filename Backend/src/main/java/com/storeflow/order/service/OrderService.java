@@ -17,6 +17,8 @@ import com.storeflow.product.entity.Product;
 import com.storeflow.product.repository.ProductRepository;
 import com.storeflow.purchase.entity.Purchase;
 import com.storeflow.purchase.repository.PurchaseRepository;
+import com.storeflow.point.service.PointService;
+import com.storeflow.coupon.service.CouponService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,14 +40,18 @@ public class OrderService {
         private final InventoryService inventoryService;
         private final PurchaseRepository purchaseRepository;
         private final ConsumerEventService consumerEventService;
+        private final PointService pointService;
+        private final CouponService couponService;
 
         public OrderService(CartItemRepository cartItemRepository,
-                        ProductRepository productRepository,
-                        OrderRepository orderRepository,
-                        ConsumerRepository consumerRepository,
-                        InventoryService inventoryService,
-                        PurchaseRepository purchaseRepository,
-                        ConsumerEventService consumerEventService) {
+                            ProductRepository productRepository,
+                            OrderRepository orderRepository,
+                            ConsumerRepository consumerRepository,
+                            InventoryService inventoryService,
+                            PurchaseRepository purchaseRepository,
+                            ConsumerEventService consumerEventService,
+                            PointService pointService,
+                            CouponService couponService) {
                 this.cartItemRepository = cartItemRepository;
                 this.productRepository = productRepository;
                 this.orderRepository = orderRepository;
@@ -53,20 +59,22 @@ public class OrderService {
                 this.inventoryService = inventoryService;
                 this.purchaseRepository = purchaseRepository;
                 this.consumerEventService = consumerEventService;
+                this.pointService = pointService;
+                this.couponService = couponService;
         }
 
         @Transactional
-        public OrderResponse checkout(Long consumerId) {
+        public OrderResponse checkout(Long consumerId, Long consumerCouponId) {
                 List<CartItem> checkedItems = cartItemRepository.findByConsumerId(consumerId).stream()
-                                .filter(CartItem::isChecked)
-                                .toList();
+                        .filter(CartItem::isChecked)
+                        .toList();
 
                 if (checkedItems.isEmpty()) {
                         throw new IllegalStateException("결제할 상품이 선택되지 않았습니다.");
                 }
 
                 Consumer consumer = consumerRepository.findById(consumerId)
-                                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+                        .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
 
                 // member_id는 저장된 값이 아니라 계산값. 대응하는 members 행이 없으면(정상적으로는
                 // 가입 시 항상 생김) 아래 purchases INSERT가 FK 위반으로 실패한다 — 의도된 동작(이정기팀원 확인).
@@ -78,29 +86,39 @@ public class OrderService {
 
                 for (CartItem cartItem : checkedItems) {
                         Product product = productRepository.findWithLockBySkuId(cartItem.getSkuId())
-                                        .orElseThrow(() -> new IllegalStateException(
-                                                        "존재하지 않는 상품입니다. skuId=" + cartItem.getSkuId()));
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "존재하지 않는 상품입니다. skuId=" + cartItem.getSkuId()));
 
                         inventoryService.decreaseForSale(product.getSkuId(), cartItem.getQuantity());
 
                         order.addItem(new OrderItem(
-                                        product.getSkuId(),
-                                        product.getName(),
-                                        product.getPriceKrw(),
-                                        cartItem.getQuantity()));
+                                product.getSkuId(),
+                                product.getName(),
+                                product.getPriceKrw(),
+                                cartItem.getQuantity()));
 
                         purchaseRepository.save(new Purchase(
-                                        basketId, memberId, product.getSkuId(),
-                                        cartItem.getQuantity(), product.getPriceKrw(), purchasedAt));
+                                basketId, memberId, product.getSkuId(),
+                                cartItem.getQuantity(), product.getPriceKrw(), purchasedAt));
                 }
 
+                // 상품 합계가 확정된 뒤 쿠폰을 검증/계산한다.
+                CouponService.AppliedCoupon appliedCoupon =
+                        couponService.validateAndCalculate(consumerId, consumerCouponId, order.getOriginalAmount());
+                order.applyCoupon(appliedCoupon.consumerCouponId(), appliedCoupon.discountAmount());
+
                 orderRepository.save(order);
+                couponService.markUsed(consumerId, appliedCoupon.consumerCouponId(), order.getOrderId());
 
                 // session_id 개념이 아직 없어서 basketId로 대신함 (이전에 말씀드렸던 부분, 여전히 남아있음)
                 consumerEventService.record(ConsumerEvent.EventType.PURCHASE, basketId,
-                                memberId, null, null, "{\"basketId\":\"" + basketId + "\"}");
+                        memberId, null, null, "{\"basketId\":\"" + basketId + "\"}");
 
                 consumer.addSpend(order.getTotalAmount());
+
+                // 결제 완료 시 실결제 금액의 2%를 포인트로 적립한다.
+                // PointService가 주문별 중복 적립도 방지한다.
+                pointService.earnForPurchase(consumer, order);
 
                 cartItemRepository.deleteAll(checkedItems);
 
@@ -110,14 +128,14 @@ public class OrderService {
         @Transactional(readOnly = true)
         public List<OrderResponse> getMyOrders(Long consumerId) {
                 return orderRepository.findByConsumerIdOrderByCreatedAtDesc(consumerId).stream()
-                                .map(OrderResponse::new)
-                                .toList();
+                        .map(OrderResponse::new)
+                        .toList();
         }
 
         @Transactional(readOnly = true)
         public OrderResponse getOrderDetail(Long consumerId, Long orderId) {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
-                                .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 return new OrderResponse(order);
         }
 
@@ -133,14 +151,14 @@ public class OrderService {
                 long threshold = (minCount == null || minCount < 1) ? DEFAULT_MIN_PURCHASE_COUNT : minCount;
 
                 return orderRepository.findFrequentPurchases(consumerId, normalizedKeyword, threshold).stream()
-                                .map(FrequentPurchaseResponse::new)
-                                .toList();
+                        .map(FrequentPurchaseResponse::new)
+                        .toList();
         }
 
         @Transactional
         public OrderResponse requestRefund(Long consumerId, Long orderId) {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
-                                .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 order.requestRefund();
                 return new OrderResponse(order);
         }
@@ -153,12 +171,22 @@ public class OrderService {
         @Transactional
         public OrderResponse approveRefund(Long consumerId, Long orderId) {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
-                                .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 order.approveRefund();
 
                 for (OrderItem item : order.getOrderItems()) {
                         inventoryService.restockForRefund(item.getSkuId(), item.getQuantity());
                 }
+
+                Consumer consumer = consumerRepository.findById(consumerId)
+                        .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+
+                // 환불된 실제 결제금액을 이번 달 구매 누적액에서 차감하고
+                // 남은 누적 구매금액 기준으로 등급을 즉시 재계산한다.
+                consumer.subtractSpend(order.getTotalAmount());
+
+                pointService.revokeForRefund(consumer, order);
+                couponService.restoreForRefund(order.getOrderId());
 
                 return new OrderResponse(order);
         }

@@ -99,3 +99,34 @@ ALTER TABLE cart_item
 
 ALTER TABLE consumer
     ADD COLUMN withdrawn_at DATETIME NULL;
+
+
+-- 구매 완료 금액의 2% 포인트 적립 기능
+-- 1P = 1원, 계산 시 소수점 이하 버림
+
+-- 1) 회원 포인트 잔액
+ALTER TABLE consumer
+    ADD COLUMN point_balance INT NOT NULL DEFAULT 0 AFTER monthly_spend_amount;
+
+-- 2) 적립/차감 이력
+CREATE TABLE point_history (
+                               point_history_id BIGINT NOT NULL AUTO_INCREMENT,
+                               consumer_id BIGINT NOT NULL,
+                               order_id BIGINT NOT NULL,
+                               amount INT NOT NULL,
+                               type VARCHAR(30) NOT NULL,
+                               description VARCHAR(100) NOT NULL,
+                               created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                               PRIMARY KEY (point_history_id),
+                               CONSTRAINT fk_point_history_consumer
+                                   FOREIGN KEY (consumer_id) REFERENCES consumer(consumer_id),
+                               CONSTRAINT fk_point_history_order
+                                   FOREIGN KEY (order_id) REFERENCES orders(order_id),
+                               CONSTRAINT uk_point_history_order_type
+                                   UNIQUE (order_id, type),
+
+                               INDEX idx_point_history_consumer_created (consumer_id, created_at)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;

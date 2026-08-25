@@ -47,6 +47,7 @@ interface ProductDetail {
 
 const CART_STORAGE_KEY = "storeflow_cart_groups";
 const MEMBER_CACHE_KEY = "storeflow_member_cart_cache";
+const MIGRATION_ATTEMPTED_KEY = "storeflow_cart_migration_attempted";
 
 const INITIAL_CART_GROUPS: CartGroup[] = [
   {
@@ -55,33 +56,23 @@ const INITIAL_CART_GROUPS: CartGroup[] = [
     description: "일주일 식재료",
     createdAt: "오늘",
     store: "스토어플로우 마트",
-    products: [
-      { id: 90001, name: "서울우유 1L", category: "유제품", price: 2490, quantity: 1, checked: true },
-      { id: 90003, name: "계란 30구", category: "신선식품", price: 8990, quantity: 1, checked: true },
-      { id: 90007, name: "동원 참치 150g", category: "가공식품", price: 3280, quantity: 2, checked: true },
-    ],
+    products: [],
   },
   {
     id: 2,
     title: "생활용품",
     description: "집에 필요한 생활용품",
-    createdAt: "어제",
+    createdAt: "오늘",
     store: "스토어플로우 마트",
-    products: [
-      { id: 90010, name: "크리넥스 3겹 화장지 30롤", category: "생활용품", price: 12900, quantity: 1, checked: true },
-      { id: 90011, name: "섬유유연제 2L", category: "생활용품", price: 9800, quantity: 1, checked: true },
-    ],
+    products: [],
   },
   {
     id: 3,
     title: "주말 장보기",
     description: "이번 주말에 필요한 상품",
-    createdAt: "8월 15일",
+    createdAt: "오늘",
     store: "스토어플로우 마트",
-    products: [
-      { id: 90006, name: "삼겹살 1kg", category: "신선식품", price: 16900, quantity: 2, checked: true },
-      { id: 90014, name: "냉동 만두 1.5kg", category: "냉동식품", price: 8900, quantity: 1, checked: false },
-    ],
+    products: [],
   },
 ];
 
@@ -159,19 +150,21 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
 export async function loadCartGroups(): Promise<CartGroup[]> {
   if (!isLoggedIn()) return readGuestGroups();
 
-  // 로그인은 성공했지만 네트워크 문제로 직전 승계가 실패했을 수 있다.
-  // localStorage가 남아 있으면 DB 조회 전에 승계를 한 번 더 시도한다.
-  if (canUseStorage()) {
+  // 로그인 직후 승계가 실패했더라도 같은 페이지 렌더에서 무한 재호출하지 않는다.
+  // 로그인 1회당 migrate는 최대 1번만 시도하고, 실패 데이터는 localStorage에 보존한다.
+  if (canUseStorage() && window.sessionStorage.getItem(MIGRATION_ATTEMPTED_KEY) !== "1") {
     const raw = window.localStorage.getItem(CART_STORAGE_KEY);
     if (raw) {
+      window.sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "1");
       try {
         const guestGroups = JSON.parse(raw);
         if (Array.isArray(guestGroups) && guestGroups.length > 0) {
           await apiFetch("/api/cart/migrate", { method: "POST", body: JSON.stringify({ groups: guestGroups }) });
         }
         window.localStorage.removeItem(CART_STORAGE_KEY);
-      } catch {
-        // 승계 실패 시 절대 삭제하지 않는다. 다음 load/login에서 다시 시도한다.
+      } catch (error) {
+        console.error("[cart] guest cart migration failed", error);
+        // 실패 시 localStorage는 유지한다. 다음 로그인에서 다시 시도한다.
       }
     }
   }
@@ -185,6 +178,11 @@ export async function loadCartGroups(): Promise<CartGroup[]> {
 /** 로그인 성공 직후 호출. DB 저장이 성공한 경우에만 비회원 localStorage를 삭제한다. */
 export async function migrateGuestCartToAccount(): Promise<CartGroup[]> {
   if (!canUseStorage() || !isLoggedIn()) return [];
+
+  // login()에서 매 로그인마다 이 키를 초기화한 뒤 여기로 들어온다.
+  // migrate 요청을 먼저 attempted 처리해 loadCartGroups()가 중복 요청하지 않게 한다.
+  window.sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "1");
+
   const raw = window.localStorage.getItem(CART_STORAGE_KEY);
   const guestGroups: CartGroup[] = raw ? JSON.parse(raw) : [];
 
@@ -193,11 +191,18 @@ export async function migrateGuestCartToAccount(): Promise<CartGroup[]> {
       method: "POST",
       body: JSON.stringify({ groups: guestGroups }),
     });
+    // DB 승계가 성공했을 때만 비회원 장바구니를 삭제한다.
     window.localStorage.removeItem(CART_STORAGE_KEY);
   }
 
   window.sessionStorage.removeItem(MEMBER_CACHE_KEY);
   return loadCartGroups();
+}
+
+/** 새 로그인 시 승계를 다시 한 번 시도할 수 있도록 세션 플래그를 초기화한다. */
+export function resetCartMigrationAttempt(): void {
+  if (!canUseStorage()) return;
+  window.sessionStorage.removeItem(MIGRATION_ATTEMPTED_KEY);
 }
 
 export async function addProductToCartGroup(

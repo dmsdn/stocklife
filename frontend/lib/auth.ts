@@ -5,7 +5,7 @@
 "use client";
 
 import { apiFetch, setTokens, clearTokens, getOrCreateGuestSessionId } from "./api-client";
-import { migrateGuestCartToAccount } from "./cart-storage";
+import { migrateGuestCartToAccount, resetCartMigrationAttempt } from "./cart-storage";
 
 export interface SignupPayload {
   phoneNumber: string;
@@ -40,13 +40,15 @@ export async function login(phoneNumber: string, password: string): Promise<void
     }
   );
   setTokens(res.accessToken, res.refreshToken);
+  resetCartMigrationAttempt();
 
   // 로그인 성공 직후 비회원 localStorage 장바구니를 회원 DB로 승계한다.
   // 승계 실패 시 localStorage는 남겨두고 로그인 자체는 유지한다.
   try {
     await migrateGuestCartToAccount();
-  } catch {
-    // 다음 장바구니 로드 때 다시 승계할 수 있도록 로컬 데이터 보존.
+  } catch (error) {
+    console.error("[auth] guest cart migration failed", error);
+    // localStorage는 보존되고, 다음 로그인 때 다시 시도한다.
   }
 }
 

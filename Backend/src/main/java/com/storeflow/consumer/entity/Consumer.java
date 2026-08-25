@@ -37,7 +37,6 @@ public class Consumer {
     @Column(name = "mic_consent", nullable = false)
     private boolean micConsent;
 
-    // 마케팅 정보 수신 동의(선택). 회원가입 시 새로 추가된 항목.
     @Column(name = "marketing_consent", nullable = false)
     private boolean marketingConsent;
 
@@ -57,8 +56,10 @@ public class Consumer {
     @Column(name = "monthly_spend_amount", nullable = false)
     private int monthlySpendAmount = 0;
 
-    // 회원탈퇴 시각. null이면 정상 회원. phone_number가 UNIQUE라서 완전 삭제 대신
-    // 이 컬럼으로 소프트 삭제하고, 전화번호는 재가입 가능하도록 tombstone 값으로 바꿔둔다.
+    /** 1P = 1원. 구매 완료 금액의 2%를 누적한다. */
+    @Column(name = "point_balance", nullable = false)
+    private int pointBalance = 0;
+
     @Column(name = "withdrawn_at")
     private LocalDateTime withdrawnAt;
 
@@ -93,7 +94,6 @@ public class Consumer {
         this.refreshToken = refreshToken;
     }
 
-    /** 마이페이지 회원정보 수정(성별/생년월일). null이 오면 해당 필드는 바꾸지 않는다. */
     public void updateProfile(String gender, LocalDate birthDate) {
         if (gender != null) this.gender = gender;
         if (birthDate != null) this.birthDate = birthDate;
@@ -107,12 +107,6 @@ public class Consumer {
         return withdrawnAt != null;
     }
 
-    /**
-     * 회원탈퇴(소프트 삭제). 전화번호는 UNIQUE 제약이 있어 그대로 두면 이 사람이 같은 번호로
-     * 다시 가입할 수 없으므로, tombstone 값으로 바꿔서 원래 번호를 반환(release)한다.
-     * 로그인도 막아야 하므로 refreshToken도 함께 지운다. 비밀번호는 재로그인 자체가 막히므로
-     * 그대로 둬도 되지만, 혹시 모를 사고를 대비해 인코딩된 랜덤 값으로 덮어쓴다.
-     */
     public void withdraw(String tombstonePhoneNumber, String randomizedPassword) {
         this.withdrawnAt = LocalDateTime.now();
         this.phoneNumber = tombstonePhoneNumber;
@@ -120,10 +114,19 @@ public class Consumer {
         this.refreshToken = null;
     }
 
-    // 비밀번호 재설정 — 호출하는 쪽(ConsumerService)에서 이미 인코딩된 비밀번호를 넘겨야 한다.
     public void updatePassword(String encodedPassword) {
         this.password = encodedPassword;
-        this.refreshToken = null; // 재설정 후 기존 로그인 세션은 전부 무효화
+        this.refreshToken = null;
+    }
+
+    public void addPoints(int points) {
+        if (points < 0) throw new IllegalArgumentException("적립 포인트는 0 이상이어야 합니다.");
+        this.pointBalance += points;
+    }
+
+    public void subtractPoints(int points) {
+        if (points < 0) throw new IllegalArgumentException("차감 포인트는 0 이상이어야 합니다.");
+        this.pointBalance = Math.max(0, this.pointBalance - points);
     }
 
     public Long getConsumerId() { return consumerId; }
@@ -139,9 +142,25 @@ public class Consumer {
     public String getRefreshToken() { return refreshToken; }
     public Grade getGrade() { return grade; }
     public int getMonthlySpendAmount() { return monthlySpendAmount; }
+    public int getPointBalance() { return pointBalance; }
 
     public void addSpend(int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("구매 금액은 0 이상이어야 합니다.");
+        }
         this.monthlySpendAmount += amount;
+        this.grade = Grade.calculateFrom(this.monthlySpendAmount);
+    }
+
+    /**
+     * 환불 승인 시 이번 달 누적 구매금액에서 실제 결제금액을 차감하고
+     * 남은 누적 구매금액을 기준으로 회원 등급을 즉시 다시 계산한다.
+     */
+    public void subtractSpend(int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("차감 금액은 0 이상이어야 합니다.");
+        }
+        this.monthlySpendAmount = Math.max(0, this.monthlySpendAmount - amount);
         this.grade = Grade.calculateFrom(this.monthlySpendAmount);
     }
 

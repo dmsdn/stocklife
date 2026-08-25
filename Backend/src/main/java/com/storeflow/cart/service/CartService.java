@@ -118,6 +118,10 @@ public class CartService {
             if (guestGroup.getProducts() == null) continue;
             for (MigrateGuestCartRequest.Item guestItem : guestGroup.getProducts()) {
                 if (guestItem == null || guestItem.getId() == null) continue;
+                // localStorage에 과거 목업 SKU가 남아 있어도 FK 오류로 전체 승계를 실패시키지 않는다.
+                // 실제 products 테이블에 존재하는 상품만 회원 장바구니로 승계한다.
+                if (!productRepository.existsById(guestItem.getId())) continue;
+
                 int qty = guestItem.getQuantity() == null ? 1 : Math.max(1, guestItem.getQuantity());
                 boolean checked = guestItem.getChecked() == null || guestItem.getChecked();
 
