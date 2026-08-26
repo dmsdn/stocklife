@@ -61,3 +61,21 @@ CREATE TABLE IF NOT EXISTS order_item (
                                           CONSTRAINT fk_orderitem_order FOREIGN KEY (order_id) REFERENCES orders(order_id),
                                           CONSTRAINT fk_orderitem_product FOREIGN KEY (sku_id) REFERENCES products(sku_id)
 );
+
+CREATE TABLE cart_group (
+                            cart_group_id BIGINT NOT NULL AUTO_INCREMENT,
+                            consumer_id BIGINT NOT NULL,
+                            title VARCHAR(100) NOT NULL,
+                            description VARCHAR(255) NULL,
+                            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                ON UPDATE CURRENT_TIMESTAMP,
+
+                            PRIMARY KEY (cart_group_id),
+                            KEY idx_cart_group_consumer (consumer_id),
+
+                            CONSTRAINT fk_cart_group_consumer
+                                FOREIGN KEY (consumer_id)
+                                    REFERENCES consumer (consumer_id)
+                                    ON DELETE CASCADE
+);
