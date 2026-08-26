@@ -41,24 +41,37 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://192.168.0.8
 const ACCESS_TOKEN_KEY = "storeflow_access_token";
 const REFRESH_TOKEN_KEY = "storeflow_refresh_token";
 
+// ✅ "로그인 상태 유지" 체크 여부에 따라 저장소를 다르게 씁니다.
+//   - localStorage: 브라우저를 완전히 껐다 켜거나 새 창을 열어도 로그인이 유지됨
+//   - sessionStorage: 그 탭에서만 유지. 새 탭/새 창을 열거나 브라우저(탭)를 닫으면
+//     로그인이 풀림 — "로그인 유지"를 안 눌렀을 때 원하시는 동작입니다.
+//   읽을 땐 둘 다 확인합니다(로그인 당시 어느 쪽에 저장했는지 호출부가 몰라도 되게).
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY) ?? window.sessionStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  return window.localStorage.getItem(REFRESH_TOKEN_KEY) ?? window.sessionStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
-export function setTokens(accessToken: string, refreshToken: string) {
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+/** @param persist true면 localStorage(브라우저 재시작해도 유지), false면 sessionStorage(이 탭 닫으면 로그아웃) */
+export function setTokens(accessToken: string, refreshToken: string, persist: boolean = true) {
+  const storage = persist ? window.localStorage : window.sessionStorage;
+  const other = persist ? window.sessionStorage : window.localStorage;
+  // 이전에 반대쪽에 저장돼 있던 토큰이 남아 getAccessToken()에서 잘못 읽히지 않도록 정리
+  other.removeItem(ACCESS_TOKEN_KEY);
+  other.removeItem(REFRESH_TOKEN_KEY);
+  storage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 }
 
 export function clearTokens() {
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+  window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function isLoggedIn(): boolean {

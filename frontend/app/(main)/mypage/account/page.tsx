@@ -11,7 +11,7 @@ import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { LogoutButton } from "@/components/domain/logout-button";
 import { WithdrawButton } from "@/components/domain/withdraw-button";
 import { getMyProfile, type ConsumerMe } from "@/lib/consumer-api";
-import { GRADE_TIERS } from "@/lib/grade";
+import { GradeBox } from "@/components/domain/grade-box";
 
 function maskPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
@@ -49,15 +49,6 @@ export default function AccountPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const currentTierIndex = profile ? GRADE_TIERS.findIndex((t) => t.key === profile.grade) : 0;
-  const currentTier = GRADE_TIERS[Math.max(currentTierIndex, 0)];
-  const nextTier = GRADE_TIERS[currentTierIndex + 1];
-  // ✅ 금액(profile.monthlySpendAmount)은 화면에 안 보여주고, 진행률 계산에만 내부적으로 씀
-  const progressPercent =
-    profile && nextTier
-      ? Math.min(100, Math.max(0, ((profile.monthlySpendAmount - currentTier.threshold) / (nextTier.threshold - currentTier.threshold)) * 100))
-      : 100;
-
   return (
     <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -75,22 +66,10 @@ export default function AccountPage() {
         <ChevronRight size={18} className="text-muted-foreground" />
       </Link>
 
-      {/* 등급 — 금액 숨기고 진행률 바만 */}
-      {profile && (
-        <div className="mb-6 rounded-sm border border-border p-4">
-          <p className="text-sm font-semibold">{currentTier.label} 등급</p>
-          {nextTier ? (
-            <>
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-foreground" style={{ width: `${progressPercent}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">다음 등급({nextTier.label})까지 조금 더 남았어요</p>
-            </>
-          ) : (
-            <p className="mt-2 text-xs text-muted-foreground">가장 높은 등급이에요</p>
-          )}
-        </div>
-      )}
+      {/* 등급 — 마이페이지 메인 "멤버십"이랑 같은 컴포넌트 재사용 */}
+      <div className="mb-6">
+        <GradeBox profile={profile} />
+      </div>
 
       <div className="divide-y divide-border">
         <Link href="/mypage/account/phone" className="flex items-center justify-between py-3 text-sm">

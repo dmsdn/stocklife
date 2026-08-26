@@ -36,9 +36,9 @@ export default function LoginPage() {
     setLoginError(false);
     setSubmitting(true);
     try {
-      await login(toBackendPhone(phone), password);
-      // TODO: keepLoggedIn(로그인 상태 유지)을 반영하려면 리프레시 토큰 만료 정책을
-      // 백엔드와 맞춰야 함 — 지금은 옵션과 무관하게 항상 토큰을 저장만 함
+      // ✅ 로그인 유지 체크 여부를 실제로 반영 — 안 누르면 이 탭 닫을 때(sessionStorage)
+      //   또는 새 탭/새 창을 열 때 로그아웃 상태로 보이게 됩니다.
+      await login(toBackendPhone(phone), password, keepLoggedIn);
       const next = searchParams.get("next");
       router.push(next && next.startsWith("/") ? next : "/");
     } catch (e) {
