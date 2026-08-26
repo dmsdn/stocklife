@@ -68,4 +68,5 @@ public class Order {
     public int getTotalAmount() { return totalAmount; }
     public String getStatus() { return status; }
     public List<OrderItem> getOrderItems() { return orderItems; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 }

@@ -1,6 +1,5 @@
 package com.storeflow.consumer.service;
 
-import com.storeflow.cart.service.CartService;
 import com.storeflow.consumer.dto.ConsumerMeResponse;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
@@ -15,7 +14,6 @@ import com.storeflow.consumer.exception.MemberNotFoundException;
 import com.storeflow.consumer.repository.ConsumerRepository;
 import com.storeflow.consumer.repository.MemberRepository;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
-import com.storeflow.inventory.repository.ConsumerEventRepository;
 import com.storeflow.verification.entity.VerificationPurpose;
 import com.storeflow.verification.service.PhoneVerificationService;
 import org.slf4j.Logger;
@@ -35,23 +33,17 @@ public class ConsumerService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final ConsumerJwtUtil jwtUtil;
-    private final ConsumerEventRepository consumerEventRepository;
-    private final CartService cartService;
     private final PhoneVerificationService phoneVerificationService;
 
     public ConsumerService(ConsumerRepository consumerRepository,
                            MemberRepository memberRepository,
                            PasswordEncoder passwordEncoder,
                            ConsumerJwtUtil jwtUtil,
-                           ConsumerEventRepository consumerEventRepository,
-                           CartService cartService,
                            PhoneVerificationService phoneVerificationService) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
-        this.consumerEventRepository = consumerEventRepository;
-        this.cartService = cartService;
         this.phoneVerificationService = phoneVerificationService;
     }
 
@@ -125,22 +117,6 @@ public class ConsumerService {
         String refreshToken = jwtUtil.generateRefreshToken(consumer.getConsumerId());
 
         consumer.updateRefreshToken(refreshToken);
-
-        // 요구사항 29: 비회원 상태로 쌓인 데이터(행동 기록 + 장바구니)를 이 계정으로 승계한다.
-        // 두 승계 모두 이 메서드의 @Transactional 하나 안에서 처리 — 한쪽만 성공하고 롤백되는
-        // 상황이 생기지 않도록 같은 트랜잭션에 둔다.
-        // member_id는 Member.toMemberId(consumerId)와 동일한 계산식으로 구해야 값이 일치한다.
-        if (request.getSessionId() != null && !request.getSessionId().isBlank()) {
-            Integer memberId = Member.toMemberId(consumer.getConsumerId());
-            int claimedEvents = consumerEventRepository.claimGuestEvents(request.getSessionId(), memberId);
-            if (claimedEvents > 0) {
-                log.info("비회원 이벤트 {}건을 sessionId={} → memberId={} 로 승계했습니다.",
-                        claimedEvents, request.getSessionId(), memberId);
-            }
-
-            // 요구사항: 비회원 → 회원 장바구니 승계. 동일 SKU는 수량 병합(claimGuestCart 내부 처리).
-            cartService.claimGuestCart(request.getSessionId(), consumer.getConsumerId());
-        }
 
         return new LoginResponse(accessToken, refreshToken);
     }
