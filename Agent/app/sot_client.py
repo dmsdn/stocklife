@@ -842,10 +842,29 @@ def get_pending_replenishments() -> list[dict]:
       하므로 예외를 삼키지 않고 None을 돌려준다.
     """
     if not config.USE_MOCK_SOT:
+        # ⚠ **실패를 가려서 잡는다 — 08-27 B 검수 지적.**
+        #   전에는 `except Exception: return None` 으로 모든 실패를 "창구 없음"으로
+        #   뭉갰다. 창구가 실제로 없던 동안(요청 ③ 구현 전)은 맞는 근사였지만
+        #   이제는 창구가 있다 — 그 상태에서 **키가 틀려 401이 와도** 에이전트가
+        #   *"보충 대기를 조회할 창구가 아직 없습니다"* 라고 **사용자에게 거짓**을
+        #   말한다. 원인은 인증인데 화면에는 미구현이라 뜨니 아무도 못 고친다.
+        #
+        #   그래서 셋을 가른다:
+        #     404          창구 없음        → None ("모른다" — infer 가 시간을 안 말한다)
+        #     그 외 실패    통신·인증 오류    → 예외를 그대로 올린다
+        #                                     (query.py 원칙 ④가 값으로 바꿔 LLM 이
+        #                                      "지금 조회가 안 된다"로 착지하고,
+        #                                      로그에는 진짜 원인이 남는다)
+        #   404 도 "모른다"인 것은 같지만, **왜 모르는지**가 로그에서 갈린다.
         try:
             rows = _http_get(_API["pending_replenish"], headers=_internal_headers())
-        except Exception:                                  # noqa: BLE001
-            return None                                    # 창구 없음 ≠ 대기 0건
+        except Exception as e:                             # noqa: BLE001
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 404:
+                return None                                # 창구 없음 ≠ 대기 0건
+            print(f"[sot] pending 조회 실패({status or type(e).__name__}) — "
+                  f"창구 없음이 아니다: {e}")
+            raise
         return [{"sku_id": r.get("skuId"), "location_id": r.get("locationId"),
                  "floor_no": r.get("floorNo"), "has_bulk": bool(r.get("hasBulk")),
                  "queued_at": r.get("queuedAt")}
