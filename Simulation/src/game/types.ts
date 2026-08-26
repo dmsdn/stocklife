@@ -32,6 +32,22 @@ export interface FacilityInfo {
   y: number;
 }
 
+// 팀이 준 매장 도면(1F/2F/3F 이미지)에 있는 "매대는 아니지만 매장을 구성하는 요소들" —
+// 행사 상품 진열대, 계산대/SCAN, ATM, 베이커리·푸드코트 같은 취식 코너, 고객센터,
+// 안경/보청기 센터·약국, 시식 코너, A/S센터, 가전 체험존, 휴게 라운지, 입구 표시 등.
+// 매대(LocationInfo)처럼 상품이 진열되거나 클릭해서 상품 팝업이 뜨는 대상이 아니라,
+// 그냥 "여기에 이런 공간이 있다"를 보여주는 순수 표시용 사각 구역이다 — 그래서 일부러
+// occupied(통행 가능 여부)나 locations(상품 위치)에는 전혀 관여하지 않는다: NPC 길찾기나
+// Agent 쪽 매대 좌표 데이터에 영향을 주지 않고 화면에 라벨 박스만 하나 더 그리는 것뿐이다.
+export interface ServiceArea {
+  id: string;     // 'checkout' | 'atm' | 'bakery' | ... (고유 식별자, 존/시설 타입과 안 겹치게)
+  label: string;  // 화면에 표시할 이름, 예: '계산대 / SCAN'
+  x: number;      // 그리드 좌표 (왼쪽 위 모서리, 셀 단위)
+  y: number;
+  w: number;      // 폭(칸 수)
+  h: number;      // 높이(칸 수)
+}
+
 // 매대에 진열된 상품 — 실제 DB 연동 전까지는 location_id 기반으로 결정적으로
 // 생성한 더미 데이터(src/api/products.ts)를 사용한다.
 export interface ProductInfo {
@@ -56,6 +72,7 @@ export interface FloorData {
   locations: LocationInfo[];
   occupied: [number, number][]; // 매대가 차지하는 그리드 셀 (통행 불가 = map_cells.passable=0에 대응)
   facilities: FacilityInfo[];
+  serviceAreas?: ServiceArea[]; // 행사 상품·계산대·ATM 등 매대가 아닌 표시용 구역(선택적)
 }
 
 export interface GridPoint {

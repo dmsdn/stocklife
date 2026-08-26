@@ -61,4 +61,26 @@ public class InternalPurchaseController {
         return ResponseEntity.ok(result);
     }
 
+        /**
+     * "요즘 뭐가 잘 나가요?" — 카테고리(선택) 안에서 최근 인기 상품 상위 N개.
+     * 공개 /api/purchases/popular가 JWT를 요구해서, 서버 대 서버 호출(사용자 토큰 없음)
+     * 경로로는 이 내부 엔드포인트를 대신 쓴다. 응답 형태는 /compare와 동일(ProductPopularityResponse).
+     */
+    @GetMapping("/popular")
+    public ResponseEntity<?> getPopularProducts(
+            @RequestHeader("X-Internal-Service-Key") String key,
+            @RequestParam(required = false) String categoryL2,
+            @RequestParam(required = false) Integer lookbackDays,
+            @RequestParam(required = false) Integer limit) {
+        try {
+            internalServiceAuth.verify(key);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(401).body(e.getMessage());
+        }
+
+        List<ProductPopularityResponse> result =
+                purchaseService.getPopularProducts(categoryL2, lookbackDays, limit);
+        return ResponseEntity.ok(result);
+    }
+
 }
