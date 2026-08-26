@@ -35,7 +35,7 @@ export function QuantityStepper({
         type="button"
         aria-label="수량 감소"
         onClick={() => onChange(Math.max(min, quantity - 1))}
-        className={cn("flex items-center justify-center rounded-md border border-border", s.button)}
+        className={cn("flex items-center justify-center rounded-full border border-border", s.button)}
       >
         <Minus size={s.icon} />
       </button>
@@ -44,7 +44,7 @@ export function QuantityStepper({
         type="button"
         aria-label="수량 증가"
         onClick={() => onChange(quantity + 1)}
-        className={cn("flex items-center justify-center rounded-md border border-border", s.button)}
+        className={cn("flex items-center justify-center rounded-full border border-border", s.button)}
       >
         <Plus size={s.icon} />
       </button>

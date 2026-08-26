@@ -1,7 +1,7 @@
 // components/domain/filter-panel.tsx
 // ✅ "지역"·"별점" 탭 제거 (지역은 안 쓰기로 했고, 별점은 후기 기능 자체를 빼기로 한 결정과
 //   맞춰서 제거). 대신 "가격" 탭(이중 슬라이더, 1,000원 단위)을 추가했습니다.
-// ✅ 상단 모서리를 rounded-2xl → rounded-md로 변경.
+// ✅ 상단 모서리를 rounded-2xl → rounded-sm으로 통일(globals.css 컨벤션).
 "use client";
 
 import { useState } from "react";
@@ -82,7 +82,7 @@ export function FilterPanel({
       onClick={onClose}
     >
       <div
-        className="flex h-[65vh] w-full flex-col rounded-t-md bg-card md:h-[520px] md:max-w-md md:rounded-md"
+        className="flex h-[65vh] w-full flex-col rounded-t-sm bg-card md:h-[520px] md:max-w-md md:rounded-sm"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 pt-5">

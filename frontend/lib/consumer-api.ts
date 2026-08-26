@@ -23,6 +23,7 @@ export interface ConsumerMe {
 }
 
 export interface UpdateConsumerPayload {
+    name?: string;
     gender?: string | null;
     birthDate?: string | null;
     householdSize?: number | null;

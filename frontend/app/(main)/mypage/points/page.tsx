@@ -29,7 +29,7 @@ export default function PointsPage() {
       </header>
 
       <section className="px-5 pt-6">
-        <div className="rounded-2xl bg-[#F6F7F9] p-5">
+        <div className="rounded-sm bg-[#F6F7F9] p-5">
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Coins className="h-4 w-4" />
             보유 포인트

@@ -52,7 +52,7 @@ export default function CouponsPage() {
 
         <div className="mt-4 space-y-3">
           {coupons.map((coupon) => (
-            <div key={coupon.id} className={`overflow-hidden rounded-2xl bg-white ${coupon.used ? "opacity-50" : ""}`}>
+            <div key={coupon.id} className={`overflow-hidden rounded-sm bg-white ${coupon.used ? "opacity-50" : ""}`}>
               <div className="flex">
                 <div className="flex w-20 shrink-0 items-center justify-center bg-[#111111] text-white">
                   <Ticket className="h-6 w-6" />

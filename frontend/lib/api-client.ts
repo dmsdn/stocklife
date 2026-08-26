@@ -25,7 +25,7 @@ export function getOrCreateGuestSessionId(): string {
   return id;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://192.168.0.80:8080";
 
 const ACCESS_TOKEN_KEY = "storeflow_access_token";
 const REFRESH_TOKEN_KEY = "storeflow_refresh_token";

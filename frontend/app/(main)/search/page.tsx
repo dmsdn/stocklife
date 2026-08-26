@@ -184,7 +184,7 @@ function SearchPageInner() {
         <Link href="/">
           <ChevronLeft size={20} />
         </Link>
-        <div className="flex flex-1 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+        <div className="flex flex-1 items-center gap-2 rounded-sm border border-border px-3 py-2 text-sm">
           <SearchIcon size={16} className="text-muted-foreground" />
           <input
             value={keyword}
@@ -197,7 +197,7 @@ function SearchPageInner() {
         </div>
 
         {inputFocused && recent.length > 0 && (
-          <div className="absolute left-8 right-0 top-full z-20 mt-2 rounded-md border border-border bg-card p-3 shadow-sm">
+          <div className="absolute left-8 right-0 top-full z-20 mt-2 rounded-sm border border-border bg-card p-3 shadow-sm">
             <p className="mb-2 text-xs text-muted-foreground">최근 검색어</p>
             <div className="flex flex-wrap gap-2">
               {recent.map((word) => (
@@ -249,7 +249,7 @@ function SearchPageInner() {
         {results.map((product) => (
           <div key={product.skuId} className="flex gap-3 py-3">
             <button type="button" onClick={() => setDetailProductId(product.skuId)} className="flex flex-1 gap-3 text-left">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
                 IMG
               </div>
               <div className="flex min-w-0 flex-1 flex-col justify-between">

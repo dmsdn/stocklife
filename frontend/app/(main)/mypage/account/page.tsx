@@ -1,10 +1,8 @@
 // app/(main)/mypage/account/page.tsx
-// ✅ "회원정보 수정" 누르면 실제 수정 폼으로 바뀝니다. 이름은 항상 수정 가능, 휴대폰/
-//   생년월일/성별은 이미 값이 있으면 고정(회원가입 때 확정된 정보), 비어있으면 입력 가능.
-//   가구원 수는 회원가입 때 쓰던 질문 화면과 같은 1~5 버튼 UI를 그대로 씁니다.
-// ⚠ GET/PATCH /api/consumers/me가 백엔드에 아직 없어서, 지금은 조회가 항상 실패로
-//   떨어지고(→ 전부 빈 값), 저장을 눌러도 서버에 실제로 반영되지 않습니다. 엔드포인트
-//   생기면 lib/consumer-profile.ts만 보면 됩니다.
+// ✅ 닉네임: 언제든 수정 가능(링크 유지)
+// ✅ 성별/나이: 값이 있으면 텍스트만 보여주고 링크 제거(수정 못 하게), 없으면 입력하러
+//   갈 수 있게 링크 유지
+// ✅ 등급: 금액은 숨기고 등급명 텍스트 + 다음 등급까지 진행률 바로 표시
 "use client";
 
 import { useEffect, useState } from "react";
@@ -13,6 +11,7 @@ import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { LogoutButton } from "@/components/domain/logout-button";
 import { WithdrawButton } from "@/components/domain/withdraw-button";
 import { getMyProfile, type ConsumerMe } from "@/lib/consumer-api";
+import { GRADE_TIERS } from "@/lib/grade";
 
 function maskPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
@@ -45,61 +44,117 @@ export default function AccountPage() {
 
   useEffect(() => {
     getMyProfile()
-        .then(setProfile)
-        .catch(() => setProfile(null))
-        .finally(() => setLoading(false));
+      .then(setProfile)
+      .catch(() => setProfile(null))
+      .finally(() => setLoading(false));
   }, []);
 
-  const infoRows = [
-    { href: "/mypage/account/phone", label: "계정", value: profile ? maskPhone(profile.phoneNumber) : "" },
-    { href: "/mypage/account/password", label: "비밀번호 변경", value: "" },
-    { href: "/mypage/account/household", label: "가구원 수", value: profile ? householdLabel(profile.householdSize) : "" },
-    { href: "/mypage/account/gender", label: "성별", value: profile ? genderLabel(profile.gender) : "" },
-    { href: "/mypage/account/age", label: "나이", value: profile ? ageLabel(profile.birthDate) : "" },
-  ];
+  const currentTierIndex = profile ? GRADE_TIERS.findIndex((t) => t.key === profile.grade) : 0;
+  const currentTier = GRADE_TIERS[Math.max(currentTierIndex, 0)];
+  const nextTier = GRADE_TIERS[currentTierIndex + 1];
+  // ✅ 금액(profile.monthlySpendAmount)은 화면에 안 보여주고, 진행률 계산에만 내부적으로 씀
+  const progressPercent =
+    profile && nextTier
+      ? Math.min(100, Math.max(0, ((profile.monthlySpendAmount - currentTier.threshold) / (nextTier.threshold - currentTier.threshold)) * 100))
+      : 100;
 
   return (
-      <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/mypage">
-              <ChevronLeft size={20} />
-            </Link>
-            <p className="text-base">내 정보</p>
-          </div>
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/mypage">
+            <ChevronLeft size={20} />
+          </Link>
+          <p className="text-base">내 정보</p>
         </div>
-
-        {/* TODO: 프로필 사진 자리 — 백엔드에 프로필 이미지 업로드 API가 없어 자리만 유지 */}
-        <div className="mb-2 flex items-center gap-3">
-          <div className="h-20 w-20 rounded-full bg-muted" />
-          <div>
-            <p className="text-base font-medium">{profile?.name ?? (loading ? "불러오는 중..." : "")}</p>
-            <p className="text-xs text-muted-foreground">
-              {profile ? `${profile.grade} 등급 · 이번 달 ${profile.monthlySpendAmount.toLocaleString()}원` : ""}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 divide-y divide-border">
-          {infoRows.map((row) => (
-              <Link key={row.href} href={row.href} className="flex items-center justify-between py-3 text-sm">
-                <span>{row.label}</span>
-                <span className="flex items-center gap-1 text-muted-foreground">
-              {row.value}
-                  <ChevronRight size={16} />
-            </span>
-              </Link>
-          ))}
-        </div>
-
-        <LogoutButton className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
-          <LogOut size={16} />
-          로그아웃
-        </LogoutButton>
-
-        <WithdrawButton className="mt-4 block text-sm text-muted-foreground">
-          회원탈퇴
-        </WithdrawButton>
       </div>
+
+      {/* 닉네임 — 항상 수정 가능 */}
+      <Link href="/mypage/account/name" className="mb-4 flex items-center justify-between py-2">
+        <p className="text-base font-medium">{profile?.name || (loading ? "불러오는 중..." : "닉네임 입력하기")}</p>
+        <ChevronRight size={18} className="text-muted-foreground" />
+      </Link>
+
+      {/* 등급 — 금액 숨기고 진행률 바만 */}
+      {profile && (
+        <div className="mb-6 rounded-sm border border-border p-4">
+          <p className="text-sm font-semibold">{currentTier.label} 등급</p>
+          {nextTier ? (
+            <>
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-foreground" style={{ width: `${progressPercent}%` }} />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">다음 등급({nextTier.label})까지 조금 더 남았어요</p>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">가장 높은 등급이에요</p>
+          )}
+        </div>
+      )}
+
+      <div className="divide-y divide-border">
+        <Link href="/mypage/account/phone" className="flex items-center justify-between py-3 text-sm">
+          <span>계정</span>
+          <span className="flex items-center gap-1 text-muted-foreground">
+            {profile ? maskPhone(profile.phoneNumber) : ""}
+            <ChevronRight size={16} />
+          </span>
+        </Link>
+
+        <Link href="/mypage/account/password" className="flex items-center justify-between py-3 text-sm">
+          <span>비밀번호 변경</span>
+          <ChevronRight size={16} className="text-muted-foreground" />
+        </Link>
+
+        {/* 성별 — 값 있으면 텍스트만, 없으면 입력하러 가는 링크 */}
+        {profile?.gender ? (
+          <div className="flex items-center justify-between py-3 text-sm">
+            <span>성별</span>
+            <span className="text-muted-foreground">{genderLabel(profile.gender)}</span>
+          </div>
+        ) : (
+          <Link href="/mypage/account/gender" className="flex items-center justify-between py-3 text-sm">
+            <span>성별</span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              미입력
+              <ChevronRight size={16} />
+            </span>
+          </Link>
+        )}
+
+        {/* 나이 — 값 있으면 텍스트만, 없으면 입력하러 가는 링크 */}
+        {profile?.birthDate ? (
+          <div className="flex items-center justify-between py-3 text-sm">
+            <span>나이</span>
+            <span className="text-muted-foreground">{ageLabel(profile.birthDate)}</span>
+          </div>
+        ) : (
+          <Link href="/mypage/account/age" className="flex items-center justify-between py-3 text-sm">
+            <span>나이</span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              미입력
+              <ChevronRight size={16} />
+            </span>
+          </Link>
+        )}
+
+        <Link href="/mypage/account/household" className="flex items-center justify-between py-3 text-sm">
+          <span>가구원 수</span>
+          <span className="flex items-center gap-1 text-muted-foreground">
+            {profile ? householdLabel(profile.householdSize) : ""}
+            <ChevronRight size={16} />
+          </span>
+        </Link>
+      </div>
+
+      <LogoutButton className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
+        <LogOut size={16} />
+        로그아웃
+      </LogoutButton>
+
+      <WithdrawButton className="mt-4 block text-sm text-muted-foreground">
+        회원탈퇴
+      </WithdrawButton>
+    </div>
   );
 }

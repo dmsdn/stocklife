@@ -63,7 +63,7 @@ export function AttachListPickerDialog({ open, onClose, onSelect }: AttachListPi
             const checkedCount = group.products.filter((p) => p.checked).length;
 
             return (
-              <div key={group.id} className="rounded-md border border-border">
+              <div key={group.id} className="rounded-sm border border-border">
                 <button
                   type="button"
                   onClick={() => setExpandedId(expanded ? null : group.id)}

@@ -39,13 +39,13 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
 
         {/* 값 말풍선 — clamp()로 화면 밖으로 안 나가게 */}
         <span
-          className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background"
+          className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground px-2 py-1 text-xs text-background"
           style={{ left: clampedLeft(toPercent(low)) }}
         >
           {low.toLocaleString()}원
         </span>
         <span
-          className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background"
+          className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground px-2 py-1 text-xs text-background"
           style={{ left: clampedLeft(toPercent(high)) }}
         >
           {high.toLocaleString()}원
@@ -86,7 +86,7 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
           step={step}
           value={low}
           onChange={(e) => handleLowChange(Number(e.target.value) || min)}
-          className="w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+          className="w-full min-w-0 rounded-sm border border-border px-3 py-2 text-sm"
         />
         <span className="shrink-0 text-muted-foreground">~</span>
         <input
@@ -97,7 +97,7 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
           step={step}
           value={high}
           onChange={(e) => handleHighChange(Number(e.target.value) || max)}
-          className="w-full min-w-0 rounded-md border border-border px-3 py-2 text-sm"
+          className="w-full min-w-0 rounded-sm border border-border px-3 py-2 text-sm"
         />
         <span className="shrink-0 text-sm text-muted-foreground">원</span>
       </div>

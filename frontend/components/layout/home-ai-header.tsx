@@ -69,16 +69,16 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
         {/* ✅ 검색/저장/스캔/마이페이지는 모바일에 이미 하단탭바로 있어서 데스크톱에서만 노출
             (여기 없어서 모바일 폭이 넘쳤던 게 알림·AI챗 입력창이 화면 밖으로 밀리던 원인) */}
         <nav className="hidden items-center gap-1 md:flex" aria-label="주요 메뉴">
-          <Link href="/search" aria-label="검색" title="검색" className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link href="/search" aria-label="검색" title="검색" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
             <SearchIcon />
           </Link>
-          <Link href="/saved" aria-label="저장" title="저장" className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link href="/saved" aria-label="저장" title="저장" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
             <HeartIcon />
           </Link>
-          <Link href="/scan" aria-label="스캔" title="스캔" className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link href="/scan" aria-label="스캔" title="스캔" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
             <BarcodeIcon />
           </Link>
-          <Link href="/mypage" aria-label="마이페이지" title="마이페이지" className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link href="/mypage" aria-label="마이페이지" title="마이페이지" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
             <UserIcon />
           </Link>
         </nav>
@@ -88,7 +88,7 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
           href="/notifications"
           aria-label="알림"
           title="알림"
-          className="relative ml-1 flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="relative ml-1 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <BellIcon />
           {MOCK_UNREAD_COUNT > 0 && (

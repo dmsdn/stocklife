@@ -30,7 +30,7 @@ export default function TierGuidePage() {
       <SubpageHeader title="등급 안내" />
 
       {/* 현재 등급 카드 */}
-      <div className="rounded-xl border border-border bg-muted p-5">
+      <div className="rounded-sm border border-border bg-muted p-5">
         <p className="text-xs text-muted-foreground">현재 등급</p>
         <p className="mt-1 text-2xl font-bold">{currentTier.label}</p>
         <p className="mt-1 text-xs text-muted-foreground">이번 달 누적 결제 {monthlySpend.toLocaleString()}원</p>
@@ -54,7 +54,7 @@ export default function TierGuidePage() {
           return (
             <div
               key={tier.key}
-              className={`rounded-lg border p-4 ${isCurrent ? "border-primary" : "border-border"}`}
+              className={`rounded-sm border p-4 ${isCurrent ? "border-primary" : "border-border"}`}
             >
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{tier.label}</p>

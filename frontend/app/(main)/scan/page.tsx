@@ -12,7 +12,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronDown, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
+import { ChevronDown, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScanCartDialog } from "@/components/domain/scan-cart-dialog";
@@ -159,7 +159,7 @@ function ScanPageInner() {
           <button
             type="button"
             onClick={() => setGroupPickerOpen(true)}
-            className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2.5 text-left text-sm"
+            className="flex w-full items-center justify-between rounded-sm border border-border px-3 py-2.5 text-left text-sm"
           >
             <span className="min-w-0 truncate">
               {selectedGroup ? `${selectedGroup.title} (${selectedGroup.products.length}개)` : "리스트 선택"}
@@ -215,7 +215,7 @@ function ScanPageInner() {
         {product && (
           <div className="shrink-0 space-y-3 border-t border-border p-4">
             <div className="flex gap-3">
-              <div className="h-16 w-16 shrink-0 rounded-md border border-border bg-muted" />
+              <div className="h-16 w-16 shrink-0 rounded-sm border border-border bg-muted" />
               <div className="flex-1">
                 <p className="text-sm">{product.name}</p>
                 <p className="text-sm font-semibold">{product.price.toLocaleString()}원</p>

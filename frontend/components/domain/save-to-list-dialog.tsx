@@ -51,7 +51,7 @@ export function SaveToListDialog({ open, onClose, onSelect }: SaveToListDialogPr
                 onSelect(group.id);
                 onClose();
               }}
-              className="flex w-full items-center justify-between rounded-md px-3 py-3 text-left text-sm hover:bg-muted"
+              className="flex w-full items-center justify-between rounded-sm px-3 py-3 text-left text-sm hover:bg-muted"
             >
               <span>{group.title}</span>
               <span className="text-xs text-muted-foreground">{group.products.length}개</span>

@@ -1,9 +1,9 @@
-
-// ⚠ 회원가입 시 한 번만 저장되고, 가입 후 수정하는 API가 백엔드에 없습니다.
+// ✅ 한 번 입력하면 수정 불가 — 이미 값 있으면 안내만 보여주고 선택 UI 자체를 숨깁니다.
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { Button } from "@/components/ui/button";
 import { getMyProfile, updateMyProfile } from "@/lib/consumer-api";
@@ -16,11 +16,17 @@ const OPTIONS = [
 export default function AccountGenderPage() {
     const router = useRouter();
     const [gender, setGender] = useState<string | null>(null);
+    const [alreadySet, setAlreadySet] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        getMyProfile().then((p) => setGender(p.gender)).finally(() => setLoading(false));
+        getMyProfile()
+            .then((p) => {
+                if (p.gender) setAlreadySet(true);
+                setGender(p.gender);
+            })
+            .finally(() => setLoading(false));
     }, []);
 
     const handleSave = async () => {
@@ -39,6 +45,14 @@ export default function AccountGenderPage() {
             <SubpageHeader title="성별" />
             {loading ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>
+            ) : alreadySet ? (
+                <div className="py-10 text-center">
+                    <p className="text-sm text-muted-foreground">성별은 한 번 입력하면 수정할 수 없어요.</p>
+                    <button type="button" onClick={() => router.back()} className="mt-4 mx-auto flex items-center justify-center gap-1 text-sm">
+                        <ChevronLeft size={16} />
+                        돌아가기
+                    </button>
+                </div>
             ) : (
                 <>
                     <div className="space-y-2">
@@ -47,7 +61,7 @@ export default function AccountGenderPage() {
                                 key={opt.value}
                                 type="button"
                                 onClick={() => setGender(opt.value)}
-                                className={`flex w-full items-center justify-between rounded-md border px-4 py-3 text-left text-sm ${
+                                className={`flex w-full items-center justify-between rounded-sm border px-4 py-3 text-left text-sm ${
                                     gender === opt.value ? "border-primary bg-muted" : "border-border"
                                 }`}
                             >

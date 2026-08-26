@@ -5,7 +5,6 @@ import {
   FileText,
   Image as ImageIcon,
   Receipt,
-  X,
 } from "lucide-react";
 
 export type AttachmentType =

@@ -452,7 +452,7 @@ export function AiChatBody({
                 <p
                   className={
                     turn.role === "user"
-                      ? "inline-block max-w-full rounded-2xl bg-muted px-4 py-2 text-sm break-words"
+                      ? "inline-block max-w-full rounded-sm bg-muted px-4 py-2 text-sm break-words"
                       : "text-sm break-words"
                   }
                 >
@@ -483,7 +483,7 @@ export function AiChatBody({
             {attachments.map((a, i) => (
               <div
                 key={i}
-                className="flex min-w-0 max-w-full items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                className="flex min-w-0 max-w-full items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs"
               >
                 <span className="min-w-0 truncate">
                   {a.label}
@@ -503,14 +503,14 @@ export function AiChatBody({
         )}
 
         {attachOpen && (
-          <div className="grid grid-cols-5 gap-2 rounded-lg border border-border p-2">
+          <div className="grid grid-cols-5 gap-2 rounded-sm border border-border p-2">
             {attachOptions.map(
               ({ icon: Icon, label, onClick }) => (
                 <button
                   key={label}
                   type="button"
                   onClick={onClick}
-                  className="flex min-w-0 flex-col items-center gap-1 rounded-md border border-border py-3 text-[11px]"
+                  className="flex min-w-0 flex-col items-center gap-1 rounded-sm border border-border py-3 text-[11px]"
                 >
                   <Icon size={18} />
 
@@ -523,7 +523,7 @@ export function AiChatBody({
           </div>
         )}
 
-        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-border p-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-sm border border-border p-2">
           <button
             type="button"
             onClick={() => setAttachOpen((v) => !v)}

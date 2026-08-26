@@ -141,10 +141,10 @@ export function StoreMap({ floorNo, pins, routeOrder }: StoreMapProps) {
               <div key={pin.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${left}%`, top: `${top}%` }}>
                 {isActive && (
                   <div
-                    className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-border bg-card p-2 shadow-lg"
+                    className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-sm border border-border bg-card p-2 shadow-lg"
                     style={{ transform: `translateX(-50%) scale(${1 / zoom})`, transformOrigin: "bottom center" }}
                   >
-                    <div className="h-10 w-10 shrink-0 rounded-md bg-muted" />
+                    <div className="h-10 w-10 shrink-0 rounded-sm bg-muted" />
                     <div className="pr-1 text-left">
                       <p className="text-xs font-medium">{pin.name}</p>
                       <p className="text-sm font-bold">{pin.price.toLocaleString()}원</p>

@@ -11,7 +11,7 @@ import { MessageSquare, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
-import { getOrCreateSessionId, startNewSession } from "@/lib/session";
+import { startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { readCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
 
@@ -81,7 +81,7 @@ export default function SavedPage() {
           onClick={() => setTab("cart")}
           className={`border-b-2 px-3 py-2 text-sm ${tab === "cart" ? "border-foreground font-medium" : "border-transparent text-muted-foreground"}`}
         >
-          담은 리스트
+          저장한 리스트
         </button>
         <button
           type="button"
@@ -121,7 +121,7 @@ export default function SavedPage() {
               <Link
                 key={group.id}
                 href={`/saved/${group.id}`}
-                className="flex aspect-[3/2] flex-col justify-between rounded-lg border border-border p-4 hover:bg-muted"
+                className="flex aspect-[3/2] flex-col justify-between rounded-sm border border-border p-4 hover:bg-muted"
               >
                 <p className="text-sm font-medium">{group.title}</p>
                 <div>

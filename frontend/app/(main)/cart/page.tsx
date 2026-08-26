@@ -135,7 +135,7 @@ export default function CartPage() {
                 <span className="mt-1">
                   <Checkbox checked={item.checked} onChange={() => handleToggleChecked(item)} />
                 </span>
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
                   IMG
                 </div>
                 <div className="flex flex-1 flex-col justify-between">
@@ -164,7 +164,7 @@ export default function CartPage() {
           })}
         </div>
 
-        <Card className="fixed inset-x-0 bottom-16 space-y-2 rounded-none border-x-0 border-b-0 p-4 md:sticky md:top-8 md:inset-auto md:h-fit md:rounded-lg md:border">
+        <Card className="fixed inset-x-0 bottom-16 space-y-2 rounded-none border-x-0 border-b-0 p-4 md:sticky md:top-8 md:inset-auto md:h-fit md:rounded-sm md:border">
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>선택 {selectedItems.length}개</span>
             <span>{total.toLocaleString()}원</span>
