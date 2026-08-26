@@ -18,13 +18,13 @@ export interface LocationInfo {
 }
 
 export type FacilityType =
-  | 'escalator_up'
-  | 'escalator_down'
-  | 'elevator'
-  | 'restroom_male'
-  | 'restroom_female'
-  | 'family_restroom'
-  | 'water';
+    | 'escalator_up'
+    | 'escalator_down'
+    | 'elevator'
+    | 'restroom_male'
+    | 'restroom_female'
+    | 'family_restroom'
+    | 'water';
 
 export interface FacilityInfo {
   type: FacilityType;
@@ -57,6 +57,17 @@ export interface ProductInfo {
   stock: number;
 }
 
+// Agent/sim/out/world_seed.sql의 stocks(PICK) + locations를 그대로 합친 상품 좌표.
+// x/y는 Agent 좌표를 오프셋/스케일 없이 그대로 사용한다.
+export interface ProductPosition extends ProductInfo {
+  locationId: string;
+  zoneId: string;
+  floor: number;
+  x: number;
+  y: number;
+  barcode?: string;
+}
+
 export interface CartItem extends ProductInfo {
   locationId: string;
   qty: number;
@@ -70,6 +81,7 @@ export interface FloorData {
   pitchPx: number;
   zones: ZoneInfo[];
   locations: LocationInfo[];
+  productPositions?: ProductPosition[]; // Agent PICK 상품 1개당 1행(정확한 x/y)
   occupied: [number, number][]; // 매대가 차지하는 그리드 셀 (통행 불가 = map_cells.passable=0에 대응)
   facilities: FacilityInfo[];
   serviceAreas?: ServiceArea[]; // 행사 상품·계산대·ATM 등 매대가 아닌 표시용 구역(선택적)
@@ -82,14 +94,14 @@ export interface GridPoint {
 
 // 백엔드 shelf_events 8종과 이름을 맞춰뒀다 — 나중에 실제 이벤트 발행 시 그대로 대응된다.
 export type ShelfEventType =
-  | 'SALE'
-  | 'BELOW_PAR'
-  | 'TASK_QUEUED'
-  | 'TASK_STARTED'
-  | 'ITEM_CONFIRMED'
-  | 'STOCKOUT'
-  | 'RESTOCK_IN'
-  | 'MOVE';
+    | 'SALE'
+    | 'BELOW_PAR'
+    | 'TASK_QUEUED'
+    | 'TASK_STARTED'
+    | 'ITEM_CONFIRMED'
+    | 'STOCKOUT'
+    | 'RESTOCK_IN'
+    | 'MOVE';
 
 export interface RestockTask {
   taskId: string;

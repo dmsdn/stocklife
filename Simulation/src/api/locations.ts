@@ -10,10 +10,10 @@ import floor2 from '../data/floor2.json';
 import floor3 from '../data/floor3.json';
 
 const FLOORS: Record<number, FloorData> = {
-  0: floor0 as FloorData,
-  1: floor1 as FloorData,
-  2: floor2 as FloorData,
-  3: floor3 as FloorData,
+  0: floor0 as unknown as FloorData,
+  1: floor1 as unknown as FloorData,
+  2: floor2 as unknown as FloorData,
+  3: floor3 as unknown as FloorData,
 };
 
 export async function fetchFloorData(floor: number): Promise<FloorData> {
