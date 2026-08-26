@@ -168,10 +168,14 @@ export default function App() {
     setCart((prev) => {
       const idx = prev.findIndex((it) => it.locationId === location.locationId && it.skuId === product.skuId);
       if (idx >= 0) {
+        // 재고(product.stock)보다 많이 담기지 않도록 캡을 건다 — 안 그러면 "담기" 버튼을
+        // 계속 눌러서 재고가 1개인 상품도 장바구니에 20개, 30개씩 쌓을 수 있는 버그가 있었음.
+        if (prev[idx].qty >= product.stock) return prev;
         const next = [...prev];
         next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
         return next;
       }
+      if (product.stock <= 0) return prev;
       return [...prev, { ...product, locationId: location.locationId, qty: 1 }];
     });
   }, []);
@@ -355,6 +359,11 @@ export default function App() {
         <ProductPopup
           location={productPopup.location}
           products={productPopup.products}
+          cartQtyBySku={Object.fromEntries(
+            cart
+              .filter((it) => it.locationId === productPopup.location.locationId)
+              .map((it) => [it.skuId, it.qty])
+          )}
           onAddToCart={(p) => handleAddToCart(productPopup.location, p)}
           onClose={() => setProductPopup(null)}
         />

@@ -2,7 +2,7 @@
   "floor": 1,
   "floorLabel": "1F",
   "gridWidth": 54,
-  "gridHeight": 45,
+  "gridHeight": 48,
   "pitchPx": 20,
   "zones": [
     {
@@ -8033,5 +8033,15 @@
       "x": 48,
       "y": 37
     }
+  ],
+  "serviceAreas": [
+    { "id": "event-1", "label": "행사 상품", "x": 18, "y": 19, "w": 3, "h": 10 },
+    { "id": "event-2", "label": "행사 상품", "x": 32, "y": 19, "w": 10, "h": 9 },
+    { "id": "checkout", "label": "계산대 / SCAN", "x": 1, "y": 42, "w": 16, "h": 2 },
+    { "id": "atm", "label": "ATM", "x": 18, "y": 42, "w": 3, "h": 2 },
+    { "id": "bakery-counter", "label": "베이커리", "x": 22, "y": 42, "w": 7, "h": 2 },
+    { "id": "food-court", "label": "푸드코트", "x": 30, "y": 42, "w": 14, "h": 2 },
+    { "id": "customer-center", "label": "고객센터", "x": 18, "y": 45, "w": 11, "h": 3 },
+    { "id": "entrance", "label": "입구", "x": 1, "y": 45, "w": 4, "h": 2 }
   ]
 }
