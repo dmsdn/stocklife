@@ -77,11 +77,56 @@ def _product_name(sku_id: int) -> str:
     return str(sku_id)
 
 
+# ── 현재 위치 주입 (2026-08-25) ──────────────────────────────────────────────
+# [왜] `optimize_route`의 스키마는 start_floor/x/y를 LLM이 채우게 두고, description은
+#   "get_position 결과의 floor_no"라고 적어 두었다. 즉 **LLM에게 "A를 부르고 결과에서
+#   숫자 셋을 B에 옮겨 적어라"를 시키고 있었다.** 이건 B안 신원 주입에서 이미 걷어낸
+#   것과 같은 부류다 — 회원번호를 LLM이 옮겨 적게 뒀다가 되묻기·보안 구멍이 났다.
+#
+#   게다가 `get_position`은 아직 스텁(`loop._INFER_STUB`)이라 그 지시를 따르면
+#   `not_implemented`가 돌아온다. **막다른 길을 안내하고 있었다.**
+#
+# [무엇] 루프가 요청 시작에 현재 위치를 등록하고, 아래 `_resolve_start`가 LLM이 안 준
+#   경우에만 그것을 쓴다. **칸은 스키마에 그대로 남는다** — "3층 입구에서 출발해서"
+#   같은 명시 지정은 계속 가능해야 하므로 지우지 않고 **기본값만** 준다.
+#
+# [출처가 바뀌어도 이 자리는 안 바뀐다] 지금은 호출자(프론트/백엔드)가 마지막 스캔
+#   좌표를 넘긴다. 나중에 `infer.py`의 위치 추정(스캔 앵커 + 보행 그래프 스냅)이
+#   서면 **더 정확한 값이 같은 창구로 들어온다.** 주입 지점을 먼저 고정해 두는 이유다.
+_CURRENT_POSITION: tuple[int, int, int] | None = None
+
+
+def set_position(floor: int | None, x: int | None = None, y: int | None = None) -> None:
+    """루프가 요청을 시작할 때 현재 위치를 등록한다. 모르면 set_position(None).
+
+    셋 중 하나라도 없으면 등록하지 않는다 — 층만 알고 좌표를 모르는 반쪽 상태로
+    경로를 짜면 같은 층 아무 데나에서 출발한 답이 나온다. 그건 없느니만 못하다.
+    """
+    global _CURRENT_POSITION
+    if floor is None or x is None or y is None:
+        _CURRENT_POSITION = None
+    else:
+        _CURRENT_POSITION = (int(floor), int(x), int(y))
+
+
+def current_position() -> tuple[int, int, int] | None:
+    """지금 요청의 위치(없으면 None) — 읽기 전용 공개 창구.
+
+    query.current_member_id()와 같은 이유로 함수 한 겹을 둔다: 밑줄 변수를 다른
+    모듈이 집어 쓰면 '내부용'이라는 신호가 죽는다.
+    """
+    return _CURRENT_POSITION
+
+
 def _resolve_start(start_location_id, start_floor, start_x, start_y):
     """출발점을 (층, x, y) 튜플로 통일한다. 해석 불가면 None.
 
-    가장 신뢰할 수 있는 것은 get_position이 준 좌표 3종이다. location_id는
-    mock에서만 좌표로 풀 수 있다(sot_client.resolve_location의 주석 참조).
+    우선순위가 셋이고 **순서에 뜻이 있다**:
+      ① LLM이 준 좌표 3종      — 손님이 "3층 입구에서 출발해서"라고 **명시**한 경우.
+                                 주입값보다 앞선다. 사람 말이 추정보다 세다.
+      ② LLM이 준 location_id   — 좌표를 모를 때의 차선(mock에서만 풀린다)
+      ③ **주입된 현재 위치**    — LLM이 아무것도 안 줬을 때의 기본값
+    ①이 ③보다 앞이라는 것이 이 함수의 유일한 판단이다.
     """
     if start_floor is not None and start_x is not None and start_y is not None:
         return int(start_floor), int(start_x), int(start_y)
@@ -89,7 +134,7 @@ def _resolve_start(start_location_id, start_floor, start_x, start_y):
         loc = sot_client.resolve_location(start_location_id)
         if loc:
             return int(loc["floor_no"]), int(loc["x"]), int(loc["y"])
-    return None
+    return _CURRENT_POSITION            # ③ 없으면 None — 호출부가 에러로 돌린다
 
 
 def _mock_cost(a: tuple, b: tuple) -> int:
@@ -204,9 +249,12 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
 
     start = _resolve_start(start_location_id, start_floor, start_x, start_y)
     if start is None:
+        # 주입도 없고 LLM도 안 줬을 때만 여기 온다. **get_position을 부르라고 하지
+        # 않는다** — 그건 아직 스텁이라 막다른 길이다(위 주입 블록 주석 참조).
         return {"error": "missing_start_position",
-                "message": ("현재 위치 좌표가 필요합니다. get_position 결과의 floor_no/x/y를 "
-                            "start_floor/start_x/start_y로 넘기세요. 입구 좌표를 추측하지 마세요.")}
+                "message": ("현재 위치를 알 수 없습니다. 손님에게 지금 어디쯤인지"
+                            " 물어보거나(예: '몇 층에 계세요?'), 위치 없이 답할 수 있는"
+                            " 부분만 답하세요. 입구 좌표를 추측하지 마세요.")}
 
     destinations, unresolved = [], []
     for sku in sku_ids:
