@@ -59,3 +59,75 @@ ALTER TABLE consumer
 
 ALTER TABLE cart_item
     ADD COLUMN scanned_at DATETIME NULL AFTER is_checked;
+
+
+
+
+-- =========================================================
+-- cart_item 기존 테이블 → cart_group 구조 호환 마이그레이션
+-- 기존 데이터/consumer_id 유지
+-- =========================================================
+
+
+-- 1. cart_group.consumer_id FK 추가
+-- 이미 존재하면 이 구문은 건너뛰기
+ALTER TABLE cart_group
+    ADD CONSTRAINT fk_cart_group_consumer
+        FOREIGN KEY (consumer_id)
+            REFERENCES consumer (consumer_id)
+            ON DELETE CASCADE;
+
+
+-- 2. cart_item에 cart_group_id 추가
+ALTER TABLE cart_item
+    ADD COLUMN cart_group_id BIGINT NULL AFTER cart_item_id;
+
+
+-- 3. 기존 회원별 기본 장바구니 그룹 생성
+-- 이미 그룹이 있는 회원은 중복 생성하지 않음
+INSERT INTO cart_group (
+    consumer_id,
+    title,
+    description
+)
+SELECT DISTINCT
+    ci.consumer_id,
+    '기본 장바구니',
+    '기존 장바구니 데이터'
+FROM cart_item ci
+WHERE ci.consumer_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM cart_group cg
+    WHERE cg.consumer_id = ci.consumer_id
+      AND cg.title = '기본 장바구니'
+);
+
+
+-- 4. 기존 cart_item 데이터를 해당 회원의 기본 그룹에 연결
+UPDATE cart_item ci
+    JOIN (
+    SELECT
+    consumer_id,
+    MIN(cart_group_id) AS cart_group_id
+    FROM cart_group
+    WHERE title = '기본 장바구니'
+    GROUP BY consumer_id
+    ) cg
+ON cg.consumer_id = ci.consumer_id
+    SET ci.cart_group_id = cg.cart_group_id
+WHERE ci.consumer_id IS NOT NULL
+  AND ci.cart_group_id IS NULL;
+
+
+-- 5. cart_group_id 조회 성능용 인덱스 추가
+ALTER TABLE cart_item
+    ADD INDEX idx_cart_item_cart_group (cart_group_id);
+
+
+-- 6. cart_item → cart_group FK 추가
+ALTER TABLE cart_item
+    ADD CONSTRAINT fk_cart_item_cart_group
+        FOREIGN KEY (cart_group_id)
+            REFERENCES cart_group (cart_group_id)
+            ON DELETE CASCADE;
