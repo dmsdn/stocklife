@@ -1,21 +1,51 @@
 # ============================================================================
-# Agent 하네스 — 행동 감시자 (자발형 · 신호원=행동)
+# StoreFlow 하네스 — 행동 감시자 (자발형 · 신호원=행동, 파일명세 §3의 behavior)
 # ============================================================================
-
 # [한 줄] 백엔드 SSE로 흘러오는 소비자 행동(VIEW·SCAN_ADD…)을 지켜보다가,
-# "망설임" 규칙이 차면 예절 허가를 받아 루프를 깨워 먼저 말을 건다 — 장면 2.
-
-# 구조를 셋으로:
-# ① 예절(사안당 1회·총량·쿨다운)은 etiquette.py로 — 감시자가 셋이 될 때 총량 제어가 한 곳이어야 하므로 (etiquette.py 머리 주석의 실패 시나리오)
-# ② 문장 생성은 Claude 직호출이 아니라 **loop.run_chat 경유**로 — 그래야 자발형 발화에도 가드(원장 대조)가 걸린다.
-# ③ 세계 접근은 전부 sot_client로 — 이 파일에 URL·httpx 호출이 없다
-# (SSE 구독 딱 하나만 예외로 여기 있다 — 스트림은 조회가 아니라 '구독'이라 sot_client의 요청-응답 모양에 안 맞는다.
-# 대신 주소는 sot_client와 같은 config.BACKEND_BASE_URL에서 만든다).
-
-# [감지 규칙 — 전부 config 상수] 90초 창 안 VIEW 3회 이상 + 서로 다른 상품 2개 이상 + 12초 무행동 → 망설임 후보. SCAN_ADD·PURCHASE가 오면 창을 비운다.
-# (결정을 내렸으니 더는 망설임이 아니다). LLM은 이 판정에 관여하지 않는다 — 규칙이 거르고, LLM은 걸러진 순간의 문장만 만든다.
-
+#   "망설임" 규칙이 차면 예절 허가를 받아 루프를 깨워 먼저 말을 건다 — 장면 2.
+#
+# [출처: 2026-08-21 ai-server 인수] 감지 규칙·SSE 구독·재연결 백오프는 jmy의
+#   proactive_watcher.py에서 왔다(실구동으로 튜닝된 값 — config의 HESITATION_*).
+#   옮기며 구조를 셋으로 갈랐다:
+#   ① 예절(사안당 1회·총량·쿨다운)은 etiquette.py로 — 감시자가 셋이 될 때
+#      총량 제어가 한 곳이어야 하므로 (etiquette.py 머리 주석의 실패 시나리오).
+#   ② 문장 생성은 Claude 직호출이 아니라 **loop.run_chat 경유**로 — 그래야
+#      자발형 발화에도 가드(원장 대조)가 걸린다. ai-server판은 가드가 없어
+#      watcher가 지어낸 값을 잡을 장치가 없었다.
+#   ③ 세계 접근은 전부 sot_client로 — 이 파일에 URL·httpx 호출이 없다
+#      (SSE 구독 딱 하나만 예외로 여기 있다 — 스트림은 조회가 아니라 '구독'이라
+#      sot_client의 요청-응답 모양에 안 맞는다. 대신 주소는 sot_client와 같은
+#      config.BACKEND_BASE_URL에서 만든다).
+#
+# [감지 규칙 — 전부 config 상수] 90초 창 안 VIEW 3회 이상 + 서로 다른 상품 2개
+#   이상 + 12초 무행동 → 망설임 후보. SCAN_ADD·PURCHASE가 오면 창을 비운다
+#   (결정을 내렸으니 더는 망설임이 아니다). LLM은 이 판정에 관여하지 않는다 —
+#   규칙이 거르고, LLM은 걸러진 순간의 문장만 만든다.
 # ============================================================================
+#
+# ─── 개념 사전 — 이 파일에 처음 나오는 개념 3개 (52)~(54) ────────────────────
+# (①~(51): 앞 파일들의 사전은 아는 것으로 전제)
+#
+# (52) async def / await — 협력적 동시성
+#    async def 함수는 부르는 즉시 실행되지 않고 "코루틴"(중단·재개 가능한 일감)이
+#    된다. 그 안의 await 지점마다 "여기서 기다리는 동안 다른 일감이 돌아도 된다"고
+#    **자리를 비켜준다** — 스레드 없이 한 줄에서 여러 기다림(SSE 수신 + 주기 평가)을
+#    겹치는 방식이고, FastAPI의 이벤트 루프(main.py ㊻)가 그 회전판이다.
+#    주의: async 함수 안에서 **오래 걸리는 동기 코드**를 그냥 부르면 회전판이
+#    통째로 멈춘다 — 그래서 (53)이 필요하다.
+#
+# (53) asyncio.to_thread(함수, 인자…) — 동기 코드를 회전판 밖에서
+#    loop.run_chat은 동기 함수고 LLM 호출로 수 초를 그냥 서서 기다린다. async
+#    안에서 직접 부르면 그 수 초 동안 SSE 수신까지 멈춘다. to_thread는 그 함수를
+#    별도 일꾼(스레드)에 맡기고 자기는 await로 비켜서 있는다 — "동기 세계와
+#    비동기 세계의 다리". jmy판도 같은 이유로 이걸 썼다.
+#
+# (54) asyncio.Event / create_task / gather — 신호기·일감 등록·동시 대기
+#    Event  : 켜짐/꺼짐 신호 하나. stop()이 set()하면 모든 루프가 이를 보고 끝낸다.
+#    create_task : 코루틴을 "지금부터 배경에서 돌려라"로 등록한다(등록만 하고 지나감).
+#    gather : 여러 코루틴을 한꺼번에 돌리고 전부 끝날 때까지 기다린다 —
+#             여기서는 수신 루프와 평가 루프 둘을 나란히 돌리는 데 쓴다.
+# ────────────────────────────────────────────────────────────────────────────
 
 import asyncio
 import json
@@ -23,8 +53,9 @@ import time
 from datetime import datetime
 
 from app import config, etiquette, prompts, sot_client
+from app.watchers import dispatch
 
-# ── 세션별 관찰 상태 ──────────────────
+# ── 세션별 관찰 상태 (etiquette (51)과 같은 모듈 상태 패턴) ──────────────────
 # _VIEWS[세션] = [{"t": 시각(초), "sku": 상품번호}, …]  — 창 안의 VIEW만 유지
 # _LAST_EVENT[세션] = 마지막 행동 시각  /  _MEMBER[세션] = 회원 번호(비회원 None)
 # _BUSY = 지금 문장을 만드는 중인 세션 — 같은 세션에 개입 둘이 겹쳐 나가는 것을
@@ -33,7 +64,7 @@ _VIEWS: dict = {}
 _LAST_EVENT: dict = {}
 _MEMBER: dict = {}
 _BUSY: set = set()
-_STOP = asyncio.Event()
+_STOP = asyncio.Event()                                     # (54)
 
 
 def _parse_ts(value) -> float:
@@ -109,9 +140,12 @@ def _candidate(session_id: str, now: float) -> dict | None:
     top2 = tuple(ranked[:2])
     # 사안 키: 같은 두 상품 조합은 순서와 무관하게 같은 사안이어야 하므로 정렬해 붙인다.
     topic_key = "hesitation:" + ":".join(str(s) for s in sorted(top2))
+    # on_delivered: **전달에 성공한 뒤에만** 디스패처가 부른다. 관찰 창 비우기를
+    # 여기서 하지 않는 이유 — 가드에 막히거나 전달이 실패한 개입까지 관찰을
+    # 지우면, 다시 말할 기회를 잃고도 근거가 사라진다(record 를 미루는 것과 같은 계열).
     return {"topic_type": "HESITATION_HELP", "topic_key": topic_key,
             "session_id": session_id, "member_id": _MEMBER.get(session_id),
-            "sku_ids": top2}
+            "sku_ids": top2, "on_delivered": _clear_views}
 
 
 def tick(now: float | None = None) -> list[dict]:
@@ -131,9 +165,16 @@ def tick(now: float | None = None) -> list[dict]:
         cand = _candidate(session_id, now)
         if cand is None:
             continue
+        # permit 은 여기서 **미리거르기**로만 쓴다 — 예산·쿨다운에 걸린 후보를
+        # 스테이지에 넣어 봐야 디스패처가 또 거절할 뿐이다. 권위 있는 판정은
+        # 발화 직전(dispatch._deliver)에 한 번 더 한다: tick 과 발화 사이에
+        # 다른 개입이 나가 예산이 바뀔 수 있다.
         verdict = etiquette.permit(session_id, cand["topic_type"],
                                    cand["topic_key"], now=now)
         if verdict["allowed"]:
+            # 08-26 ③ — 여기서 바로 말하지 않는다. 진입 순간이면 다른 감시자의
+            # 후보와 **묶여야** 하는데, 그러려면 한자리에 모여야 한다.
+            etiquette.stage(session_id, cand)
             allowed.append(cand)
         # 거절 사유는 조용히 삼키지 않는다 — 단, 매 틱 찍으면 로그가 홍수가 되므로
         # 쿨다운·중복 거절은 침묵하고, 이상 사유(unknown_topic_type)만 찍는다.
@@ -142,69 +183,38 @@ def tick(now: float | None = None) -> list[dict]:
     return allowed
 
 
-async def _handle(cand: dict) -> None:
-    """허가된 후보 하나를 발화까지 완주시킨다: 문장 생성(루프) → 가드 → 전달 → 기록."""
-    from app import guard, loop         # 지연 import — 감지·판정 스모크는 LLM 없이 돌아야 한다
-    session_id = cand["session_id"]
-    _BUSY.add(session_id)
-    try:
-        # 상품 이름을 붙여 지시문을 만든다. 이름 조회가 실패해도 번호로 진행 —
-        # 개입 기회는 시간 창이 좁아서(손님이 곧 이동한다) 완벽보다 제때가 낫다.
-        names = []
-        for sku in cand["sku_ids"]:
-            p = await asyncio.to_thread(sot_client.get_product, sku)      # (53)
-            names.append(f"{p['name']}(sku {sku})" if p else f"sku {sku}")
-        message = prompts.PROACTIVE_HESITATION.format(sku_list=" / ".join(names))
+async def _build_hesitation(cand: dict) -> str | None:
+    """망설임 개입의 **지시문만** 만든다. 발화 파이프라인은 dispatch 가 갖는다.
 
-        # 문장은 반드시 루프가 만든다 — 도구로 사실을 확인하고 원장을 남기는
-        # 유일한 경로다. 동기 함수라 (53)으로 회전판 밖에서 돌린다.
-        # allow_actions=False: 손님이 시키지 않았으므로 장바구니 조작을 **경로에서**
-        # 잠근다(프롬프트 금지는 지침일 뿐 — loop.run_chat의 인자 주석, 08-24 검수).
-        result = await asyncio.to_thread(
-            loop.run_chat, message,
-            cand["member_id"], session_id, None, allow_actions=False)
+    [08-26에 무엇이 바뀌었나] 전에는 이 자리에 `_handle`이 있어서 지시문 조립부터
+      루프·가드·전달·기록까지 혼자 했다. 그 구조에서는 **진입 순간에 다른 감시자와
+      묶일 수가 없다** — 각자 자기 말을 자기가 내보내니까. 파이프라인을
+      `dispatch._deliver` 로 옮기고, 여기에는 이 감시자만 아는 것 하나를 남겼다:
+      **"망설임을 어떻게 말로 옮기나."**
 
-        verdict = guard.check(result["reply"], result["ledgers"])
-        if not verdict["ok"]:
-            # 자발형은 재생성하지 않는다(반응형의 정책 ⓒ와 다른 점): 손님이 묻지도
-            # 않은 말을 두 번 비용 들여 다듬을 가치가 없다 — 이번 개입을 버리고,
-            # 기록도 안 남긴다(예절 예산을 안 깎아야 다음 기회가 산다).
-            print(f"[behavior] 가드 차단 — 개입 폐기: {[v['reason'] for v in verdict['violations']]}")
-            return
-        pushed = await asyncio.to_thread(
-            sot_client.push_proactive_message, session_id, result["reply"])
-        if not pushed.get("ok"):
-            print(f"[behavior] 전달 실패 — 기록 안 함: {pushed}")
-            return
-        etiquette.record(session_id, cand["topic_key"])
-        _VIEWS[session_id] = []         # 같은 관찰 묶음으로 재개입하지 않도록 비운다
-        print(f"[behavior] HESITATION_HELP 발화 완료 session={session_id} sku={cand['sku_ids']}")
-    except Exception as e:
-        print(f"[behavior] 개입 처리 실패 session={session_id}: {type(e).__name__}: {e}")
-    finally:
-        _BUSY.discard(session_id)       # remove와 달리 없어도 조용히 — 예외 경로에서도 잠금 해제
+    [반환] 루프에 넣을 지시문 문자열. 만들지 못하면 None(디스패처가 조용히 뺀다).
+
+    [부작용] 없다 — SoT 조회는 읽기뿐이다. 관찰 창 비우기는 **전달에 성공한 뒤**
+      디스패처가 `on_delivered` 로 부른다(실패한 개입이 관찰까지 지우면, 다시
+      말할 기회를 잃고도 근거가 사라진다).
+    """
+    names = []
+    for sku in cand["sku_ids"]:
+        # 이름 조회가 실패해도 번호로 진행 — 개입 기회는 시간 창이 좁아서
+        # (손님이 곧 이동한다) 완벽보다 제때가 낫다.
+        p = await asyncio.to_thread(sot_client.get_product, sku)      # (53)
+        names.append(f"{p['name']}(sku {sku})" if p else f"sku {sku}")
+    return prompts.PROACTIVE_HESITATION.format(sku_list=" / ".join(names))
 
 
-async def _tick_forever() -> None:
-    """주기 평가 루프. WATCH_TICK_SEC마다 규칙을 재평가하고 허가된 개입을 띄운다."""
-    while not _STOP.is_set():
-        try:
-            for cand in tick():
-                asyncio.create_task(_handle(cand))          # (54) 배경 일감으로 등록
-            etiquette.cleanup()
-            # 오래된 관찰 상태도 함께 청소 (etiquette의 세션 장부와 같은 TTL).
-            now = time.time()
-            for sid in [s for s, t in _LAST_EVENT.items()
-                        if now - t > config.WATCH_SESSION_TTL_SEC]:
-                _VIEWS.pop(sid, None); _LAST_EVENT.pop(sid, None); _MEMBER.pop(sid, None)
-        except Exception as e:
-            print(f"[behavior] tick 실패: {type(e).__name__}: {e}")
-        try:
-            # sleep 대신 "stop 신호를 최대 N초 기다리기" — 종료 신호가 오면
-            # N초를 다 안 기다리고 즉시 깬다(서버 내리는 데 2초씩 끌지 않게).
-            await asyncio.wait_for(_STOP.wait(), timeout=config.WATCH_TICK_SEC)
-        except asyncio.TimeoutError:
-            pass                        # 타임아웃 = 신호 없음 = 다음 바퀴로 (정상)
+def _clear_views(cand: dict) -> None:
+    """전달 성공 뒤 관찰 창을 비운다 — 같은 관찰 묶음으로 재개입하지 않게."""
+    _VIEWS[cand["session_id"]] = []
+
+
+# (57) 디스패처에 자기 유형을 등록한다. import 시점에 한 번 — 의존 방향이
+#   감시자 → 디스패처 한쪽이라 순환 import 가 안 생긴다.
+dispatch.register("HESITATION_HELP", _build_hesitation)
 
 
 async def _listen_forever() -> None:
@@ -283,6 +293,8 @@ def reset() -> None:
 
 # ── 스모크 (LLM·네트워크 없음 — 감지+예절까지): python -m app.watchers.behavior ──
 if __name__ == "__main__":
+    from app.env import use_utf8_stdout
+    use_utf8_stdout()          # 로그의 한글이 cp949 콘솔에서 안 터지게
     etiquette.reset(); reset()
     t0 = 5000.0
     S = "sess-demo"
@@ -322,4 +334,32 @@ if __name__ == "__main__":
     on_event("VIEW", {"sessionId": S, "skuId": 101042}, now=t0 + 104)
     assert tick(now=t0 + 120) == [], "90초 밖 VIEW가 횟수에 끼었다"
 
-    print("behavior 스모크 5갈래 전부 통과 (감지+예절 — 발화 생성은 실호출 영역)")
+    # ⑥ **전 경로 통합** (08-26 ③) — tick 이 스테이지에 넣고, 디스패처가
+    #    세션별로 하나의 결정을 만든다. 진입 후보가 섞이면 **묶여야** 한다.
+    reset(); etiquette.reset()
+    on_event("VIEW", {"sessionId": S, "skuId": 101042, "memberId": 9001}, now=t0)
+    on_event("VIEW", {"sessionId": S, "skuId": 101043}, now=t0 + 4)
+    on_event("VIEW", {"sessionId": S, "skuId": 101042}, now=t0 + 8)
+    assert len(tick(now=t0 + 21)) == 1, "망설임 후보가 안 떴다"
+    # 같은 순간 시간 감시자가 진입 브리핑을 넣었다고 치자 (08/28에 실물이 온다)
+    etiquette.stage(S, {"topic_type": "STORE_ENTRY_BRIEF", "moment": "entry",
+                        "topic_key": "rp:9001:101042", "session_id": S,
+                        "member_id": 9001})
+    got = dispatch.plan([S])
+    assert len(got) == 1, got                      # 세션당 **한 줄**
+    d = got[0][1]
+    assert d["mode"] == "bundle" and len(d["items"]) == 2, d
+    # 우선순위 내림차순: 망설임(30) > 진입브리핑(20)
+    assert [i["topic_type"] for i in d["items"]] == [
+        "HESITATION_HELP", "STORE_ENTRY_BRIEF"], d["items"]
+    print("⑥ 묶음:", " + ".join(i["topic_type"] for i in d["items"]))
+
+    # ⑦ 묶음이 나가면 예산은 1만 쓰고, 안의 사안은 각각 재발화가 막힌다
+    etiquette.record(S, d["topic_key"],
+                     also=[i["topic_key"] for i in d["items"]], now=t0 + 22)
+    assert etiquette._SESSIONS[S]["count"] == 1
+    assert not etiquette.permit(S, "HESITATION_HELP",
+                                "hesitation:101042:101043", now=t0 + 300)["allowed"]
+
+    reset(); etiquette.reset()
+    print("behavior 스모크 7갈래 전부 통과 (감지+예절+스테이징 — 발화 생성은 실호출 영역)")

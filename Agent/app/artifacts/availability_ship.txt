@@ -1,0 +1,17 @@
+가용예측 출하본 — 2026-08-26
+  모델      HistGradientBoosting(max_iter=200, lr=0.1, leaves=31, seed=0)
+  설계행렬  84열 (상호작용 제외 — 트리가 스스로 만든다)
+  구간      11개
+  학습/검증 1,036,707 / 346,817 행 (작업 단위 분리) · 적합 16.9초
+
+  Brier          0.04056
+  중간대역 편차   -0.7%p   (45~80%)
+  신뢰도항        0.00002
+
+  무엇을 이겼나 (hazard_compare.py · 시드 3개 평균 Brier)
+    logit                  0.04892
+    cloglog                0.05057
+    logit_no_interaction   0.05598
+    rule_baseline          0.12480
+
+  파일  availability_model.joblib (0.2 MB)
