@@ -23,6 +23,7 @@ import { addProductToCartGroup, updateCartGroups, readCartGroups } from "@/lib/c
 import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
 import { usePermissionStatus } from "@/lib/use-permission-status";
 import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
+import { QuantityStepper } from "@/components/domain/quantity-stepper";
 
 const DEFAULT_GROUP_ID = 1;
 
@@ -62,7 +63,9 @@ function ScanPageInner() {
     return selectedGroup.products.find((p) => p.id === product.skuId)?.quantity ?? 0;
   }, [product, selectedGroup]);
 
-  // ✅ 실제 GET /api/products/barcode/{barcode} 연동
+  // ✅ 실제 GET /api/products/barcode/{barcode} 연동.
+  //   예전엔 조회만 하고 "담기" 버튼을 한 번 더 눌러야 했는데, 스캔 즉시 자동으로
+  //   1개 담기고, 이후엔 +/- 스테퍼로 개수만 조절하는 방식으로 바꿨습니다.
   const lookupByCode = async (code: string) => {
     if (!code.trim()) return;
     setError(null);
@@ -77,13 +80,26 @@ function ScanPageInner() {
         categoryL1?: string;
         imageUrl?: string | null;
       }>(`/api/products/barcode/${code.trim()}`, { auth: false });
-      setProduct({
+      const scanned = {
         skuId: found.skuId,
         name: found.name,
         price: found.finalPriceKrw ?? found.priceKrw,
         category: found.categoryL1 ?? "",
         image: found.imageUrl ?? undefined,
+      };
+      setProduct(scanned);
+
+      // ✅ 조회되자마자 바로 1개 담기 (기존엔 handleConfirmAdd를 따로 눌러야 했음)
+      addProductToCartGroup(groupId, {
+        id: scanned.skuId,
+        name: scanned.name,
+        category: scanned.category,
+        price: scanned.price,
+        image: scanned.image,
       });
+      setSessionScans((prev) => new Set(prev).add(scanned.skuId));
+      refreshGroups();
+      setJustAdded(scanned.skuId);
     } catch {
       setProduct(null);
       setError("해당 바코드의 상품을 찾을 수 없어요.");
@@ -115,22 +131,6 @@ function ScanPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraPermission]);
 
-  const handleConfirmAdd = () => {
-    if (!product) return;
-    addProductToCartGroup(groupId, {
-      id: product.skuId,
-      name: product.name,
-      category: product.category,
-      price: product.price,
-      image: product.image,
-    });
-    setSessionScans((prev) => new Set(prev).add(product.skuId));
-    refreshGroups();
-    setJustAdded(product.skuId);
-    setBarcode("");
-    setProduct(null);
-  };
-
   const handleRemoveEntirely = () => {
     if (!product) return;
     updateCartGroups((gs) =>
@@ -144,6 +144,23 @@ function ScanPageInner() {
     refreshGroups();
     setBarcode("");
     setProduct(null);
+  };
+
+  // ✅ 스캔 직후 뜨는 +/- 스테퍼용. 0으로 내리면 리스트에서 완전히 뺍니다.
+  const handleQuantityChange = (nextQty: number) => {
+    if (!product) return;
+    if (nextQty <= 0) {
+      handleRemoveEntirely();
+      return;
+    }
+    updateCartGroups((gs) =>
+      gs.map((g) =>
+        g.id !== groupId
+          ? g
+          : { ...g, products: g.products.map((p) => (p.id === product.skuId ? { ...p, quantity: nextQty } : p)) }
+      )
+    );
+    refreshGroups();
   };
 
   return (
@@ -219,24 +236,20 @@ function ScanPageInner() {
               <div className="flex-1">
                 <p className="text-sm">{product.name}</p>
                 <p className="text-sm font-semibold">{product.price.toLocaleString()}원</p>
-                <p className="text-xs text-muted-foreground">
-                  {existingQty > 0
-                    ? `현재 ${existingQty}개 담겨있어요 → 담으면 ${existingQty + 1}개`
-                    : "아직 안 담겨있어요 → 담으면 1개"}
+                <p className="flex items-center gap-1 text-xs text-success">
+                  <Check size={12} />
+                  담았어요
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {existingQty > 0 && (
-                <Button variant="outline" className="flex flex-1 items-center gap-1.5" onClick={handleRemoveEntirely}>
-                  <X size={16} />
-                  카트에서 빼기
-                </Button>
-              )}
-              <Button className="flex-1" onClick={handleConfirmAdd}>
-                담기
+            {/* ✅ "담기" 버튼 대신 +/- 스테퍼로 바로 개수 조절 (스캔 시점에 이미 1개 담긴 상태) */}
+            <div className="flex items-center justify-between gap-2">
+              <Button variant="outline" className="flex items-center gap-1.5" onClick={handleRemoveEntirely}>
+                <X size={16} />
+                카트에서 빼기
               </Button>
+              <QuantityStepper quantity={existingQty} onChange={handleQuantityChange} min={0} />
             </div>
           </div>
         )}

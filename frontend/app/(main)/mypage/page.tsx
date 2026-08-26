@@ -19,14 +19,10 @@ import { Button } from "@/components/ui/button";
 
 import { isLoggedIn as checkLoggedIn } from "@/lib/api-client";
 import {
-  fetchMyProfile,
-  type ConsumerProfile,
-} from "@/lib/consumer-profile";
-
-import {
-  fetchMyGrade,
-  type MyGrade,
-} from "@/lib/consumer-benefits";
+  getMyProfile,
+  type ConsumerMe,
+} from "@/lib/consumer-api";
+import { GradeBox } from "@/components/domain/grade-box";
 
 import {
   fetchNotices,
@@ -148,17 +144,9 @@ const menuGroups = [
   },
 ];
 
-const gradeLabel: Record<MyGrade["grade"], string> = {
-  BASIC: "BASIC",
-  BRONZE: "BRONZE",
-  SILVER: "SILVER",
-  GOLD: "GOLD",
-};
-
 export default function MyPage() {
   const [loggedIn, setLoggedIn] = useState(false);
-  const [profile, setProfile] = useState<ConsumerProfile | null>(null);
-  const [grade, setGrade] = useState<MyGrade | null>(null);
+  const [profile, setProfile] = useState<ConsumerMe | null>(null);
   const [latestNotice, setLatestNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
@@ -167,8 +155,7 @@ export default function MyPage() {
     setLoggedIn(isIn);
 
     if (isIn) {
-      fetchMyProfile().then(setProfile);
-      fetchMyGrade().then(setGrade);
+      getMyProfile().then(setProfile).catch(() => setProfile(null));
     }
 
     fetchNotices().then((list) => {
@@ -206,12 +193,6 @@ export default function MyPage() {
                 <span>
                   {profile?.name ?? "이름 미입력"}
                 </span>
-
-                <span className="text-muted-foreground">
-                  {grade
-                    ? gradeLabel[grade.grade]
-                    : "BASIC"}
-                </span>
               </div>
 
               <ChevronRight
@@ -245,25 +226,10 @@ export default function MyPage() {
               멤버십
              ========================= */}
 
-          <Link
-            href="/mypage/tier-guide"
-            className="
-              mt-1
-              flex
-              h-[88px]
-              w-full
-              items-center
-              justify-center
-              rounded-[20px]
-              bg-muted
-              text-base
-              font-medium
-              transition-colors
-              hover:bg-muted/80
-            "
-          >
-            멤버십
-          </Link>
+          {/* ✅ 정적 "멤버십" 링크 박스 대신, 내 정보 화면과 같은 실제 등급 박스(GradeBox)를 씁니다. */}
+          <div className="mt-1">
+            <GradeBox profile={profile} />
+          </div>
 
           {/* =========================
               저장 / 최근 본 / 전자영수증

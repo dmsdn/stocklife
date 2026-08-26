@@ -31,7 +31,8 @@ export async function signup(payload: SignupPayload): Promise<void> {
   });
 }
 
-export async function login(phoneNumber: string, password: string): Promise<void> {
+/** @param keepLoggedIn true면 브라우저를 껐다 켜도 로그인 유지(localStorage), false면 이 탭에서만 유지(sessionStorage) */
+export async function login(phoneNumber: string, password: string, keepLoggedIn: boolean = true): Promise<void> {
   const res = await apiFetch<{ accessToken: string; refreshToken: string }>(
       "/api/consumers/login",
       {
@@ -40,7 +41,7 @@ export async function login(phoneNumber: string, password: string): Promise<void
         auth: false,
       }
   );
-  setTokens(res.accessToken, res.refreshToken);
+  setTokens(res.accessToken, res.refreshToken, keepLoggedIn);
   resetCartMigrationAttempt();
 
   // 로그인 성공 직후 비회원 localStorage 장바구니를 회원 DB로 승계한다.
