@@ -261,8 +261,13 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 @app.get("/health")
 def health() -> dict:
     """살아 있음 + 지금 어떤 모드인가. 백엔드·프론트가 연동 전에 찔러보는 곳."""
+    # 출하물 상태를 같이 준다(08-26). 없으면 추론 도구가 전부 "준비 안 됨"으로
+    # 답하는데, 그때 프론트·백엔드가 보는 첫 화면이 여기라 원인이 바로 보여야 한다.
+    # (기동 로그에도 찍히지만 로그는 --log-level 에 묻히고 지나가면 사라진다)
+    from app.tools import infer
     return {"ok": True, "mock_sot": config.USE_MOCK_SOT,
-            "tools": len(definitions.TOOLS), "model": config.LLM_MODEL}
+            "tools": len(definitions.TOOLS), "model": config.LLM_MODEL,
+            "assets": infer.loaded()}
 
 
 # ── 직접 실행 (개발용) ──────────────────────────────────────────────────────

@@ -42,7 +42,12 @@ AGENT_PORT = 8000
 # True면 sot_client가 mock_data를 읽고, False면 백엔드 HTTP를 부른다.
 # 스위치를 sot_client "내부"가 아니라 여기 둔 이유: 루프·도구 코드는
 # mock인지 실물인지 몰라야 한다(알면 분기가 새어나가 교체가 수술이 된다).
-USE_MOCK_SOT = True
+# ⚠ 값은 상수지만 **환경변수로 덮을 수 있다**(08-26). 전에는 순수 상수라
+#   mock↔실물 전환이 **코드 수정**이었다 — 그러면 전환할 때마다 git diff가
+#   생기고, 실수로 False인 채 커밋되면 다른 사람 기계에서 백엔드 없이 죽는다.
+#   `.env`에 `USE_MOCK_SOT=false` 한 줄이면 코드를 안 건드리고 바뀐다.
+#   os.environ을 읽으므로 **env.load_env()가 먼저 돌아야 한다**(입구가 보장).
+USE_MOCK_SOT = os.environ.get("USE_MOCK_SOT", "true").strip().lower() not in ("false", "0", "no")
 BACKEND_BASE_URL = "http://localhost:8080"   # Spring Boot. 팀계약 API 8종의 뿌리
 # 액션(장바구니 쓰기)용 내부 API 인증키는 여기 두지 않는다 — 비밀값이라
 # 코드가 아니라 .env에서 읽는다(tools/action.py의 INTERNAL_SERVICE_KEY).
