@@ -153,6 +153,9 @@ def run(n_members: int, n_days: int):
 
     def on_snapshot(engine, data):
         snap["stock"] = dict(stock)
+        # 대기 중 SKU 집합 — 슬라이스가 이들의 매대 이벤트를 포함해야
+        # pending API 의 queuedAt(대기 원점)이 데모 SKU 밖에서도 채워진다
+        snap["pending_skus"] = set(pending.keys())
         off = (engine.now - _EPOCH0) / 86400.0
         snap["ts"] = _ts(off)[1]
 
@@ -418,7 +421,7 @@ def run(n_members: int, n_days: int):
     censored = [tid for tid, m in task_meta.items() if m["cens"] is not None]
 
     _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, members,
-                   snap["ts"])
+                   snap["ts"], snap.get("pending_skus") or set())
     _write_stock_sync(snap["stock"] or stock, pick_loc, cfg, snap["ts"])
     _summary(counters, purchases, shelf_ev, consumer_ev, task_meta, censored,
              total_member_visits, len(guest_offs), time.perf_counter() - t_wall,
@@ -472,7 +475,7 @@ def _write_csv_gz(path, header, rows):
 
 
 def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, members,
-                   snap_ts=None):
+                   snap_ts=None, pending_skus=None):
     os.makedirs(OUT_DIR, exist_ok=True)
     _write_csv_gz(os.path.join(OUT_DIR, "purchases.csv.gz"),
                   ["purchase_id", "basket_id", "member_id", "sku_id", "qty",
@@ -519,7 +522,7 @@ def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, member
                    "q_vertical", "q_horizontal", "q_floor", "q_work_sec", "l2",
                    "wait_sec", "travel_sec", "handling_sec",
                    "duration_sec", "event", "censor_reason", "true_lead_sec"], lead_rows)
-    _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts)
+    _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts, pending_skus)
 
 
 def _sqlstr(v):
@@ -530,7 +533,8 @@ def _sqlstr(v):
     return "'" + str(v).replace("\\", "\\\\").replace("'", "''") + "'"
 
 
-def _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts=None):
+def _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts=None,
+                      pending_skus=None):
     """데모 회원(앞 DEMO_MEMBERS명) × 최근 DEMO_DAYS일만 SQL로. 운영 DB 적재용.
 
     [상한 컷 — 08-27] snap_ts(마지막 영업일 14:20) **이후** 행은 버린다.
@@ -548,7 +552,20 @@ def _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts=None):
     pur = [r for r in purchases if r[2] in demo_ids and recent(r[6])]
     demo_skus = {r[3] for r in pur}
     con = [r for r in consumer_ev if (r[3] in demo_ids) and recent(r[6])]
-    she = [r for r in shelf_ev if r[2] in demo_skus and recent(r[6])]
+    # 매대 이벤트는 두 집합의 합이다 (08-27 확장):
+    #   demo_skus     데모 회원이 산 상품 — 대화 맥락의 재료
+    #   pending_skus  스냅샷 순간 보충 대기 중이던 상품 — 이들의 BELOW_PAR 가
+    #                 슬라이스에 없으면 pending API 의 queuedAt 이 null 이 되어
+    #                 95건 중 78건이 "대기 원점 모름"으로 착지했다(08-27 실측).
+    #                 95개 SKU × 90일 이벤트라 슬라이스는 수천 행만 는다.
+    # ⚠ pending SKU 는 **작업 수명주기 이벤트만** 넣는다. SALE 까지 넣으면
+    #   인기 상품 95종의 90일 판매 행이 통째로 딸려와 슬라이스가 16.6→36MB 로
+    #   뛴다(08-27 실측). queuedAt 에 필요한 것은 BELOW_PAR 계열뿐이다.
+    _pend = (pending_skus or set()) - demo_skus
+    _task_ev = {"BELOW_PAR", "TASK_QUEUED", "RESTOCK_IN", "STOCKOUT"}
+    she = [r for r in shelf_ev if recent(r[6])
+           and (r[2] in demo_skus
+                or (r[2] in _pend and r[1] in _task_ev))]
 
     path = os.path.join(OUT_DIR, "history_seed.sql")
     with open(path, "w", encoding="utf-8", newline="\n") as f:

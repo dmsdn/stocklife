@@ -405,10 +405,12 @@ def get_purchase_history(member_id: int) -> list[dict]:
     방향 실수(최신→과거로 빼서 음수 간격)가 생긴다. 정렬 책임을 여기 고정한다.
     """
     if not config.USE_MOCK_SOT:
-        # 요청 ④(08-27 승인) 경로. 구현 전에는 404 → query.py 의 예외 처리(원칙 ④)가
-        # 값으로 바꿔 LLM 이 "이력 조회가 안 된다"로 정직하게 착지한다.
+        # 요청 ④ — 08-27에 **우리가 직접 구현**했다(InternalPurchaseController /history).
+        # ⚠ consumerId 가 아니라 memberId 다: 공개판은 consumerId→toMemberId 변환을
+        #   거치는데, 그 길로 가면 시드 회원 1005 가 10,001,005 로 둔갑해 이력이
+        #   항상 빈다. 내부판은 member_id 축을 그대로 받는다.
         rows = _http_get(_API["get_purchase_history"],
-                         {"consumerId": member_id}, headers=_internal_headers())
+                         {"memberId": member_id}, headers=_internal_headers())
         return [{"sku_id": r.get("skuId"), "qty": r.get("qty"),
                  "purchased_at": r.get("purchasedAt")} for r in (rows or [])]
     # 리스트 컴프리헨션: "PURCHASES의 각 행 p 중 member_id가 일치하는 것만 모아
