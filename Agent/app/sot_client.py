@@ -109,12 +109,12 @@ _API = {
     "get_frequent":         "/internal/orders/frequent",              # 반복구매 집계(백엔드가 계산)
     "get_product_metrics":  "/internal/products/metrics",             # 30일 지표·재구매율
     "compare_popularity":   "/internal/purchases/compare",            # 상품 간 판매량 비교
-    "get_popular":          "/internal/purchases/popular",            # ⚠ 백엔드에 아직 없음(요청함)
+    "get_popular":          "/internal/purchases/popular",            # ✅ 08-27 구현 확인(요청 ①)
     "get_alt_candidates":   "/api/products/{sku_id}/alternatives/candidates",  # 대체 후보(공개)
     "navigation_route":     "/api/navigation/route",                  # A* 경로 계산(POST·공개)
     "push_proactive":       "/internal/chat/proactive",               # 자발형 말풍선 전달
     # ── 08-25 신설 요청(jmy) — 가용예측이 이것 없이는 못 선다 ──
-    "pending_replenish":    "/internal/replenishment/pending",       # ⚠ 백엔드에 아직 없음(요청함)
+    "pending_replenish":    "/internal/replenishment/pending",       # ✅ 08-27 구현 확인(요청 ③)
 }
 # 이름 앞의 밑줄(_API, _http_get)은 파이썬 관례로 "이 모듈 내부용 — 밖에서
 # import해 쓰지 마라"는 표시다. 강제는 아니고 읽는 사람에 대한 신호다.
@@ -707,10 +707,14 @@ def get_popular_products(category_l2: str | None = None,
     """카테고리(또는 전체) 인기 순위 — '요즘 뭐가 잘 나가?'의 근거.
 
     [출력] compare_purchase_popularity와 같은 모양(같은 질문의 '순위판'이므로).
-    ⚠ 실물 경로 /internal/purchases/popular는 **백엔드에 아직 없다**(공개판
-    /api/purchases/popular는 JWT 필수라 서버 대 서버로 못 부른다). jmy에게
-    내부판 신설을 요청해 둔 상태 — 그 전에 실물 모드로 부르면 404가 나고,
-    query.py의 예외 처리(원칙 ④)가 이를 값으로 바꿔 LLM이 정직하게 착지한다.
+    ✅ **08-27 구현 확인** — 내부판이 열렸다. 이 경로가 따로 있는 이유는 남긴다:
+    공개판 /api/purchases/popular 는 JWT 필수라 서버 대 서버(사용자 토큰 없음)로는
+    못 부른다. 그래서 X-Internal-Service-Key 로 인증하는 내부판을 요청했다.
+
+    ⚠ **백엔드가 상한을 말없이 깎는다**(08-27 B 실측): lookbackDays 최대 365 ·
+      limit 최대 50. 넘겨도 400 이 아니라 **잘린 결과가 200 으로** 온다 —
+      "60개를 부탁했는데 50개만 왔다"를 두 번 조사하지 않도록 여기 적어 둔다.
+      발화가 틀리지는 않으므로 방어 코드는 넣지 않는다.
     """
     if not config.USE_MOCK_SOT:
         # ⚠ **빈 문자열을 보내면 안 된다 — 08-27 실연동에서 잡았다.**
@@ -837,9 +841,16 @@ def get_pending_replenishments() -> list[dict]:
                  있으면 수직(백룸에서 내려 채움·빠름), 없으면 수평/층간(느림).
       queued_at: par 밑으로 떨어진 시각. 대기 시간의 원점.
 
-    ⚠ 실물 경로는 **아직 백엔드에 없다**(jmy 요청 대기). 없으면 빈 목록을 돌려주고,
-      infer가 그것을 "큐를 모른다"로 읽어 확률을 안 낸다 — 0건과 미지원을 구분해야
-      하므로 예외를 삼키지 않고 None을 돌려준다.
+    ✅ **08-27 구현 확인**(요청 ③ — `InternalReplenishmentController`). 응답 다섯 칸이
+      우리 매핑과 1:1 이고, 부탁한 "큐가 없어도 200 []"(404 아님)까지 지켜져 있다.
+
+    [반환이 세 갈래인 이유] 0건과 미지원을 구분해야 하므로 예외를 삼키지 않는다:
+      list  정상 (빈 리스트 = 진짜 대기 0건)
+      None  창구 없음(404)
+      str   "auth_failed" · "sot_unreachable" — 우리 쪽 설정·통신 문제
+    ⚠ `queuedAt` 은 null 이 올 수 있다(BELOW_PAR 이벤트가 없으면 — 백엔드 DTO 주석).
+      지금 infer 는 이 값을 특징으로 쓰지 않아 무해하지만, 나중에 대기시간을
+      특징에 넣는다면 **null 이 0 이 되지 않게** 해야 한다.
     """
     if not config.USE_MOCK_SOT:
         # ⚠ **실패를 가려서 잡는다 — 08-27 B 검수 지적.**
@@ -859,12 +870,18 @@ def get_pending_replenishments() -> list[dict]:
         try:
             rows = _http_get(_API["pending_replenish"], headers=_internal_headers())
         except Exception as e:                             # noqa: BLE001
+            # 원인을 **문자열로 갈라** 돌려준다. 셋 다 확률을 안 내는 것은 같지만
+            # infer 가 `why` 를 다르게 적어야 운영자가 원인을 안다.
+            #   404      창구 없음        (지금 문구 그대로)
+            #   401·403  키·권한 — 우리 설정 문제
+            #   그 외     백엔드 미기동·타임아웃
             status = getattr(getattr(e, "response", None), "status_code", None)
             if status == 404:
-                return None                                # 창구 없음 ≠ 대기 0건
-            print(f"[sot] pending 조회 실패({status or type(e).__name__}) — "
-                  f"창구 없음이 아니다: {e}")
-            raise
+                return None
+            reason = "auth_failed" if status in (401, 403) else "sot_unreachable"
+            print(f"[sot] pending 조회 실패 {reason}"
+                  f"({status or type(e).__name__}): {e}")
+            return reason
         return [{"sku_id": r.get("skuId"), "location_id": r.get("locationId"),
                  "floor_no": r.get("floorNo"), "has_bulk": bool(r.get("hasBulk")),
                  "queued_at": r.get("queuedAt")}

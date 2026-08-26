@@ -172,7 +172,7 @@ def predict_availability(sku_id: int) -> dict:
           큐 5칸 제거(78) Brier 0.07507   ← 85% 악화. 규칙 바닥(0.1248)에 가까워진다
       **큐가 이 자산의 절반이다.** 중앙값으로 채워 넣으면 "그럴듯한 거짓"이 된다.
 
-    → 백엔드에 창구 하나가 열려야 한다(jmy 요청 대기):
+    → 그 창구가 요청 ③이고 08-27에 열렸다(구현 확인):
           GET /internal/replenishment/pending
           → [{sku_id, location_id, floor, has_bulk, queued_at}, …]
       그것만 있으면 qlen·q_vertical·q_horizontal·q_work_sec를 전부 만들 수 있다.
@@ -183,14 +183,22 @@ def predict_availability(sku_id: int) -> dict:
                 "message": "가용예측 모델이 적재되지 않았습니다."}
 
     pending = sot_client.get_pending_replenishments()
-    if pending is None:
-        # 창구가 없다. **0건과 구분해야 한다** — 0건은 "한가하다"이고
-        # None은 "모른다"다. 모르는 채로 중앙값을 넣으면 그럴듯한 거짓이 된다.
+    # 큐를 못 얻은 이유가 셋이다. **발화 정책은 셋 다 같다**(시간을 지어내지
+    # 않는다) — 다른 것은 `why` 뿐이고, 그게 운영자가 원인을 아는 유일한 단서다.
+    # 08-27 B 검수: 전에는 셋을 전부 "창구가 아직 없습니다"로 접어, 키 오타
+    # 하나에 자산이 통째로 침묵하는데 로그엔 "미구현"만 남았다.
+    #   None            창구 없음(404)
+    #   "auth_failed"   키·권한 — 우리 설정 문제
+    #   "sot_unreachable" 백엔드 미기동·타임아웃
+    _WHY = {None: "매장 전체 보충 대기 상태를 조회할 창구가 아직 없습니다.",
+            "auth_failed": "백엔드 내부 API 인증에 실패했습니다(INTERNAL_SERVICE_KEY 불일치).",
+            "sot_unreachable": "백엔드에 연결하지 못했습니다(미기동·타임아웃)."}
+    if pending is None or isinstance(pending, str):
         return {"error": "queue_state_unavailable",
                 "message": ("지금은 보충 시점을 확률로 말할 수 없습니다. "
                             "매대 재고와 예비 재고(BULK) 유무까지만 말하고, "
                             "'약 N분'처럼 시간을 지어내지 마세요."),
-                "why": "매장 전체 보충 대기 상태를 조회할 창구가 아직 없습니다."}
+                "why": _WHY.get(pending, _WHY[None])}
 
     inv = sot_client.get_inventory(int(sku_id)) or {}
     locs = inv.get("locations") or []
