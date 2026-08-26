@@ -107,8 +107,8 @@ def main() -> int:
     else:
         line(BAD, "상품 시드", f"sku {probe_sku} 없음 — **products_seed_5000.sql 미적재**")
         bad += 1
-    inv = sot_client.get_inventory(probe_sku)
-    if inv and (inv.get("locations") or []):
+    inv = sot_client.get_inventory(probe_sku) or {}
+    if (inv.get("locations") or []):
         line(OK, "재고·매대 시드", f"{len(inv['locations'])}개 위치")
     else:
         line(BAD, "재고·매대 시드", "위치 없음 — world_seed.sql 미적재")

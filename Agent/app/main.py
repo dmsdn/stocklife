@@ -72,9 +72,16 @@
 
 import os
 
-from app import config          # 의존 없는 바닥(0층) — 언제 불러도 안전
-
 # ── .env 적재 ───────────────────────────────────────────────────────────────
+# ⚠ **config 보다 먼저다 — 08-26에 순서를 뒤집었다.**
+#   전에는 `from app import config` 가 위에 있고 주석이 "언제 불러도 안전"이라
+#   적혀 있었다. config 가 순수 상수뿐이던 시절엔 맞는 말이었다. 그런데
+#   USE_MOCK_SOT 을 환경변수로 덮을 수 있게 바꾸면서 config 가 **import 시점에
+#   os.environ 을 읽게** 됐다 — 그 순간 "언제 불러도 안전"이 거짓이 됐다.
+#   .env 를 나중에 읽으면 config 는 이미 기본값(mock=True)으로 얼어붙는다.
+#   실제로 `.env` 에 USE_MOCK_SOT=false 를 넣었는데 서버가 mock 으로 떴다.
+#   → **환경을 읽는 모듈은 환경이 채워진 뒤에 import 한다.** 이것이 규칙이고,
+#     config 에 env 를 하나라도 넣는 순간 config 도 그 규칙의 대상이 된다.
 # 로더(load_env)는 app/env.py에 산다 — 하네스의 입구가 둘(서버=여기, 평가=러너)
 # 이라, 준비 코드를 한쪽 입구에 두면 다른 입구가 빠뜨린다. 실제로 08-20 첫
 # 실호출 때 러너가 키를 못 읽어 인증 오류로 전멸했다(경위는 env.py 머리 주석).
@@ -86,6 +93,8 @@ from app.env import load_env, use_utf8_stdout
 #   **개입이 통째로 사라지면서 원인도 안 남는다**(08-26 실측 · env.py 주석).
 use_utf8_stdout()
 load_env()
+
+from app import config                                          # noqa: E402
 
 # ── .env를 읽은 "뒤"에 불러야 하는 것들 ─────────────────────────────────────
 # import가 위아래로 갈라진 이유(보통은 전부 맨 위에 모은다):

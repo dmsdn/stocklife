@@ -308,7 +308,15 @@ def run(n_members: int, n_days: int):
             deplete(sku, qty, t, off)
         # 결제 이벤트
         counters["eid_c"] += 1
-        consumer_ev.append((counters["eid_c"], "PURCHASE", session, mid, None, None, ts, basket_id))
+        # ⚠ payload 는 **JSON 컬럼**이다(schema_v2: "SEARCH의 질의문, PURCHASE의
+        #   basket_id 등"). basket_id 를 맨 문자열로 넣으면 MySQL 이
+        #   `Invalid JSON text: "Invalid value." at position 0` 으로 적재를 거부한다
+        #   — 08-26에 실제로 history_seed 적재가 여기서 멈췄다.
+        #   parquet/csv 로만 쓸 때는 안 드러나고 **DB에 넣는 순간** 터지는 종류다.
+        #   객체로 감싸는 이유: 나중에 칸을 더할 수 있다(순수 문자열 "..." 도 유효한
+        #   JSON 이지만 확장하려면 형태를 바꿔야 한다).
+        consumer_ev.append((counters["eid_c"], "PURCHASE", session, mid, None, None, ts,
+                            '{"basket_id": "%s"}' % basket_id))
 
     def on_guest_visit(engine, data):
         gi, off = data

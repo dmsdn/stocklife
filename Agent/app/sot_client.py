@@ -300,6 +300,25 @@ def get_product(sku_id: int) -> dict | None:
     return mock_data.PRODUCTS.get(sku_id)
 
 
+def _norm_loc(r: dict) -> dict:
+    """백엔드의 camelCase 로케이션 한 줄 → 우리 계약(snake_case).
+
+    [왜 이 파일에 있나] 이름 변환을 도구·추론 쪽에서 하면 **경계가 새어나간다** —
+    infer 가 "백엔드는 camelCase 다"를 알게 되는 순간 mock 으로 못 돌아간다.
+    sot_client 가 SoT 로 가는 유일한 창구이므로 변환도 여기서 끝낸다.
+
+    [없는 칸은 None] `min_qty`(보충 임계)는 지금 이 API 가 안 준다. 0 으로 채우면
+    "임계가 0" = 절대 보충 안 함이 되어 조용히 틀린다 — 모르는 것은 None 이다.
+    """
+    g = r.get
+    return {"location_id": g("locationId") or g("location_id"),
+            "zone_id":     g("zoneId")     or g("zone_id"),
+            "tier_role":   g("tierRole")   or g("tier_role"),
+            "floor_no":    g("floorNo")    if g("floorNo") is not None else g("floor_no"),
+            "x": g("x"), "y": g("y"), "qty": g("qty"),
+            "min_qty": g("minQty") if g("minQty") is not None else g("min_qty")}
+
+
 def get_inventory(sku_id: int) -> dict:
     """상품 하나의 재고 전모 — 도구 get_inventory의 실체.
 
@@ -313,7 +332,20 @@ def get_inventory(sku_id: int) -> dict:
     매대(PICK) 0 + 바로 위(BULK) 40이 함께 보여 "약 N분 뒤 채워집니다"가 성립한다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_inventory"].format(sku_id=sku_id))
+        # ⚠ **실물은 모양이 다르다 — 08-26 첫 실연동에서 잡았다.**
+        #   백엔드는 `[{locationId, zoneId, tierRole, floorNo, x, y, qty}, …]`
+        #   **맨 리스트**를 camelCase 로 돌려준다. 그런데 mock 은 위 docstring 대로
+        #   `{"sku_id":…, "locations":[… snake_case …]}` 를 준다.
+        #   원시 응답을 그대로 흘려보내면 mock ↔ 실물의 **모양이 갈린다**:
+        #     · `inv.get("locations")` → list 에는 .get 이 없어 AttributeError
+        #     · 설령 dict 였어도 `L.get("tier_role")` 은 camelCase 를 못 읽어
+        #       **PICK 매대를 못 찾고** 가용예측이 통째로 죽는다
+        #   이건 404 도 500 도 아니라 조용히 틀리는 종류다 —
+        #   **경계를 넘는 자리에서 한 번 정규화한다**(이 파일이 그 경계다).
+        rows = _http_get(_API["get_inventory"].format(sku_id=sku_id))
+        if isinstance(rows, dict):          # 혹시 백엔드가 감싸서 주면 벗긴다
+            rows = rows.get("locations") or rows.get("items") or []
+        return {"sku_id": int(sku_id), "locations": [_norm_loc(r) for r in (rows or [])]}
 
     locs = []
     # STOCKS의 키는 (sku_id, location_id) 튜플(개념 ⑥ — 수정 불가라 dict 키가
