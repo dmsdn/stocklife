@@ -101,7 +101,7 @@ _API = {
     "get_product":          "/api/products/{sku_id}",
     "get_products_by_skus": "/api/products/by-skus",
     "get_inventory":        "/api/products/{sku_id}/inventory",       # 구: /api/inventory/{sku_id}
-    "get_purchase_history": "/api/members/{member_id}/purchases",     # ⚠ 백엔드 미확정 — 팀계약 갱신 대기
+    "get_purchase_history": "/internal/purchases/history",           # 요청 ④ — 08-27 승인, 구현 대기
     "get_session_cart":     "/api/sessions/{session_id}/cart",        # ⚠ 백엔드 미확정 — 팀계약 갱신 대기
     "get_wishlist":         "/api/wishlist",                          # 구: /api/members/{id}/wishlist
     "get_change_events":    "/api/inventory/change-events",           # 구: /api/events/changes
@@ -219,10 +219,38 @@ def search_products(keyword: str | None = None,
     [반환 예] [{"sku_id": 101042, "name": "아기 물티슈 …", …, "on_promo": False}, …]
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["search_products"], {
-            "keyword": keyword, "category_l1": category_l1, "category_l2": category_l2,
-            "max_price": max_price, "on_promo_only": on_promo_only,
-            "new_within_days": new_within_days})
+        # ⚠ **이름 정규화 — 08-27 첫 실연동에서 잡은 것.** 두 겹으로 어긋나 있었다:
+        #   ① 파라미터: 백엔드는 camelCase(categoryL1·maxPrice·onPromo·recentDays)를
+        #      받는데 snake 로 보내고 있었다 — Spring 은 모르는 파라미터를 조용히
+        #      무시하므로 **필터가 전부 풀린 채** 200 이 온다(에러가 아니다).
+        #   ② 응답: skuId·priceKrw·categoryL2 … camelCase 그대로 흘려보내면
+        #      query.py 의 투영이 snake 키만 집어 **sku_id 가 증발**한다. 그러면
+        #      LLM 은 재고·위치 조회로 넘어갈 열쇠가 없어 검색만 반복하다 도구
+        #      한도를 태운다 — "취급하는 건 확인했는데 재고는 확인이 어렵네요"가
+        #      바로 이 증상이었다. get_inventory 의 _norm_loc 과 같은 계열이며,
+        #      변환은 **경계(sot_client)에서 한 번**만 한다.
+        rows = _http_get(_API["search_products"], {
+            "keyword": keyword, "categoryL1": category_l1, "categoryL2": category_l2,
+            "maxPrice": max_price, "onPromo": on_promo_only,
+            "recentDays": new_within_days})
+        out = []
+        for r in (rows or []):
+            g = r.get
+            out.append({
+                "sku_id":      g("skuId"),
+                "name":        g("name"),
+                "brand":       g("brand"),
+                "category_l1": g("categoryL1"),
+                "category_l2": g("categoryL2"),
+                "price_krw":   g("priceKrw"),
+                "unit":        g("unit"),
+                "spec_raw":    g("specRaw"),
+                "on_promo":    bool(g("onPromo")),
+                # 행사 중이면 실판매가가 다르다 — mock 에는 없는 칸이지만 실물이
+                # 주는 사실이라 살린다(가격 발화의 근거는 최종가여야 한다)
+                "final_price_krw": g("finalPriceKrw"),
+            })
+        return out
 
     # ── 지금 행사 중인 sku 집합 만들기 ──
     # {… for … if …} = 집합 컴프리헨션: "PROMOTIONS의 각 행 p에 대해, 조건을
@@ -377,7 +405,12 @@ def get_purchase_history(member_id: int) -> list[dict]:
     방향 실수(최신→과거로 빼서 음수 간격)가 생긴다. 정렬 책임을 여기 고정한다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_purchase_history"].format(member_id=member_id))
+        # 요청 ④(08-27 승인) 경로. 구현 전에는 404 → query.py 의 예외 처리(원칙 ④)가
+        # 값으로 바꿔 LLM 이 "이력 조회가 안 된다"로 정직하게 착지한다.
+        rows = _http_get(_API["get_purchase_history"],
+                         {"consumerId": member_id}, headers=_internal_headers())
+        return [{"sku_id": r.get("skuId"), "qty": r.get("qty"),
+                 "purchased_at": r.get("purchasedAt")} for r in (rows or [])]
     # 리스트 컴프리헨션: "PURCHASES의 각 행 p 중 member_id가 일치하는 것만 모아
     # 새 리스트로" — for문 3줄을 한 줄로 쓴 것.
     rows = [p for p in mock_data.PURCHASES if p["member_id"] == member_id]

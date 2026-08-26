@@ -21,7 +21,7 @@ MySQL   localhost:3307 / storeflow_db
 | ④ | `Agent/catalog/out/products_seed_5000.sql` | 상품 5,000 | 위치·재고가 sku를 참조 |
 | ⑤ | `Agent/sim/out/world_seed.sql` | locations 11,544 · stocks 9,940 · shelf_configs 4,970 | 매대 구조 |
 | ⑥ | `Agent/sim/out/members_seed.sql` | 회원 10,000 | |
-| ⑦ | `Agent/sim/out/mode1/history_seed.sql` | **데모 슬라이스** — 회원 30명 × 90일<br>purchases 2,064 · shelf_events 188,396 · consumer_events 3,845 | 16.6MB · 몇 분 걸린다 |
+| ⑦-a | `Agent/sim/out/mode1/history_seed.sql` | **데모 슬라이스** — 회원 30명 × 90일<br>purchases 2,064 · shelf_events 188,396 · consumer_events 3,845 | 16.6MB · 몇 분 걸린다 |
 
 ```bash
 MYSQL="/c/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe"
@@ -31,7 +31,15 @@ MYSQL="/c/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe"
 "$MYSQL" -h127.0.0.1 -P3307 -uroot -p storeflow_db < Agent/sim/out/world_seed.sql
 "$MYSQL" -h127.0.0.1 -P3307 -uroot -p storeflow_db < Agent/sim/out/members_seed.sql
 "$MYSQL" -h127.0.0.1 -P3307 -uroot -p storeflow_db < Agent/sim/out/mode1/history_seed.sql
+"$MYSQL" -h127.0.0.1 -P3307 -uroot -p storeflow_db < Agent/sim/out/mode1/stock_sync.sql
 ```
+
+### ⑦-b `stock_sync.sql` — **반드시 history 다음, 마지막에** (08-27 신설)
+
+재고 스냅샷을 DES 스냅샷 시각(**2026-08-08 토 14:20** = `config.DEMO_NOW`)으로
+동기화한다. 없으면 stocks 가 t=0 상태라 "이미 채워졌는데 par 밑" 같은 자기모순이
+생기고, pending 의 queuedAt 이 전부 null 이 된다. 토요일 오후인 이유: 평일 낮의
+순간 큐는 0~5건이라 킬링 장면 1이 성립하지 않는다(주말 오후가 피크 — 큐 96건).
 
 ## 2. 걸린 것 넷 — 다음 사람은 안 걸리게
 
