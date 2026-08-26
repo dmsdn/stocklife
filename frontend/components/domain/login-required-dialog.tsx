@@ -29,8 +29,7 @@ export function LoginRequiredDialog({ open, onClose }: LoginRequiredDialogProps)
           <Button
             onClick={() => {
               onClose();
-              // TODO: 지금은 마이페이지로 이동 — /auth/login으로 바로 보내려면 이 경로만 바꾸면 됨
-              router.push("/mypage");
+              router.push("/auth/login?next=/cart");
             }}
           >
             로그인하고 이용하기

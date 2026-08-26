@@ -15,6 +15,7 @@ import {
   addProductToCartGroup,
   createCartGroup,
   readCartGroups,
+  loadCartGroups,
   type CartGroup,
 } from "@/lib/cart-storage";
 
@@ -79,7 +80,7 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    setCartGroups(readCartGroups());
+    loadCartGroups().then(setCartGroups).catch(() => setCartGroups(readCartGroups()));
   }, []);
 
   // ✅ 최근 AI 대화 — 실제 GET /api/chat/sessions
@@ -137,11 +138,11 @@ export default function HomePage() {
     );
   };
 
-  const openCartPicker = (
+  const openCartPicker = async (
     product: RecommendedProduct,
   ) => {
     setSelectedProduct(product);
-    setCartGroups(readCartGroups());
+    try { setCartGroups(await loadCartGroups()); } catch { setCartGroups(readCartGroups()); }
     setCartPickerOpen(true);
   };
 
@@ -150,7 +151,7 @@ export default function HomePage() {
     setSelectedProduct(null);
   };
 
-  const handleAddToCart = (
+  const handleAddToCart = async (
     groupId: number,
   ) => {
     if (!selectedProduct) {
@@ -158,7 +159,7 @@ export default function HomePage() {
     }
 
     const nextGroups =
-      addProductToCartGroup(
+      await addProductToCartGroup(
         groupId,
         {
           id: selectedProduct.id,
@@ -173,16 +174,16 @@ export default function HomePage() {
     closeCartPicker();
   };
 
-  const handleCreateCart = () => {
+  const handleCreateCart = async () => {
     if (!selectedProduct) {
       return;
     }
 
     const newGroup =
-      createCartGroup("새 장보기");
+      await createCartGroup("새 장보기");
 
     const nextGroups =
-      addProductToCartGroup(
+      await addProductToCartGroup(
         newGroup.id,
         {
           id: selectedProduct.id,

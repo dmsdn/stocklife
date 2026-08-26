@@ -15,14 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
-import {
-  readCartGroups,
-  updateCartGroups,
-  deleteCartGroup,
-  syncUpdateServerCart,
-  syncRemoveFromServerCart,
-  type CartGroup,
-} from "@/lib/cart-storage";
+import {readCartGroups, loadCartGroups,updateCartGroups, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup,} from "@/lib/cart-storage";
 
 export default function SavedGroupDetailPage() {
   const router = useRouter();
@@ -33,7 +26,9 @@ export default function SavedGroupDetailPage() {
   const [routeOpen, setRouteOpen] = useState(false);
 
   useEffect(() => {
-    setGroup(readCartGroups().find((g) => g.id === groupId) ?? null);
+    loadCartGroups()
+      .then((groups) => setGroup(groups.find((g) => g.id === groupId) ?? null))
+      .catch(() => setGroup(readCartGroups().find((g) => g.id === groupId) ?? null));
   }, [groupId]);
 
   const handleQuantityChange = (
@@ -58,7 +53,7 @@ export default function SavedGroupDetailPage() {
     setGroup(next.find((g) => g.id === groupId) ?? null);
 
     // 실제 서버 장바구니 PATCH
-    syncUpdateServerCart(productId, quantity);
+    syncUpdateServerCart(next.find((g) => g.id === groupId)?.products.find((p) => p.id === productId)?.cartItemId, quantity);
   };
 
   const handleToggleChecked = (productId: number) => {
@@ -78,6 +73,8 @@ export default function SavedGroupDetailPage() {
     );
 
     setGroup(next.find((g) => g.id === groupId) ?? null);
+    const changed = next.find((g) => g.id === groupId)?.products.find((p) => p.id === productId);
+    syncUpdateServerCart(changed?.cartItemId, undefined, changed?.checked);
   };
 
   const handleRemove = (productId: number) => {
@@ -97,7 +94,7 @@ export default function SavedGroupDetailPage() {
     setGroup(next.find((g) => g.id === groupId) ?? null);
 
     // 실제 서버 장바구니 DELETE
-    syncRemoveFromServerCart(productId);
+    syncRemoveFromServerCart(group.products.find((p) => p.id === productId)?.cartItemId);
   };
 
   if (!group) {
@@ -151,8 +148,7 @@ export default function SavedGroupDetailPage() {
                 `"${group.title}" 리스트를 삭제할까요?`
               )
             ) {
-              deleteCartGroup(group.id);
-              router.push("/saved");
+              void deleteCartGroup(group.id).then(() => router.push("/saved"));
             }
           }}
           className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"

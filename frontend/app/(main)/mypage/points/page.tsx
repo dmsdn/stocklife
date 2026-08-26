@@ -2,10 +2,39 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ChevronLeft, Coins } from "lucide-react";
-import { fetchPointBalance, fetchPointHistory, type PointBalance, type PointHistoryItem } from "@/lib/consumer-benefits";
+import { apiFetch } from "@/lib/api-client";
+
+interface PointHistoryItem {
+  pointHistoryId: number;
+  orderId: number;
+  amount: number;
+  type: "PURCHASE_EARN" | "REFUND_REVOKE";
+  description: string;
+  createdAt: string;
+}
+
+interface PointSummary {
+  balance: number;
+  earnedThisMonth: number;
+  usedThisMonth: number;
+  earningRatePercent: number;
+  history: PointHistoryItem[];
+}
 
 export default function PointsPage() {
+  const [data, setData] = useState<PointSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<PointSummary>("/api/points/me")
+        .then(setData)
+        .catch(() => setError("포인트 정보를 불러오지 못했어요."))
+        .finally(() => setLoading(false));
+  }, []);
+
   const [balance, setBalance] = useState<PointBalance | null>(null);
   const [history, setHistory] = useState<PointHistoryItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -28,54 +57,75 @@ export default function PointsPage() {
         <div className="w-10" />
       </header>
 
-      <section className="px-5 pt-6">
-        <div className="rounded-sm bg-[#F6F7F9] p-5">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Coins className="h-4 w-4" />
-            보유 포인트
-          </div>
+        <section className="px-5 pt-6">
+          {loading && <p className="py-10 text-center text-sm text-gray-500">불러오는 중...</p>}
+          {error && <p className="py-10 text-center text-sm text-red-500">{error}</p>}
 
-          {!loaded ? (
-            <p className="mt-3 text-sm text-gray-400">불러오는 중...</p>
-          ) : balance ? (
-            <>
-              <div className="mt-3 flex items-end gap-1">
-                <strong className="text-[32px] font-bold tracking-tight">{balance.balance.toLocaleString()}</strong>
-                <span className="mb-1 text-sm font-medium">P</span>
-              </div>
-              <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-                <span>이번 달 적립 {balance.earnedThisMonth.toLocaleString()}P</span>
-                <span>이번 달 사용 {balance.usedThisMonth.toLocaleString()}P</span>
-              </div>
-            </>
-          ) : (
-            <p className="mt-3 text-sm text-gray-400">포인트 정보를 불러올 수 없어요.</p>
-          )}
-        </div>
+          {!loading && !error && data && (
+              <>
+                <div className="rounded-2xl bg-[#F6F7F9] p-5">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Coins className="h-4 w-4" />
+                    보유 포인트
+                  </div>
+
+                  <div className="mt-3 flex items-end gap-1">
+                    <strong className="text-[32px] font-bold tracking-tight">
+                      {data.balance.toLocaleString()}
+                    </strong>
+                    <span className="mb-1 text-sm font-medium">P</span>
+                  </div>
+
+                  <p className="mt-2 text-xs text-gray-500">
+                    구매 완료 금액의 {data.earningRatePercent}% 적립
+                  </p>
+
+                  <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+                    <span>이번 달 적립 {data.earnedThisMonth.toLocaleString()}P</span>
+                    <span>이번 달 차감 {data.usedThisMonth.toLocaleString()}P</span>
+                  </div>
+                </div>
 
         <div className="mt-8">
           <h2 className="text-[17px] font-semibold">포인트 내역</h2>
 
-          {loaded && history.length === 0 && (
-            <p className="mt-6 text-center text-sm text-gray-400">내역이 없어요.</p>
-          )}
-
-          <div className="mt-4 divide-y">
-            {history.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-4">
-                <div>
-                  <p className="text-sm font-medium">{item.title}</p>
-                  <p className="mt-1 text-xs text-gray-400">{item.createdAt}</p>
+                  {data.history.length === 0 ? (
+                      <p className="py-10 text-center text-sm text-gray-400">아직 포인트 내역이 없어요.</p>
+                  ) : (
+                      <div className="mt-4 divide-y">
+                        {data.history.map((item) => (
+                            <PointHistory key={item.pointHistoryId} item={item} />
+                        ))}
+                      </div>
+                  )}
                 </div>
-                <span className={`text-sm font-semibold ${item.amount > 0 ? "text-[#111111]" : "text-gray-400"}`}>
-                  {item.amount > 0 ? "+" : ""}
-                  {item.amount.toLocaleString()}P
-                </span>
-              </div>
-            ))}
-          </div>
+              </>
+          )}
+        </section>
+      </main>
+  );
+}
+
+function PointHistory({ item }: { item: PointHistoryItem }) {
+  const positive = item.amount > 0;
+  const date = new Date(item.createdAt).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return (
+      <div className="flex items-center justify-between py-4">
+        <div>
+          <p className="text-sm font-medium">{item.description}</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {date} · 주문 #{item.orderId}
+          </p>
         </div>
-      </section>
-    </main>
+
+        <span className={`text-sm font-semibold ${positive ? "text-[#111111]" : "text-gray-400"}`}>
+        {positive ? "+" : ""}{item.amount.toLocaleString()}P
+      </span>
+      </div>
   );
 }

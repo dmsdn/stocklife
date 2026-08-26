@@ -4,7 +4,8 @@
 //   - 전화번호 인증(SMS), 비밀번호 재설정 API 전부 추가됨 → 실제 연결
 "use client";
 
-import { apiFetch, setTokens, clearTokens } from "./api-client";
+import { apiFetch, setTokens, clearTokens, getOrCreateGuestSessionId } from "./api-client";
+import { migrateGuestCartToAccount, resetCartMigrationAttempt } from "./cart-storage";
 
 export interface SignupPayload {
   phoneNumber: string;
@@ -35,11 +36,21 @@ export async function login(phoneNumber: string, password: string): Promise<void
     "/api/consumers/login",
     {
       method: "POST",
-      body: JSON.stringify({ phoneNumber, password }),
+      body: JSON.stringify({ phoneNumber, password, sessionId: getOrCreateGuestSessionId() }),
       auth: false,
     }
   );
   setTokens(res.accessToken, res.refreshToken);
+  resetCartMigrationAttempt();
+
+  // 로그인 성공 직후 비회원 localStorage 장바구니를 회원 DB로 승계한다.
+  // 승계 실패 시 localStorage는 남겨두고 로그인 자체는 유지한다.
+  try {
+    await migrateGuestCartToAccount();
+  } catch (error) {
+    console.error("[auth] guest cart migration failed", error);
+    // localStorage는 보존되고, 다음 로그인 때 다시 시도한다.
+  }
 }
 
 export async function logout(): Promise<void> {

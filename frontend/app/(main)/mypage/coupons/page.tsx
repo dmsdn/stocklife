@@ -2,10 +2,41 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Ticket } from "lucide-react";
-import { fetchCoupons, type Coupon } from "@/lib/consumer-benefits";
+import { useEffect, useState } from "react";
+import { ChevronLeft, Ticket } from "lucide-react";
+import { apiFetch } from "@/lib/api-client";
+
+interface CouponItem {
+  consumerCouponId: number;
+  code: string;
+  title: string;
+  description: string;
+  discountType: "FIXED" | "PERCENT";
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscountAmount: number | null;
+  status: "AVAILABLE" | "USED" | "EXPIRED";
+  usable: boolean;
+  validUntil: string;
+}
+
+interface CouponSummary {
+  availableCount: number;
+  coupons: CouponItem[];
+}
 
 export default function CouponsPage() {
+  const [data, setData] = useState<CouponSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<CouponSummary>("/api/coupons/me")
+      .then(setData)
+      .catch(() => setError("쿠폰 정보를 불러오지 못했어요."))
+      .finally(() => setLoading(false));
+  }, []);
+
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -36,8 +67,7 @@ export default function CouponsPage() {
           <div>
             <p className="text-xs text-gray-500">사용 가능한 쿠폰</p>
             <p className="mt-0.5 text-xl font-bold">
-              {usable.length}
-              <span className="ml-1 text-sm font-medium">장</span>
+              {data?.availableCount ?? 0}<span className="ml-1 text-sm font-medium">장</span>
             </p>
           </div>
         </div>
@@ -45,24 +75,36 @@ export default function CouponsPage() {
 
       <section className="px-5 pt-5">
         <h2 className="text-[17px] font-semibold">내 쿠폰</h2>
+        {loading && <p className="py-10 text-center text-sm text-gray-500">불러오는 중...</p>}
+        {error && <p className="py-10 text-center text-sm text-red-500">{error}</p>}
+        {!loading && !error && data?.coupons.length === 0 && (
+          <p className="py-10 text-center text-sm text-gray-400">보유한 쿠폰이 없어요.</p>
+        )}
 
         {loaded && coupons.length === 0 && (
           <p className="mt-6 text-center text-sm text-gray-400">보유한 쿠폰이 없어요.</p>
         )}
 
         <div className="mt-4 space-y-3">
-          {coupons.map((coupon) => (
-            <div key={coupon.id} className={`overflow-hidden rounded-sm bg-white ${coupon.used ? "opacity-50" : ""}`}>
-              <div className="flex">
-                <div className="flex w-20 shrink-0 items-center justify-center bg-[#111111] text-white">
-                  <Ticket className="h-6 w-6" />
-                </div>
-                <div className="flex-1 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold">{coupon.title}</h3>
-                      <p className="mt-1 text-xs text-gray-500">{coupon.description}</p>
-                      <p className="mt-3 text-[11px] text-gray-400">{coupon.expiresAt}까지</p>
+          {data?.coupons.map((coupon) => {
+            const expiry = new Date(coupon.validUntil).toLocaleDateString("ko-KR");
+            const statusText = coupon.usable ? "사용 가능" : coupon.status === "USED" ? "사용 완료" : "기간 만료";
+            return (
+              <div key={coupon.consumerCouponId} className={`overflow-hidden rounded-2xl bg-white ${coupon.usable ? "" : "opacity-55"}`}>
+                <div className="flex">
+                  <div className="flex w-20 shrink-0 items-center justify-center bg-[#111111] text-white">
+                    <Ticket className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">{coupon.title}</h3>
+                        <p className="mt-1 text-xs text-gray-500">{coupon.description}</p>
+                        <p className="mt-3 text-[11px] text-gray-400">{expiry}까지 · {statusText}</p>
+                      </div>
+                      {coupon.usable && (
+                        <Link href="/cart" className="shrink-0 text-xs font-medium">장바구니에서 사용</Link>
+                      )}
                     </div>
                     {!coupon.used && (
                       <button type="button" className="flex shrink-0 items-center text-xs font-medium">
@@ -73,8 +115,8 @@ export default function CouponsPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </main>

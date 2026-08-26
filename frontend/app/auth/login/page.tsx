@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ function formatPhone(value: string) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +39,8 @@ export default function LoginPage() {
       await login(toBackendPhone(phone), password);
       // TODO: keepLoggedIn(로그인 상태 유지)을 반영하려면 리프레시 토큰 만료 정책을
       // 백엔드와 맞춰야 함 — 지금은 옵션과 무관하게 항상 토큰을 저장만 함
-      router.push("/");
+      const next = searchParams.get("next");
+      router.push(next && next.startsWith("/") ? next : "/");
     } catch (e) {
       // 전화번호/비밀번호 불일치(InvalidCredentialsException)든 다른 서버 오류든
       // 백엔드가 에러 형식을 통일해두지 않아서 일단 하나로 묶어서 보여줌

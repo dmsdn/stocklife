@@ -28,9 +28,9 @@ export function SaveToListDialog({ open, onClose, onSelect }: SaveToListDialogPr
     }
   }, [open]);
 
-  const handleCreateAndSelect = () => {
+  const handleCreateAndSelect = async () => {
     if (!newTitle.trim()) return;
-    const group = createCartGroup(newTitle.trim());
+    const group = await createCartGroup(newTitle.trim());
     onSelect(group.id);
     onClose();
   };
