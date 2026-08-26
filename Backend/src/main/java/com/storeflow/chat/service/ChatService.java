@@ -1,5 +1,7 @@
 package com.storeflow.chat.service;
 
+import com.storeflow.cart.entity.CartGroup;
+import com.storeflow.cart.repository.CartGroupRepository;
 import com.storeflow.chat.dto.*;
 import com.storeflow.chat.entity.ChatMessage;
 import com.storeflow.chat.entity.ChatSession;
@@ -29,6 +31,7 @@ public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final RestTemplate restTemplate;
     private final EventBroadcastService eventBroadcastService;
+    private final CartGroupRepository cartGroupRepository;
 
     @Value("${agent.base-url}")
     private String agentBaseUrl;
@@ -36,11 +39,13 @@ public class ChatService {
     public ChatService(ChatSessionRepository chatSessionRepository,
                        ChatMessageRepository chatMessageRepository,
                        RestTemplate restTemplate,
-                       EventBroadcastService eventBroadcastService) {
+                       EventBroadcastService eventBroadcastService,
+                       CartGroupRepository cartGroupRepository) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.restTemplate = restTemplate;
         this.eventBroadcastService = eventBroadcastService;
+        this.cartGroupRepository = cartGroupRepository;
     }
 
     /**
@@ -49,20 +54,37 @@ public class ChatService {
      *
      * 로그인 사용자: consumerId로 소유권 구분
      * 비회원: X-Chat-Client-Id 값(anonymousId)으로 소유권 구분
+     *
+     * groupIdOrNull: 장보기 리스트 화면에서 시작된 대화면 그 리스트(cart_group) id.
+     * 홈 화면 등 일반 대화면 null로 두면 지금처럼 동작한다. 비회원이거나 본인 소유가
+     * 아닌 groupId가 오면 조용히 무시(null 처리)한다 — 리스트 자체가 회원 전용 기능이라
+     * 이 때문에 채팅 시작 자체를 막을 이유는 없다.
      */
     @Transactional
-    public ChatSessionResponse createSession(Long consumerIdOrNull, String anonymousIdOrNull) {
+    public ChatSessionResponse createSession(Long consumerIdOrNull, String anonymousIdOrNull, Long groupIdOrNull) {
         requireOwnerIdentity(consumerIdOrNull, anonymousIdOrNull);
 
         String sessionId = UUID.randomUUID().toString();
+        Long ownedGroupId = resolveOwnedGroupIdOrNull(consumerIdOrNull, groupIdOrNull);
 
         ChatSession session = new ChatSession(
                 sessionId,
                 consumerIdOrNull,
-                consumerIdOrNull == null ? normalizeAnonymousId(anonymousIdOrNull) : null
+                consumerIdOrNull == null ? normalizeAnonymousId(anonymousIdOrNull) : null,
+                ownedGroupId
         );
 
         return ChatSessionResponse.from(chatSessionRepository.save(session));
+    }
+
+    /** groupId가 있어도 로그인 상태가 아니거나 본인 리스트가 아니면 null로 무시한다. */
+    private Long resolveOwnedGroupIdOrNull(Long consumerIdOrNull, Long groupIdOrNull) {
+        if (groupIdOrNull == null || consumerIdOrNull == null) {
+            return null;
+        }
+        return cartGroupRepository.findByCartGroupIdAndConsumerId(groupIdOrNull, consumerIdOrNull)
+                .map(CartGroup::getCartGroupId)
+                .orElse(null);
     }
 
     /**

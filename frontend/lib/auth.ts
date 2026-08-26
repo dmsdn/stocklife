@@ -4,7 +4,7 @@
 //   - 전화번호 인증(SMS), 비밀번호 재설정 API 전부 추가됨 → 실제 연결
 "use client";
 
-import { apiFetch, setTokens, clearTokens, getOrCreateGuestSessionId } from "./api-client";
+import { apiFetch, setTokens, clearTokens } from "./api-client";
 import { migrateGuestCartToAccount, resetCartMigrationAttempt } from "./cart-storage";
 
 export interface SignupPayload {
@@ -34,12 +34,12 @@ export async function signup(payload: SignupPayload): Promise<void> {
 /** @param keepLoggedIn true면 브라우저를 껐다 켜도 로그인 유지(localStorage), false면 이 탭에서만 유지(sessionStorage) */
 export async function login(phoneNumber: string, password: string, keepLoggedIn: boolean = true): Promise<void> {
   const res = await apiFetch<{ accessToken: string; refreshToken: string }>(
-    "/api/consumers/login",
-    {
-      method: "POST",
-      body: JSON.stringify({ phoneNumber, password, sessionId: getOrCreateGuestSessionId() }),
-      auth: false,
-    }
+      "/api/consumers/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ phoneNumber, password }),
+        auth: false,
+      }
   );
   setTokens(res.accessToken, res.refreshToken, keepLoggedIn);
   resetCartMigrationAttempt();

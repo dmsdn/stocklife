@@ -2,6 +2,7 @@ package com.storeflow.chat.controller;
 
 import com.storeflow.chat.dto.ChatRequest;
 import com.storeflow.chat.dto.ChatSessionResponse;
+import com.storeflow.chat.dto.CreateChatSessionRequest;
 import com.storeflow.chat.service.ChatService;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
 import jakarta.validation.Valid;
@@ -51,17 +52,21 @@ public class ChatController {
      * 5-1: 새 채팅 만들기.
      *
      * POST /api/chat/sessions
+     * 바디는 선택: { "groupId": 123 } 을 보내면 그 장보기 리스트에 묶인 대화로 시작된다.
+     * (비회원은 groupId를 보내도 무시됨 — 리스트는 로그인 회원 전용 기능이라서.)
      */
     @PostMapping("/sessions")
     public ResponseEntity<?> createSession(
+            @RequestBody(required = false) CreateChatSessionRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
     ) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
+            Long groupId = request == null ? null : request.getGroupId();
 
             return ResponseEntity.ok(
-                    chatService.createSession(consumerId, anonymousId)
+                    chatService.createSession(consumerId, anonymousId, groupId)
             );
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(e.getMessage());
