@@ -15,11 +15,22 @@
 // X-Session-Id"를 원하므로 auth:true 옵션에 얹어 자동으로 처리한다.
 const GUEST_SESSION_KEY = "storeflow_guest_session_id";
 
+// ✅ crypto.randomUUID()는 보안 컨텍스트(https 또는 localhost)에서만 존재합니다.
+//   http://IP주소:3000처럼 접속하면 이 함수가 없어서 TypeError가 나고, 그게 로그인
+//   fetch()가 나가기도 전에(요청 바디 만드는 단계에서) 터져버려서 "네트워크 요청 자체가
+//   안 나가고 콘솔에도 안 찍히는" 것처럼 보였던 문제의 원인이었습니다. 폴백을 추가합니다.
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `guest-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function getOrCreateGuestSessionId(): string {
   if (typeof window === "undefined") return "";
   let id = window.localStorage.getItem(GUEST_SESSION_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateId();
     window.localStorage.setItem(GUEST_SESSION_KEY, id);
   }
   return id;
