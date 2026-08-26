@@ -73,13 +73,22 @@ def main() -> int:
         line(OK, f"{len(pending)}건 수신")
         r = pending[0]
         # 우리가 읽는 키가 실제로 채워졌나. None이면 이름이 다른 것이다.
-        for k in ("sku_id", "location_id", "floor_no", "has_bulk", "queued_at"):
+        # queued_at 만 **null 이 정상일 수 있다** — 백엔드 DTO 주석대로
+        # "BELOW_PAR 이벤트가 없으면 null"(0건이 아니라 모름). 나머지 넷은
+        # null 이면 필드명 불일치다.
+        for k in ("sku_id", "location_id", "floor_no", "has_bulk"):
             v = r.get(k)
             if v is None:
                 line(BAD, f"필드 {k}", "None — 백엔드 필드명이 다르다(camelCase 확인)")
                 bad += 1
             else:
                 line(OK, f"필드 {k}", repr(v)[:44])
+        n_q = sum(1 for x in pending if x.get("queued_at"))
+        if n_q:
+            line(OK, "필드 queued_at", f"{n_q}/{len(pending)}건에 값 있음")
+        else:
+            line(WARN, "필드 queued_at", "전건 null — BELOW_PAR 이력이 없다는 뜻. "
+                                        "대기시간 원점이 없어 예측이 낙관 쪽으로 기운다")
 
     # ── ② 인기 상품 ───────────────────────────────────────────────────────
     print("\n── ② /internal/purchases/popular ──")

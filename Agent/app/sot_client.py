@@ -678,9 +678,18 @@ def get_popular_products(category_l2: str | None = None,
     query.py의 예외 처리(원칙 ④)가 이를 값으로 바꿔 LLM이 정직하게 착지한다.
     """
     if not config.USE_MOCK_SOT:
-        rows = _http_get(_API["get_popular"],
-                         {"categoryL2": category_l2, "lookbackDays": lookback_days,
-                          "limit": limit},
+        # ⚠ **빈 문자열을 보내면 안 된다 — 08-27 실연동에서 잡았다.**
+        #   백엔드 쿼리는 `(:categoryL2 IS NULL OR pr.categoryL2 = :categoryL2)` 라
+        #   **null 이어야 "전체"** 다. 우리가 `""` 를 보내면 "카테고리 이름이
+        #   빈 문자열인 상품"을 찾게 되어 **항상 0건**이 온다.
+        #   404 도 500 도 아니고 200 + 빈 배열이라 조용히 틀린다 — 실제로
+        #   "이번 주에 뭐가 잘 팔려요?" 가 계속 "데이터가 없다"로 답했다.
+        #   None 인 칸은 아예 빼서 보낸다(httpx 는 None 을 그대로 &k=None 으로
+        #   직렬화하지 않고 빼 주지만, 빈 문자열은 빼지 않는다).
+        params = {"lookbackDays": lookback_days, "limit": limit}
+        if category_l2:                       # ""·None 이면 안 넣는다 = 전체
+            params["categoryL2"] = category_l2
+        rows = _http_get(_API["get_popular"], params,
                          headers=_internal_headers())
         items = [{"sku_id": r.get("skuId"), "name": r.get("productName"),
                   "total_qty": r.get("totalQty"), "purchaser_count": r.get("purchaserCount")}
