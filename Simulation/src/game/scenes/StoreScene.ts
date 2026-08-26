@@ -127,13 +127,16 @@ const FACILITY_ICON: Record<string, string> = {
 
 // 시설 중 실제 타일팩 이미지가 있는 것만 여기 등록 — 나머지는 계속 이모지 아이콘을 쓴다.
 // (정수기는 "Modern Supermarket" 팩에 냉온수기 스프라이트가 있어서 이모지 대신 이걸 쓴다.
-// 엘리베이터/에스컬레이터는 새로 받은 "Modern Shopping Mall" 팩에서 잘라 넣었다. 화장실
-// 3종은 이 팩에도 마땅한 그림이 없어서 계속 이모지 배지를 쓴다.)
+// 엘리베이터/에스컬레이터는 새로 받은 "Modern Shopping Mall" 팩에서 잘라 넣었다. 남녀 화장실은
+// AI 생성 프롬프트로 만든 문 표지판 이미지를 추가했다. 가족 화장실(family_restroom)은 마땅한
+// 그림이 없어서 계속 이모지 배지를 쓴다.)
 const FACILITY_IMAGE: Record<string, string> = {
   water: 'facility-water',
   elevator: 'facility-elevator',
   escalator_up: 'facility-escalator-up',
   escalator_down: 'facility-escalator-down',
+  restroom_male: 'facility-restroom-male',
+  restroom_female: 'facility-restroom-female',
 };
 
 // 엘리베이터/에스컬레이터가 너무 작아서 잘 안 보인다는 피드백 — 기본 TILE(24px) 크기의
@@ -310,6 +313,36 @@ const ZONE_RACK_TEXTURE_VARIANTS: Record<string, { single: string; merged: strin
     { single: 'zone-f3-d-clothing-3', merged: 'zone-f3-d-clothing-3-m' }, // 컬러풀 옷걸이 랙
     { single: 'zone-f3-d-clothing-4', merged: 'zone-f3-d-clothing-4-m' }, // 회전식 원형 옷걸이
     { single: 'zone-f3-d-clothing-5', merged: 'zone-f3-d-clothing-5-m' }, // 서랍장 진열대
+  ],
+  // 2층 뷰티·헬스 구역 — "Shopping Mall" 팩의 화장품 매대 3종을 받아서 추가. 나머지
+  // 5개 구역(세탁·청소/화장지·위생/반려용품/수납·생활잡화/주방용품)은 두 팩(Modern Shopping
+  // Mall2, Shopping Mall) 어디에도 다른 상품과 섞이지 않은 깔끔한 매대형 이미지가 없어서
+  // AI 생성 프롬프트로 매대형 이미지를 새로 만들어 추가했다(채팅 답변 참고).
+  'F2-B': [
+    { single: 'zone-f2-b-beauty', merged: 'zone-f2-b-beauty-m' }, // 기존 단품 아이콘 매대
+    { single: 'zone-f2-b-beauty-2', merged: 'zone-f2-b-beauty-2-m' }, // 로션·튜브 매대
+    { single: 'zone-f2-b-beauty-3', merged: 'zone-f2-b-beauty-3-m' }, // 아이섀도·립스틱 매대
+    { single: 'zone-f2-b-beauty-4', merged: 'zone-f2-b-beauty-4-m' }, // 마스카라·향수 매대
+  ],
+  'F2-F': [
+    { single: 'zone-f2-f-cleaning', merged: 'zone-f2-f-cleaning-m' }, // 기존 단품 아이콘 매대
+    { single: 'zone-f2-f-cleaning-rack', merged: 'zone-f2-f-cleaning-rack-m' }, // AI 생성 세제·청소용품 매대
+  ],
+  'F2-D': [
+    { single: 'zone-f2-d-hygiene', merged: 'zone-f2-d-hygiene-m' }, // 기존 단품 아이콘 매대
+    { single: 'zone-f2-d-hygiene-rack', merged: 'zone-f2-d-hygiene-rack-m' }, // AI 생성 화장지·위생용품 매대
+  ],
+  'F2-A': [
+    { single: 'zone-f2-a-pet', merged: 'zone-f2-a-pet-m' }, // 기존 단품 아이콘 매대
+    { single: 'zone-f2-a-pet-rack', merged: 'zone-f2-a-pet-rack-m' }, // AI 생성 반려용품 매대
+  ],
+  'F2-C': [
+    { single: 'zone-f2-c-storage', merged: 'zone-f2-c-storage-m' }, // 기존 단품 아이콘 매대
+    { single: 'zone-f2-c-storage-rack', merged: 'zone-f2-c-storage-rack-m' }, // AI 생성 수납·생활잡화 매대
+  ],
+  'F2-E': [
+    { single: 'zone-f2-e-kitchen', merged: 'zone-f2-e-kitchen-m' }, // 기존 단품 아이콘 매대
+    { single: 'zone-f2-e-kitchen-rack', merged: 'zone-f2-e-kitchen-rack-m' }, // AI 생성 주방용품 매대
   ],
 };
 
