@@ -1,7 +1,10 @@
 package com.storeflow.inventory.service;
 
+import com.storeflow.inventory.dto.BelowParTimestamp;
 import com.storeflow.inventory.dto.ChangeEventResponse;
 import com.storeflow.inventory.dto.InventoryItemResponse;
+import com.storeflow.inventory.dto.PendingReplenishmentResponse;
+import com.storeflow.inventory.dto.PendingReplenishmentRow;
 import com.storeflow.inventory.entity.Location;
 import com.storeflow.inventory.entity.ShelfEvent;
 import com.storeflow.inventory.entity.Stock;
@@ -16,8 +19,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.storeflow.inventory.dto.BelowParTimestamp;
+import com.storeflow.inventory.dto.PendingReplenishmentResponse;
+import com.storeflow.inventory.dto.PendingReplenishmentRow;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class InventoryService {
@@ -140,6 +152,34 @@ public class InventoryService {
         Instant since = Instant.now().minus(recentHours, ChronoUnit.HOURS);
         return shelfEventRepository.findChangeEvents(CHANGE_EVENT_TYPES, skuIds, since).stream()
                 .map(ChangeEventResponse::new)
+                .toList();
+    }
+
+        /** replenishment/pending(③). 3개 쿼리를 합쳐서 최종 응답을 만든다. */
+    @Transactional(readOnly = true)
+    public List<PendingReplenishmentResponse> getPendingReplenishments() {
+        List<PendingReplenishmentRow> rows =
+                stockRepository.findPendingPickShortages(Location.TierRole.PICK);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Integer> bulkSkuIds = new HashSet<>(
+                stockRepository.findSkuIdsWithPositiveStockByTierRole(Location.TierRole.BULK));
+
+        Map<String, Instant> queuedAtByKey = shelfEventRepository
+                .findLatestBelowParTimestamps(ShelfEvent.EventType.BELOW_PAR).stream()
+                .collect(Collectors.toMap(
+                        t -> t.getSkuId() + "|" + t.getLocationId(),
+                        BelowParTimestamp::getOccurredAt));
+
+        return rows.stream()
+                .map(r -> new PendingReplenishmentResponse(
+                        r.getSkuId(),
+                        r.getLocationId(),
+                        r.getFloorNo(),
+                        bulkSkuIds.contains(r.getSkuId()),
+                        queuedAtByKey.get(r.getSkuId() + "|" + r.getLocationId())))
                 .toList();
     }
 
