@@ -10,6 +10,7 @@ import com.storeflow.product.repository.ProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,6 +61,23 @@ public class CartService {
         return new CartGroupResponse(group, List.of());
     }
 
+    @Transactional(readOnly = true)
+    public CartGroupResponse getGroup(Long consumerId, Long groupId) {
+        CartGroup group = requireOwnedGroup(consumerId, groupId);
+        List<CartItemResponse> items = cartItemRepository.findByCartGroupId(groupId).stream()
+                .map(CartItemResponse::new).toList();
+        return new CartGroupResponse(group, items);
+    }
+
+    @Transactional
+    public CartGroupResponse updateGroup(Long consumerId, Long groupId, UpdateCartGroupRequest request) {
+        CartGroup group = requireOwnedGroup(consumerId, groupId);
+        group.updateInfo(request.getTitle(), request.getDescription());
+        List<CartItemResponse> items = cartItemRepository.findByCartGroupId(groupId).stream()
+                .map(CartItemResponse::new).toList();
+        return new CartGroupResponse(group, items);
+    }
+
     @Transactional
     public void deleteGroup(Long consumerId, Long groupId) {
         CartGroup group = requireOwnedGroup(consumerId, groupId);
@@ -70,13 +88,19 @@ public class CartService {
     @Transactional
     public CartItemResponse addItemToGroup(Long consumerId, Long groupId, AddCartItemRequest request) {
         requireOwnedGroup(consumerId, groupId);
+        LocalDateTime now = LocalDateTime.now();
         CartItem item = cartItemRepository.findByCartGroupIdAndSkuId(groupId, request.getSkuId())
                 .map(existing -> {
                     existing.increaseQuantity(request.getQuantity());
+                    existing.markScanned(now);
                     return existing;
                 })
-                .orElseGet(() -> cartItemRepository.save(
-                        new CartItem(groupId, request.getSkuId(), request.getQuantity())));
+                .orElseGet(() -> {
+                    CartItem created = cartItemRepository.save(
+                            new CartItem(groupId, request.getSkuId(), request.getQuantity()));
+                    created.markScanned(now);
+                    return created;
+                });
         return new CartItemResponse(item);
     }
 

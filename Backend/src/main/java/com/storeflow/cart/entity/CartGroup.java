@@ -43,6 +43,11 @@ public class CartGroup {
     @PreUpdate
     void onUpdate() { updatedAt = LocalDateTime.now(); }
 
+    public void updateInfo(String title, String description) {
+        if (title != null && !title.isBlank()) this.title = title.trim();
+        if (description != null) this.description = description.trim();
+    }
+
     public Long getCartGroupId() { return cartGroupId; }
     public Long getConsumerId() { return consumerId; }
     public String getTitle() { return title; }

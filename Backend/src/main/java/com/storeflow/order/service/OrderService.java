@@ -1,6 +1,7 @@
 package com.storeflow.order.service;
 
 import com.storeflow.cart.entity.CartItem;
+import com.storeflow.cart.repository.CartGroupRepository;
 import com.storeflow.cart.repository.CartItemRepository;
 import com.storeflow.consumer.entity.Consumer;
 import com.storeflow.consumer.entity.Member;
@@ -32,6 +33,7 @@ public class OrderService {
         private static final long DEFAULT_MIN_PURCHASE_COUNT = 2;
 
         private final CartItemRepository cartItemRepository;
+        private final CartGroupRepository cartGroupRepository;
         private final ProductRepository productRepository;
         private final OrderRepository orderRepository;
         private final ConsumerRepository consumerRepository;
@@ -40,13 +42,15 @@ public class OrderService {
         private final ConsumerEventService consumerEventService;
 
         public OrderService(CartItemRepository cartItemRepository,
-                        ProductRepository productRepository,
-                        OrderRepository orderRepository,
-                        ConsumerRepository consumerRepository,
-                        InventoryService inventoryService,
-                        PurchaseRepository purchaseRepository,
-                        ConsumerEventService consumerEventService) {
+                            CartGroupRepository cartGroupRepository,
+                            ProductRepository productRepository,
+                            OrderRepository orderRepository,
+                            ConsumerRepository consumerRepository,
+                            InventoryService inventoryService,
+                            PurchaseRepository purchaseRepository,
+                            ConsumerEventService consumerEventService) {
                 this.cartItemRepository = cartItemRepository;
+                this.cartGroupRepository = cartGroupRepository;
                 this.productRepository = productRepository;
                 this.orderRepository = orderRepository;
                 this.consumerRepository = consumerRepository;
@@ -56,17 +60,31 @@ public class OrderService {
         }
 
         @Transactional
-        public OrderResponse checkout(Long consumerId) {
-                List<CartItem> checkedItems = cartItemRepository.findByConsumerId(consumerId).stream()
-                                .filter(CartItem::isChecked)
+        public OrderResponse checkout(Long consumerId, Long groupId) {
+                List<CartItem> allCheckedItems = cartItemRepository.findByConsumerId(consumerId).stream()
+                        .filter(CartItem::isChecked)
+                        .toList();
+
+                List<CartItem> checkedItems;
+                if (groupId == null) {
+                        // 하위호환: groupId 없이 호출하면 지금까지처럼 회원의 체크된 상품 전체가 대상.
+                        checkedItems = allCheckedItems;
+                } else {
+                        // 이 리스트가 실제로 본인 소유인지 먼저 확인 — 남의 groupId를 넣어서
+                        // 엉뚱한 상품을 결제 대상으로 끌어오는 걸 막는다.
+                        cartGroupRepository.findByCartGroupIdAndConsumerId(groupId, consumerId)
+                                .orElseThrow(() -> new IllegalStateException("장바구니 리스트를 찾을 수 없습니다."));
+                        checkedItems = allCheckedItems.stream()
+                                .filter(item -> groupId.equals(item.getCartGroupId()))
                                 .toList();
+                }
 
                 if (checkedItems.isEmpty()) {
                         throw new IllegalStateException("결제할 상품이 선택되지 않았습니다.");
                 }
 
                 Consumer consumer = consumerRepository.findById(consumerId)
-                                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+                        .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
 
                 // member_id는 저장된 값이 아니라 계산값. 대응하는 members 행이 없으면(정상적으로는
                 // 가입 시 항상 생김) 아래 purchases INSERT가 FK 위반으로 실패한다 — 의도된 동작(이정기팀원 확인).
@@ -78,27 +96,27 @@ public class OrderService {
 
                 for (CartItem cartItem : checkedItems) {
                         Product product = productRepository.findWithLockBySkuId(cartItem.getSkuId())
-                                        .orElseThrow(() -> new IllegalStateException(
-                                                        "존재하지 않는 상품입니다. skuId=" + cartItem.getSkuId()));
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "존재하지 않는 상품입니다. skuId=" + cartItem.getSkuId()));
 
                         inventoryService.decreaseForSale(product.getSkuId(), cartItem.getQuantity());
 
                         order.addItem(new OrderItem(
-                                        product.getSkuId(),
-                                        product.getName(),
-                                        product.getPriceKrw(),
-                                        cartItem.getQuantity()));
+                                product.getSkuId(),
+                                product.getName(),
+                                product.getPriceKrw(),
+                                cartItem.getQuantity()));
 
                         purchaseRepository.save(new Purchase(
-                                        basketId, memberId, product.getSkuId(),
-                                        cartItem.getQuantity(), product.getPriceKrw(), purchasedAt));
+                                basketId, memberId, product.getSkuId(),
+                                cartItem.getQuantity(), product.getPriceKrw(), purchasedAt));
                 }
 
                 orderRepository.save(order);
 
                 // session_id 개념이 아직 없어서 basketId로 대신함 (이전에 말씀드렸던 부분, 여전히 남아있음)
                 consumerEventService.record(ConsumerEvent.EventType.PURCHASE, basketId,
-                                memberId, null, null, "{\"basketId\":\"" + basketId + "\"}");
+                        memberId, null, null, "{\"basketId\":\"" + basketId + "\"}");
 
                 consumer.addSpend(order.getTotalAmount());
 
@@ -110,14 +128,14 @@ public class OrderService {
         @Transactional(readOnly = true)
         public List<OrderResponse> getMyOrders(Long consumerId) {
                 return orderRepository.findByConsumerIdOrderByCreatedAtDesc(consumerId).stream()
-                                .map(OrderResponse::new)
-                                .toList();
+                        .map(OrderResponse::new)
+                        .toList();
         }
 
         @Transactional(readOnly = true)
         public OrderResponse getOrderDetail(Long consumerId, Long orderId) {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
-                                .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 return new OrderResponse(order);
         }
 
@@ -133,14 +151,14 @@ public class OrderService {
                 long threshold = (minCount == null || minCount < 1) ? DEFAULT_MIN_PURCHASE_COUNT : minCount;
 
                 return orderRepository.findFrequentPurchases(consumerId, normalizedKeyword, threshold).stream()
-                                .map(FrequentPurchaseResponse::new)
-                                .toList();
+                        .map(FrequentPurchaseResponse::new)
+                        .toList();
         }
 
         @Transactional
         public OrderResponse requestRefund(Long consumerId, Long orderId) {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
-                                .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 order.requestRefund();
                 return new OrderResponse(order);
         }
@@ -153,7 +171,7 @@ public class OrderService {
         @Transactional
         public OrderResponse approveRefund(Long consumerId, Long orderId) {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
-                                .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 order.approveRefund();
 
                 for (OrderItem item : order.getOrderItems()) {

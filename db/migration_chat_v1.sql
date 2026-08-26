@@ -46,3 +46,16 @@ ALTER TABLE consumer
 -- 2) 탈퇴한 회원을 조회에서 걸러낼 일이 많을 것 같아 인덱스 추가(선택이지만 미리 추가).
 ALTER TABLE consumer
     ADD INDEX idx_consumer_withdrawn_at (withdrawn_at);
+
+
+-- ============================================================================
+-- StoreFlow cart_item - "어떻게 담았는지" 구분용 scanned_at 추가
+--
+-- scanned_at이 있으면: 매장에서 실제로 스캔/검색해서 담은 상품
+-- scanned_at이 NULL이면: 그냥 계획 단계에서 담아둔 상품(체크박스 토글은 이 값을 안 건드림)
+--
+-- AI "이번달 소비 분석"에서 계획 대비 실구매 비교의 근거 데이터로 사용.
+-- ============================================================================
+
+ALTER TABLE cart_item
+    ADD COLUMN scanned_at DATETIME NULL AFTER is_checked;

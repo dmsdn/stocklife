@@ -44,6 +44,19 @@ public class CartController {
         return ResponseEntity.status(201).body(cartService.createGroup(requireConsumerId(authorization), request));
     }
 
+    @GetMapping("/groups/{groupId}")
+    public ResponseEntity<CartGroupResponse> getGroup(@RequestHeader("Authorization") String authorization,
+                                                      @PathVariable Long groupId) {
+        return ResponseEntity.ok(cartService.getGroup(requireConsumerId(authorization), groupId));
+    }
+
+    @PatchMapping("/groups/{groupId}")
+    public ResponseEntity<CartGroupResponse> updateGroup(@RequestHeader("Authorization") String authorization,
+                                                         @PathVariable Long groupId,
+                                                         @RequestBody UpdateCartGroupRequest request) {
+        return ResponseEntity.ok(cartService.updateGroup(requireConsumerId(authorization), groupId, request));
+    }
+
     @DeleteMapping("/groups/{groupId}")
     public ResponseEntity<Void> deleteGroup(@RequestHeader("Authorization") String authorization,
                                             @PathVariable Long groupId) {

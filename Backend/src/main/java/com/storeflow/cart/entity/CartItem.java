@@ -23,6 +23,12 @@ public class CartItem {
     @Column(name = "is_checked", nullable = false)
     private boolean checked;
 
+    // 스캔/검색으로 담을 때만 채워짐(POST .../items). 체크박스로 수동 토글할 때는
+    // 절대 안 건드림 — "매장에서 실제로 스캔한 것"과 "미리 계획만 해둔 것"을 구분하기 위함.
+    // AI 소비 분석(계획 대비 실구매 비교)의 근거 데이터로 쓰임.
+    @Column(name = "scanned_at")
+    private LocalDateTime scannedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -59,9 +65,13 @@ public class CartItem {
     }
     public void toggleChecked(boolean checked) { this.checked = checked; }
 
+    /** 스캔/검색으로 담을(또는 다시 담을) 때만 호출. 체크박스 토글 경로에서는 절대 호출하지 않는다. */
+    public void markScanned(LocalDateTime scannedAt) { this.scannedAt = scannedAt; }
+
     public Long getCartItemId() { return cartItemId; }
     public Long getCartGroupId() { return cartGroupId; }
     public Integer getSkuId() { return skuId; }
     public int getQuantity() { return quantity; }
     public boolean isChecked() { return checked; }
+    public LocalDateTime getScannedAt() { return scannedAt; }
 }

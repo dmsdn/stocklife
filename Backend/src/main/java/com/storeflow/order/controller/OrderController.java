@@ -23,9 +23,14 @@ public class OrderController {
         this.orderService = orderService;
     }
 
+    /**
+     * groupId를 안 주면 기존과 동일하게 회원의 체크된 상품 전체가 결제 대상(하위호환).
+     * groupId를 주면 그 리스트에서 체크된 상품만 결제 대상으로 좁힌다.
+     */
     @PostMapping("/checkout")
-    public ResponseEntity<OrderResponse> checkout(@CurrentConsumer Long consumerId) {
-        OrderResponse response = orderService.checkout(consumerId);
+    public ResponseEntity<OrderResponse> checkout(@CurrentConsumer Long consumerId,
+                                                  @RequestParam(required = false) Long groupId) {
+        OrderResponse response = orderService.checkout(consumerId, groupId);
         return ResponseEntity.status(201).body(response);
     }
 
@@ -36,7 +41,7 @@ public class OrderController {
 
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderResponse> getOrderDetail(@CurrentConsumer Long consumerId,
-            @PathVariable Long orderId) {
+                                                        @PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.getOrderDetail(consumerId, orderId));
     }
 
