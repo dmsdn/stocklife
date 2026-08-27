@@ -1,21 +1,39 @@
-// Agent/sim/out/world_seed.sql + Agent/catalog/out/products_seed.csv에서 생성된 실제 상품 좌표/상품 정보.
-// Simulation 내부에서 임의 SKU/더미 상품을 만들지 않는다.
+// storeflow-backend(/api/locations/{locationId}/products)와 실제로 연동된 상품 조회.
+// 매대(location) 안에 어떤 상품이 있는지 보여주는 스페이스바 팝업용 데이터.
 
-import type { LocationInfo, ProductInfo, ProductPosition } from '../game/types';
-import agentProductsRaw from '../data/products-agent.json';
+import type { LocationInfo, ProductInfo } from '../game/types';
 
-const agentProducts = agentProductsRaw as ProductPosition[];
-
-// 같은 매대 셀(x,y)에 level이 다른 여러 상품이 있을 수 있으므로 좌표 단위로 묶는다.
-const productsByCell = new Map<string, ProductPosition[]>();
-for (const product of agentProducts) {
-  const key = `${product.floor}:${product.x}:${product.y}`;
-  const arr = productsByCell.get(key);
-  if (arr) arr.push(product);
-  else productsByCell.set(key, [product]);
+interface LocationProductDto {
+  skuId: number;
+  name: string;
+  price: number;
+  stock: number;
 }
 
-// 구매/환불 시 시뮬레이션 세션에서만 바뀌는 재고 오버레이.
+export async function fetchProductsAtLocation(
+  location: LocationInfo,
+  _zoneLabel: string
+): Promise<ProductInfo[]> {
+  const res = await fetch(`/api/locations/${encodeURIComponent(location.locationId)}/products`);
+  if (!res.ok) {
+    throw new Error(`GET /api/locations/${location.locationId}/products 실패 (${res.status})`);
+  }
+  const items: LocationProductDto[] = await res.json();
+  return items.map((it) => {
+    const overlay = stockOverlay.get(overlayKey(location.locationId, it.skuId)) ?? 0;
+    return {
+      skuId: it.skuId,
+      name: it.name,
+      price: it.price,
+      stock: Math.max(0, it.stock + overlay),
+    };
+  });
+}
+
+// 구매/환불 시 화면에 즉시 반영하기 위한 세션 내 오버레이. 실제 차감은 백엔드가
+// /api/orders/checkout 처리 중에 하고(스키마_변경규칙.md 동작계약), 여기서는
+// 다음에 이 매대를 다시 열었을 때 서버가 아직 안 돌려준 변화를 화면에서만 먼저 보여준다.
+// 새로고침하면 서버 값(fetchProductsAtLocation)으로 다시 맞춰진다.
 const stockOverlay = new Map<string, number>();
 function overlayKey(locationId: string, skuId: number) {
   return `${locationId}::${skuId}`;
@@ -24,25 +42,4 @@ function overlayKey(locationId: string, skuId: number) {
 export function adjustStock(locationId: string, skuId: number, delta: number) {
   const key = overlayKey(locationId, skuId);
   stockOverlay.set(key, (stockOverlay.get(key) ?? 0) + delta);
-}
-
-export async function fetchProductsAtLocation(
-    location: LocationInfo,
-    _zoneLabel: string
-): Promise<ProductInfo[]> {
-  // locationId 하나가 아니라 실제 grid 좌표를 기준으로 조회한다.
-  // Agent에서는 같은 x/y에 level이 다른 PICK 위치가 존재할 수 있기 때문이다.
-  const floor = Number(location.zoneId.match(/^F(\d+)-/)?.[1] ?? 0);
-  const key = `${floor}:${location.x}:${location.y}`;
-  const products = productsByCell.get(key) ?? [];
-
-  return products.map((product) => {
-    const overlay = stockOverlay.get(overlayKey(location.locationId, product.skuId)) ?? 0;
-    return {
-      skuId: product.skuId,
-      name: product.name,
-      price: product.price,
-      stock: Math.max(0, product.stock + overlay),
-    };
-  });
 }
