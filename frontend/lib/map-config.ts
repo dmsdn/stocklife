@@ -33,6 +33,9 @@ interface FloorMapApiResponse {
 }
 
 const realGridCache = new Map<number, boolean[][]>();
+// ✅ zoneId -> zone 이름(예: "유제품 코너"). 배치 위치 조회에서 받은 zoneId를 사람이 읽을
+//   텍스트로 바꾸려면 필요. fetchRealFloorMap()이 통로 격자를 캐싱할 때 같이 채운다.
+const zoneNameCache = new Map<number, Map<string, string>>();
 
 /** 실제 지도 데이터를 미리 불러와서 캐시를 채웁니다 (컴포넌트 마운트 시 호출) */
 export async function fetchRealFloorMap(floorNo: number): Promise<void> {
@@ -47,9 +50,19 @@ export async function fetchRealFloorMap(floorNo: number): Promise<void> {
       if (cell.y < height && cell.x < width) grid[cell.y][cell.x] = cell.passable;
     }
     realGridCache.set(floorNo, grid);
+
+    const zoneNames = new Map<string, string>();
+    for (const zone of res.zones) zoneNames.set(zone.zoneId, zone.name);
+    zoneNameCache.set(floorNo, zoneNames);
   } catch {
     // 실패하면 캐시에 안 남기고, 아래 추측 로직으로 계속 동작
   }
+}
+
+/** zoneId로 사람이 읽을 zone 이름을 찾습니다. fetchRealFloorMap()을 먼저 불러야 채워집니다.
+ *  못 찾으면(아직 못 불러왔거나 없는 zoneId) null. */
+export function getZoneName(floorNo: number, zoneId: string): string | null {
+  return zoneNameCache.get(floorNo)?.get(zoneId) ?? null;
 }
 
 // ⚠ 실제 데이터를 아직 못 불러왔을 때만 쓰는 추측 로직(폴백).

@@ -9,6 +9,7 @@ import {
   Map as MapIcon,
   PlayCircle,
   Trash2,
+  Bot,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import {readCartGroups, loadCartGroups,updateCartGroups, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup,} from "@/lib/cart-storage";
+import { useOpenAiChat } from "@/lib/use-open-ai-chat";
+import { apiFetch } from "@/lib/api-client";
 
 export default function SavedGroupDetailPage() {
   const router = useRouter();
@@ -24,11 +27,23 @@ export default function SavedGroupDetailPage() {
 
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
+  const openAiChat = useOpenAiChat();
+  // ✅ 이 리스트에 이미 연결된 AI 대화가 있는지 확인 — 있으면 "이어서 물어보기"로 표시.
+  //   백엔드 group_id 컬럼은 추가돼있는데, 세션 목록 응답에 groupId를 내려주는지는
+  //   아직 확인 전이라 실패하면 그냥 "새로 물어보기"로 폴백합니다.
+  const [linkedSessionId, setLinkedSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCartGroups()
       .then((groups) => setGroup(groups.find((g) => g.id === groupId) ?? null))
       .catch(() => setGroup(readCartGroups().find((g) => g.id === groupId) ?? null));
+
+    apiFetch<{ sessionId: string; groupId?: number | null }[]>("/api/chat/sessions")
+      .then((sessions) => {
+        const linked = sessions.find((s) => s.groupId === groupId);
+        setLinkedSessionId(linked?.sessionId ?? null);
+      })
+      .catch(() => setLinkedSessionId(null));
   }, [groupId]);
 
   const handleQuantityChange = (
@@ -319,6 +334,16 @@ export default function SavedGroupDetailPage() {
           장보기 시작
         </Button>
       </div>
+
+      {/* ✅ 리스트별 AI — 이미 대화가 있으면 "이어서", 없으면 "물어보기" */}
+      <Button
+        variant="outline"
+        className="mt-2 flex w-full items-center justify-center gap-1.5"
+        onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
+      >
+        <Bot size={16} />
+        {linkedSessionId ? "AI와 이어서 물어보기" : "이 리스트로 AI에게 물어보기"}
+      </Button>
 
       <StoreMapDialog
         open={routeOpen}

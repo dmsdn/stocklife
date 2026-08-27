@@ -16,8 +16,8 @@ export function useOpenAiChat() {
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const { open } = useAiPanel();
 
-  return (prompt?: string) => {
-    open(prompt);
+  return (prompt?: string, groupId?: number) => {
+    open(prompt, groupId);
     if (!isDesktop) {
       router.push("/ai");
     }

@@ -11,13 +11,15 @@ export function getSessionId(): string | null {
   return window.localStorage.getItem(SESSION_KEY);
 }
 
-export async function getOrCreateSessionId(): Promise<string> {
+export async function getOrCreateSessionId(groupId?: number | null): Promise<string> {
   const existing = getSessionId();
   if (existing) return existing;
-  return startNewSession();
+  return startNewSession(groupId);
 }
 
-export async function startNewSession(): Promise<string> {
+/** @param groupId 특정 리스트에서 시작한 대화면 그 리스트 id를 넘깁니다 — chat_session.group_id로
+ *  저장돼서, 나중에 그 리스트 화면에서 "이어서 물어보기"로 이어집니다. */
+export async function startNewSession(groupId?: number | null): Promise<string> {
   const headers: Record<string, string> = {};
   if (!getAccessToken()) {
     headers["X-Chat-Client-Id"] = getClientId();
@@ -25,6 +27,7 @@ export async function startNewSession(): Promise<string> {
   const res = await apiFetch<{ sessionId: string }>("/api/chat/sessions", {
     method: "POST",
     headers,
+    body: groupId ? JSON.stringify({ groupId }) : undefined,
   });
   window.localStorage.setItem(SESSION_KEY, res.sessionId);
   return res.sessionId;
