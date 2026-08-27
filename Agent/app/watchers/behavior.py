@@ -217,68 +217,22 @@ def _clear_views(cand: dict) -> None:
 dispatch.register("HESITATION_HELP", _build_hesitation)
 
 
-async def _listen_forever() -> None:
-    """백엔드 SSE(/internal/events/stream)를 상시 구독한다. 끊기면 지수 백오프 재연결.
-
-    SSE(Server-Sent Events) 형식: 한 이벤트가 "event: VIEW\\n data: {...json...}\\n
-    빈 줄" 로 온다 — 빈 줄이 이벤트의 끝 표시라서, 줄을 모으다가 빈 줄에서
-    한 건을 완성해 on_event로 넘긴다(jmy의 파서를 그대로 인수).
-    """
-    import httpx, os
-    backoff = 1.0
-    url = config.BACKEND_BASE_URL + "/internal/events/stream"
-    headers = {"X-Internal-Service-Key": os.environ.get("INTERNAL_SERVICE_KEY", "")}
-    # read=None = 수신 타임아웃 없음. SSE는 "다음 이벤트까지 무한정 기다리는" 것이
-    # 정상 상태라, 조회용 타임아웃을 걸면 조용한 매장에서 주기적으로 끊긴다.
-    timeout = httpx.Timeout(connect=5.0, read=None, write=5.0, pool=5.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        while not _STOP.is_set():
-            try:
-                async with client.stream("GET", url, headers=headers) as resp:
-                    resp.raise_for_status()
-                    print(f"[behavior] SSE 연결됨: {url}")
-                    backoff = 1.0       # 연결 성공 — 다음 실패는 다시 1초부터
-                    event_name, data_lines = None, []
-                    async for line in resp.aiter_lines():   # (52) 줄 단위 비동기 수신
-                        if _STOP.is_set():
-                            return
-                        if line == "":                      # 빈 줄 = 이벤트 한 건 완성
-                            if event_name and data_lines:
-                                try:
-                                    data = json.loads("\n".join(data_lines))
-                                except json.JSONDecodeError:
-                                    pass                    # 깨진 이벤트는 버린다
-                                else:
-                                    if event_name != "connected":
-                                        on_event(event_name, data)
-                            event_name, data_lines = None, []
-                        elif line.startswith("event:"):
-                            event_name = line[6:].strip()
-                        elif line.startswith("data:"):
-                            data_lines.append(line[5:].strip())
-            except asyncio.CancelledError:
-                raise                   # 서버 종료의 취소 신호는 삼키면 안 된다
-            except Exception as e:
-                print(f"[behavior] SSE 끊김: {type(e).__name__}: {e} ({backoff:.0f}초 뒤 재연결)")
-                try:
-                    await asyncio.wait_for(_STOP.wait(), timeout=backoff)
-                except asyncio.TimeoutError:
-                    pass
-                backoff = min(backoff * 2, 15.0)   # 1→2→4→…→15초 상한 (백엔드 재시작 배려)
+def sessions() -> list:
+    """이 감시자가 관찰 중인 세션 — runner 가 스테이지 배출 대상으로 쓴다."""
+    return list(set(_VIEWS) | set(_LAST_EVENT))
 
 
-async def run() -> None:
-    """감시자 본체 — main.py의 lifespan이 배경 일감으로 등록한다.
-
-    mock 모드에서는 아무것도 안 하고 끝난다: SSE를 줄 백엔드가 없어서 연결
-    실패 로그만 쌓인다. 자발형의 mock 검증은 SSE가 아니라 on_event/tick을
-    직접 부르는 시나리오 재생(08/29)으로 한다.
-    """
-    if config.USE_MOCK_SOT:
-        print("[behavior] mock 모드 — SSE 구독 없이 대기(시나리오 주입 전용)")
-        return
-    _STOP.clear()
-    await asyncio.gather(_listen_forever(), _tick_forever())    # (54)
+# ⚠ **SSE 구독과 run() 은 08-27 에 `watchers/runner.py` 로 올라갔다.**
+#   스트림 하나에 행동 이벤트와 매대 이벤트가 **같이** 오기 때문이다(백엔드
+#   AgentEventStreamController 하나). 여기서 구독하면 이 파일이 매대 이벤트를
+#   받아 world 에 넘기는 이상한 그림이 되고, world 가 따로 구독하면 연결이
+#   둘이 되어 같은 이벤트를 두 번 받는다. **공용 스트림은 공용 자리에서.**
+#
+#   그때 함께 드러난 것: 이 파일의 `run()` 이 **없는 함수**(`_tick_forever`)를
+#   부르고 있었고, `dispatch.pump()` 를 부르는 곳이 아무 데도 없었다 —
+#   08-26 스테이징 개편이 `_handle` 을 옮기며 **구동 루프를 같이 데려갔다.**
+#   자발형이 통째로 죽어 있었는데 mock 은 조기 반환이라 안 드러났다.
+#   → runner.py 머리 주석의 「부품을 떼어 옮길 때는 부르던 손도 같이 옮긴다」.
 
 
 def stop() -> None:

@@ -50,8 +50,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 ARTIFACTS = os.path.abspath(os.path.join(_HERE, "..", "artifacts"))
 
 # (52) 모듈 전역 — lifespan이 채우고 도구가 읽는다. None이면 "아직 안 올렸다".
+# floormap은 joblib이 아니라 **백엔드에서 받아 오는** 자산이다(위치추정 규칙판의
+# 스냅 재료). 파일이 아니라도 "상주시키고 도구가 읽는다"는 계약은 같다.
 _STATE: dict = {"availability": None, "repurchase": None,
-                "photo": None, "photo_encoder": None}
+                "photo": None, "photo_encoder": None, "floormap": None}
 
 
 # ── 적재 ────────────────────────────────────────────────────────────────────
@@ -115,7 +117,96 @@ def load_all(with_photo_encoder: bool = False) -> dict:
         _load_photo_encoder()
         got["photo_encoder"] = _STATE["photo"]["model_id"]
 
+    # 위치추정의 스냅 재료 — 실물 모드에서만(백엔드가 격자의 정본이다).
+    # 백엔드가 아직 안 떠 있으면 여기서 실패해도 되고(_try가 삼킨다),
+    # 첫 사용 시 _ensure_floormap()이 다시 시도한다 — 기동 순서에 안 묶인다.
+    if not config.USE_MOCK_SOT:
+        _try("floormap", _load_floormap)
+
     return got
+
+
+def _load_floormap() -> str:
+    """보행 격자를 백엔드에서 받아 상주시킨다 — 위치추정 자산의 적재.
+
+    층당 7,125칸(95×75)을 매 요청마다 받으면 그게 병목이라, joblib 자산들과
+    같은 규율(헌법 6 — lifespan 1회 로드 상주)로 여기서 한 번 받는다.
+    담는 것은 층별 **통행 가능 칸의 집합** 하나다 — 스냅에 필요한 것은
+    "이 칸을 밟을 수 있나"라는 판정뿐이고, set의 in 검사는 O(1)이다.
+    """
+    fm = {}
+    for f in (1, 2, 3):
+        m = sot_client.get_floor_map(f)
+        cells = (m or {}).get("cells") or []
+        if not cells:
+            raise RuntimeError(f"{f}층 격자가 비어 있습니다 — nav_cells 시드 확인")
+        fm[f] = frozenset((int(c["x"]), int(c["y"])) for c in cells
+                          if c.get("passable"))
+    _STATE["floormap"] = fm
+    return "격자 " + " · ".join(f"{f}층 {len(s):,}칸" for f, s in fm.items())
+
+
+def _ensure_floormap() -> dict | None:
+    """격자를 지연 확보한다 — lifespan 때 백엔드가 안 떠 있었어도 살아난다.
+
+    기동 순서 문제는 08-27에 실제로 있었다(에이전트 먼저, 백엔드 나중).
+    적재 실패를 영구 상태로 만들면 "백엔드를 늦게 켠 날"은 재기동 전까지
+    스냅이 죽는다 — 그래서 None이면 쓸 때 한 번 더 시도한다.
+    """
+    if _STATE["floormap"] is None and not config.USE_MOCK_SOT:
+        try:
+            _load_floormap()
+        except Exception:                                      # noqa: BLE001
+            return None                # 여전히 못 받으면 스냅 없이 간다(앵커는 산다)
+    return _STATE["floormap"]
+
+
+def snap_to_walkable(floor: int, x: int, y: int, max_r: int = 4):
+    """(floor, x, y)를 가장 가까운 통행 가능 칸으로 스냅한다.
+
+    [왜 필요한가] 사람은 매대 위가 아니라 그 앞 통로에 서 있다. 통행 불가 칸을
+    출발점으로 넘기면 백엔드 A*가 "출발점이 통행 불가"로 경로를 못 만든다.
+
+    ⚠ **실측(08-27): 지금은 한 번도 안 옮긴다.** 실 시드의 위치 10,104개
+    (PICK 5,052 · BULK 5,052)가 **전부 이미 통행 칸**이다 — `world_gen`이
+    `FACE_D` 오프셋을 적용해 **접근 지점**을 `locations`에 넣기 때문이다.
+    처음엔 "매대 칸이라 반드시 옮겨야 한다"고 적었는데 난수 격자로만 재서
+    틀렸다(실데이터로 다시 재고 고쳤다).
+    그래도 남기는 이유: 앵커의 출처가 `locations`만이 아니다 — 프론트가 보내는
+    `posFloor/posX/posY`는 **스캔 시점의 기기 좌표**라 통행 칸 보장이 계약에
+    없다. 비용 0의 안전망이고, 배치가 바뀌면 그날 값을 한다.
+    **"없으면 죽는다"가 아니라 "지금은 무동작"이 정확한 서술이다.**
+
+    [탐색] 반경 r=0,1,2,…의 정사각 링을 안쪽부터 돈다 — 처음 만나는 통행 칸이
+    가장 가까운 답이다(체비셰프 거리 기준. 매대는 2×2라 r≤2에서 반드시 통로가
+    나오고, max_r=4는 시설 언저리 좌표까지 감당하는 여유다).
+
+    [반환] (x, y, snapped) — 격자가 없으면(모의 모드·백엔드 다운) 입력 그대로
+    돌려주고 snapped=False. 스냅 실패도 좌표를 버리지 않는다 — 층 정보만으로도
+    발화("2층에 계시죠")는 성립한다.
+    """
+    fm = _ensure_floormap()
+    grid = (fm or {}).get(int(floor))
+    if not grid:
+        return int(x), int(y), False
+    if (int(x), int(y)) in grid:
+        return int(x), int(y), False               # 이미 통로 — 스냅할 것 없음
+    for r in range(1, max_r + 1):
+        best = None
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if max(abs(dx), abs(dy)) != r:     # 링의 테두리만 (안쪽은 이미 봤다)
+                    continue
+                c = (int(x) + dx, int(y) + dy)
+                if c in grid:
+                    # 같은 링 안에서는 맨해튼 거리로 더 가까운 쪽을 고른다 —
+                    # 대각(2칸 걸음)보다 정면(1칸 걸음)이 실제로 가깝다.
+                    d = abs(dx) + abs(dy)
+                    if best is None or d < best[0]:
+                        best = (d, c)
+        if best is not None:
+            return best[1][0], best[1][1], True
+    return int(x), int(y), False                   # 반경 안에 통로가 없다 — 그대로
 
 
 def _load_photo_encoder():
@@ -704,27 +795,48 @@ def _fetch_image(image_ref: str):
     return None
 
 
-# ── ④⑤ 아직 자산이 없는 둘 ─────────────────────────────────────────────────
+# ── ④ 위치 추정 — 규칙판 자산 (08-27 층 분해와 함께 출하) ────────────────────
 def get_position() -> dict:
-    """위치 추정. **자산이 아직 없다**(규칙판: 스캔 앵커 + 보행 그래프 스냅).
+    """위치 추정 — **스캔 앵커 + 보행 격자 스냅** (설계서 §7 출하 사양의 규칙판).
 
-    ⚠ 경로 도구는 이 도구를 안 기다린다 — 루프가 현재 위치를 주입하므로
-      `optimize_route`는 여기 없이도 돈다(compute.set_position).
+    [규칙 두 단] 센서가 없으므로 관측은 스캔뿐이다(설계 §4.1 — 맥락은 관측이
+    아니라 행동 증거로 추론한다).
+      ① 앵커: 마지막으로 스캔한 매대의 좌표 = 손님이 마지막으로 **확실히**
+        있었던 곳. 루프가 요청마다 주입한다(compute.set_position).
+      ② 스냅: 매대 칸은 장애물이라 사람이 서 있을 수 없다 — 백엔드 격자의
+        가장 가까운 통행 칸으로 옮긴다. 이 좌표라야 경로 계산의 출발점이 된다.
+
+    [한계를 값에 싣는다] 이것은 추정이고, 스캔 후 얼마나 걸었는지는 모른다.
+    read_as로 그 한계를 LLM에게 전달한다 — "정확한 현재 위치"로 단정해 말하면
+    손님이 자기 위치와 다른 안내를 받는다(가드가 아니라 표현 규율의 몫).
+
+    [이론 확장(야간)] 베이지안 필터(칼만/파티클) — 스캔 사이의 이동을 확률로
+    메운다. 규칙판은 그 필터의 관측 모델 자리에 그대로 들어간다.
+
+    ⚠ 경로 도구는 이 도구를 안 기다린다 — 루프가 같은 앵커를 직접 주입하므로
+      `optimize_route`는 여기 없이도 돈다. 이 도구의 소비자는 "지금 나 어디쯤
+      이에요?" 같은 **위치 질문 자체**다(기능 6·7·10).
     """
     from app.tools import compute
     pos = compute.current_position()
     if pos is None:
-        return {"error": "not_implemented",
-                "message": ("지금 위치를 알 수 없습니다. 손님에게 몇 층인지 "
-                            "물어보거나 위치 없이 답할 수 있는 부분만 답하세요.")}
+        return {"error": "no_scan_anchor",
+                "message": ("아직 스캔 기록이 없어 위치를 추정할 수 없습니다. "
+                            "손님에게 몇 층인지 물어보거나, 위치 없이 답할 수 "
+                            "있는 부분만 답하세요.")}
     f, x, y = pos
-    return {"floor_no": f, "x": x, "y": y,
-            "source": "last_scan",
-            "read_as": "마지막 스캔 위치입니다. 추정이라 정확하지 않을 수 있습니다."}
+    sx, sy, snapped = snap_to_walkable(f, x, y)
+    return {"floor_no": int(f), "x": sx, "y": sy,
+            "source": "scan_anchor+graph_snap",
+            "snapped": snapped,
+            "read_as": ("마지막 스캔 매대 앞 통로 기준의 추정 위치입니다. "
+                        "스캔 후 이동했을 수 있으니 단정하지 말고 "
+                        "'~쯤에 계시죠?' 정도로 말하세요.")}
 
 
+# ── ⑤ 아직 배선 전인 하나 ───────────────────────────────────────────────────
 def match_preferences(**kwargs) -> dict:
-    """취향 매칭. 자산 미구현."""
+    """취향 매칭. 자산(T15 npz)은 완주 — **배선이 08/29다**(요청 ④ history 의존)."""
     return {"error": "not_implemented",
             "message": "취향 매칭은 아직 준비 중입니다. 이 기능 없이 답할 수 "
                        "있는 부분만 답하세요."}

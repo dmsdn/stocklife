@@ -102,7 +102,13 @@ _API = {
     "get_products_by_skus": "/api/products/by-skus",
     "get_inventory":        "/api/products/{sku_id}/inventory",       # 구: /api/inventory/{sku_id}
     "get_purchase_history": "/internal/purchases/history",           # 요청 ④ — 08-27 승인, 구현 대기
-    "get_session_cart":     "/api/sessions/{session_id}/cart",        # ⚠ 백엔드 미확정 — 팀계약 갱신 대기
+    # ⚠ 08-27: `/api/sessions/{id}/cart` 는 **존재하지 않는다**(404). 팀계약에
+    #   "백엔드 미확정"으로 적어 두고 그대로 둔 자리였다. 실물에 있는 것은
+    #   `/internal/cart/session?consumerId=` — **이름은 session 인데 인자는 회원**
+    #   이다(B 검수 R-4). 세션 단위 장바구니는 스키마에만 있고 창구가 없다.
+    #   그래서 회원 단위로 갈아탔다. 지금 세계에선 한 회원이 한 세션이라
+    #   데모에 차이가 없고, 실물과 맞는다. 비회원 장바구니는 열린 사안이다.
+    "get_session_cart":     "/internal/cart/session",
     "get_wishlist":         "/api/wishlist",                          # 구: /api/members/{id}/wishlist
     "get_change_events":    "/api/inventory/change-events",           # 구: /api/events/changes
     # ── 08-21 ai-server 인수로 새로 열린 창구들 ──
@@ -112,6 +118,7 @@ _API = {
     "get_popular":          "/internal/purchases/popular",            # ✅ 08-27 구현 확인(요청 ①)
     "get_alt_candidates":   "/api/products/{sku_id}/alternatives/candidates",  # 대체 후보(공개)
     "navigation_route":     "/api/navigation/route",                  # A* 경로 계산(POST·공개)
+    "floor_map":            "/api/map/floors/{floor_no}",             # 보행 격자(공개) — 위치 스냅 재료
     "push_proactive":       "/internal/chat/proactive",               # 자발형 말풍선 전달
     # ── 08-25 신설 요청(jmy) — 가용예측이 이것 없이는 못 선다 ──
     "pending_replenish":    "/internal/replenishment/pending",       # ✅ 08-27 구현 확인(요청 ③)
@@ -316,6 +323,47 @@ def get_product(sku_id: int) -> dict | None:
     return mock_data.PRODUCTS.get(sku_id)
 
 
+def spec_quantity(spec) -> dict | None:
+    """상품의 `spec` 에서 **수량 축과 값**만 뽑아 낸다. 없으면 None.
+
+    [왜 파서가 아니라 이건가 — 08-27] 처음 계획은 `spec_raw`("500g")를 정규식+사전으로
+    파싱하는 것이었다. 실데이터를 열어 보니 **카탈로그가 이미 정답을 들고 있다** —
+    4,970개 전부 `quantity: {primary, value}` 가 정상이고, 복합 규격 331개
+    ("900ml × 3입")도 접혀 있다(→ volume_ml 2700). 당연하다: 그 문자열을 만든
+    `catalog.py` 가 수량을 알고 있다.
+
+    파싱으로 갔으면 막혔다 — `spec_raw` 의 **19.4%(965개)는 숫자가 아예 없다**
+    ("기본형"·"싱글"·"퀸"·"단품", 전부 count_ea 1). 정규식으로는 못 풀고 사전이
+    필요한데, 그 사전은 `catalog.py` 가 새 단어를 추가하는 날 조용히 낡는다.
+
+    > **업스트림이 이미 아는 것을 다운스트림에서 복원하지 않는다.**
+    > 문자열로 납작하게 만든 뒤 다시 세우는 일은, 왕복마다 정보를 잃는다.
+
+    [모양이 둘이다] mock 은 dict 를, 실물 백엔드는 JSON **문자열**을 준다
+    (DB 컬럼이 `json` 타입이고 DTO 가 String 으로 들고 온다). 둘 다 받는다.
+    **그래서 이 함수가 필요하다** — 도구가 "어느 쪽에서 왔나"를 알면 경계가 샌다.
+
+    [왜 상품 dict 에 미리 담아 두지 않나] `_norm_product` 에서 계산해 칸으로
+    넣으면 실물은 정규화를 타는데 **mock 은 안 탄다**(mock_data 는 이미
+    snake_case 라 그 함수를 안 거친다). 칸이 한쪽에만 생기면 도구가 두 모양을
+    받게 된다 — 창구를 하나로 두는 이 파일의 규율에 어긋난다.
+    쓰는 쪽에서 `sot_client.spec_quantity(p.get("spec"))` 로 부른다.
+    """
+    if not spec:
+        return None
+    if isinstance(spec, str):
+        import json
+        try:
+            spec = json.loads(spec)
+        except Exception:                                  # noqa: BLE001
+            return None                                    # 깨진 JSON — 모른다
+    q = (spec or {}).get("quantity") or {}
+    axis, value = q.get("primary"), q.get("value")
+    if not axis or not isinstance(value, (int, float)) or value <= 0:
+        return None                                        # 0·음수는 나눗셈이 안 된다
+    return {"axis": str(axis), "value": float(value)}
+
+
 def _norm_product(r: dict) -> dict:
     """백엔드의 camelCase 상품 한 줄 → 우리 계약(snake_case).
 
@@ -330,6 +378,10 @@ def _norm_product(r: dict) -> dict:
     return {"sku_id": g("skuId"), "name": g("name"), "brand": g("brand"),
             "category_l1": g("categoryL1"), "category_l2": g("categoryL2"),
             "price_krw": g("priceKrw"), "unit": g("unit"), "spec_raw": g("specRaw"),
+            # ⚠ 08-27 이전에는 `specRaw`(원문 문자열)만 살리고 `spec`(수량이 든
+            #   JSON)을 **버리고 있었다.** 그래서 단위가격 비교가 "파서를 만들어야
+            #   하는 일"로 보였다 — 실제로는 창구가 값을 안 넘긴 것뿐이다.
+            "spec": g("spec"),
             "on_promo": bool(g("onPromo")),
             "discount_krw": g("discountKrw"), "final_price_krw": g("finalPriceKrw")}
 
@@ -443,7 +495,41 @@ def get_session_cart(session_id: str) -> dict:
     이벤트가 진실이고 장바구니는 그 파생이다 — append-only 세계의 읽기 방식.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_session_cart"].format(session_id=session_id))
+        # 실물은 **회원**으로 조회한다(위 _API 주석). 세션 id 는 안 쓰이지만
+        # 서명에는 남긴다 — mock 경로가 그것으로 이벤트를 재생하고, 세션 단위
+        # 창구가 열리는 날 부르는 쪽을 안 고치고 갈아탈 수 있다.
+        from app.tools import query as _q
+        cid = _q.current_member_id()
+        if cid is None:
+            # 비회원이면 조회할 장바구니가 없다. 오류가 아니라 **상태**다 —
+            # 액션 3종의 _require_member 와 같은 판정을 조회에서도 한다.
+            return {"session_id": session_id, "items": [], "total_krw": 0,
+                    "note": "비회원 세션이라 장바구니가 없습니다."}
+        r = _http_get(_API["get_session_cart"],
+                      {"consumerId": cid},
+                      headers=_internal_headers()) or {}
+        # camelCase → 우리 계약. 실물 DTO(SessionCartItemResponse)의 이름은
+        # skuId · productName · priceKrw · quantity · subtotal 이다.
+        items = [{"sku_id": it.get("skuId"),
+                  "name": it.get("productName"),
+                  "quantity": it.get("quantity"),
+                  "price_krw": it.get("priceKrw"),
+                  "line_total_krw": it.get("subtotal")}
+                 for it in (r.get("items") or [])]
+        # ⚠ **`cart_item_id` 가 이 응답에 없다.** 그런데 수량변경·빼기는 그것을
+        #   받는다(sku 로는 못 부른다 — 같은 상품이 여러 줄일 수 있어서).
+        #   그래서 담기 → 수량변경의 사슬이 **아직 안 이어진다.**
+        #   조용히 비워 두면 LLM 이 sku 를 cart_item_id 로 넘겨 엉뚱한 줄을
+        #   지운다 — 그래서 **없다는 사실을 값으로 실어 보낸다.**
+        #   요청: SessionCartItemResponse 에 cartItemId 추가(백엔드 3줄).
+        out = {"session_id": session_id, "items": items,
+               "total_krw": r.get("totalAmount", 0)}
+        if items:
+            out["note"] = ("이 목록에는 cart_item_id 가 없습니다. "
+                           "수량 변경·빼기는 지금 호출할 수 없으니, "
+                           "손님께 앱에서 직접 수정해 달라고 안내하세요. "
+                           "sku_id 를 cart_item_id 로 넘기지 마세요.")
+        return out
 
     # counts = {sku_id: 순수 담긴 개수}. 담으면 +1, 빼면 -1로 누적한다.
     # `: dict[int, int]`는 타입 힌트(개념 ④ — 키도 값도 int라는 표시일 뿐).
@@ -499,8 +585,26 @@ def get_change_events(sku_ids: list[int] | None = None,
     네트워크를 건너오게 된다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_change_events"],
-                         {"sku_ids": sku_ids, "within_hours": within_hours})
+        # ⚠ **이름 계약**이 어긋나 400 이었다(08-27 B 검수 R-3).
+        #   컨트롤러: @RequestParam List<Integer> skuIds, @RequestParam int hours
+        #   우리:     sku_ids · within_hours            → 400
+        #   기능은 처음부터 멀쩡했다. 404 도 500 도 아니라 "창구가 없나" 하고
+        #   엉뚱한 데를 봤다 — **이름만 틀린 실패가 제일 오래 안 잡힌다.**
+        #   다른 내부 창구가 전부 camelCase(skuIds·consumerId)라 우리가 맞춘다.
+        #   ⚠ skuIds 는 필수다(defaultValue 가 없다) — None 이면 400 이므로,
+        #     '전체 조회'는 이 창구로 못 한다. 감시자가 늘 sku 를 좁혀 부르므로
+        #     지금은 무해하지만, 전체가 필요해지면 백엔드에 기본값을 요청한다.
+        if not sku_ids:
+            return []
+        rows = _http_get(_API["get_change_events"],
+                         {"skuIds": list(sku_ids), "hours": int(within_hours)}) or []
+        # ⚠ 원시 camelCase 를 흘려보내면 안 된다 — 08-27 에 `get_inventory`·
+        #   `search_products` 가 정확히 그래서 **값이 조용히 None** 이 됐다.
+        #   경계에서 한 번 바꾼다(이 파일의 규율).
+        return [{"event_id": r.get("eventId"), "event_type": r.get("eventType"),
+                 "sku_id": r.get("skuId"), "location_id": r.get("locationId"),
+                 "qty": r.get("qty"), "occurred_at": r.get("occurredAt"),
+                 "payload": r.get("payload")} for r in rows]
 
     # timedelta 산술(개념 ③): "지금 - N시간" = 조회 시작 시점.
     since = config.DEMO_NOW - timedelta(hours=within_hours)
@@ -549,10 +653,12 @@ def get_products_by_skus(sku_ids: list[int]) -> list[dict]:
         # 자바 쪽 파라미터 표기는 skuIds(camelCase) — 여기서 변환한다.
         rows = _http_get(_API["get_products_by_skus"], {"skuIds": sku_ids})
         # 실물 응답의 camelCase 키를 mock과 같은 snake_case로 맞춘다.
-        return [{"sku_id": r.get("skuId"), "name": r.get("name"), "brand": r.get("brand"),
-                 "price_krw": r.get("priceKrw"), "category_l1": r.get("categoryL1"),
-                 "category_l2": r.get("categoryL2"), "spec_raw": r.get("specRaw"),
-                 "lifecycle_status": r.get("lifecycleStatus")} for r in rows]
+        # ⚠ 여기서 `_norm_product` 를 안 쓰고 손으로 투영하던 것이 화근이었다 —
+        #   같은 상품인데 창구마다 칸이 달랐다(단위가격이 필요로 하는 `spec` 이
+        #   이쪽에만 없었다). 공용 투영으로 합친다: **한 곳만 고치면 둘 다 산다.**
+        #   `lifecycle_status` 는 _norm_product 에 없던 칸이라 얹어 준다.
+        return [dict(_norm_product(r), lifecycle_status=r.get("lifecycleStatus"))
+                for r in rows]
     # mock: PRODUCTS에서 있는 것만 골라 담는다. `if s in mock_data.PRODUCTS`가
     # 없으면 없는 sku에서 KeyError로 죽는다 — '없음'은 정상 입력(get_product와 동일).
     return [mock_data.PRODUCTS[s] for s in sku_ids if s in mock_data.PRODUCTS]
@@ -957,6 +1063,26 @@ def resolve_location(location_id: str) -> dict | None:
     if loc is None:
         return None
     return {"floor_no": loc["floor_no"], "x": loc["x"], "y": loc["y"]}
+
+
+def get_floor_map(floor_no: int) -> dict | None:
+    """층 하나의 보행 격자 — GET /api/map/floors/{n} (공개 조회).
+
+    반환 {"floorNo": n, "cells": [{"x","y","passable","transitId"}, …], "zones": […]}.
+    위치 추정(infer.get_position)의 **스냅 재료**다. 격자의 정본은 백엔드
+    nav_cells 하나뿐이고(world_gen.py: "동선 솔버와 위치 스냅이 같은 격자를
+    봐야 한다"), 우리가 sim에서 따로 구우면 지도가 두 벌이 되어 프론트가
+    그리는 매장과 에이전트가 아는 매장이 갈린다.
+
+    [언제 불리나] lifespan에서 층별 1회 — 층당 7,125칸(95×75)이라 요청마다
+    받으면 그게 병목이다. 상주 캐시는 infer._STATE가 맡는다(헌법 6과 같은 규율).
+
+    [mock] None — mock 세계에는 격자가 없다(LOCATIONS 좌표는 근사 소품).
+    스냅은 실물 전용이고, mock의 get_position은 앵커를 그대로 돌려준다.
+    """
+    if config.USE_MOCK_SOT:
+        return None
+    return _http_get(_API["floor_map"].format(floor_no=int(floor_no)))
 
 
 def get_navigation_route(start_floor: int, start_x: int, start_y: int,
