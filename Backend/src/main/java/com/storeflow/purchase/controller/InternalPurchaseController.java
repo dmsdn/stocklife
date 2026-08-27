@@ -3,7 +3,6 @@ package com.storeflow.purchase.controller;
 import com.storeflow.global.internal.InternalServiceAuth;
 import com.storeflow.purchase.dto.CategoryPreferenceResponse;
 import com.storeflow.purchase.dto.ProductPopularityResponse;
-import com.storeflow.purchase.dto.PurchaseHistoryResponse;
 import com.storeflow.purchase.service.PurchaseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -84,25 +83,4 @@ public class InternalPurchaseController {
         return ResponseEntity.ok(result);
     }
 
-
-    /**
-     * 회원 구매 원장(시각 포함) — Agent 소비주기 자산(predict_repurchase)의 원료.
-     * /internal/orders/frequent 로 대신할 수 없는 이유: 그쪽은 ① orders 를 읽는데
-     * 데모 데이터는 purchases 에 있고 ② 응답이 집계(purchaseCount)라 시각이 없다.
-     * 구매 간격은 시각의 나열에서만 계산된다.
-     * ⚠ consumerId 가 아니라 memberId 다 — 위 getPurchaseHistoryByMemberId 주석 참조.
-     */
-    @GetMapping("/history")
-    public ResponseEntity<?> getPurchaseHistory(
-            @RequestHeader("X-Internal-Service-Key") String key,
-            @RequestParam Integer memberId) {
-        try {
-            internalServiceAuth.verify(key);
-        } catch (SecurityException e) {
-            return ResponseEntity.status(401).body(e.getMessage());
-        }
-        List<PurchaseHistoryResponse> result =
-                purchaseService.getPurchaseHistoryByMemberId(memberId);
-        return ResponseEntity.ok(result);
-    }
 }
