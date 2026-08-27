@@ -829,6 +829,35 @@ def get_current_prices(sku_ids: list[int]) -> dict:
     return out
 
 
+class Unavailable(str):
+    """실패 사유를 담되 **거짓(falsy)으로 평가되는** 문자열.
+
+    [왜 이런 게 필요한가 — 08-27 사고] `get_pending_replenishments`가 실패 사유를
+    평범한 `str`로 돌려주게 바꿨더니, 이미 있던 호출부가 조용히 깨졌다.
+
+        for row in (sot.get_pending_replenishments() or [])[:300]:
+
+    `"sot_unreachable"`은 **참**이라 `or []`를 통과하고, 슬라이스가 되고,
+    루프가 **글자 하나하나를 행으로** 돌린다. 그래서 에러가 `row.get`에서
+    나 원인이 세 단계 떨어진 곳에 보인다("왜 str에 get이 없지?").
+
+    [고친 방식] 사유를 없애지 않고 **거짓으로 만든다.** 그러면
+      · `x or []`      → `[]`          (목록으로 쓰는 쪽은 그냥 산다)
+      · `if not x:`    → 참             (실패 처리도 자연스럽다)
+      · `isinstance(x, str)` · `x == "auth_failed"` → 그대로 (사유를 읽는 쪽도 산다)
+    **호출부가 앞으로 늘어나도 같은 사고가 안 난다** — 규율이 아니라 타입이
+    막는다(§2-5a "경계를 구조로 만드는 것").
+
+    [왜 예외가 아닌가] 예외로 올리면 `infer`가 `why`를 갈라 적을 수 없고,
+    골든셋 재료 수집처럼 **없으면 건너뛰면 그만인** 자리까지 죽는다.
+    """
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+
 def get_pending_replenishments() -> list[dict]:
     """지금 par 밑이라 **보충 대기 중인 매대 전부**. 매장 단위 집계다.
 
@@ -853,7 +882,8 @@ def get_pending_replenishments() -> list[dict]:
     [반환이 세 갈래인 이유] 0건과 미지원을 구분해야 하므로 예외를 삼키지 않는다:
       list  정상 (빈 리스트 = 진짜 대기 0건)
       None  창구 없음(404)
-      str   "auth_failed" · "sot_unreachable" — 우리 쪽 설정·통신 문제
+      Unavailable("auth_failed" | "sot_unreachable") — 우리 쪽 설정·통신 문제.
+            **거짓으로 평가되는 str** 이라 `or []`·`if not` 관용구가 그대로 산다
     ⚠ `queuedAt` 은 null 이 올 수 있다(BELOW_PAR 이벤트가 없으면 — 백엔드 DTO 주석).
       지금 infer 는 이 값을 특징으로 쓰지 않아 무해하지만, 나중에 대기시간을
       특징에 넣는다면 **null 이 0 이 되지 않게** 해야 한다.
@@ -887,7 +917,7 @@ def get_pending_replenishments() -> list[dict]:
             reason = "auth_failed" if status in (401, 403) else "sot_unreachable"
             print(f"[sot] pending 조회 실패 {reason}"
                   f"({status or type(e).__name__}): {e}")
-            return reason
+            return Unavailable(reason)
         return [{"sku_id": r.get("skuId"), "location_id": r.get("locationId"),
                  "floor_no": r.get("floorNo"), "has_bulk": bool(r.get("hasBulk")),
                  "queued_at": r.get("queuedAt")}

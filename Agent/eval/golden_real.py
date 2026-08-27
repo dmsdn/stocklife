@@ -63,7 +63,17 @@ def fixtures(sot) -> dict:
     #    셋을 다 만족해야 "곧 채워진다"가 사실이 된다. 하나라도 없으면
     #    그 발화가 거짓이 되므로 케이스 자체가 성립하지 않는다.
     f["restock_name"] = None
-    for row in (sot.get_pending_replenishments() or [])[:300]:
+    pending = sot.get_pending_replenishments()
+    if not pending:
+        # 셋 다 "재료가 없다"는 같지만 이유가 다르다 — 찍지 않으면 SKIP 이
+        # 세계 탓인지(진짜 0건) 서버 탓인지(미기동·키) 구분이 안 된다.
+        #   []                    진짜 대기 0건
+        #   None                  창구 없음(404)
+        #   Unavailable("...")    인증·통신 실패
+        if pending is not None and pending != []:
+            print(f"[fixtures] 보충 대기 조회 실패({pending}) — 장면 1 은 SKIP")
+        pending = []
+    for row in pending[:300]:
         if not (row.get("queued_at") and row.get("has_bulk")):
             continue
         inv = sot.get_inventory(row["sku_id"]) or {}

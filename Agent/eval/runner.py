@@ -181,8 +181,19 @@ def main() -> None:
     #   mock 은 백엔드 없이 도는 유일한 검증이라 버리지 않는다.
     real = "--real" in sys.argv
     skipped = []
+    # ⚠ 가드는 **양쪽으로** 걸어야 한다(08-27). 전에는 `--real` 인데 mock 인
+    #   경우만 막았는데, 실연동 전환으로 .env 가 false 가 된 뒤로는 **반대쪽이
+    #   더 자주** 터진다: mock 판을 돌렸는데 도구가 실물 백엔드를 두드리고,
+    #   백엔드가 없으면 15케이스가 전부 "지금 조회가 안 되네요"로 FAIL 한다.
+    #   골든셋이 죽은 게 아니라 **백엔드를 안 켠 것**인데, 출력만 보면 구분이
+    #   안 돼서 코드를 뒤지게 된다.
+    from app import config, sot_client
+    if not real and not config.USE_MOCK_SOT:
+        print("⚠ mock 골든셋인데 USE_MOCK_SOT=false 다 — 도구가 실물 백엔드를 부른다.\n"
+              "   백엔드를 켠 상태면 `--real` 로 실물 골든셋을 돌리는 게 맞고,\n"
+              "   백엔드 없이 검증만 하려면 .env 의 USE_MOCK_SOT 를 true 로.")
+        sys.exit(2)
     if real:
-        from app import config, sot_client
         if config.USE_MOCK_SOT:
             print("⚠ --real 인데 USE_MOCK_SOT=true 다. .env 를 고치고 다시.")
             sys.exit(2)

@@ -65,7 +65,15 @@ def main() -> int:
     print("── ① /internal/replenishment/pending ──")
     pending = sot_client.get_pending_replenishments()
     if pending is None:
-        line(BAD, "창구 응답", "None — 예외가 났다(404/401/연결 실패). 서버·키 확인")
+        line(BAD, "창구 응답", "None — 404. 창구 자체가 없다(경로·컨트롤러 확인)")
+        bad += 1
+    elif isinstance(pending, str):
+        # 08-27: 404 와 "우리 쪽 문제"를 가른 뒤로 사유가 문자열로 온다.
+        # 여기서 뭉치면 탐침의 존재 이유(빈 배열의 의미를 가른다)가 없어진다.
+        line(BAD, "창구 응답", {
+            "auth_failed": "auth_failed — INTERNAL_SERVICE_KEY 불일치(401/403)",
+            "sot_unreachable": "sot_unreachable — 백엔드 미기동·타임아웃",
+        }.get(pending, pending))
         bad += 1
     elif not pending:
         line(WARN, "빈 배열 []", "0건이다. **시드가 적재됐는지** 아래 ③으로 판별")
