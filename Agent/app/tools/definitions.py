@@ -401,15 +401,28 @@ TOOLS = [
             "매대가 비었을 때 '언제쯤 다시 채워질지'를 시점별 확률로 예측한다(예: 10분 내 40%, 20분 내 85%). "
             "쓸 때: get_inventory에서 매대(PICK) 0 + 보관단(BULK)이나 백룸에 재고가 확인된 직후. "
             "쓰지 말 때: 매대에 재고가 있을 때(예측할 게 없다), 매장 전체 어디에도 재고가 없을 때"
-            "(그때는 find_substitutes로). 확률·시간을 직접 추측해 말하지 말 것 — 이 도구의 값을 그대로 쓴다."
+            "(그때는 find_substitutes로). 확률·시간을 직접 추측해 말하지 말 것 — 이 도구의 값을 그대로 쓴다. "
+            "⚠ curve의 prob_pct는 **이미 퍼센트**다(0.4는 0.4%이지 40%가 아니다). 100을 곱하지 말 것. "
+            "within도 이미 사람 단위다('30분'을 초로 되돌리거나 다른 단위로 바꾸지 말 것)."
         ),
         "input_schema": {
             "type": "object",
+            # ⚠ 08-27: `location_id` 를 삭제했다. **함수가 안 받는 인자를 광고하고
+            #   있었다** — `infer.predict_availability(sku_id)` 뿐인데 스키마는 그것을
+            #   required 로까지 걸어 두어, LLM 이 규칙대로 부를수록 반드시
+            #   `bad_arguments` 로 튕겼다. 실물 골든셋에서 모델은 이 도구를 **두 번**
+            #   부르고 두 번 다 실패한 뒤 "정확한 보충 시점은 확인이 어렵네요"로
+            #   물러섰다 — 킬링 장면 1 이 통째로 죽어 있었는데, 도구가 실패해도
+            #   발화는 그럴듯해서 골든셋이 PASS 를 줬다(그 케이스가 확률을 요구하지
+            #   않았기 때문). **스텁 시절 스키마가 실물 구현을 따라오지 않은 것**이
+            #   근본 원인이라, 아래 `check_schema_signature()` 로 전수 대조를 건다.
+            # [왜 위치가 필요 없나] 모델의 특징은 SKU 의 par·경로형(VERTICAL/
+            #   HORIZONTAL)과 **매장 전체 큐 길이**다. 위치는 sku_id 로 조회해서
+            #   내부에서 얻는다 — LLM 이 넘길 이유가 없다.
             "properties": {
                 "sku_id": {"type": "integer", "description": "상품 고유 번호"},
-                "location_id": {"type": "string", "description": "비어 있는 매대(PICK) 위치"},
             },
-            "required": ["sku_id", "location_id"],
+            "required": ["sku_id"],
         },
     },
     {

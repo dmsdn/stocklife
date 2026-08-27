@@ -76,6 +76,25 @@ use_utf8_stdout()
 load_env()
 
 from app import guard, loop                    # noqa: E402
+from app.tools import infer                    # noqa: E402
+
+# ── 출하물 적재 — 러너도 입구다 (08-27, 실물 골든셋 첫 실행에서 발견) ────────
+# [무엇이 문제였나] 서버는 main.py 의 lifespan 이 `infer.load_all()` 을 부르는데,
+#   러너는 **설계상 main 을 안 거치고 loop 를 직접 부른다**(서버 없이 채점하려고).
+#   그래서 추론 도구 5종이 전부 "model_not_loaded" 로 떨어진 채 채점됐다 —
+#   발화가 "소비주기 모델이 서버에서 로드가 안 돼서"라고 말하는데도 **케이스는
+#   PASS 였다**(must_not_include 에 안 걸려서). 자산이 통째로 빠진 채 13/15 를
+#   보고 "잘 된다"고 읽을 뻔했다.
+# [08-20 과 같은 계열이다] 그때는 `.env` 를 러너가 안 읽어 12케이스가 전멸했고,
+#   그 교훈으로 `env.load_env()` 를 두 입구가 명시 호출하게 했다. **입구가 둘이면
+#   준비 코드는 입구마다 명시적으로 부른다** — 이번엔 출하물이 그 대상이었다.
+# [사진 인코더는 안 올린다] 3.5GB 이고 골든셋에 사진 케이스가 없다. 필요해지면
+#   `with_photo_encoder=True` 로 켠다(config.LOAD_PHOTO_ENCODER 와 같은 판단).
+_loaded = infer.load_all()
+if not _loaded:
+    print("⚠ 출하물이 하나도 없습니다 — 추론 케이스가 전부 '준비 안 됨'으로 채점됩니다.")
+else:
+    print("출하물 " + " · ".join(f"{k}={v}" for k, v in _loaded.items()))
 from eval.golden_set import GOLDEN             # noqa: E402
 
 

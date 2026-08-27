@@ -104,7 +104,7 @@ def _arg(flag, default=None, cast=str):
 def _curve(r, indent="      "):
     for p in r.get("curve", []):
         note = f"  ({p['note']})" if p.get("note") else ""
-        print(f"{indent}{p['within']:>7s}  {p['prob']:>5.1f}%{note}")
+        print(f"{indent}{p['within']:>7s}  {p['prob_pct']:>5.1f}%{note}")
 
 
 def main():

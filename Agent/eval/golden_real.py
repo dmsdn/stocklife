@@ -145,11 +145,27 @@ def build(f: dict) -> list[dict]:
         {"id": "real_scene1", "needs": "restock_name",
          "q": f"{_n(f.get('restock_name'))} 있어요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-1",
-         "expect_tools": ["search_products", "get_inventory"],
-         "must_include": [("보충", "채워", "들어오", "입고", "예비", "다시")],
-         "must_not_include": [r"품절", r"없습니다[.!]?\s*$"],
+         # ⚠ 08-27 상향: `predict_availability` 를 필수로 올렸다.
+         #   [왜 빠져 있었나] 이 케이스를 쓸 때 가용 예측이 스텁이었다. 그래서
+         #   **되는 것에 맞춰** get_inventory 까지만 기대했고, 케이스는 PASS 인데
+         #   발화는 "정확한 보충 시점은 확인이 어렵네요"였다. 킬링 장면 1의 심장
+         #   ("약 15분 후 보충 예정")이 골든셋에서 통째로 안 검증되고 있었다.
+         #   출하물이 08-26에 올라온 뒤에도 기준이 안 따라 올라온 것이다.
+         #   [헌법 8 이 여기서 지켜진다] 확률을 요구하는 이유는 표현 취향이 아니라
+         #   "있다/없다" 이진으로 답하지 말라는 규율이다. 큐 95(토요일 14:20)에서
+         #   모델은 1시간 내 97.6% 를 낸다 — 이진으로는 "곧 됩니다"밖에 못 말하고,
+         #   그건 15분 뒤 빈손으로 돌아온 손님에게 거짓이 된다.
+         "expect_tools": ["search_products", "get_inventory", "predict_availability"],
+         "must_include": [("보충", "채워", "들어오", "입고", "예비", "다시"),
+                          ("%", "퍼센트", "확률")],
+         # `품절` 을 통짜로 금지하면 "품절은 아니에요"(옳은 발화)까지 잡는다 —
+         # 가드 쪽과 같은 정정(08-27). 부정이 붙지 않은 품절 주장만 금지한다.
+         "must_not_include": [r"품절(?!\s*\S{0,3}\s*아니)", r"없습니다[.!]?\s*$",
+                              # 모델이 답을 냈는데 "모르겠다"고 말하면 도구를 놀린 것
+                              r"시점[^.!?]{0,10}(확인이 어|알 수 없|모르)"],
          "why": "실물 DB에서 매대 0 + 예비 있음인 상품. mock 과 달리 **큐 상태가"
-                " 진짜다** — pending 창구·stock_sync 시점 정합이 여기서 검증된다"},
+                " 진짜다** — pending 창구·stock_sync 시점 정합이 여기서 검증된다."
+                " 08-27부터 가용 예측 곡선까지 요구한다(킬링 장면 1 · 헌법 8)"},
 
         # ── 재고 있음 → 위치를 사람 말로 ────────────────────────────────────
         {"id": "real_in_stock", "needs": "in_stock_name",
@@ -174,7 +190,13 @@ def build(f: dict) -> list[dict]:
         {"id": "real_repurchase", "needs": "repeat_name",
          "q": f"{_n(f.get('repeat_name'))} 다시 살 때 됐나요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-4",
-         "expect_tools": ["get_purchase_history"],
+         # ⚠ 08-27 정정: `get_purchase_history` 를 기대했는데 모델은
+         #   `predict_repurchase` 를 썼고, **그쪽이 옳다** — 그 도구가 이력 조회를
+         #   내부에서 하고 곡선까지 낸다. 원시 이력만 보고 "살 때 됐다"를 판정하면
+         #   그건 LLM 이 주기를 눈대중한 것이라 헌법 2 위반이다. 기대치를 도구
+         #   이름으로 박아 두면 **더 나은 경로를 FAIL 로 만든다** — 이 케이스가
+         #   확인해야 하는 것은 "이력 창구가 산다"이지 "어느 함수를 부른다"가 아니다.
+         "expect_tools": ["predict_repurchase"],
          "must_include": [],
          "must_not_include": [r"이력이 없|구매 기록이 없|처음 (구매|사)"],
          "why": "실제로 2회 이상 산 상품이다. '이력 없음'이 나오면 history 창구가"
@@ -227,10 +249,21 @@ def build(f: dict) -> list[dict]:
               if f.get("pair_names") else "",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-10",
          "expect_tools": ["optimize_bundle"],
-         "must_include": [],
-         "must_not_include": [r"둘 다 (담|사|구매)"],   # 예산상 둘 다는 불가
+         # 솔버가 고른 총액이 발화에 있어야 한다 — "하나만 담긴다"는 결론만 있고
+         # 금액이 없으면 손님이 계산대에서 확인할 방법이 없다.
+         "must_include": [(f"{f['pair_budget']:,}",)] if f.get("pair_budget") else [],
+         # ⚠ 08-27 정정: 원래 패턴이 `둘 다 (담|사|구매)` 였는데, 이것이
+         #   **"둘 다 담으면 10,980원이라 예산을 2,545원 초과하네요"까지 FAIL 로
+         #   잡았다.** 그 문장은 정확히 우리가 원하는 발화다 — 조합 최적화 결과를
+         #   사람에게 설명하는 일은 **선택된 것이 아니라 탈락한 것**을 말하는 일이라,
+         #   "둘 다"라는 표현은 기각 사유를 대는 자리에서 오히려 필요하다.
+         #   그래서 **가능하다고 주장하는 형태만** 금지한다("둘 다 담을 수 있어요").
+         #   교훈: 금지 패턴은 낱말이 아니라 **주장**을 잡아야 한다. 낱말로 잡으면
+         #   좋은 발화를 죽이고, 그걸 고치려다 모델을 나쁜 쪽으로 밀게 된다.
+         "must_not_include": [r"둘 다\s*\S*(담|사|구매)\S*\s*(수 있|드릴|가능|됩니다|돼요)"],
          "why": "예산 조합의 총액은 LLM 이 더한 값이 아니라 솔버의 total_krw 여야"
-                " 한다. 예산을 하나만 되게 잡았으므로 '둘 다'는 산술 실패다"},
+                " 한다. 예산을 하나만 되게 잡았으므로 '둘 다 담을 수 있다'는 산술"
+                " 실패다. 반대로 '둘 다면 초과'라는 기각 사유는 좋은 발화다"},
 
         # ── 대체 제안 — 원 상품 확인이 먼저 ─────────────────────────────────
         {"id": "real_substitute", "needs": "in_stock_name",

@@ -568,12 +568,33 @@ def _optimize_bundle(budget_krw: int, purpose: str | None = None,
         solved = solve_bundle(groups, budget_krw=budget_krw, max_items=max_items)
         items = [{k: v for k, v in it.items() if k not in ("priority", "need_key")}
                  for it in solved["items"]]
-        return {"ok": True, "budget_krw": budget_krw, "total_krw": solved["total_krw"],
-                "remaining_krw": budget_krw - solved["total_krw"],
-                "item_count": len(items), "items": items,
-                "excluded_no_price_sku_ids": excluded_no_price,
-                "excluded_over_budget_sku_ids": excluded_over_budget,
-                "note": "지정한 후보 중 예산 안에서 최다 품목·최저 총액 조합입니다."}
+        # ── 탈락 설명의 재료 (08-27 real_budget FAIL) ────────────────────────
+        # [무엇이 문제였나] 후보 둘 중 하나만 담긴 결과를 받은 LLM 이 **왜 둘 다는
+        #   안 되는지**를 설명하려고 "5,090+5,890=10,980원"을 스스로 더했다.
+        #   10,980 이 원장에 없어 가드가 막았다 — 위 compare 와 같은 뿌리다.
+        # [왜 이 값이 필요한가] 솔버는 "하나만 담긴다"는 **결론**을 주는데,
+        #   손님이 납득하려면 **기각 사유**가 필요하다. "예산이 8,435원인데 둘 다면
+        #   10,980원이라 2,545원 모자라요"가 설득이고, "하나만 담을 수 있어요"는
+        #   통보다. 조합 최적화의 결과를 사람에게 설명하는 일은 근본적으로
+        #   "선택된 것"이 아니라 "탈락한 것"을 말하는 일이다.
+        # [단품 초과와 다르다] `excluded_over_budget_sku_ids` 는 **혼자서도**
+        #   예산을 넘는 상품이다. 여기 10,980 은 각각은 되는데 **합쳐서** 넘는
+        #   경우라, 사유가 다르고 발화도 달라야 한다.
+        priced = [pr["final"] for pr in (prices.get(s) for s in sku_ids) if pr]
+        all_total = sum(priced)
+        s2 = {"ok": True, "budget_krw": budget_krw, "total_krw": solved["total_krw"],
+              "remaining_krw": budget_krw - solved["total_krw"],
+              "item_count": len(items), "items": items,
+              "candidate_count": len(priced),
+              "all_candidates_total_krw": all_total,
+              # 넘을 때만 싣는다. 안 넘는데 0 을 실으면 LLM 이 "딱 맞아요"처럼
+              # 없는 사실을 읽을 여지가 생긴다.
+              "over_budget_by_krw": (all_total - budget_krw
+                                     if all_total > budget_krw else None),
+              "excluded_no_price_sku_ids": excluded_no_price,
+              "excluded_over_budget_sku_ids": excluded_over_budget,
+              "note": "지정한 후보 중 예산 안에서 최다 품목·최저 총액 조합입니다."}
+        return s2
 
     return {"error": "missing_input",
             "message": "purpose(목적) 또는 candidate_sku_ids(후보 목록) 중 하나는 필요합니다."}
@@ -606,8 +627,31 @@ def _compare_products(sku_ids: list, sort_by: str = "price_asc") -> dict:
                      "regular_price_krw": pr["regular"], "discount_krw": pr["discount"],
                      "final_price_krw": pr["final"], "on_promo": pr["on_promo"]})
     rows.sort(key=lambda r: r["final_price_krw"], reverse=(sort_by == "price_desc"))
+
+    # ── 차액 — **솔버가 뺀다** (08-27 실물 골든셋 real_compare FAIL) ──────────
+    # [무엇이 문제였나] 위 독스트링은 "LLM이 숫자를 하나도 만들지 않고 그 문장을
+    #   조립할 수 있다"를 목표로 선언해 놓고, 정작 **가격 비교에서 손님이 가장
+    #   듣고 싶은 수 — 얼마나 싼가 — 를 안 돌려주고 있었다.** 그래서 LLM이
+    #   5,890 − 5,090 을 스스로 해서 "800원 더 싸요"라고 말했고, 800이 원장에
+    #   없어 가드가 `unsupported (800)` 로 발화를 막았다.
+    # [왜 가드를 푸는 쪽이 아닌가] "원장의 두 수를 뺀 값은 봐준다"로 열면,
+    #   **LLM의 산술 오류가 그 구멍으로 조용히 통과한다.** 헌법 2(계산은 솔버가)가
+    #   존재하는 이유가 바로 그 오류다. 비용이 비대칭이다 — 파생값을 안 주면
+    #   발화가 막히는 것으로 끝나지만(눈에 보인다), 구멍을 열면 틀린 값이
+    #   손님에게 간다(안 보인다). 그래서 **막는 쪽을 유지하고 재료를 준다.**
+    # [왜 '가장 싼 것과의 차이'인가] 3개 이상을 비교할 때 모든 쌍의 차액은
+    #   n(n−1)/2 개로 불어나고 대부분 발화에 안 쓰인다. 손님의 질문은 사실상
+    #   늘 "뭐가 제일 싸고 얼마나 차이 나냐"라서, 기준점 하나(최저가)로 충분하다.
+    # [0 도 싣는다] 최저가 상품 자신의 차액은 0이다. 빼지 않고 남기는 이유는
+    #   LLM 이 "같은 값"을 말해야 할 때(동가 상품)도 근거가 있어야 하기 때문.
+    cheapest = min(rows, key=lambda r: r["final_price_krw"]) if rows else None
+    for r in rows:
+        r["diff_from_cheapest_krw"] = r["final_price_krw"] - cheapest["final_price_krw"]
     return {"sort_by": sort_by, "items": rows, "missing_sku_ids": missing,
-            "cheapest_sku_id": min(rows, key=lambda r: r["final_price_krw"])["sku_id"] if rows else None}
+            "cheapest_sku_id": cheapest["sku_id"] if cheapest else None,
+            # 최고가−최저가. "둘 중 뭐가 싸냐"는 2개 비교에서 이 값이 곧 답이다.
+            "max_diff_krw": (max(r["final_price_krw"] for r in rows)
+                             - cheapest["final_price_krw"]) if rows else None}
 
 
 # ════════════════════════════════════════════════════════════════════════════

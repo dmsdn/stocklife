@@ -135,6 +135,34 @@ def loaded() -> dict:
 
 
 # ── 공통 도구 ───────────────────────────────────────────────────────────────
+def _humanize(v: int, unit: str) -> str:
+    """구간 상한을 **손님이 쓰는 단위**로 적는다. 1800초 → "30분".
+
+    [왜 도구가 환산하나 — LLM 이 하면 안 되나]
+      08-27 실물 골든셋에서 곡선이 "1800초 내 40%"를 줬고, 모델은 당연히
+      "30분 내 40%"라고 말했다. 그런데 **30 은 원장에 없는 수**라 가드가 발화를
+      막았다. 여기서 선택지가 둘이었다:
+        (a) 가드에 "1800/60 은 봐준다"는 예외를 판다 → 산술 구멍이 열린다
+        (b) 도구가 사람 단위로 낸다 → LLM 은 인용만 한다
+      (b) 를 고른다. 헌법 2 는 "LLM 에게 산술 금지"인데, **단위 환산도 산술이다.**
+      그리고 애초에 "1800초 내 보충됩니다"는 손님에게 쓸 수 없는 문장이라,
+      환산은 표현 취향이 아니라 **도구가 마땅히 했어야 할 일**이었다.
+
+    [왜 반올림하지 않고 나누어떨어질 때만 바꾸나] 1500초는 "25분"이 되지만
+      1700초는 "1700초"로 남는다. 어정쩡한 값을 "약 28분"으로 만들면 그 '약'이
+      원장에 없는 새 수를 만든다 — 지금 고치는 바로 그 문제를 되풀이한다.
+      DES 의 구간 경계는 60·900·1800·3600 처럼 사람 단위로 잡혀 있어서
+      실제로는 거의 다 깔끔하게 떨어진다.
+    """
+    if unit != "초":
+        return f"{v}{unit}"                 # 일 단위(재구매)는 이미 사람 단위다
+    if v % 3600 == 0:
+        return f"{v // 3600}시간"
+    if v % 60 == 0:
+        return f"{v // 60}분"
+    return f"{v}초"                          # 안 떨어지면 원래 단위 그대로
+
+
 def _curve_to_points(F, edges, unit: str) -> list[dict]:
     """구간별 누적확률 → 손님에게 보여줄 (시점, 확률) 목록.
 
@@ -151,8 +179,17 @@ def _curve_to_points(F, edges, unit: str) -> list[dict]:
         if not np.isfinite(hi):
             break
         pct = float(f) * 100
-        out.append({"within": f"{int(hi)}{unit}",
-                    "prob": round(pct, 1),
+        # ⚠ 칸 이름이 `prob` 였다 (08-27 정정). 값은 **퍼센트**(0.4 = 0.4%)인데
+        #   이름이 확률이라, 모델이 "0.4 → 40%"로 읽고 손님에게 **100배 틀린 수**를
+        #   말했다("30분 내는 40% 정도고" — 실제로는 0.4%). 가드는 못 잡는다:
+        #   40 이 원장 어딘가에 있으면 "근거 있는 수"로 통과하고, 애초에 가드는
+        #   **수가 원장에 있나**를 보지 **그 수가 무엇의 값인가**를 안 본다.
+        #   골든셋도 PASS 를 줬다 — "%가 있는가"만 봤으니까.
+        # [교훈] 스키마의 이름은 주석이 아니라 **인터페이스**다. 단위가 이름에 없으면
+        #   읽는 쪽이 단위를 추측하고, LLM 은 가장 흔한 관행(0~1 확률)으로 추측한다.
+        #   `_pct` 접미사는 그 추측의 여지를 없앤다.
+        out.append({"within": _humanize(int(hi), unit),
+                    "prob_pct": round(pct, 1),
                     # 0.05% 미만·99.95% 초과는 그 사실을 문자로 적어 둔다
                     "note": ("거의 없음" if pct < 0.05 else
                              ("거의 확실" if pct > 99.95 else None))})
@@ -286,8 +323,12 @@ def predict_availability(sku_id: int) -> dict:
 
 
 # ── ② 소비주기 ──────────────────────────────────────────────────────────────
-def predict_repurchase(sku_id: int) -> dict:
-    """이 손님이 이 상품을 다시 살 때가 됐나 — 시점별 확률 곡선.
+def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
+    """이 손님이 이 상품을 다시 살 때가 됐나 — 시점별 확률 곡선. **품목 하나.**
+
+    ⚠ 이것은 내부 함수다. LLM 이 부르는 도구는 아래 `predict_repurchase`(복수)다.
+      `hist` 를 받는 이유: 복수판이 이력을 **한 번만** 조회해 나눠 주기 위함이다.
+      품목마다 다시 조회하면 같은 회원의 같은 이력을 N 번 가져온다.
 
     가용예측과 달리 **필요한 것이 전부 SoT에 있다** — 그 쌍의 과거 구매 이력이면
     된다. 회원 번호는 LLM이 아니라 루프가 주입한 것을 쓴다(B안).
@@ -304,7 +345,8 @@ def predict_repurchase(sku_id: int) -> dict:
                 "message": "비회원 세션이라 구매 이력이 없습니다. 로그인하면 "
                            "재구매 시점을 안내할 수 있다고 알려주세요."}
 
-    hist = sot_client.get_purchase_history(member_id) or []
+    if hist is None:
+        hist = sot_client.get_purchase_history(member_id) or []
     days = sorted(_to_day(h["purchased_at"]) for h in hist
                   if int(h.get("sku_id", -1)) == int(sku_id))
     if not days:
@@ -388,6 +430,85 @@ def predict_repurchase(sku_id: int) -> dict:
                     "문장이나 알림의 근거로 쓰지 마세요. "
                     "⚠ 회원 축(가구·반려·자녀·차량)과 방문 리듬은 지금 조회 창구가 "
                     "없어 결측·평균으로 채웠습니다 — 개인화가 덜 된 값입니다."),
+    }
+
+
+# 한 번에 돌려줄 최대 품목 수. "뭐 사야 되지?"의 답으로 스무 개를 늘어놓으면
+# 손님이 아무것도 안 고른다 — 발화가 감당할 수 있는 길이가 곧 상한이다.
+# ⚠ 자른 개수는 반드시 결과에 적는다(no silent caps, 08-24 검수).
+REPURCHASE_MAX_ITEMS = 5
+
+
+def predict_repurchase(sku_ids: list | None = None) -> dict:
+    """살 때가 된 품목들 — **여러 개를 한 번에** 판정한다.
+
+    [왜 복수인가 — 08-27에 서명이 스키마와 어긋나 있었다]
+      스키마는 처음부터 `sku_ids`(배열, 비우면 전 품목)를 광고했는데 구현은
+      `predict_repurchase(sku_id)` 단수였다. `schema_check.py` 가 이것을 잡았다.
+      **스키마를 단수로 낮추는 선택지도 있었지만 그러면 기능이 사라진다** —
+      도구 설명문에 적힌 "'뭐 사야 되지?'·살 때가 된 품목 선별"은 전 품목을
+      훑어야만 답할 수 있고, 진입 브리핑(킬링 장면 3)의 "살 때 되신 것 2개"도
+      마찬가지다. 어긋남을 발견했을 때 **구현이 게으른 쪽이었지 스키마가 과한
+      쪽이 아니었다.**
+
+    [sku_ids 를 비우면] 이 손님이 **2회 이상 산 품목 전부**를 판정한다.
+      1회뿐인 품목은 간격이 없어 주기가 정의되지 않으므로 애초에 제외한다
+      (넣으면 사전평균으로 곡선이 나오는데, 그건 개인화가 아니라 소분류 평균이라
+      "당신은"으로 시작하는 문장의 근거가 못 된다).
+
+    [정렬 — 무엇이 '더 살 때'인가] 경과일 ÷ 평소 주기. 이 비가 1을 넘으면
+      평소보다 오래 안 산 것이다. 절대 경과일로 줄 세우면 원래 주기가 긴 품목
+      (세제·휴지)이 늘 위로 올라와 매번 같은 답이 된다.
+    """
+    from app.tools import query                                # 순환 import 회피
+    if _STATE["repurchase"] is None:
+        return {"error": "model_not_loaded",
+                "message": "소비주기 모델이 적재되지 않았습니다."}
+    member_id = query.current_member_id()
+    if member_id is None:
+        return {"error": "no_member",
+                "message": "비회원 세션이라 구매 이력이 없습니다. 로그인하면 "
+                           "재구매 시점을 안내할 수 있다고 알려주세요."}
+
+    hist = sot_client.get_purchase_history(member_id) or []
+    if sku_ids:
+        targets = list(dict.fromkeys(int(s) for s in sku_ids))
+    else:
+        # 이력 전 품목 — 단, 2회 이상 산 것만(위 독스트링)
+        cnt = {}
+        for h in hist:
+            cnt[int(h["sku_id"])] = cnt.get(int(h["sku_id"]), 0) + 1
+        targets = [s for s, n in cnt.items() if n >= 2]
+        if not targets:
+            return {"error": "no_history",
+                    "message": "두 번 이상 산 품목이 없어 소비주기를 낼 수 없습니다. "
+                               "재구매 시점을 말하지 말고 다른 방식으로 도우세요.",
+                    "member_history_items": len(cnt)}
+
+    results, failed = [], []
+    for sku in targets:
+        r = _repurchase_one(sku, hist=hist)
+        (failed if r.get("error") else results).append(
+            {"sku_id": sku, "error": r["error"]} if r.get("error") else r)
+
+    # 살 때가 된 순서로. 주기를 못 구한 것(past_intervals=0)은 뒤로 민다.
+    def _due(r):
+        cyc = r.get("typical_cycle_days")
+        return (r["days_since_last"] / cyc) if cyc else -1.0
+    results.sort(key=_due, reverse=True)
+    shown = results[:REPURCHASE_MAX_ITEMS]
+
+    return {
+        "member_id": member_id,
+        "evaluated": len(targets),
+        "returned": len(shown),
+        # 자른 사실을 명시한다 — 없으면 LLM 이 "전부 검토했다"고 말하게 된다
+        "truncated": len(results) - len(shown),
+        "items": shown,
+        "failed": failed,
+        "read_as": ("items 는 **살 때가 된 순서**(경과일÷평소 주기)로 정렬돼 "
+                    "있습니다. 각 항목의 curve·read_as 를 그대로 따르세요. "
+                    "truncated 가 0 보다 크면 그만큼 더 있다는 사실을 알리세요."),
     }
 
 
