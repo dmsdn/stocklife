@@ -58,6 +58,13 @@ def _missing():
     return out
 
 
+# ⚠ 진입점이므로 표준출력을 먼저 utf-8로 (08-27). 이게 없어서 cp949 콘솔에서
+#   곡선 표의 `—`에 UnicodeEncodeError 가 나 **사진 갈래까지 도달조차 못 했다** —
+#   "사진은 계속 안 되던데"의 정체가 적재 실패가 아니라 그 앞줄의 print 였다.
+#   env.py 의 헌장과 같다: 공용 준비 코드는 입구가 명시 호출한다.
+from app.env import use_utf8_stdout                            # noqa: E402
+use_utf8_stdout()
+
 _gone = _missing()
 if "--photo" not in sys.argv:
     _gone.pop("transformers", None)      # 안 쓸 것으로 시끄럽게 하지 않는다
