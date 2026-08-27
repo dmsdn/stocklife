@@ -60,7 +60,7 @@ import { confirmRestock } from '../../api/locations';
 // 반비례하게 맞추므로 기본(꽉 채운) 화면에서 전체 크기는 그대로고, 실제로 달라지는 건
 // 렌더링 선명도 + 사용자가 확대했을 때 보이는 디테일이다.
 const TILE = 24;
-const PLAYER_SPEED = 330; // px/sec — TILE 16→24(1.5배)에 맞춰 화면상 체감 속도가 그대로이도록 같이 1.5배
+const PLAYER_SPEED = 460; // px/sec — 330에서 상향(성원님 요청: 손님 캐릭터 이동속도 더 빠르게)
 const HOLD_MOVE_DELAY = 140; // 방향키를 누르고 있을 때 한 칸 이동 간격(ms)
 
 // ── NPC(재고 담당 직원) 관련 상수 ──
@@ -433,6 +433,8 @@ export default class StoreScene extends Phaser.Scene {
   // 휠 줌의 최소값으로도 같이 써서 사용자가 이보다 더 축소해서 매장을 작게 만들 수 없게 한다.
   private minZoom = 0.15;
   private spaceKey!: Phaser.Input.Keyboard.Key;
+  private debugKey!: Phaser.Input.Keyboard.Key;
+  private debugOccupiedLayer?: Phaser.GameObjects.Graphics;
 
   // ── NPC(재입고 직원) 상태 ──
   // loadFloor()로 층이 바뀔 때마다 그 층 소속 NPC를 새로 만들고 이전 NPC의 비동기 루프는
@@ -530,6 +532,12 @@ export default class StoreScene extends Phaser.Scene {
     this.spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.spaceKey.on('down', () => this.handleSpacePress());
 
+    // 4번(눈에 보이지 않는 충돌구역 확인용): O키를 누르면 지금 층의 occupied(통행 불가) 칸
+    // 전부를 반투명 빨간 사각형으로 덮어 그린다 — 매대 이미지가 없는데도 막혀있는 칸(진짜
+    // "안 보이는 벽")이 있으면 이걸로 바로 눈에 보인다. 다시 누르면 꺼진다.
+    this.debugKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O);
+    this.debugKey.on('down', () => this.toggleOccupiedDebugOverlay());
+
     this.fitCameraToWorld();
     this.setupCameraDrag();
     // 브라우저 창 크기가 바뀌면(캔버스 컨테이너 크기 변경 포함) 항상 매장 전체가
@@ -606,16 +614,19 @@ export default class StoreScene extends Phaser.Scene {
 
   // 프로그램에서(트립 orchestration) 특정 좌표로 캐릭터를 걷게 시키는 공개 메서드.
   // 클릭 이동과 동일한 A* + tween 로직을 재사용한다.
-  walkTo(goal: GridPoint, onArrive?: () => void) {
+  // onArrive(success): success=false는 "경로를 못 찾아서 실제로는 한 칸도 못 움직였다"는
+  // 뜻이다(안 보이는 충돌구역 등으로 목적지가 고립된 경우) — 호출부가 이걸 "도착했다"로
+  // 착각하고 다음 단계로 넘어가면 안 된다(4번 문제와 엮인 2/3번 버그의 원인이었다).
+  walkTo(goal: GridPoint, onArrive?: (success: boolean) => void) {
     const target = this.grid.nearestWalkableTo(goal) ?? goal;
     const path = findPath(this.grid, this.playerGrid, target);
     if (path.length === 0) {
-      onArrive?.();
+      onArrive?.(false);
       return;
     }
     this.currentPath = path.slice(1);
     this.drawPath(path);
-    this.pendingArriveCallback = onArrive;
+    this.pendingArriveCallback = () => onArrive?.(true);
     if (!this.moving) this.advancePath();
   }
 
@@ -627,10 +638,12 @@ export default class StoreScene extends Phaser.Scene {
     return this.playerGrid;
   }
 
-  private pendingArriveCallback?: () => void;
+  private pendingArriveCallback?: () => void; // walkTo가 onArrive를 감싸서 넣어둔다(항상 success 인자까지 처리된 상태)
 
   private buildFloor() {
     this.grid = new Grid(this.floorData.gridWidth, this.floorData.gridHeight, this.floorData.occupied);
+    this.debugOccupiedLayer?.destroy();
+    this.debugOccupiedLayer = undefined;
     this.floorTileLayer?.destroy();
     this.floorTileLayer = this.add.graphics();
     this.floorTileLayer.setDepth(DEPTH_FLOOR_TILE);
@@ -840,6 +853,18 @@ export default class StoreScene extends Phaser.Scene {
                 drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
                 merged.add(cellKey(x0, y0));
                 merged.add(cellKey(x0, y1));
+                // 짝 없이 혼자 2x2 크기로 그려서 옆 칸(x0±1)까지 이미지가 살짝 넘치는데, 그
+                // 옆 칸이 실제로는 매대 데이터가 없는 통로라 클릭해도 상품 정보가 안 뜨던
+                // 문제(5번) — 이미지가 넘친 만큼 클릭도 이 매대로 이어지도록 등록해둔다.
+                // 이미 진짜 매대가 있는 칸은 절대 덮어쓰지 않는다(has 체크).
+                const loc0 = byCell.get(cellKey(x0, y0))!;
+                const loc1 = byCell.get(cellKey(x0, y1))!;
+                for (const nx of [x0 - 1, x0 + 1]) {
+                  const k0 = cellKey(nx, y0);
+                  if (!this.locationByCell.has(k0)) this.locationByCell.set(k0, loc0);
+                  const k1 = cellKey(nx, y1);
+                  if (!this.locationByCell.has(k1)) this.locationByCell.set(k1, loc1);
+                }
               }
               i += 1;
             }
@@ -895,6 +920,15 @@ export default class StoreScene extends Phaser.Scene {
                 drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
                 merged.add(cellKey(x0, y0));
                 merged.add(cellKey(x1, y0));
+                // 위와 같은 이유 — 위아래(y0±1)로 넘치는 이미지 영역도 클릭이 되게 등록.
+                const loc0 = byCell.get(cellKey(x0, y0))!;
+                const loc1 = byCell.get(cellKey(x1, y0))!;
+                for (const ny of [y0 - 1, y0 + 1]) {
+                  const k0 = cellKey(x0, ny);
+                  if (!this.locationByCell.has(k0)) this.locationByCell.set(k0, loc0);
+                  const k1 = cellKey(x1, ny);
+                  if (!this.locationByCell.has(k1)) this.locationByCell.set(k1, loc1);
+                }
               }
               i += 1;
             }
@@ -923,6 +957,17 @@ export default class StoreScene extends Phaser.Scene {
         const cy = loc.y * TILE + TILE / 2;
         if (mergedTex) {
           drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
+          // 완전히 혼자인 칸도 2x2로 크게 그려서 상하좌우로 이미지가 넘친다 — 그 넘친 칸들도
+          // (진짜 매대가 없는 한) 이 매대 클릭으로 이어지게 등록.
+          for (const [nx, ny] of [
+            [loc.x - 1, loc.y],
+            [loc.x + 1, loc.y],
+            [loc.x, loc.y - 1],
+            [loc.x, loc.y + 1],
+          ]) {
+            const nk = cellKey(nx, ny);
+            if (!this.locationByCell.has(nk)) this.locationByCell.set(nk, loc);
+          }
         } else {
           const texKey = singleTex || WAREHOUSE_CRATES[warehouseIdx % WAREHOUSE_CRATES.length];
           if (!singleTex) warehouseIdx++;
@@ -1323,6 +1368,21 @@ export default class StoreScene extends Phaser.Scene {
     const loc = this.locationByCell.get(`${gx},${gy}`) ?? null;
     // 실제로 걷게 할지(같은 층) 트립 팝업을 띄울지(다른 층)는 App이 결정한다.
     this.events2.onTileClick?.({ x: gx, y: gy }, loc);
+  }
+
+  private toggleOccupiedDebugOverlay() {
+    if (this.debugOccupiedLayer) {
+      this.debugOccupiedLayer.destroy();
+      this.debugOccupiedLayer = undefined;
+      return;
+    }
+    const g = this.add.graphics();
+    g.setDepth(DEPTH_LABEL + 1); // 매대/라벨보다도 위에 그려서 확실히 보이게
+    g.fillStyle(0xff0000, 0.35);
+    for (const [x, y] of this.floorData.occupied) {
+      g.fillRect(x * TILE, y * TILE, TILE, TILE);
+    }
+    this.debugOccupiedLayer = g;
   }
 
   private handleSpacePress() {

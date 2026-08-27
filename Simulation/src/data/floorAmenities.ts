@@ -34,26 +34,37 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
     // 그리드 전체 95x75 — 화장실/에스컬레이터/엘리베이터는 F1-H·F1-C(가장 오른쪽,
     // 최대 x=87)보다 바깥인 x=88 여백에 세로로 쌓는다.
     pitchPx: 20,
+    // 2026-08-27 재배치(3차, DB seed 원본 검증): 성원님이 O키 디버그 오버레이 스크린샷으로
+    // "빨간 네모(통행 불가) 안쪽이 매대 자리이고, 지금 시설/서비스구역이 전부 그 빨간 네모
+    // 테두리 위에 얹혀 있다"는 걸 확인해주셔서, 더 이상 zone 박스 추정으로 좌표를 잡지 않고
+    // db/seed/world_seed.sql의 map_cells(passable)·locations 원본을 직접 파싱해서 검증했다.
+    // 방법: 층별 map_cells에서 BFS로 "가장 큰 연결된 통행가능 영역"을 구하고, 거기서 실제
+    // 매대(locations) 칸을 뺀 "안전 칸(통행 가능 + 매대 아님)" 집합을 만든 뒤, 모든 시설/구역
+    // 좌표가 이 안전 칸에 완전히 들어가는지 하나씩 검사·재배치했다. 에스컬레이터(x=88~89,
+    // y=66~67)는 map_cells.transit_id='ESC'로 직접 확인된 값이라 그대로 유지.
+    // 실제 확인된 1층 정면 통로는 y=66~67 두 줄(x=7~90 연속 통행 가능)뿐이라, 계산대·ATM·
+    // 베이커리·푸드코트·고객센터·입구를 전부 이 두 줄 폭(h=2) 안에서 겹치지 않게 한 줄로
+    // 재배치했다(예전 h=3~4짜리 박스는 실제로 존재하지 않는 폭이라 전부 안전 칸 밖으로
+    // 삐져나가 있었다).
     facilities: [
-      { type: 'family_restroom', x: 92, y: 26 },
-      { type: 'restroom_male', x: 92, y: 30 },
-      { type: 'water', x: 92, y: 34 },
-      { type: 'restroom_female', x: 92, y: 38 },
-      { type: 'escalator_up', x: 92, y: 55 },
-      { type: 'elevator', x: 92, y: 60 },
+      { type: 'family_restroom', x: 90, y: 68 },
+      { type: 'restroom_male', x: 91, y: 69 },
+      { type: 'water', x: 92, y: 69 },
+      { type: 'restroom_female', x: 90, y: 70 },
+      { type: 'escalator_up', x: 88, y: 66 },
+      { type: 'elevator', x: 91, y: 70 },
     ],
     serviceAreas: [
-      // F1-D(2~32,20~38)와 F1-A(2~32,39~58) 오른쪽 통로(x 32~39 사이)의 작은 행사대.
-      { id: 'event-1', label: '행사 상품', x: 33, y: 28, w: 6, h: 8 },
-      // F1-G/F1-E 오른쪽, F1-H/F1-C 왼쪽 사이 통로에 놓이는 큰 행사 진열대("위시 상품").
-      { id: 'event-2', label: '행사 상품', x: 65, y: 29, w: 20, h: 12 },
-      // 아래쪽은 모든 매대(F1-A~H) 최대 y(64)보다 바깥인 y=66~ 여백에 한 줄로 배치.
-      { id: 'checkout', label: '계산대 / SCAN', x: 2, y: 66, w: 27, h: 3 },
-      { id: 'atm', label: 'ATM', x: 31, y: 66, w: 5, h: 3 },
-      { id: 'bakery-counter', label: '베이커리', x: 37, y: 66, w: 12, h: 3 },
-      { id: 'food-court', label: '푸드코트', x: 51, y: 66, w: 24, h: 3 },
-      { id: 'customer-center', label: '고객센터', x: 31, y: 70, w: 19, h: 4 },
-      { id: 'entrance', label: '입구', x: 2, y: 70, w: 7, h: 3 },
+      // F1-D/F1-A 오른쪽 통로 안전 칸에 맞춘 행사대(기존보다 축소).
+      { id: 'event-1', label: '행사 상품', x: 34, y: 28, w: 6, h: 8 },
+      { id: 'event-2', label: '행사 상품', x: 19, y: 57, w: 20, h: 7 },
+      // 정면 통로(y=66~67, 실측 h=2)에 왼쪽부터 겹치지 않게 한 줄 배치.
+      { id: 'entrance', label: '입구', x: 7, y: 66, w: 6, h: 2 },
+      { id: 'checkout', label: '계산대 / SCAN', x: 15, y: 66, w: 18, h: 2 },
+      { id: 'atm', label: 'ATM', x: 35, y: 66, w: 4, h: 2 },
+      { id: 'bakery-counter', label: '베이커리', x: 41, y: 66, w: 10, h: 2 },
+      { id: 'food-court', label: '푸드코트', x: 53, y: 66, w: 16, h: 2 },
+      { id: 'customer-center', label: '고객센터', x: 71, y: 66, w: 14, h: 2 },
     ],
   },
   2: {
@@ -63,26 +74,26 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
     // 화장실/에스컬레이터/엘리베이터는 1층과 같은 x=88 라인에 맞춰서 층마다 같은
     // 위치처럼 보이게 하고(F2-A 최대 x=86보다 바깥이라 안전), 위아래로만 늘어놓는다.
     pitchPx: 20,
+    // 2026-08-27 재배치(3차, DB seed 원본 검증) — 방법은 1F 주석 참고. 2층 실제 통로는
+    // y=61~62(2층 하단 통로, 1층과 달리 y=66은 이 층에서 좁고 끊겨 있어 쓸 수 없었음)라
+    // 시식코너/안경보청기센터/약국을 이 폭(h=2)에 맞춰 재배치했다. 오른쪽 행사대 2개는
+    // 실제 안전 칸 세로 통로(x=78~88 부근)에 맞춰 폭을 줄였다.
     facilities: [
-      { type: 'family_restroom', x: 92, y: 26 },
-      { type: 'restroom_male', x: 92, y: 30 },
-      { type: 'water', x: 92, y: 34 },
-      { type: 'restroom_female', x: 92, y: 38 },
-      { type: 'escalator_up', x: 92, y: 55 },
-      { type: 'escalator_down', x: 92, y: 60 },
-      { type: 'elevator', x: 92, y: 65 },
+      { type: 'family_restroom', x: 90, y: 68 },
+      { type: 'restroom_male', x: 91, y: 69 },
+      { type: 'water', x: 92, y: 69 },
+      { type: 'restroom_female', x: 90, y: 70 },
+      { type: 'escalator_up', x: 88, y: 66 },
+      { type: 'escalator_down', x: 89, y: 67 },
+      { type: 'elevator', x: 91, y: 70 },
     ],
     serviceAreas: [
-      // F2-E(43~75,1~19) 오른쪽 통로(x 76~88 사이)에 세로로 긴 행사 진열대.
-      { id: 'event', label: '행사 상품', x: 87, y: 1, w: 6, h: 22 },
-      // F2-C(49~67,23~42) 오른쪽 / F2-E 아래(y 19~41 사이) 빈 통로에 놓이는 두 번째
-      // 행사 진열대(첫 번째보다 작은 사이즈로 도면과 구분).
-      { id: 'event-2', label: '행사 상품', x: 71, y: 24, w: 9, h: 15 },
-      // F2-B(2~40,39~58) 아래(y>58) 여백에 안경/보청기 센터 + 약국.
-      { id: 'optical-hearing-center', label: '안경 / 보청기 센터', x: 2, y: 60, w: 17, h: 5 },
-      { id: 'pharmacy', label: '약국', x: 2, y: 66, w: 17, h: 5 },
-      // F2-C/F2-A 아래(y>59) 여백에 넓게 걸치는 시식 코너.
-      { id: 'tasting-corner', label: '시식 코너', x: 20, y: 61, w: 66, h: 8 },
+      { id: 'event', label: '행사 상품', x: 78, y: 1, w: 6, h: 22 },
+      { id: 'event-2', label: '행사 상품', x: 79, y: 24, w: 9, h: 15 },
+      // 2층 하단 실제 통로(y=61~62, h=2)에 왼쪽부터 겹치지 않게 배치.
+      { id: 'optical-hearing-center', label: '안경 / 보청기 센터', x: 2, y: 61, w: 17, h: 2 },
+      { id: 'pharmacy', label: '약국', x: 21, y: 61, w: 17, h: 2 },
+      { id: 'tasting-corner', label: '시식 코너', x: 15, y: 59, w: 66, h: 2 },
     ],
   },
   3: {
@@ -91,21 +102,23 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
     //                     F3-B(2~56,42~55,홈/가전)
     // F3-A 최대 x=89라 화장실 라인은 x=91로 한 칸 더 밀었다.
     pitchPx: 20,
+    // 2026-08-27 재배치(3차, DB seed 원본 검증) — 방법은 1F 주석 참고. 3층은 y=57 줄이
+    // 실제로 h=4까지 안전 칸이라 기존 폭 그대로 한 줄에 배치할 수 있었다.
     facilities: [
-      { type: 'family_restroom', x: 92, y: 26 },
-      { type: 'restroom_male', x: 92, y: 30 },
-      { type: 'water', x: 92, y: 34 },
-      { type: 'restroom_female', x: 92, y: 38 },
-      { type: 'escalator_down', x: 92, y: 55 },
-      { type: 'elevator', x: 92, y: 60 },
+      { type: 'family_restroom', x: 90, y: 68 },
+      { type: 'restroom_male', x: 91, y: 69 },
+      { type: 'water', x: 92, y: 69 },
+      { type: 'restroom_female', x: 90, y: 70 },
+      { type: 'escalator_down', x: 89, y: 67 },
+      { type: 'elevator', x: 91, y: 70 },
     ],
     serviceAreas: [
-      // F3-B(2~56,42~55) 아래(y>55) 여백에 A/S센터 · 가전 체험존 · 휴게 라운지 한 줄로.
-      { id: 'as-center', label: 'A/S센터', x: 2, y: 57, w: 15, h: 6 },
-      { id: 'appliance-experience', label: '가전 체험존', x: 18, y: 57, w: 29, h: 10 },
-      { id: 'lounge', label: '휴게 라운지', x: 48, y: 57, w: 20, h: 10 },
+      { id: 'as-center', label: 'A/S센터', x: 9, y: 57, w: 15, h: 4 },
+      { id: 'appliance-experience', label: '가전 체험존', x: 26, y: 57, w: 29, h: 4 },
+      { id: 'lounge', label: '휴게 라운지', x: 57, y: 57, w: 20, h: 4 },
     ],
   },
+
 };
 
 // zoneId -> 도면 원본 색상. DB(zones 테이블)에는 색상 컬럼이 없어서 프론트가 들고 있는다.

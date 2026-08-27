@@ -115,38 +115,52 @@ export default function App() {
     [busy, viewFloor, playerFloor, viewFloorData]
   );
 
+  // 반환값: 목적지 층까지 실제로 도착했으면 true. false면(경로 없음/시설 없음/에러 등)
+  // 호출부가 "도착한 셈 치고" 다음 단계로 넘어가면 안 된다 — 2번(쇼핑목록이 걷지도 않고
+  // 다음 층으로 넘어가버리는) 버그가 바로 이걸 안 지켜서 생겼던 것.
   const startTrip = useCallback(
-    async (toFloor: number, targetCell: GridPoint, method: TransferMethod) => {
+    async (toFloor: number, targetCell: GridPoint, method: TransferMethod): Promise<boolean> => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      if (!canvas) return false;
       setBusy(true);
       setTransferPrompt(null);
       setElevatorPrompt(false);
 
       // 트립 시작 전, 씬을 캐릭터가 실제로 있는 층 + 실제 위치로 되돌려 놓는다
       // (지금 보고 있던 화면이 목적지 층이었을 수 있으므로).
-      const startData = await getFloorData(playerFloor);
-      setViewFloor(playerFloor);
-      setViewFloorData(startData);
-      canvas.loadFloor(startData, { startCell: playerCell ?? undefined, hidePlayer: false });
+      // 중간에 fetch/이동 중 에러가 나도 busy가 true로 영영 남아있으면 그 이후로는
+      // 매대 클릭/층 전환/쇼핑목록 안내가 전부 조용히 아무 반응도 안 하는 것처럼 보인다 —
+      // try/finally로 무슨 일이 있어도 busy는 반드시 풀리게 한다.
+      try {
+        const startData = await getFloorData(playerFloor);
+        setViewFloor(playerFloor);
+        setViewFloorData(startData);
+        canvas.loadFloor(startData, { startCell: playerCell ?? undefined, hidePlayer: false });
 
-      await runTrip({
-        canvas,
-        fromFloor: playerFloor,
-        toFloor,
-        targetCell,
-        method,
-        onFloorChange: (floor, data) => {
-          setPlayerFloor(floor);
-          setViewFloor(floor);
-          setViewFloorData(data);
-        },
-        onStepMessage: setStatusMessage,
-      });
+        const arrived = await runTrip({
+          canvas,
+          fromFloor: playerFloor,
+          toFloor,
+          targetCell,
+          method,
+          onFloorChange: (floor, data) => {
+            setPlayerFloor(floor);
+            setViewFloor(floor);
+            setViewFloorData(data);
+          },
+          onStepMessage: setStatusMessage,
+        });
 
-      setPlayerCell(canvas.getPlayerGrid());
-      setBusy(false);
-      setStatusMessage('');
+        setPlayerCell(canvas.getPlayerGrid());
+        return arrived;
+      } catch (err) {
+        console.error('[startTrip] 이동 중 오류', err);
+        setStatusMessage('이동 중 오류가 발생했습니다.');
+        setTimeout(() => setStatusMessage(''), 2500);
+        return false;
+      } finally {
+        setBusy(false);
+      }
     },
     [playerFloor, playerCell, getFloorData]
   );
@@ -263,30 +277,56 @@ export default function App() {
     setShoppingListOpen(false);
     setBusy(true);
 
-    // 보고 있던 화면이 캐릭터 층이 아니었을 수 있으니, 시작 전에 캐릭터 실제 위치로 맞춘다.
-    const startData = await getFloorData(playerFloor);
-    setViewFloor(playerFloor);
-    setViewFloorData(startData);
-    canvas.loadFloor(startData, { startCell: playerCell ?? undefined, hidePlayer: false });
+    try {
+      // 보고 있던 화면이 캐릭터 층이 아니었을 수 있으니, 시작 전에 캐릭터 실제 위치로 맞춘다.
+      const startData = await getFloorData(playerFloor);
+      setViewFloor(playerFloor);
+      setViewFloorData(startData);
+      canvas.loadFloor(startData, { startCell: playerCell ?? undefined, hidePlayer: false });
 
-    let currentFloor = playerFloor;
-    for (let i = 0; i < shoppingList.length; i++) {
-      const it = shoppingList[i];
-      setNavigatingIndex(i);
-      if (it.floorNo === currentFloor) {
-        setStatusMessage(`"${it.name}"(으)로 이동 중...`);
-        await new Promise<void>((resolve) => canvas.walkTo({ x: it.x, y: it.y }, resolve));
-      } else {
-        await startTrip(it.floorNo, { x: it.x, y: it.y }, 'elevator');
-        currentFloor = it.floorNo;
-        setBusy(true); // startTrip이 끝나면서 busy를 풀어버리므로, 목록이 끝날 때까지 다시 잠근다.
+      let currentFloor = playerFloor;
+      for (let i = 0; i < shoppingList.length; i++) {
+        const it = shoppingList[i];
+        setNavigatingIndex(i);
+        if (it.floorNo === currentFloor) {
+          setStatusMessage(`"${it.name}"(으)로 이동 중...`);
+          const arrived = await new Promise<boolean>((resolve) => canvas.walkTo({ x: it.x, y: it.y }, resolve));
+          if (!arrived) {
+            // 실제로는 못 걸어간 건데 "도착했다"고 치고 다음 항목으로 넘어가던 게 2번 버그의
+            // 핵심 원인이었다 — 여기서 멈추고 사용자에게 알린다(4번: 안 보이는 충돌구역일 수 있음).
+            setStatusMessage(`"${it.name}" 위치까지 경로를 찾지 못했습니다. (맵에 막힌 구간이 있을 수 있어요)`);
+            setTimeout(() => setStatusMessage(''), 3500);
+            return;
+          }
+          // 같은 층 안에서 이동한 뒤에는 반드시 playerCell을 갱신해야 한다 — 이걸 빼먹으면
+          // 다음에 startTrip()이 호출될 때(층 이동 시작 시) playerCell이 옛날(이 목록을 시작하기
+          // 전 위치, 즉 "1층 출발점")로 남아있어서 캐릭터가 방금 걸어온 경로를 잊고 그 옛날
+          // 자리로 순간이동한 것처럼 보이는 게 2번 버그의 진짜 원인이었다.
+          setPlayerCell(canvas.getPlayerGrid());
+        } else {
+          // startTrip은 자기 자신이 busy를 true→false로 관리하고 끝에 반드시 false로 풀어준다
+          // (try/finally). 목록 전체가 끝날 때까지는 다시 잠가서 중간에 다른 조작이 끼어들지 않게 한다.
+          const arrived = await startTrip(it.floorNo, { x: it.x, y: it.y }, 'elevator');
+          if (!arrived) {
+            setStatusMessage(`${it.floorNo}층으로 이동하지 못했습니다. (엘리베이터 경로를 찾지 못했어요)`);
+            setTimeout(() => setStatusMessage(''), 3500);
+            return;
+          }
+          currentFloor = it.floorNo;
+          setBusy(true);
+        }
       }
-    }
 
-    setNavigatingIndex(null);
-    setBusy(false);
-    setStatusMessage('쇼핑목록 안내를 완료했습니다.');
-    setTimeout(() => setStatusMessage(''), 2500);
+      setStatusMessage('쇼핑목록 안내를 완료했습니다.');
+      setTimeout(() => setStatusMessage(''), 2500);
+    } catch (err) {
+      console.error('[handleNavigateShoppingList] 안내 중 오류', err);
+      setStatusMessage('쇼핑목록 안내 중 오류가 발생했습니다.');
+      setTimeout(() => setStatusMessage(''), 2500);
+    } finally {
+      setNavigatingIndex(null);
+      setBusy(false);
+    }
   }, [busy, navigatingIndex, shoppingList, playerFloor, playerCell, getFloorData, startTrip]);
 
   const escalatorAvailable = transferPrompt
