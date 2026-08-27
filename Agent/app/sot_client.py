@@ -233,24 +233,7 @@ def search_products(keyword: str | None = None,
             "keyword": keyword, "categoryL1": category_l1, "categoryL2": category_l2,
             "maxPrice": max_price, "onPromo": on_promo_only,
             "recentDays": new_within_days})
-        out = []
-        for r in (rows or []):
-            g = r.get
-            out.append({
-                "sku_id":      g("skuId"),
-                "name":        g("name"),
-                "brand":       g("brand"),
-                "category_l1": g("categoryL1"),
-                "category_l2": g("categoryL2"),
-                "price_krw":   g("priceKrw"),
-                "unit":        g("unit"),
-                "spec_raw":    g("specRaw"),
-                "on_promo":    bool(g("onPromo")),
-                # 행사 중이면 실판매가가 다르다 — mock 에는 없는 칸이지만 실물이
-                # 주는 사실이라 살린다(가격 발화의 근거는 최종가여야 한다)
-                "final_price_krw": g("finalPriceKrw"),
-            })
-        return out
+        return [_norm_product(r) for r in (rows or [])]
 
     # ── 지금 행사 중인 sku 집합 만들기 ──
     # {… for … if …} = 집합 컴프리헨션: "PROMOTIONS의 각 행 p에 대해, 조건을
@@ -320,12 +303,35 @@ def get_product(sku_id: int) -> dict | None:
     자연스럽게 답할 재료이지, 서버가 죽을 일이 아니다.
     """
     if not config.USE_MOCK_SOT:
+        # ⚠ `search_products` 와 **같은 부류의 버그였다**(08-27 실물 골든셋 준비 중 발견).
+        #   백엔드는 camelCase 로 준다 — 원시를 흘려보내면 도구 결과에 `price_krw` 가
+        #   없어 **가격이 조용히 None** 이 된다. 404 도 500 도 아니라 안 보인다.
+        #   변환은 경계(이 파일)에서 한 번 — `_norm_loc`·search 와 같은 규율.
         # .format(sku_id=...) = _API 표의 "{sku_id}" 빈칸에 실제 값을 끼운다.
-        return _http_get(_API["get_product"].format(sku_id=sku_id))
+        r = _http_get(_API["get_product"].format(sku_id=sku_id))
+        return _norm_product(r) if r else None
     # dict.get(키) = 키가 있으면 그 값을, 없으면 None을 돌려준다.
     # mock_data.PRODUCTS[sku_id]로 쓰면 없는 키에서 KeyError 예외가 터진다 —
     # "없음"이 정상 케이스인 여기서는 get이 맞다.
     return mock_data.PRODUCTS.get(sku_id)
+
+
+def _norm_product(r: dict) -> dict:
+    """백엔드의 camelCase 상품 한 줄 → 우리 계약(snake_case).
+
+    [왜 공용인가] `search_products` 와 `get_product` 가 **같은 모양**을 돌려줘야
+    한다 — 도구가 어느 쪽으로 상품을 얻었든 뒤 코드가 같아야 하기 때문이다.
+    투영을 두 곳에 각각 적으면 한쪽만 고치는 날 조용히 갈린다.
+
+    [`final_price_krw` 를 살리는 이유] 행사 중이면 실판매가가 다르다. 가격 발화의
+    근거는 정가가 아니라 **손님이 계산대에서 낼 금액**이어야 한다.
+    """
+    g = r.get
+    return {"sku_id": g("skuId"), "name": g("name"), "brand": g("brand"),
+            "category_l1": g("categoryL1"), "category_l2": g("categoryL2"),
+            "price_krw": g("priceKrw"), "unit": g("unit"), "spec_raw": g("specRaw"),
+            "on_promo": bool(g("onPromo")),
+            "discount_krw": g("discountKrw"), "final_price_krw": g("finalPriceKrw")}
 
 
 def _norm_loc(r: dict) -> dict:

@@ -17,6 +17,9 @@
 #   cd Agent 옆(warehouse-store 루트)에서
 #   C:\venvs\2nd_project311\Scripts\python.exe -m eval.runner            # 전체
 #   C:\venvs\2nd_project311\Scripts\python.exe -m eval.runner --only scene1_restock
+#   C:\venvs\2nd_project311\Scripts\python.exe -m eval.runner --real
+#     ⚠ --real 은 백엔드 8080 + 시드 적재 + USE_MOCK_SOT=false 가 선행이다.
+#       `python backend_probe.py` 가 "전환 가능"이어야 한다.
 # ============================================================================
 #
 # ─── 개념 사전 — 이 파일에 처음 나오는 개념 3개 (㊽~㊿) ──────────────────────
@@ -154,12 +157,36 @@ def main() -> None:
     if "--only" in sys.argv:                            # ㊾
         only = sys.argv[sys.argv.index("--only") + 1]
 
-    cases = [c for c in GOLDEN if only is None or c["id"] == only]
+    # --real : 실물 골든셋(백엔드·DB 필요). 없으면 mock 판.
+    #   두 벌을 나란히 두는 이유는 golden_real.py 머리말 참조 —
+    #   mock 은 백엔드 없이 도는 유일한 검증이라 버리지 않는다.
+    real = "--real" in sys.argv
+    skipped = []
+    if real:
+        from app import config, sot_client
+        if config.USE_MOCK_SOT:
+            print("⚠ --real 인데 USE_MOCK_SOT=true 다. .env 를 고치고 다시.")
+            sys.exit(2)
+        from eval import golden_real
+        # 세계 상태(재고·큐·이력·인기)는 **실행 시각에** 뽑는다. 케이스에 박으면
+        # DES 를 다시 돌리는 날(설계 §10 세계 버전 대조) 통째로 죽는다.
+        fx = golden_real.fixtures(sot_client)
+        all_cases = golden_real.build(fx)
+        # 재료가 없는 케이스는 FAIL 이 아니라 SKIP 이다 — 세계 탓이지 코드 탓이 아니다.
+        skipped = [c["id"] for c in all_cases
+                   if c.get("needs") and not fx.get(c["needs"])]
+        pool = [c for c in all_cases if c["id"] not in skipped]
+    else:
+        pool = GOLDEN
+
+    cases = [c for c in pool if only is None or c["id"] == only]
     if not cases:
         print(f"해당 id 없음: {only}")
         sys.exit(2)
 
-    print(f"골든셋 v0 — {len(cases)}케이스 실행\n")
+    print(f"골든셋 {'실물' if real else 'mock'} — {len(cases)}케이스 실행"
+          + (f" (재료 없어 SKIP {len(skipped)}: {', '.join(skipped)})" if skipped else "")
+          + "\n")
     n_pass = 0
     for i, case in enumerate(cases, 1):                 # ㊽
         try:
