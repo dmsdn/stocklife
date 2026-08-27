@@ -34,6 +34,22 @@ export async function fetchProductsAtLocation(
 // /api/orders/checkout 처리 중에 하고(스키마_변경규칙.md 동작계약), 여기서는
 // 다음에 이 매대를 다시 열었을 때 서버가 아직 안 돌려준 변화를 화면에서만 먼저 보여준다.
 // 새로고침하면 서버 값(fetchProductsAtLocation)으로 다시 맞춰진다.
+// GET /api/floors/{floorNo}/low-stock-locations(신규) — 층 전체 재고부족 매대를 한 번의
+// 요청으로 받아온다. NPC가 매대 하나하나에 순차로 /api/locations/{id}/products를 부르던
+// 방식(매대 수천 개 x 1요청)을 대체하기 위한 것 — StoreScene의 findLowStockTarget에서 쓴다.
+export interface LowStockLocationDto {
+  locationId: string;
+  skuIds: number[];
+}
+
+export async function fetchLowStockLocations(floorNo: number): Promise<LowStockLocationDto[]> {
+  const res = await fetch(`/api/floors/${floorNo}/low-stock-locations`);
+  if (!res.ok) {
+    throw new Error(`GET /api/floors/${floorNo}/low-stock-locations 실패 (${res.status})`);
+  }
+  return res.json();
+}
+
 const stockOverlay = new Map<string, number>();
 function overlayKey(locationId: string, skuId: number) {
   return `${locationId}::${skuId}`;

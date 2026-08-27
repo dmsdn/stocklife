@@ -7,8 +7,16 @@ import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
 import CartModal from './components/CartModal';
 import AIChatModal from './components/AIChatModal';
+import ShoppingListModal from './components/ShoppingListModal';
 import { fetchFloorData } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
+import {
+  loadShoppingList,
+  saveShoppingList,
+  resolveProductLocation,
+  type ProductSearchResult,
+  type ShoppingListItem,
+} from './api/shoppingList';
 import { runTrip, type TransferMethod } from './game/trip';
 import { escalatorRoute, floorLabel } from './game/floorGraph';
 import type { FloorData, LocationInfo, FacilityInfo, GridPoint, ProductInfo, CartItem } from './game/types';
@@ -40,6 +48,15 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [productPopup, setProductPopup] = useState<{ location: LocationInfo; products: ProductInfo[] } | null>(null);
+
+  // 쇼핑목록(9~11번): 검색해서 담고, 순서를 바꾸고, 그 순서대로 캐릭터를 안내한다.
+  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => loadShoppingList());
+  const [shoppingListOpen, setShoppingListOpen] = useState(false);
+  const [navigatingIndex, setNavigatingIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    saveShoppingList(shoppingList);
+  }, [shoppingList]);
 
   const floorCacheRef = useRef<Map<number, FloorData>>(new Map());
   const getFloorData = useCallback(async (floor: number): Promise<FloorData> => {
@@ -199,6 +216,79 @@ export default function App() {
     });
   }, []);
 
+  const handleAddShoppingItem = useCallback(async (product: ProductSearchResult) => {
+    const loc = await resolveProductLocation(product.skuId);
+    if (!loc) {
+      setStatusMessage('이 상품의 매대 위치를 찾을 수 없습니다.');
+      setTimeout(() => setStatusMessage(''), 2000);
+      return;
+    }
+    setShoppingList((prev) => [
+      ...prev,
+      {
+        skuId: product.skuId,
+        name: product.name,
+        price: product.price,
+        floorNo: loc.floorNo,
+        x: loc.x,
+        y: loc.y,
+        locationId: loc.locationId,
+        zoneId: loc.zoneId,
+      },
+    ]);
+  }, []);
+
+  const handleRemoveShoppingItem = useCallback((index: number) => {
+    setShoppingList((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleMoveShoppingItem = useCallback((index: number, direction: -1 | 1) => {
+    setShoppingList((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }, []);
+
+  // 쇼핑목록 순서대로 캐릭터를 안내(11번). 같은 층 항목은 바로 걸어가고, 다른 층 항목은
+  // 엘리베이터(모든 층 직행 가능)로 이동한다 — 에스컬레이터는 인접 층만 연결돼 있어서
+  // 자동 안내에는 항상 갈 수 있는 엘리베이터를 쓰는 게 안전하다.
+  const handleNavigateShoppingList = useCallback(async () => {
+    if (busy || navigatingIndex !== null || shoppingList.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    setShoppingListOpen(false);
+    setBusy(true);
+
+    // 보고 있던 화면이 캐릭터 층이 아니었을 수 있으니, 시작 전에 캐릭터 실제 위치로 맞춘다.
+    const startData = await getFloorData(playerFloor);
+    setViewFloor(playerFloor);
+    setViewFloorData(startData);
+    canvas.loadFloor(startData, { startCell: playerCell ?? undefined, hidePlayer: false });
+
+    let currentFloor = playerFloor;
+    for (let i = 0; i < shoppingList.length; i++) {
+      const it = shoppingList[i];
+      setNavigatingIndex(i);
+      if (it.floorNo === currentFloor) {
+        setStatusMessage(`"${it.name}"(으)로 이동 중...`);
+        await new Promise<void>((resolve) => canvas.walkTo({ x: it.x, y: it.y }, resolve));
+      } else {
+        await startTrip(it.floorNo, { x: it.x, y: it.y }, 'elevator');
+        currentFloor = it.floorNo;
+        setBusy(true); // startTrip이 끝나면서 busy를 풀어버리므로, 목록이 끝날 때까지 다시 잠근다.
+      }
+    }
+
+    setNavigatingIndex(null);
+    setBusy(false);
+    setStatusMessage('쇼핑목록 안내를 완료했습니다.');
+    setTimeout(() => setStatusMessage(''), 2500);
+  }, [busy, navigatingIndex, shoppingList, playerFloor, playerCell, getFloorData, startTrip]);
+
   const escalatorAvailable = transferPrompt
     ? !!escalatorRoute(playerFloor, transferPrompt.targetFloor)
     : false;
@@ -289,6 +379,24 @@ export default function App() {
             }}
           >
             🤖💬 AI Chat
+          </button>
+
+          <button
+            onClick={() => setShoppingListOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1px solid #3a3f4b',
+              background: '#1e2128',
+              color: '#f472b6',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            📝 쇼핑목록 {shoppingList.length}
           </button>
 
           {viewFloor !== playerFloor && (
@@ -382,6 +490,18 @@ export default function App() {
       )}
 
       {chatOpen && <AIChatModal onClose={() => setChatOpen(false)} />}
+
+      {shoppingListOpen && (
+        <ShoppingListModal
+          items={shoppingList}
+          navigatingIndex={navigatingIndex}
+          onAdd={handleAddShoppingItem}
+          onRemove={handleRemoveShoppingItem}
+          onMove={handleMoveShoppingItem}
+          onNavigate={handleNavigateShoppingList}
+          onClose={() => setShoppingListOpen(false)}
+        />
+      )}
     </div>
   );
 }
