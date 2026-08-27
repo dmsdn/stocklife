@@ -1,11 +1,13 @@
 package com.storeflow.consumer.controller;
 
+import com.storeflow.consumer.dto.ConsumerMeResponse;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.ResetPasswordRequest;
 import com.storeflow.consumer.dto.RegistrationCheckRequest;
 import com.storeflow.consumer.dto.RegistrationStatusResponse;
 import com.storeflow.consumer.dto.SignupRequest;
+import com.storeflow.consumer.dto.UpdateConsumerRequest;
 import com.storeflow.consumer.service.ConsumerService;
 import com.storeflow.global.security.CurrentConsumer; // JWT에서 consumerId 꺼내는 커스텀 애노테이션 (아래 참고)
 import com.storeflow.verification.dto.MessageResponse;
@@ -95,6 +97,26 @@ public class ConsumerController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@CurrentConsumer Long consumerId) {
         consumerService.logout(consumerId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 마이페이지 "내 정보" 조회. */
+    @GetMapping("/me")
+    public ResponseEntity<ConsumerMeResponse> getMe(@CurrentConsumer Long consumerId) {
+        return ResponseEntity.ok(consumerService.getMe(consumerId));
+    }
+
+    /** 마이페이지 회원정보 수정(성별/생년월일/가구원수/반려동물/자녀/차량/마케팅수신동의). */
+    @PatchMapping("/me")
+    public ResponseEntity<ConsumerMeResponse> updateMe(@CurrentConsumer Long consumerId,
+                                                       @Valid @RequestBody UpdateConsumerRequest request) {
+        return ResponseEntity.ok(consumerService.updateMe(consumerId, request));
+    }
+
+    /** 회원탈퇴. 성공하면 프론트는 토큰을 지우고 로그인 화면으로 보내면 된다. */
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> withdraw(@CurrentConsumer Long consumerId) {
+        consumerService.withdraw(consumerId);
         return ResponseEntity.noContent().build();
     }
 }

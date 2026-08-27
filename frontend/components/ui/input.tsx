@@ -1,4 +1,5 @@
 // components/ui/input.tsx
+// ✅ rounded-xl → rounded-sm으로 통일(globals.css 컨벤션: 인풋 같은 "담는" 요소는 sm).
 import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 
@@ -10,7 +11,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       type={type}
       data-slot="input"
       className={cn(
-        "h-12 w-full min-w-0 rounded-xl border-1 border-transparent bg-muted px-4 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive md:text-sm",
+        "h-12 w-full min-w-0 rounded-sm border border-transparent bg-muted px-4 py-1 text-base outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive md:text-sm",
         className
       )}
       {...props}

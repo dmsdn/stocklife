@@ -1,10 +1,17 @@
 // app/(main)/mypage/faq/page.tsx
-// ⚠ 백엔드에 FAQ API가 없어서 목업입니다. 카테고리별로 나눠서 내용을 보강했습니다.
+// ✅ 실제 GET /api/faq 우선 시도, 실패하면(백엔드 아직 없음) 아래 목업으로 대체합니다.
 "use client";
 
+import { useEffect, useState } from "react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
+import { apiFetch } from "@/lib/api-client";
 
-const faqGroups = [
+interface FaqGroup {
+  category: string;
+  items: { q: string; a: string }[];
+}
+
+const MOCK_FAQ_GROUPS: FaqGroup[] = [
   {
     category: "주문 / 결제",
     items: [
@@ -32,6 +39,14 @@ const faqGroups = [
 ];
 
 export default function FaqPage() {
+  const [faqGroups, setFaqGroups] = useState<FaqGroup[]>(MOCK_FAQ_GROUPS);
+
+  useEffect(() => {
+    apiFetch<FaqGroup[]>("/api/faq")
+      .then((list) => list.length > 0 && setFaqGroups(list))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <SubpageHeader title="FAQ" />

@@ -33,3 +33,28 @@ ALTER TABLE cart_item
 --    MySQL 8.0.16+ CHECK 제약 지원 전제.
 ALTER TABLE cart_item
     ADD CONSTRAINT chk_cart_owner CHECK (consumer_id IS NOT NULL OR session_id IS NOT NULL);
+
+
+
+-- ============================================================================
+-- StoreFlow 채팅 세션 - 장보기 리스트(cart_group) 연동 v3
+--
+-- 요구사항: 장보기 리스트 화면에서 "AI에게 물어보기"로 시작한 대화는
+--   그 리스트를 기억해야 함. group_id가 NULL이면 지금처럼 그냥 일반 대화.
+--
+-- 기존 migration_chat_v1.sql, migration_chat_v2.sql 적용 후 실행.
+-- ============================================================================
+
+ALTER TABLE chat_session
+    ADD COLUMN group_id BIGINT NULL AFTER anonymous_id;
+
+-- cart_group이 삭제되면 해당 대화는 그냥 "일반 대화"로 남기고(연결만 끊기),
+-- 대화 이력 자체는 지우지 않는다 — 채팅 이력 삭제는 별도 정책 소관.
+ALTER TABLE chat_session
+    ADD CONSTRAINT fk_chat_session_group
+        FOREIGN KEY (group_id) REFERENCES cart_group (cart_group_id)
+            ON DELETE SET NULL;
+
+
+CREATE INDEX idx_chat_session_group
+    ON chat_session (group_id);

@@ -50,7 +50,7 @@ export function ProductCard({
       )}
 
       {/* TODO: 실제 상품 이미지 자리 — 지금은 자리만 표시 */}
-      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
         IMG
       </div>
 
@@ -90,7 +90,7 @@ export function ProductCard({
               <button
                 type="button"
                 onClick={onAdd}
-                className="rounded-md border border-border px-3 py-1.5 text-xs"
+                className="rounded-full border border-border px-3 py-1.5 text-xs"
               >
                 담기
               </button>

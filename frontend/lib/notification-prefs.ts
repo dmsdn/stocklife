@@ -1,8 +1,9 @@
 // lib/notification-prefs.ts
-// ⚠ 백엔드에 알림설정 조회/변경 API가 없어서 로컬 저장입니다. marketingConsent는 회원가입 시
-//   입력한 값이 있으면 그 값으로 초기화하고, 이후 변경은 로컬에만 반영됩니다(실제 반영하려면
-//   백엔드에 PATCH 엔드포인트가 필요합니다).
+// ✅ 로컬 저장은 그대로 두고(즉시 반영용), 실제 서버 저장(GET/PATCH)도 같이 시도합니다.
+//   백엔드에 아직 없으면 실패해도 로컬 값은 정상 동작합니다.
 "use client";
+
+import { apiFetch } from "./api-client";
 
 const KEY = "storeflow_notification_prefs";
 
@@ -37,4 +38,19 @@ export function readNotificationPrefs(): NotificationPrefs {
 
 export function writeNotificationPrefs(prefs: NotificationPrefs) {
   window.localStorage.setItem(KEY, JSON.stringify(prefs));
+  apiFetch("/api/consumers/notification-settings", {
+    method: "PATCH",
+    body: JSON.stringify(prefs),
+  }).catch(() => {});
+}
+
+/** ✅ 서버에 저장된 값이 있으면 그걸로 로컬을 덮어씁니다(다른 기기에서 바꾼 설정 반영용) */
+export async function syncNotificationPrefsFromServer(): Promise<NotificationPrefs> {
+  try {
+    const server = await apiFetch<NotificationPrefs>("/api/consumers/notification-settings");
+    window.localStorage.setItem(KEY, JSON.stringify(server));
+    return server;
+  } catch {
+    return readNotificationPrefs();
+  }
 }

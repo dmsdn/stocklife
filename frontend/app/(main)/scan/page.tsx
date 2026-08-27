@@ -9,10 +9,10 @@
 //   - h-dvh 대신 공용 하단탭바 높이(4rem)를 뺀 높이로 고쳐서 버튼이 화면 밖으로 안 밀려남
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronDown, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
+import { ChevronDown, ShoppingCart, Map as MapIcon, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScanCartDialog } from "@/components/domain/scan-cart-dialog";
@@ -20,6 +20,10 @@ import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
 import { apiFetch } from "@/lib/api-client";
 import { addProductToCartGroup, updateCartGroups, readCartGroups } from "@/lib/cart-storage";
+import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
+import { usePermissionStatus } from "@/lib/use-permission-status";
+import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
+import { QuantityStepper } from "@/components/domain/quantity-stepper";
 
 const DEFAULT_GROUP_ID = 1;
 
@@ -28,6 +32,7 @@ interface ScannedProduct {
   name: string;
   price: number;
   category: string;
+  image?: string;
 }
 
 // ✅ useSearchParams()가 Suspense 경계 없이 쓰이면 next build의 정적 프리렌더가 실패해서
@@ -58,10 +63,11 @@ function ScanPageInner() {
     return selectedGroup.products.find((p) => p.id === product.skuId)?.quantity ?? 0;
   }, [product, selectedGroup]);
 
-  // ✅ 실제 GET /api/products/barcode/{barcode} 연동
-  const handleLookup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!barcode.trim()) return;
+  // ✅ 실제 GET /api/products/barcode/{barcode} 연동.
+  //   예전엔 조회만 하고 "담기" 버튼을 한 번 더 눌러야 했는데, 스캔 즉시 자동으로
+  //   1개 담기고, 이후엔 +/- 스테퍼로 개수만 조절하는 방식으로 바꿨습니다.
+  const lookupByCode = async (code: string) => {
+    if (!code.trim()) return;
     setError(null);
     setJustAdded(null);
 
@@ -72,33 +78,58 @@ function ScanPageInner() {
         priceKrw: number;
         finalPriceKrw?: number;
         categoryL1?: string;
-      }>(`/api/products/barcode/${barcode.trim()}`, { auth: false });
-      setProduct({
+        imageUrl?: string | null;
+      }>(`/api/products/barcode/${code.trim()}`, { auth: false });
+      const scanned = {
         skuId: found.skuId,
         name: found.name,
         price: found.finalPriceKrw ?? found.priceKrw,
         category: found.categoryL1 ?? "",
+        image: found.imageUrl ?? undefined,
+      };
+      setProduct(scanned);
+
+      // ✅ 조회되자마자 바로 1개 담기 (기존엔 handleConfirmAdd를 따로 눌러야 했음)
+      addProductToCartGroup(groupId, {
+        id: scanned.skuId,
+        name: scanned.name,
+        category: scanned.category,
+        price: scanned.price,
+        image: scanned.image,
       });
+      setSessionScans((prev) => new Set(prev).add(scanned.skuId));
+      refreshGroups();
+      setJustAdded(scanned.skuId);
     } catch {
       setProduct(null);
       setError("해당 바코드의 상품을 찾을 수 없어요.");
     }
   };
 
-  const handleConfirmAdd = () => {
-    if (!product) return;
-    addProductToCartGroup(groupId, {
-      id: product.skuId,
-      name: product.name,
-      category: product.category,
-      price: product.price,
-    });
-    setSessionScans((prev) => new Set(prev).add(product.skuId));
-    refreshGroups();
-    setJustAdded(product.skuId);
-    setBarcode("");
-    setProduct(null);
+  const handleLookup = (e: React.FormEvent) => {
+    e.preventDefault();
+    lookupByCode(barcode);
   };
+
+  // ✅ 카메라로 실제 바코드 스캔 — 이미 허용돼있으면 바로 켜지고, 아직 안 물어봤으면
+  //   브라우저 기본 팝업 전에 설명 모달을 먼저 보여줍니다.
+  const { videoRef, permission: cameraStreamState, supported, start } = useBarcodeScanner((code) => {
+    setBarcode(code);
+    lookupByCode(code);
+  });
+  const cameraPermission = usePermissionStatus("camera");
+  const [showCameraModal, setShowCameraModal] = useState(false);
+
+  useEffect(() => {
+    if (cameraPermission === "granted") {
+      start();
+    } else if (cameraPermission === "prompt") {
+      setShowCameraModal(true);
+    } else if (cameraPermission === "unsupported") {
+      start(); // Permissions API 미지원 브라우저는 그냥 바로 시도(브라우저 기본 팝업이 뜸)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraPermission]);
 
   const handleRemoveEntirely = () => {
     if (!product) return;
@@ -115,6 +146,23 @@ function ScanPageInner() {
     setProduct(null);
   };
 
+  // ✅ 스캔 직후 뜨는 +/- 스테퍼용. 0으로 내리면 리스트에서 완전히 뺍니다.
+  const handleQuantityChange = (nextQty: number) => {
+    if (!product) return;
+    if (nextQty <= 0) {
+      handleRemoveEntirely();
+      return;
+    }
+    updateCartGroups((gs) =>
+      gs.map((g) =>
+        g.id !== groupId
+          ? g
+          : { ...g, products: g.products.map((p) => (p.id === product.skuId ? { ...p, quantity: nextQty } : p)) }
+      )
+    );
+    refreshGroups();
+  };
+
   return (
     // 공용 하단탭바(h-16=4rem)를 뺀 높이로 고정 — 이전엔 h-dvh를 그대로 써서 버튼이 탭바 밑으로 밀려나던 문제 수정
     <div className="flex h-[calc(100dvh-4rem)] flex-col overflow-hidden">
@@ -128,7 +176,7 @@ function ScanPageInner() {
           <button
             type="button"
             onClick={() => setGroupPickerOpen(true)}
-            className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2.5 text-left text-sm"
+            className="flex w-full items-center justify-between rounded-sm border border-border px-3 py-2.5 text-left text-sm"
           >
             <span className="min-w-0 truncate">
               {selectedGroup ? `${selectedGroup.title} (${selectedGroup.products.length}개)` : "리스트 선택"}
@@ -149,18 +197,30 @@ function ScanPageInner() {
           </Button>
         </form>
 
-        <div className="relative min-h-0 flex-1 shrink">
-          <span className="absolute left-8 top-8 h-10 w-10 border-l-2 border-t-2 border-foreground" />
-          <span className="absolute right-8 top-8 h-10 w-10 border-r-2 border-t-2 border-foreground" />
-          <span className="absolute bottom-8 left-8 h-10 w-10 border-b-2 border-l-2 border-foreground" />
-          <span className="absolute bottom-8 right-8 h-10 w-10 border-b-2 border-r-2 border-foreground" />
+        <div className="relative min-h-0 flex-1 shrink overflow-hidden bg-black">
+          {cameraStreamState !== "granted" && (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-sm text-white">
+                {cameraStreamState === "denied"
+                  ? "카메라 권한이 거부됐어요. 브라우저 설정에서 허용해주세요."
+                  : "카메라를 여는 중..."}
+              </p>
+            </div>
+          )}
+          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" muted playsInline />
+
+          {cameraStreamState === "granted" && !supported && (
+            <p className="absolute inset-x-4 bottom-4 text-center text-xs text-white/80">
+              이 브라우저는 자동 바코드 인식을 지원하지 않아요. 숫자를 직접 입력해주세요.
+            </p>
+          )}
+
+          <span className="absolute left-8 top-8 h-10 w-10 border-l-2 border-t-2 border-white" />
+          <span className="absolute right-8 top-8 h-10 w-10 border-r-2 border-t-2 border-white" />
+          <span className="absolute bottom-8 left-8 h-10 w-10 border-b-2 border-l-2 border-white" />
+          <span className="absolute bottom-8 right-8 h-10 w-10 border-b-2 border-r-2 border-white" />
           {error && (
             <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-danger">{error}</p>
-          )}
-          {!product && !error && (
-            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-muted-foreground">
-              바코드를 스캔하거나 숫자를 입력해주세요
-            </p>
           )}
           {justAdded && (
             <p className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 items-center justify-center gap-1 text-sm text-success">
@@ -172,28 +232,24 @@ function ScanPageInner() {
         {product && (
           <div className="shrink-0 space-y-3 border-t border-border p-4">
             <div className="flex gap-3">
-              <div className="h-16 w-16 shrink-0 rounded-md border border-border bg-muted" />
+              <div className="h-16 w-16 shrink-0 rounded-sm border border-border bg-muted" />
               <div className="flex-1">
                 <p className="text-sm">{product.name}</p>
                 <p className="text-sm font-semibold">{product.price.toLocaleString()}원</p>
-                <p className="text-xs text-muted-foreground">
-                  {existingQty > 0
-                    ? `현재 ${existingQty}개 담겨있어요 → 담으면 ${existingQty + 1}개`
-                    : "아직 안 담겨있어요 → 담으면 1개"}
+                <p className="flex items-center gap-1 text-xs text-success">
+                  <Check size={12} />
+                  담았어요
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {existingQty > 0 && (
-                <Button variant="outline" className="flex flex-1 items-center gap-1.5" onClick={handleRemoveEntirely}>
-                  <X size={16} />
-                  카트에서 빼기
-                </Button>
-              )}
-              <Button className="flex-1" onClick={handleConfirmAdd}>
-                담기
+            {/* ✅ "담기" 버튼 대신 +/- 스테퍼로 바로 개수 조절 (스캔 시점에 이미 1개 담긴 상태) */}
+            <div className="flex items-center justify-between gap-2">
+              <Button variant="outline" className="flex items-center gap-1.5" onClick={handleRemoveEntirely}>
+                <X size={16} />
+                카트에서 빼기
               </Button>
+              <QuantityStepper quantity={existingQty} onChange={handleQuantityChange} min={0} />
             </div>
           </div>
         )}
@@ -232,6 +288,15 @@ function ScanPageInner() {
         onClose={() => setGroupPickerOpen(false)}
         onSelect={setGroupId}
         onGroupsChange={refreshGroups}
+      />
+      <PermissionRequestDialog
+        open={showCameraModal}
+        kind="camera"
+        onConfirm={() => {
+          setShowCameraModal(false);
+          start();
+        }}
+        onClose={() => setShowCameraModal(false)}
       />
     </div>
   );

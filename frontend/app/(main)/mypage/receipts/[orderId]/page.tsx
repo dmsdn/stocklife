@@ -30,11 +30,9 @@ export default function ReceiptDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    apiFetch<Order[]>("/api/orders")
-      .then((orders) => {
-        const source = orders.length > 0 ? orders : MOCK_ORDERS;
-        setOrder(source.find((o) => o.orderId === orderId) ?? null);
-      })
+    // ✅ 목록 전체를 불러와 필터링하던 방식 대신, 실제 단건 조회 API 사용
+    apiFetch<Order>(`/api/orders/${orderId}`)
+      .then((o) => setOrder(o ?? MOCK_ORDERS.find((m) => m.orderId === orderId) ?? null))
       .catch(() => setOrder(MOCK_ORDERS.find((o) => o.orderId === orderId) ?? null));
   }, [orderId]);
 

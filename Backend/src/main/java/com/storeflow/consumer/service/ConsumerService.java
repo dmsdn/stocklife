@@ -1,11 +1,12 @@
 package com.storeflow.consumer.service;
 
-import com.storeflow.cart.service.CartService;
+import com.storeflow.consumer.dto.ConsumerMeResponse;
 import com.storeflow.consumer.dto.LoginRequest;
 import com.storeflow.consumer.dto.LoginResponse;
 import com.storeflow.consumer.dto.ResetPasswordRequest;
 import com.storeflow.consumer.dto.RegistrationStatusResponse;
 import com.storeflow.consumer.dto.SignupRequest;
+import com.storeflow.consumer.dto.UpdateConsumerRequest;
 import com.storeflow.consumer.entity.Consumer;
 import com.storeflow.consumer.entity.Member;
 import com.storeflow.consumer.exception.InvalidCredentialsException;
@@ -13,7 +14,6 @@ import com.storeflow.consumer.exception.MemberNotFoundException;
 import com.storeflow.consumer.repository.ConsumerRepository;
 import com.storeflow.consumer.repository.MemberRepository;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
-import com.storeflow.inventory.repository.ConsumerEventRepository;
 import com.storeflow.verification.entity.VerificationPurpose;
 import com.storeflow.verification.service.PhoneVerificationService;
 import org.slf4j.Logger;
@@ -33,23 +33,17 @@ public class ConsumerService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final ConsumerJwtUtil jwtUtil;
-    private final ConsumerEventRepository consumerEventRepository;
-    private final CartService cartService;
     private final PhoneVerificationService phoneVerificationService;
 
     public ConsumerService(ConsumerRepository consumerRepository,
                            MemberRepository memberRepository,
                            PasswordEncoder passwordEncoder,
                            ConsumerJwtUtil jwtUtil,
-                           ConsumerEventRepository consumerEventRepository,
-                           CartService cartService,
                            PhoneVerificationService phoneVerificationService) {
         this.consumerRepository = consumerRepository;
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
-        this.consumerEventRepository = consumerEventRepository;
-        this.cartService = cartService;
         this.phoneVerificationService = phoneVerificationService;
     }
 
@@ -111,6 +105,10 @@ public class ConsumerService {
         Consumer consumer = consumerRepository.findByPhoneNumber(request.getPhoneNumber())
                 .orElseThrow(() -> new InvalidCredentialsException("전화번호 또는 비밀번호가 일치하지 않습니다."));
 
+        if (consumer.isWithdrawn()) {
+            throw new InvalidCredentialsException("전화번호 또는 비밀번호가 일치하지 않습니다.");
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), consumer.getPassword())) {
             throw new InvalidCredentialsException("전화번호 또는 비밀번호가 일치하지 않습니다.");
         }
@@ -120,23 +118,62 @@ public class ConsumerService {
 
         consumer.updateRefreshToken(refreshToken);
 
-        // 요구사항 29: 비회원 상태로 쌓인 데이터(행동 기록 + 장바구니)를 이 계정으로 승계한다.
-        // 두 승계 모두 이 메서드의 @Transactional 하나 안에서 처리 — 한쪽만 성공하고 롤백되는
-        // 상황이 생기지 않도록 같은 트랜잭션에 둔다.
-        // member_id는 Member.toMemberId(consumerId)와 동일한 계산식으로 구해야 값이 일치한다.
-        if (request.getSessionId() != null && !request.getSessionId().isBlank()) {
-            Integer memberId = Member.toMemberId(consumer.getConsumerId());
-            int claimedEvents = consumerEventRepository.claimGuestEvents(request.getSessionId(), memberId);
-            if (claimedEvents > 0) {
-                log.info("비회원 이벤트 {}건을 sessionId={} → memberId={} 로 승계했습니다.",
-                        claimedEvents, request.getSessionId(), memberId);
-            }
+        return new LoginResponse(accessToken, refreshToken);
+    }
 
-            // 요구사항: 비회원 → 회원 장바구니 승계. 동일 SKU는 수량 병합(claimGuestCart 내부 처리).
-            cartService.claimGuestCart(request.getSessionId(), consumer.getConsumerId());
+    /** 마이페이지 "내 정보". Member 행이 없는 구가입자도 조회는 되어야 하므로 findById는 optional 그대로 둔다. */
+    @Transactional(readOnly = true)
+    public ConsumerMeResponse getMe(Long consumerId) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+        Member member = memberRepository.findById(Member.toMemberId(consumerId)).orElse(null);
+        return new ConsumerMeResponse(consumer, member);
+    }
+
+    /**
+     * 마이페이지 회원정보 수정. Consumer(성별/생년월일)와 Member(가구원수/반려동물/자녀/차량) 양쪽을
+     * 한 트랜잭션에서 갱신한다. Member 행이 아직 없는 구가입자가 처음 수정하는 경우도 있으므로
+     * 없으면 새로 만든다.
+     */
+    @Transactional
+    public ConsumerMeResponse updateMe(Long consumerId, UpdateConsumerRequest request) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+        consumer.updateProfile(request.getGender(), request.getBirthDate());
+        if (request.getMarketingConsent() != null) {
+            consumer.updateMarketingConsent(request.getMarketingConsent());
         }
 
-        return new LoginResponse(accessToken, refreshToken);
+        Byte householdSize = request.getHouseholdSize() == null ? null : request.getHouseholdSize().byteValue();
+        int memberId = Member.toMemberId(consumerId);
+        Member member = memberRepository.findById(memberId).orElse(null);
+        if (member == null) {
+            member = new Member(memberId, householdSize, request.getHasPet(), request.getHasChild(),
+                    request.getByCar(), Instant.now());
+            memberRepository.save(member);
+        } else {
+            member.updateProfile(householdSize, request.getHasPet(), request.getHasChild(), request.getByCar());
+        }
+
+        return new ConsumerMeResponse(consumer, member);
+    }
+
+    /**
+     * 회원탈퇴. 전화번호를 tombstone 값으로 바꿔서 원래 번호는 재가입에 쓸 수 있게 풀어주고,
+     * 비밀번호도 랜덤값으로 덮어써서 재로그인을 원천 차단한다. 구매내역(purchases)·리뷰 등
+     * 과거 기록은 그대로 남긴다 — 삭제하면 다른 도메인(재구매 주기 계산 등)이 참조하는 이력이
+     * 끊기므로, "계정만 잠그고 데이터는 보존"하는 소프트 삭제 방식을 쓴다.
+     */
+    @Transactional
+    public void withdraw(Long consumerId) {
+        Consumer consumer = consumerRepository.findById(consumerId)
+                .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+        if (consumer.isWithdrawn()) {
+            return; // 이미 탈퇴한 회원 — 멱등하게 처리
+        }
+        String tombstonePhoneNumber = "WITHDRAWN_" + consumerId + "_" + consumer.getPhoneNumber();
+        String randomizedPassword = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
+        consumer.withdraw(tombstonePhoneNumber, randomizedPassword);
     }
 
     @Transactional

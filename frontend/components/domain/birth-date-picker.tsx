@@ -288,14 +288,18 @@ function WheelPicker({
 interface BirthDatePickerProps {
   value: string;
   onChange: (value: string) => void;
+  /** ✅ "modal"(기본, 회원가입 화면에서 쓰는 버튼+팝업 방식) | "inline"(버튼 없이
+   *  휠 선택 UI를 그 자리에 바로 보여줌 — 별도 페이지에서 곧장 뜨게 할 때 사용) */
+  mode?: "modal" | "inline";
 }
 
 export function BirthDatePicker({
   value,
   onChange,
+  mode = "modal",
 }: BirthDatePickerProps) {
   const [open, setOpen] =
-    useState(false);
+    useState(mode === "modal" ? false : true);
 
   const today = getToday();
 
@@ -348,6 +352,18 @@ export function BirthDatePicker({
     selectedDay,
   ]);
 
+  // ✅ inline 모드는 페이지 들어오자마자 현재/기존 값 기준으로 휠을 세팅
+  useEffect(() => {
+    if (mode !== "inline") return;
+    const parsed = parseBirthDate(value);
+    if (parsed) {
+      setSelectedYear(parsed.year);
+      setSelectedMonth(parsed.month);
+      setSelectedDay(parsed.day);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   const openPicker = () => {
     const parsed =
       parseBirthDate(value);
@@ -395,7 +411,7 @@ export function BirthDatePicker({
       birthDate
     );
 
-    setOpen(false);
+    if (mode === "modal") setOpen(false);
   };
 
   const formattedValue =
@@ -413,6 +429,62 @@ export function BirthDatePicker({
           return `${parsed.year}년 ${parsed.month}월 ${parsed.day}일`;
         })()
       : "";
+
+  const wheelRows = (
+    <div className="relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute left-0 right-0 top-1/2 z-10 -translate-y-1/2 bg-muted/40"
+        style={{
+          height:
+            ITEM_HEIGHT,
+        }}
+      />
+
+      <div className="relative z-20 flex gap-0">
+        <WheelPicker
+          values={YEARS}
+          value={selectedYear}
+          onChange={
+            setSelectedYear
+          }
+          suffix="년"
+        />
+
+        <WheelPicker
+          values={MONTHS}
+          value={selectedMonth}
+          onChange={
+            setSelectedMonth
+          }
+          suffix="월"
+        />
+
+        <WheelPicker
+          values={days}
+          value={selectedDay}
+          onChange={
+            setSelectedDay
+          }
+          suffix="일"
+        />
+      </div>
+    </div>
+  );
+
+  if (mode === "inline") {
+    return (
+      <div>
+        {wheelRows}
+        <Button
+          type="button"
+          className="mt-4 h-11 w-full rounded-[8px]"
+          onClick={handleConfirm}
+        >
+          선택하기
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -466,45 +538,7 @@ export function BirthDatePicker({
             </DialogTitle>
           </DialogHeader>
 
-          {/* 년 / 월 / 일 */}
-          <div className="relative overflow-hidden">
-            <div
-              className="pointer-events-none absolute left-0 right-0 top-1/2 z-10 -translate-y-1/2 bg-muted/40"
-              style={{
-                height:
-                  ITEM_HEIGHT,
-              }}
-            />
-
-            <div className="relative z-20 flex gap-0">
-              <WheelPicker
-                values={YEARS}
-                value={selectedYear}
-                onChange={
-                  setSelectedYear
-                }
-                suffix="년"
-              />
-
-              <WheelPicker
-                values={MONTHS}
-                value={selectedMonth}
-                onChange={
-                  setSelectedMonth
-                }
-                suffix="월"
-              />
-
-              <WheelPicker
-                values={days}
-                value={selectedDay}
-                onChange={
-                  setSelectedDay
-                }
-                suffix="일"
-              />
-            </div>
-          </div>
+          {wheelRows}
 
           <DialogFooter className="mt-2 -mx-5 -mb-6 rounded-b-sm px-5 py-4">
             <Button

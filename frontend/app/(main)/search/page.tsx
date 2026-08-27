@@ -41,6 +41,7 @@ function SearchPageInner() {
   const searchParams = useSearchParams();
 
   const [keyword, setKeyword] = useState("");
+  const [aiMode, setAiMode] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => readSearchHistory());
   const [inputFocused, setInputFocused] = useState(false);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,6 +78,18 @@ function SearchPageInner() {
   const runSearch = async (kw?: string) => {
     setLoading(true);
     try {
+      // ✅ AI 자연어 검색 모드면 실제 POST /api/ai/search로 보냅니다.
+      if (aiMode && kw) {
+        const res = await apiFetch<{ results?: Product[] } | Product[]>("/api/ai/search", {
+          method: "POST",
+          body: JSON.stringify({ query: kw }),
+        });
+        const list = Array.isArray(res) ? res : res.results ?? [];
+        setProducts(list);
+        setLoading(false);
+        return;
+      }
+
       const qs = new URLSearchParams();
       if (kw) qs.set("keyword", kw);
       if (filters.categories[0]) qs.set("categoryL1", filters.categories[0]);
@@ -158,11 +171,20 @@ function SearchPageInner() {
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-5xl md:p-8">
+      {/* ✅ 실제 POST /api/ai/search 연동 — 켜면 자연어로 검색됨 */}
+      <button
+        type="button"
+        onClick={() => setAiMode((v) => !v)}
+        className={`mb-2 rounded-full border px-3 py-1 text-xs ${aiMode ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
+      >
+        {aiMode ? "AI 검색 켜짐" : "AI로 검색하기"}
+      </button>
+
       <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
         <Link href="/">
           <ChevronLeft size={20} />
         </Link>
-        <div className="flex flex-1 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+        <div className="flex flex-1 items-center gap-2 rounded-sm border border-border px-3 py-2 text-sm">
           <SearchIcon size={16} className="text-muted-foreground" />
           <input
             value={keyword}
@@ -175,7 +197,7 @@ function SearchPageInner() {
         </div>
 
         {inputFocused && recent.length > 0 && (
-          <div className="absolute left-8 right-0 top-full z-20 mt-2 rounded-md border border-border bg-card p-3 shadow-sm">
+          <div className="absolute left-8 right-0 top-full z-20 mt-2 rounded-sm border border-border bg-card p-3 shadow-sm">
             <p className="mb-2 text-xs text-muted-foreground">최근 검색어</p>
             <div className="flex flex-wrap gap-2">
               {recent.map((word) => (
@@ -227,7 +249,7 @@ function SearchPageInner() {
         {results.map((product) => (
           <div key={product.skuId} className="flex gap-3 py-3">
             <button type="button" onClick={() => setDetailProductId(product.skuId)} className="flex flex-1 gap-3 text-left">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
                 IMG
               </div>
               <div className="flex min-w-0 flex-1 flex-col justify-between">

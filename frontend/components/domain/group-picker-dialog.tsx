@@ -37,9 +37,9 @@ export function GroupPickerDialog({
     }
   }, [open]);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newTitle.trim()) return;
-    const group = createCartGroup(newTitle.trim());
+    const group = await createCartGroup(newTitle.trim());
     onGroupsChange();
     onSelect(group.id);
     onClose();
@@ -63,7 +63,7 @@ export function GroupPickerDialog({
                   onSelect(group.id);
                   onClose();
                 }}
-                className={`flex w-full items-center justify-between rounded-md border px-3 py-3 text-left text-sm ${
+                className={`flex w-full items-center justify-between rounded-sm border px-3 py-3 text-left text-sm ${
                   selected ? "border-primary bg-muted" : "border-border hover:bg-muted"
                 }`}
               >

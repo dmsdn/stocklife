@@ -44,7 +44,7 @@ export default function OrderDetailPage() {
 
       {order && (
         <>
-          <div className="mb-4 flex items-center justify-between rounded-md bg-muted px-4 py-3 text-sm">
+          <div className="mb-4 flex items-center justify-between rounded-sm bg-muted px-4 py-3 text-sm">
             <span>결제 상태</span>
             <span className="font-medium">{order.status === "PAID" ? "결제완료" : order.status}</span>
           </div>

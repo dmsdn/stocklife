@@ -18,6 +18,24 @@ import {
   ListChecks,
   Square,
 } from "lucide-react";
+
+// ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
+//   비슷한 상품을 찾아옵니다.
+interface PhotoSearchResult {
+  productName?: string;
+  results?: { skuId: number; productName: string }[];
+}
+async function sendPhotoSearch(file: File): Promise<PhotoSearchResult | null> {
+  try {
+    const form = new FormData();
+    form.append("photo", file);
+    const res = await fetch("/api/ai/photo-search", { method: "POST", body: form });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 import { apiFetch, getAccessToken } from "@/lib/api-client";
 import {
   getOrCreateSessionId,
@@ -25,6 +43,8 @@ import {
 } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { AttachListPickerDialog } from "@/components/domain/attach-list-picker-dialog";
+import { usePermissionStatus } from "@/lib/use-permission-status";
+import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -79,6 +99,8 @@ export function AiChatBody({
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const micPermission = usePermissionStatus("microphone");
+  const [showMicModal, setShowMicModal] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -203,6 +225,17 @@ export function AiChatBody({
         },
       ]);
 
+      // 카메라/이미지는 실제로 서버에 보내서 비슷한 상품을 찾아옵니다.
+      if (kind === "camera" || kind === "image") {
+        sendPhotoSearch(file).then((result) => {
+          if (!result) return;
+          const found = result.productName ?? result.results?.[0]?.productName;
+          if (found) {
+            setTurns((prev) => [...prev, { role: "assistant", content: `사진에서 "${found}"와(과) 비슷한 상품을 찾았어요.` }]);
+          }
+        });
+      }
+
       e.target.value = "";
       setAttachOpen(false);
     };
@@ -239,6 +272,16 @@ export function AiChatBody({
       return;
     }
 
+    // ✅ 이미 허용돼있으면 바로 녹음 시작, 아직 안 물어봤으면 설명 모달부터
+    if (micPermission === "prompt") {
+      setShowMicModal(true);
+      return;
+    }
+
+    await startRecording();
+  };
+
+  const startRecording = async () => {
     try {
       const stream =
         await navigator.mediaDevices.getUserMedia({
@@ -409,7 +452,7 @@ export function AiChatBody({
                 <p
                   className={
                     turn.role === "user"
-                      ? "inline-block max-w-full rounded-2xl bg-muted px-4 py-2 text-sm break-words"
+                      ? "inline-block max-w-full rounded-sm bg-muted px-4 py-2 text-sm break-words"
                       : "text-sm break-words"
                   }
                 >
@@ -440,7 +483,7 @@ export function AiChatBody({
             {attachments.map((a, i) => (
               <div
                 key={i}
-                className="flex min-w-0 max-w-full items-center gap-1 rounded-md border border-border px-2 py-1 text-xs"
+                className="flex min-w-0 max-w-full items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs"
               >
                 <span className="min-w-0 truncate">
                   {a.label}
@@ -460,14 +503,14 @@ export function AiChatBody({
         )}
 
         {attachOpen && (
-          <div className="grid grid-cols-5 gap-2 rounded-lg border border-border p-2">
+          <div className="grid grid-cols-5 gap-2 rounded-sm border border-border p-2">
             {attachOptions.map(
               ({ icon: Icon, label, onClick }) => (
                 <button
                   key={label}
                   type="button"
                   onClick={onClick}
-                  className="flex min-w-0 flex-col items-center gap-1 rounded-md border border-border py-3 text-[11px]"
+                  className="flex min-w-0 flex-col items-center gap-1 rounded-sm border border-border py-3 text-[11px]"
                 >
                   <Icon size={18} />
 
@@ -480,7 +523,7 @@ export function AiChatBody({
           </div>
         )}
 
-        <div className="flex min-w-0 items-center gap-2 rounded-2xl border border-border p-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-sm border border-border p-2">
           <button
             type="button"
             onClick={() => setAttachOpen((v) => !v)}
@@ -544,6 +587,15 @@ export function AiChatBody({
         open={listPickerOpen}
         onClose={() => setListPickerOpen(false)}
         onSelect={handleAttachList}
+      />
+      <PermissionRequestDialog
+        open={showMicModal}
+        kind="microphone"
+        onConfirm={() => {
+          setShowMicModal(false);
+          startRecording();
+        }}
+        onClose={() => setShowMicModal(false)}
       />
     </div>
   );

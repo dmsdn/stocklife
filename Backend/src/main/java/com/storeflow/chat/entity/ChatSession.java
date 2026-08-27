@@ -32,6 +32,12 @@ public class ChatSession {
     @Column(name = "anonymous_id", length = 64)
     private String anonymousId;
 
+    // 장보기 리스트(cart_group) 화면에서 "AI에게 물어보기"로 시작한 대화면 값이 있고,
+    // 홈 화면 등 일반 대화로 시작했으면 NULL. 그룹이 삭제되면 FK ON DELETE SET NULL로
+    // 자동으로 풀리고 대화 자체는 남는다.
+    @Column(name = "group_id")
+    private Long groupId;
+
     @Column(name = "title", length = 120)
     private String title;
 
@@ -44,9 +50,14 @@ public class ChatSession {
     protected ChatSession() {}
 
     public ChatSession(String sessionId, Long consumerId, String anonymousId) {
+        this(sessionId, consumerId, anonymousId, null);
+    }
+
+    public ChatSession(String sessionId, Long consumerId, String anonymousId, Long groupId) {
         this.sessionId = sessionId;
         this.consumerId = consumerId;
         this.anonymousId = anonymousId;
+        this.groupId = groupId;
     }
 
     @PrePersist
@@ -85,6 +96,7 @@ public class ChatSession {
     public String getSessionId() { return sessionId; }
     public Long getConsumerId() { return consumerId; }
     public String getAnonymousId() { return anonymousId; }
+    public Long getGroupId() { return groupId; }
     public String getTitle() { return title; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

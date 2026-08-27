@@ -11,9 +11,9 @@ import { MessageSquare, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
-import { getOrCreateSessionId, startNewSession } from "@/lib/session";
+import { startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
-import { readCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
+import { readCartGroups, loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
 
 interface ChatSession {
   sessionId: string;
@@ -34,15 +34,15 @@ export default function SavedPage() {
   const [newGroupTitle, setNewGroupTitle] = useState("");
 
   useEffect(() => {
-    setGroups(readCartGroups());
+    loadCartGroups().then(setGroups).catch(() => setGroups(readCartGroups()));
   }, []);
 
   const groupTotal = (group: CartGroup) =>
     group.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (!newGroupTitle.trim()) return;
-    const group = createCartGroup(newGroupTitle.trim());
+    const group = await createCartGroup(newGroupTitle.trim());
     setNewGroupTitle("");
     setShowNewGroupInput(false);
     router.push(`/saved/${group.id}`);
@@ -81,7 +81,7 @@ export default function SavedPage() {
           onClick={() => setTab("cart")}
           className={`border-b-2 px-3 py-2 text-sm ${tab === "cart" ? "border-foreground font-medium" : "border-transparent text-muted-foreground"}`}
         >
-          담은 리스트
+          저장한 리스트
         </button>
         <button
           type="button"
@@ -121,7 +121,7 @@ export default function SavedPage() {
               <Link
                 key={group.id}
                 href={`/saved/${group.id}`}
-                className="flex aspect-[3/2] flex-col justify-between rounded-lg border border-border p-4 hover:bg-muted"
+                className="flex aspect-[3/2] flex-col justify-between rounded-sm border border-border p-4 hover:bg-muted"
               >
                 <p className="text-sm font-medium">{group.title}</p>
                 <div>

@@ -5,10 +5,12 @@
 "use client";
 
 import { apiFetch, setTokens, clearTokens } from "./api-client";
+import { migrateGuestCartToAccount, resetCartMigrationAttempt } from "./cart-storage";
 
 export interface SignupPayload {
   phoneNumber: string;
   password: string;
+  name: string;
   gender?: string;
   birthDate?: string; // "YYYY-MM-DD"
   cameraConsent: boolean;
@@ -29,16 +31,27 @@ export async function signup(payload: SignupPayload): Promise<void> {
   });
 }
 
-export async function login(phoneNumber: string, password: string): Promise<void> {
+/** @param keepLoggedIn true면 브라우저를 껐다 켜도 로그인 유지(localStorage), false면 이 탭에서만 유지(sessionStorage) */
+export async function login(phoneNumber: string, password: string, keepLoggedIn: boolean = true): Promise<void> {
   const res = await apiFetch<{ accessToken: string; refreshToken: string }>(
-    "/api/consumers/login",
-    {
-      method: "POST",
-      body: JSON.stringify({ phoneNumber, password }),
-      auth: false,
-    }
+      "/api/consumers/login",
+      {
+        method: "POST",
+        body: JSON.stringify({ phoneNumber, password }),
+        auth: false,
+      }
   );
-  setTokens(res.accessToken, res.refreshToken);
+  setTokens(res.accessToken, res.refreshToken, keepLoggedIn);
+  resetCartMigrationAttempt();
+
+  // 로그인 성공 직후 비회원 localStorage 장바구니를 회원 DB로 승계한다.
+  // 승계 실패 시 localStorage는 남겨두고 로그인 자체는 유지한다.
+  try {
+    await migrateGuestCartToAccount();
+  } catch (error) {
+    console.error("[auth] guest cart migration failed", error);
+    // localStorage는 보존되고, 다음 로그인 때 다시 시도한다.
+  }
 }
 
 export async function logout(): Promise<void> {
@@ -50,6 +63,14 @@ export async function logout(): Promise<void> {
 }
 
 // ---------- 회원가입 전화번호 인증 ----------
+
+export async function checkRegistrationStatus(phoneNumber: string): Promise<{ registered: boolean }> {
+  return apiFetch<{ registered: boolean; nextAction: string }>("/api/consumers/registration-status", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ phoneNumber }),
+  });
+}
 
 export async function sendSignupCode(phoneNumber: string): Promise<void> {
   await apiFetch("/api/consumers/signup/send-code", {

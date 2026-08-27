@@ -48,7 +48,7 @@ export default function WishlistPage() {
       <div className="divide-y divide-border">
         {items.map((item) => (
           <div key={item.skuId} className="flex gap-3 py-3">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
               IMG
             </div>
             <div className="flex flex-1 items-center justify-between">
