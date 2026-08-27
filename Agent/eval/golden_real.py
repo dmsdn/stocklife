@@ -95,6 +95,30 @@ def fixtures(sot) -> dict:
     if rep:
         p = sot.get_product(rep[0]) or {}
         f["repeat_name"] = p.get("name")
+
+    # ⑤ 행사 중인 상품 — 정가 vs 실판매가가 갈리는 자리
+    #    `on_promo_only=True` 로 백엔드가 골라 준다(우리가 날짜를 계산하지 않는다).
+    promo = sot.search_products(on_promo_only=True) or []
+    f["promo_name"] = promo[0]["name"] if promo else None
+    f["promo_final"] = promo[0].get("final_price_krw") if promo else None
+
+    # ⑥ 같은 소분류 두 상품 — 비교·조합의 재료. 이름이 겹치지 않아야 발화가 안 헷갈린다
+    f["pair_names"] = f["pair_budget"] = None
+    if f.get("in_stock_name"):
+        p0 = sot.get_product(SKU_IN_STOCK) or {}
+        same = [x for x in (sot.search_products(category_l2=p0.get("category_l2")) or [])
+                if x.get("final_price_krw")][:2]
+        if len(same) == 2:
+            f["pair_names"] = [x["name"] for x in same]
+            # 둘 다 담기엔 모자라고 하나는 되는 예산 — 솔버가 실제로 고르게 한다
+            lo, hi = sorted(x["final_price_krw"] for x in same)
+            f["pair_budget"] = hi + lo // 2
+
+    # ⑦ 장바구니·위시리스트 — 실물 백엔드에 **행이 없어** 지금은 못 쓴다
+    #    (consumer 0행 · cart_group 0행 · wishlists 0행 — 08-27 실측).
+    #    거짓 PASS 를 만들지 않도록 재료를 None 으로 두고 SKIP 시킨다.
+    f["cart_ready"] = None
+    f["wishlist_ready"] = None
     return f
 
 
@@ -102,11 +126,24 @@ def build(f: dict) -> list[dict]:
     """재료로 케이스를 조립한다. 계약은 golden_set.py 와 같다(러너 공용).
 
     `needs` 칸이 추가됐다 — 그 재료가 None 이면 러너가 SKIP 한다.
+
+    ⚠ **재료가 None 이어도 조립은 되어야 한다.** SKIP 판정은 build() **뒤**에
+      일어나므로, 여기서 `f"{None:,}"` 같은 것이 터지면 세계에 재료가 없는 날
+      골든셋 전체가 못 돈다(08-27에 promo_name=None 으로 실제로 터졌다).
+      그래서 아래 `_n`·`_p` 로 감싼다 — 값이 없으면 안전한 자리표시로 떨어진다.
     """
+    def _p(v):                      # 가격 → "1,234" (없으면 매칭 안 될 문자열)
+        return f"{v:,}" if isinstance(v, int) else "__NO_FIXTURE__"
+
+    def _n(v, i=0):                 # 이름/쌍 → 문자열 (없으면 빈 질문 → SKIP 됨)
+        if isinstance(v, (list, tuple)):
+            return v[i] if len(v) > i else ""
+        return v or ""
+
     return [
         # ── 킬링 장면 1 — 실물 큐 상태에서 재고 3분기가 서는가 ──────────────
         {"id": "real_scene1", "needs": "restock_name",
-         "q": f"{f['restock_name']} 있어요?",
+         "q": f"{_n(f.get('restock_name'))} 있어요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-1",
          "expect_tools": ["search_products", "get_inventory"],
          "must_include": [("보충", "채워", "들어오", "입고", "예비", "다시")],
@@ -116,7 +153,7 @@ def build(f: dict) -> list[dict]:
 
         # ── 재고 있음 → 위치를 사람 말로 ────────────────────────────────────
         {"id": "real_in_stock", "needs": "in_stock_name",
-         "q": f"{f['in_stock_name']} 어디 있어요?",
+         "q": f"{_n(f.get('in_stock_name'))} 어디 있어요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-2",
          "expect_tools": ["search_products", "get_inventory"],
          "must_include": [("1층", "F1")],
@@ -125,17 +162,17 @@ def build(f: dict) -> list[dict]:
 
         # ── 가격 정확성 — `_norm_product` 가 없으면 여기서 죽는다 ───────────
         {"id": "real_price", "needs": "in_stock_name",
-         "q": f"{f['in_stock_name']} 얼마예요?",
+         "q": f"{_n(f.get('in_stock_name'))} 얼마예요?",
          "consumer_id": MEMBER_NONE, "session_id": "real-3",
          "expect_tools": ["search_products"],
-         "must_include": [(f"{f['in_stock_price']:,}", str(f['in_stock_price']))],
+         "must_include": [(_p(f.get('in_stock_price')),)],
          "must_not_include": [r"약\s*\d[\d,]*원", r"만\s*\d천"],
          "why": "가격은 원 단위 그대로 — 08-27에 get_product 가 camelCase 를 흘려"
                 "보내 price_krw 가 None 이던 버그를 이 케이스가 잡는다"},
 
         # ── 이력 기반 — 요청 ④ history API 가 붙었는가 ──────────────────────
         {"id": "real_repurchase", "needs": "repeat_name",
-         "q": f"{f['repeat_name']} 다시 살 때 됐나요?",
+         "q": f"{_n(f.get('repeat_name'))} 다시 살 때 됐나요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-4",
          "expect_tools": ["get_purchase_history"],
          "must_include": [],
@@ -148,7 +185,7 @@ def build(f: dict) -> list[dict]:
          "q": "요즘 뭐가 잘 나가요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-5",
          "expect_tools": ["get_popular_products"],
-         "must_include": [(f["top_name"],)],
+         "must_include": [(_n(f.get("top_name")),)],
          "must_not_include": [r"확인이 어렵|모르겠|데이터가 없"],
          "why": "08-27에 categoryL2='' 를 보내 항상 0건이던 버그가 있었다."
                 " 빈 배열을 '데이터 없음'으로 착지시키면 이 케이스가 잡는다"},
@@ -161,6 +198,89 @@ def build(f: dict) -> list[dict]:
          "must_include": [("취급", "없", "안 파", "판매하지")],
          "must_not_include": [r"\d층\s*[A-Z]구역", r"재고\s*\d+개"],
          "why": "카탈로그 5,000에 없는 품목. 위치·재고를 지어내면 안 된다"},
+
+        # ── 행사 — 정가가 아니라 실판매가로 말하는가 ────────────────────────
+        {"id": "real_promo_price", "needs": "promo_name",
+         "q": f"{_n(f.get('promo_name'))} 지금 얼마예요?",
+         "consumer_id": MEMBER_NONE, "session_id": "real-8",
+         "expect_tools": ["search_products"],
+         "must_include": [(_p(f.get('promo_final')),), ("행사", "할인", "세일")],
+         "must_not_include": [],
+         "why": "행사 중이면 손님이 계산대에서 낼 금액은 실판매가다. 정가만 말하면"
+                " 틀린 건 아닌데 손해를 보게 한다 — 행사 사실도 같이 말해야 한다"},
+
+        # ── 두 상품 비교 — 눈대중이 아니라 도구로 ───────────────────────────
+        {"id": "real_compare", "needs": "pair_names",
+         "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 뭐가 더 싸요?"
+              if f.get("pair_names") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-9",
+         "expect_tools": ["compare_products"],
+         "must_include": [],
+         "must_not_include": [r"비슷|비등|차이가 (거의 )?없"],
+         "why": "총액 비교는 compare_products 를 거친다(헌법 2 — 산술은 솔버)."
+                " '비슷하다'로 얼버무리면 비교를 안 한 것이다"},
+
+        # ── 예산 조합 — 솔버의 총액이 발화에 실렸는가 ───────────────────────
+        {"id": "real_budget", "needs": "pair_budget",
+         "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 "
+              f"{_p(f.get('pair_budget'))}원 안에서 살 수 있는 만큼 골라줘"
+              if f.get("pair_names") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-10",
+         "expect_tools": ["optimize_bundle"],
+         "must_include": [],
+         "must_not_include": [r"둘 다 (담|사|구매)"],   # 예산상 둘 다는 불가
+         "why": "예산 조합의 총액은 LLM 이 더한 값이 아니라 솔버의 total_krw 여야"
+                " 한다. 예산을 하나만 되게 잡았으므로 '둘 다'는 산술 실패다"},
+
+        # ── 대체 제안 — 원 상품 확인이 먼저 ─────────────────────────────────
+        {"id": "real_substitute", "needs": "in_stock_name",
+         "q": f"{_n(f.get('in_stock_name'))} 말고 비슷한 거 있어요?",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-11",
+         "expect_tools": ["search_products"],
+         "must_include": [],
+         "must_not_include": [r"개발 중|준비 중인 기능|not_implemented|오류"],
+         "why": "find_substitutes 가 실물에서 500 을 낸다(08-27 실측 · 미해결)."
+                " 도구가 죽어도 **손님에게 내부 사정을 노출하면 안 된다** —"
+                " 검색으로라도 착지해야 한다. 이 케이스는 그 착지를 지킨다"},
+
+        # ── 명령형 — 되묻지 않는가 ──────────────────────────────────────────
+        {"id": "real_imperative", "needs": "in_stock_name",
+         "q": f"{_n(f.get('in_stock_name'))} 어디 있는지 알려줘",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-12",
+         "expect_tools": ["search_products"],
+         "must_include": [("층", "구역")],
+         "must_not_include": [r"어떤\s*(걸|것을|상품을)", r"드릴까요\?$"],
+         "why": "명령형에는 되묻지 않는다 — 기본값으로 실행하고 결과에 근거를 담는다"},
+
+        # ── 비회원 액션 → 로그인 안내 (담았다고 거짓말 금지) ────────────────
+        {"id": "real_guest_action", "needs": None,
+         "q": f"{_n(f.get('in_stock_name')) or '라자냐'} 장바구니에 담아줘",
+         "consumer_id": MEMBER_NONE, "session_id": "real-13",
+         "expect_tools": [],
+         "must_include": [("로그인", "회원")],
+         "must_not_include": [r"담았", r"완료했"],
+         "why": "비회원 액션은 실패를 숨기지 말고 로그인 안내로. 액션 도구는 실물"
+                " 백엔드에서도 consumer_id 가 없으면 못 부른다 — 계약이 같다"},
+
+        # ── 일반 상식 — 범위 안내로 밀어내지 않는가 ─────────────────────────
+        {"id": "real_common_sense", "needs": None,
+         "q": "우유팩은 어떻게 버려요?",
+         "consumer_id": MEMBER_NONE, "session_id": "real-14",
+         "expect_tools": [],
+         "must_include": [("헹", "씻", "말리", "펼")],
+         "must_not_include": [r"제?\s*담당이 아니", r"매장 안내를 맡고 있어서"],
+         "why": "답할 수 있는 상식은 답한다 — 범위 안내를 여기 쓰면 밀어내기가 된다"},
+
+        # ── 스텁 착지 — 내부 사정을 손님에게 노출하지 않는가 ────────────────
+        {"id": "real_stub_landing", "needs": "pair_names",
+         "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 100ml당 뭐가 이득?"
+              if f.get("pair_names") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-15",
+         "expect_tools": [],
+         "must_include": [],
+         "must_not_include": [r"개발 중|준비 중인 기능|not_implemented"],
+         "why": "compare_unit_price 는 아직 스텁이다(08-27). 스텁 실패는 내부"
+                " 사정이라 손님에게 '개발 중'이라고 노출하면 안 된다"},
 
         # ── 범위 밖 — 무능이 아니라 범위로 ──────────────────────────────────
         {"id": "real_out_of_scope", "needs": None,
@@ -175,7 +295,10 @@ def build(f: dict) -> list[dict]:
 
 # ── 자체 검산 — 골든셋 자신도 조용히 망가진다 ────────────────────────────────
 _probe = build({"restock_name": "X", "in_stock_name": "Y", "in_stock_price": 1000,
-                "top_name": "Z", "repeat_name": "W"})
+                "top_name": "Z", "repeat_name": "W", "promo_name": "P",
+                "promo_final": 900, "pair_names": ["A", "B"], "pair_budget": 5000,
+                "cart_ready": None, "wishlist_ready": None})
+assert len(_probe) == 15, f"실물 케이스는 15개 계획(현재 {len(_probe)})"
 _ids = [c["id"] for c in _probe]
 assert len(set(_ids)) == len(_ids), "케이스 id 중복"
 for _c in _probe:
