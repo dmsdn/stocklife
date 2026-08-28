@@ -241,6 +241,13 @@ const ZONE_TEXTURE_MERGED: Record<string, string> = {
   'F3-E': 'zone-f3-e-bags-m',
 };
 
+// 3F D(의류) 전용 긴 가판대 이미지.
+// F3-D는 location 좌표가 매대 위/아래 가장자리에 있고, 실제 통행 불가(occupied) 영역은
+// 그 사이의 4칸 높이 직사각형이다. 그래서 기존 48/96px 매대 아이콘을 반복해서 그리지 않고
+// occupied 직사각형 하나당 긴 가판대 PNG 하나를 깔아 실제 의류 매대처럼 보이게 한다.
+const F3_D_LONG_RACK_TEX = 'zone-f3-d-clothing-long';
+const F3_B_LONG_RACK_TEX = 'zone-f3-b-appliance-long';
+
 // B1(중앙창고)은 존이 하나(B1-W)뿐이라 텍스처도 하나면 단조로우므로, 위치 인덱스에 따라
 // 상자/크레이트 몇 종을 순환시켜 창고답게 섞어 놓는다.
 const WAREHOUSE_CRATES = ['crate-red', 'crate-green', 'crate-blue', 'crate-box', 'crate-wood'];
@@ -464,9 +471,11 @@ export default class StoreScene extends Phaser.Scene {
       ...Object.values(ZONE_TEXTURE_MERGED),
       ...WAREHOUSE_CRATES,
       ...Object.values(ZONE_RACK_TEXTURE_VARIANTS).flatMap((variants) =>
-        variants.flatMap((v) => [v.single, v.merged]),
+          variants.flatMap((v) => [v.single, v.merged]),
       ),
       SALES_FLOOR_TEX,
+      F3_D_LONG_RACK_TEX,
+      F3_B_LONG_RACK_TEX,
       WAREHOUSE_FLOOR_TEX,
       ...Object.values(FACILITY_IMAGE),
       ...Object.values(SERVICE_AREA_IMAGE),
@@ -546,6 +555,223 @@ export default class StoreScene extends Phaser.Scene {
     this.scale.on('resize', () => this.fitCameraToWorld());
   }
 
+  /**
+   * 3F B(홈·가전) 구역의 빨간 occupied 영역을 긴 가전 가판대 이미지로 채운다.
+   *
+   * F3-D와 같은 방식으로 렌더링과 클릭 판정을 분리한다.
+   * 위/아래 location rack 사이의 occupied 영역에 PNG 한 장을 늘려서 그리고,
+   * 이미지 안쪽 셀 클릭은 기존 locationId로 다시 매핑한다.
+   */
+  private drawF3BApplianceFixtures() {
+    if (this.floorData.floor !== 3) return;
+
+    const applianceLocs = this.floorData.locations.filter((loc) => loc.zoneId === 'F3-B');
+    if (applianceLocs.length === 0) return;
+
+    const byRack = new Map<number, LocationInfo[]>();
+    for (const loc of applianceLocs) {
+      const arr = byRack.get(loc.rack);
+      if (arr) arr.push(loc);
+      else byRack.set(loc.rack, [loc]);
+    }
+
+    const racks = [...byRack.entries()]
+        .map(([rack, locs]) => ({
+          rack,
+          locs: [...locs].sort((a, b) => a.x - b.x),
+          y: locs[0]?.y ?? 0,
+        }))
+        .sort((a, b) => a.y - b.y || a.rack - b.rack);
+
+    const locationForX = (locs: LocationInfo[], gx: number, endXExclusive: number) => {
+      for (let i = 0; i < locs.length; i++) {
+        const startX = locs[i].x;
+        const nextX = i + 1 < locs.length ? locs[i + 1].x : endXExclusive;
+        if (gx >= startX && gx < nextX) return locs[i];
+      }
+      return locs[locs.length - 1];
+    };
+
+    // x=2,4,6 ... 처럼 bay가 2칸 간격이므로, 중간에 큰 통로가 나오면 별도 매대로 분리한다.
+    const splitIntoRuns = (locs: LocationInfo[]) => {
+      const runs: LocationInfo[][] = [];
+      let current: LocationInfo[] = [];
+      for (const loc of [...locs].sort((a, b) => a.x - b.x)) {
+        const prev = current[current.length - 1];
+        if (!prev || loc.x <= prev.x + 2) current.push(loc);
+        else {
+          runs.push(current);
+          current = [loc];
+        }
+      }
+      if (current.length) runs.push(current);
+      return runs;
+    };
+
+    // F3-B는 rack 1/2, rack 3/4가 각각 하나의 물리 매대 쌍이다.
+    for (let i = 0; i + 1 < racks.length; i += 2) {
+      const topRack = racks[i];
+      const bottomRack = racks[i + 1];
+      if (!topRack.locs.length || !bottomRack.locs.length) continue;
+
+      const occupiedTopY = topRack.y + 1;
+      const occupiedBottomYExclusive = bottomRack.y;
+      const occupiedRows = occupiedBottomYExclusive - occupiedTopY;
+      if (occupiedRows <= 0) continue;
+
+      const topRuns = splitIntoRuns(topRack.locs);
+
+      for (const topRun of topRuns) {
+        const minX = topRun[0].x;
+        const endXExclusive = topRun[topRun.length - 1].x + 2;
+
+        // 같은 x 범위에 대응하는 아래쪽 rack 상품들만 사용한다.
+        const bottomRun = bottomRack.locs.filter((loc) => loc.x >= minX && loc.x < endXExclusive);
+        if (bottomRun.length === 0) continue;
+
+        const pxX = minX * TILE;
+        const pxY = occupiedTopY * TILE;
+        const pxW = (endXExclusive - minX) * TILE;
+        const pxH = occupiedRows * TILE;
+
+        if (this.textures.exists(F3_B_LONG_RACK_TEX)) {
+          const shadow = this.add.ellipse(
+              pxX + pxW / 2,
+              pxY + pxH * 0.78,
+              pxW * 0.94,
+              Math.max(TILE * 0.55, pxH * 0.32),
+              0x000000,
+              0.16,
+          );
+          const fixture = this.add.image(pxX + pxW / 2, pxY + pxH / 2, F3_B_LONG_RACK_TEX);
+          fixture.setDisplaySize(pxW, pxH);
+          this.shelfLayer.add(shadow);
+          this.shelfLayer.add(fixture);
+        } else {
+          const zone = this.floorData.zones.find((z) => z.zoneId === 'F3-B');
+          const fallbackColor = zone
+              ? Phaser.Display.Color.HexStringToColor(zone.color).color
+              : 0xc7e2ed;
+          const rect = this.add.rectangle(pxX + pxW / 2, pxY + pxH / 2, pxW, pxH, fallbackColor, 0.8);
+          this.shelfLayer.add(rect);
+        }
+
+        // PNG는 한 장이어도 내부 클릭은 기존 상품 location으로 유지한다.
+        // 위쪽 절반 = top rack, 아래쪽 절반 = bottom rack.
+        const midY = occupiedTopY + occupiedRows / 2;
+        for (let gy = occupiedTopY; gy < occupiedBottomYExclusive; gy++) {
+          const rackLocs = gy + 0.5 < midY ? topRun : bottomRun;
+          for (let gx = minX; gx < endXExclusive; gx++) {
+            const loc = locationForX(rackLocs, gx, endXExclusive);
+            if (loc) this.locationByCell.set(`${gx},${gy}`, loc);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 3F D(의류) 구역의 실제 적재 공간을 긴 가판대 이미지로 그린다.
+   *
+   * floor3.json 구조는 한 물리 매대마다 다음처럼 되어 있다.
+   *   위쪽 상품 location 행  (예: y=2)
+   *   occupied 4행         (예: y=3~6)  ← 여기에 긴 PNG를 그림
+   *   아래쪽 상품 location 행 (예: y=7)
+   *
+   * 한 PNG 안에 상품이 여러 개 보여도 클릭에는 문제가 없다. 이미지 내부 occupied 셀들을
+   * x방향으로 bay에 나누고, 위 절반은 위쪽 rack, 아래 절반은 아래쪽 rack의 LocationInfo로
+   * locationByCell에 연결한다. 따라서 이미지 자체는 하나지만 클릭 결과는 기존 locationId 단위다.
+   */
+  private drawF3DClothingFixtures() {
+    if (this.floorData.floor !== 3) return;
+
+    const clothingLocs = this.floorData.locations.filter((loc) => loc.zoneId === 'F3-D');
+    if (clothingLocs.length === 0) return;
+
+    const byRack = new Map<number, LocationInfo[]>();
+    for (const loc of clothingLocs) {
+      const arr = byRack.get(loc.rack);
+      if (arr) arr.push(loc);
+      else byRack.set(loc.rack, [loc]);
+    }
+
+    const racks = [...byRack.entries()]
+        .map(([rack, locs]) => ({
+          rack,
+          locs: [...locs].sort((a, b) => a.x - b.x),
+          y: locs[0]?.y ?? 0,
+        }))
+        .sort((a, b) => a.y - b.y || a.rack - b.rack);
+
+    const locationForX = (locs: LocationInfo[], gx: number, endXExclusive: number) => {
+      for (let i = 0; i < locs.length; i++) {
+        const startX = locs[i].x;
+        const nextX = i + 1 < locs.length ? locs[i + 1].x : endXExclusive;
+        if (gx >= startX && gx < nextX) return locs[i];
+      }
+      return locs[locs.length - 1];
+    };
+
+    // F3-D는 (위 rack, 아래 rack) 두 줄이 실제 매대 하나를 공유한다.
+    for (let i = 0; i + 1 < racks.length; i += 2) {
+      const topRack = racks[i];
+      const bottomRack = racks[i + 1];
+      if (!topRack.locs.length || !bottomRack.locs.length) continue;
+
+      const minX = Math.min(topRack.locs[0].x, bottomRack.locs[0].x);
+      // bay 좌표가 2칸 간격(x=2,4,...,20)이므로 마지막 bay도 2칸 폭을 차지하게 +2.
+      const maxLocX = Math.max(
+          topRack.locs[topRack.locs.length - 1].x,
+          bottomRack.locs[bottomRack.locs.length - 1].x,
+      );
+      const endXExclusive = maxLocX + 2;
+
+      const occupiedTopY = topRack.y + 1;
+      const occupiedBottomYExclusive = bottomRack.y;
+      const occupiedRows = occupiedBottomYExclusive - occupiedTopY;
+      if (occupiedRows <= 0) continue;
+
+      const pxX = minX * TILE;
+      const pxY = occupiedTopY * TILE;
+      const pxW = (endXExclusive - minX) * TILE;
+      const pxH = occupiedRows * TILE;
+
+      if (this.textures.exists(F3_D_LONG_RACK_TEX)) {
+        const shadow = this.add.ellipse(
+            pxX + pxW / 2,
+            pxY + pxH * 0.78,
+            pxW * 0.94,
+            Math.max(TILE * 0.55, pxH * 0.32),
+            0x000000,
+            0.16,
+        );
+        const fixture = this.add.image(pxX + pxW / 2, pxY + pxH / 2, F3_D_LONG_RACK_TEX);
+        fixture.setDisplaySize(pxW, pxH);
+        this.shelfLayer.add(shadow);
+        this.shelfLayer.add(fixture);
+      } else {
+        const zone = this.floorData.zones.find((z) => z.zoneId === 'F3-D');
+        const fallbackColor = zone
+            ? Phaser.Display.Color.HexStringToColor(zone.color).color
+            : 0xf5b4b8;
+        const rect = this.add.rectangle(pxX + pxW / 2, pxY + pxH / 2, pxW, pxH, fallbackColor, 0.8);
+        this.shelfLayer.add(rect);
+      }
+
+      // 이미지 내부 클릭 셀 → 실제 상품 location 연결.
+      // 위 절반은 topRack, 아래 절반은 bottomRack으로 나누고, 가로는 각 bay가 가진
+      // 2칸 폭 전체를 같은 locationId로 본다.
+      const midY = occupiedTopY + occupiedRows / 2;
+      for (let gy = occupiedTopY; gy < occupiedBottomYExclusive; gy++) {
+        const rackLocs = gy + 0.5 < midY ? topRack.locs : bottomRack.locs;
+        for (let gx = minX; gx < endXExclusive; gx++) {
+          const loc = locationForX(rackLocs, gx, endXExclusive);
+          if (loc) this.locationByCell.set(`${gx},${gy}`, loc);
+        }
+      }
+    }
+  }
+
   // 매장 "전체"가 화면 안에 항상 다 들어오도록(위아래/좌우 어느 쪽도 잘리지 않게) 줌을 맞추고
   // 가운데 정렬한다.
   //
@@ -572,8 +798,8 @@ export default class StoreScene extends Phaser.Scene {
     // 화면 가장자리에 딱 붙지 않고 아주 약간의 숨 쉴 여백을 남긴다.
     const FILL_RATIO = 0.96;
     const containZoom = Math.min(
-      (canvasW * FILL_RATIO) / worldW,
-      (canvasH * FILL_RATIO) / worldH,
+        (canvasW * FILL_RATIO) / worldW,
+        (canvasH * FILL_RATIO) / worldH,
     );
     this.minZoom = Phaser.Math.Clamp(containZoom, 0.1, 3);
     this.cameras.main.setZoom(this.minZoom);
@@ -759,13 +985,13 @@ export default class StoreScene extends Phaser.Scene {
 
     const cellKey = (x: number, y: number) => `${x},${y}`;
     const drawSprite = (
-      cx: number,
-      cy: number,
-      w: number,
-      h: number,
-      texKey: string,
-      fallbackColor: number,
-      flip?: boolean,
+        cx: number,
+        cy: number,
+        w: number,
+        h: number,
+        texKey: string,
+        fallbackColor: number,
+        flip?: boolean,
     ) => {
       // 옆 칸과 완전히 붙어 보이지 않도록 살짝 인셋을 줘서 그린다(SHELF_INSET) — 매대 사이
       // 바닥이 얇게 보여서 "매대 하나하나"라는 게 눈에 들어오게 하기 위함.
@@ -789,6 +1015,11 @@ export default class StoreScene extends Phaser.Scene {
 
     for (const [key, locs] of rackGroups) {
       const zoneId = key.split('::')[0];
+
+      // F3-D는 아래 drawF3DClothingFixtures()가 두 rack을 한 쌍으로 묶어
+      // occupied 직사각형 하나에 긴 가판대 이미지 하나를 그린다.
+      // 따라서 여기서 기존 1칸/2x2 매대 이미지를 다시 그리면 상품이 중복되어 보인다.
+      if (zoneId === 'F3-D' || zoneId === 'F3-B') continue;
       const zone = zoneById.get(zoneId);
       const fallbackColor = zone ? Phaser.Display.Color.HexStringToColor(zone.color).color : 0xcccccc;
       let singleTex = zone && ZONE_TEXTURE[zone.zoneId];
@@ -826,12 +1057,12 @@ export default class StoreScene extends Phaser.Scene {
               const x0 = sortedXs[i];
               const x1 = sortedXs[i + 1];
               if (
-                x1 !== undefined &&
-                x1 === x0 + 1 &&
-                byCell.has(cellKey(x0, y0)) &&
-                byCell.has(cellKey(x0, y1)) &&
-                byCell.has(cellKey(x1, y0)) &&
-                byCell.has(cellKey(x1, y1))
+                  x1 !== undefined &&
+                  x1 === x0 + 1 &&
+                  byCell.has(cellKey(x0, y0)) &&
+                  byCell.has(cellKey(x0, y1)) &&
+                  byCell.has(cellKey(x1, y0)) &&
+                  byCell.has(cellKey(x1, y1))
               ) {
                 const cx = x0 * TILE + TILE;
                 const cy = y0 * TILE + TILE;
@@ -882,8 +1113,8 @@ export default class StoreScene extends Phaser.Scene {
           }
         }
       }
-      // 가로 합침: 정확히 두 개의 x값(=2열 폭)으로 이루어진 경우, 같은 y에서 x·x+1을 합친다.
-      // 존별 설정이 '2x2'면 y도 두 칸씩 짝지어 정사각형(2x2)으로, 짝이 안 맞는 마지막 행은
+          // 가로 합침: 정확히 두 개의 x값(=2열 폭)으로 이루어진 경우, 같은 y에서 x·x+1을 합친다.
+          // 존별 설정이 '2x2'면 y도 두 칸씩 짝지어 정사각형(2x2)으로, 짝이 안 맞는 마지막 행은
       // 2x1로 대체한다.
       else if (mergedTex && xs.size === 2) {
         const [x0, x1] = [...xs].sort((a, b) => a - b);
@@ -896,12 +1127,12 @@ export default class StoreScene extends Phaser.Scene {
               const y0 = sortedYs[i];
               const y1 = sortedYs[i + 1];
               if (
-                y1 !== undefined &&
-                y1 === y0 + 1 &&
-                byCell.has(cellKey(x0, y0)) &&
-                byCell.has(cellKey(x1, y0)) &&
-                byCell.has(cellKey(x0, y1)) &&
-                byCell.has(cellKey(x1, y1))
+                  y1 !== undefined &&
+                  y1 === y0 + 1 &&
+                  byCell.has(cellKey(x0, y0)) &&
+                  byCell.has(cellKey(x1, y0)) &&
+                  byCell.has(cellKey(x0, y1)) &&
+                  byCell.has(cellKey(x1, y1))
               ) {
                 const cx = x0 * TILE + TILE;
                 const cy = y0 * TILE + TILE;
@@ -975,6 +1206,13 @@ export default class StoreScene extends Phaser.Scene {
         }
       }
     }
+
+    // 3F D 의류 구역: 빨간 occupied 직사각형(5개)을 긴 의류 가판대 이미지로 교체한다.
+    // 클릭 판정은 이미지가 아니라 locationByCell에 별도로 매핑하므로, PNG가 한 장이어도
+    // 가로 bay / 위·아래 rack에 따라 서로 다른 상품 위치를 선택할 수 있다.
+    this.drawF3BApplianceFixtures();
+    this.drawF3DClothingFixtures();
+
 
     // 존 라벨은 배열에서 "그 존의 첫 번째 매대"가 아니라, 그 존에 속한 모든 매대의
     // 실제 바운딩박스 좌측 상단(min-x, min-y)을 계산해서 그 자리에 둔다 — 배열 순서상
@@ -1144,14 +1382,14 @@ export default class StoreScene extends Phaser.Scene {
   private randomWalkableCellNear(center: GridPoint, radius: number): GridPoint {
     for (let i = 0; i < 50; i++) {
       const x = Phaser.Math.Clamp(
-        center.x + Phaser.Math.Between(-radius, radius),
-        0,
-        this.floorData.gridWidth - 1
+          center.x + Phaser.Math.Between(-radius, radius),
+          0,
+          this.floorData.gridWidth - 1
       );
       const y = Phaser.Math.Clamp(
-        center.y + Phaser.Math.Between(-radius, radius),
-        0,
-        this.floorData.gridHeight - 1
+          center.y + Phaser.Math.Between(-radius, radius),
+          0,
+          this.floorData.gridHeight - 1
       );
       if (this.grid.isWalkable(x, y)) return { x, y };
     }
@@ -1176,14 +1414,14 @@ export default class StoreScene extends Phaser.Scene {
 
     this.npcHomeMarker?.destroy();
     this.npcHomeMarker = this.add
-      .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
-        fontSize: '20px',
-        color: '#78350f',
-        backgroundColor: '#fef3c7cc',
-        padding: { x: 2, y: 0 },
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(DEPTH_NPC);
+        .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
+          fontSize: '20px',
+          color: '#78350f',
+          backgroundColor: '#fef3c7cc',
+          padding: { x: 2, y: 0 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(DEPTH_NPC);
 
     for (let i = 0; i < count; i++) {
       const cell = this.npcHomeCell;
@@ -1281,14 +1519,14 @@ export default class StoreScene extends Phaser.Scene {
 
   private showRestockBubble(npc: NpcAgent, text: string) {
     const t = this.add
-      .text(npc.container.x, npc.container.y - 16, text, {
-        fontSize: '20px',
-        color: '#16a34a',
-        backgroundColor: '#ffffffcc',
-        padding: { x: 3, y: 1 },
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_NPC + 1);
+        .text(npc.container.x, npc.container.y - 16, text, {
+          fontSize: '20px',
+          color: '#16a34a',
+          backgroundColor: '#ffffffcc',
+          padding: { x: 3, y: 1 },
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH_NPC + 1);
     this.tweens.add({ targets: t, y: t.y - 14, alpha: 0, duration: 900, onComplete: () => t.destroy() });
   }
 
