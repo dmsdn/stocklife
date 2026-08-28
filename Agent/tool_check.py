@@ -30,6 +30,7 @@
 # ============================================================================
 from __future__ import annotations
 
+import os
 import sys
 import traceback
 
@@ -55,15 +56,22 @@ from app import config  # noqa: E402  ← load_env() 뒤여야 한다
 from app import sot_client  # noqa: E402
 from app.tools import action, compute, definitions, infer, query  # noqa: E402
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
 OK, EMPTY, BAD, SKIP = "✅", "⚠", "❌", "·"
 
 # 고장이 아니라 **상태**인 것들 — 이 서버가 그 기능을 안 켰을 뿐이다.
-#   not_implemented   아직 안 만들었다(match_preferences — 08/29 배선)
+#   (not_implemented 는 08-28 에 뺐다 — match_preferences 가 배선되어 이 상태를
+#    내는 도구가 하나도 없다. 명단에 남겨 두면 **다음에 스텁이 생겨도 초록불**이다)
 #   encoder_not_loaded 사진 인코더 3.5GB 는 기본 꺼짐(LOAD_PHOTO_ENCODER)
 #   not_pending       큐에 없는 sku 는 곡선을 그릴 이유가 없다(매대에 있다)
 #   no_scan_anchor    스캔 기록이 없으면 추측하지 않는 것이 설계다
-STATE_ERRORS = {"not_implemented", "encoder_not_loaded",
-                "not_pending", "no_scan_anchor"}
+#   no_comparable_pair 축이 다르면(무게 vs 개수) 단위가격은 성립하지 않는다.
+#                     거부가 **옳은 동작**이다 — 억지로 견주면 거짓 비교가 된다.
+#                     재료를 같은 축으로 골라 주면 안 나오지만, 세계에 같은 축
+#                     짝이 없을 수도 있다(mock). 그때도 고장은 아니다.
+STATE_ERRORS = {"encoder_not_loaded", "not_pending",
+                "no_scan_anchor", "no_comparable_pair"}
 _rows: list = []
 
 
@@ -133,29 +141,83 @@ def _brief(v) -> str:
     return str(v)[:60]
 
 
+def _photo_fixture() -> str:
+    """사진 재료 — 로컬에 있는 실제 이미지 하나.
+
+    [왜 빈 문자열이면 안 되나] `_fetch_image` 는 경로만 받는다. 빈 문자열을
+      주면 `image_not_found` 로 떨어지는데, 그건 **도구를 잰 게 아니라 재료를
+      안 준 것**이다. 인코더를 켜 놓고도 표는 그대로라 "켜도 소용없네"로 읽힌다.
+
+    [없으면 빈 문자열] `imagegen/` 은 작업장에만 있고 팀 저장소엔 없다(생성
+      스크립트는 옮기지 않는다 — 파일명세 §4.5). 그쪽에서는 재료가 없으니
+      `image_not_found` 가 나고, 그건 정직한 상태다.
+    """
+    import glob
+    for base in (os.path.join(_HERE, "..", "imagegen", "out"),
+                 os.path.join(_HERE, "imagegen", "out")):
+        hit = glob.glob(os.path.join(base, "**", "*.png"), recursive=True)
+        if hit:
+            return sorted(hit)[0]
+    return ""
+
+
+def _session_id() -> str:
+    """세션 id 하나 — mock 에서는 **아무 문자열이나 쓰면 안 된다.**
+
+    mock 의 `get_session_cart` 는 장바구니 테이블을 읽는 게 아니라
+    SCAN_ADD/SCAN_REMOVE 이벤트를 시간순으로 재생해 복원한다(이벤트가 진실이고
+    장바구니는 그 파생 — append-only 세계의 읽기 방식). 그래서 지어낸 세션 id 를
+    주면 **재생할 이벤트가 0건**이라 빈 장바구니가 나오고, 표에는 도구가 고장난
+    것처럼 찍힌다. 실제로는 없는 세션을 물어본 것이다 — `_pick_member` 와 같은
+    종류의 픽스처 문제다.
+
+    실물에서는 `/internal/cart/session?consumerId=` 라 세션 id 를 안 쓴다.
+    """
+    return "sess-7f3a9c" if config.USE_MOCK_SOT else "toolcheck-session"
+
+
 def _pick_member() -> int:
-    """구매 이력이 **실제로 있는** 회원을 하나 고른다. 못 고르면 1001 로 물러선다.
+    """구매 이력이 **실제로 있는** 회원을 하나 고른다. 못 고르면 첫 후보로 물러선다.
 
     [왜 뽑나] SKU 를 안 박는 것과 같은 이유다 — 데모 슬라이스를 다시 만들면
       회원 번호가 통째로 바뀐다. 다만 회원은 검색 창구가 없어서, 후보를
       순서대로 두드려 **이력이 나오는 첫 번째**를 쓴다.
+
+    [⚠ mock 과 실물은 회원 번호 축이 다르다 — 08-28 에 걸렸다]
+      mock 세계의 회원은 9001·9002 이고 실물 시드는 1001~11000 이다.
+      1001 부터만 두드리면 mock 에서는 **아무도 못 찾고 1001 로 물러서는데,
+      1001 은 mock 에 존재하지 않는다.** 그러면 이력·장바구니·찜이 전부
+      빈 채로 나오고, 표가 "도구가 고장났다"처럼 보인다 — 실제로는 검사기가
+      없는 사람에게 물어본 것이다. **빈 결과의 원인이 도구가 아니라 픽스처인
+      경우**라서, 이걸 안 가르면 멀쩡한 도구를 며칠 쫓게 된다.
     """
-    for mid in range(1001, 1031):
+    cands = ([9001, 9002] if config.USE_MOCK_SOT else []) + list(range(1001, 1031))
+    for mid in cands:
         try:
-            query.set_identity(mid, "toolcheck-session")
-            r = query.REGISTRY["get_purchase_history"]() or {}
+            query.set_identity(mid, _session_id())
+            # ⚠ **레지스트리를 직접 부르면 안 된다.** 그 함수는 member_id 를
+            #   위치 인자로 받고, 그걸 채워 주는 것은 `query.run` 의 신원 주입이다.
+            #   직접 부르면 늘 TypeError 가 나고 아래 except 가 그걸 삼켜
+            #   **후보를 하나도 못 찾은 채 첫 후보로 물러선다.** 08-28 까지 이
+            #   함수는 한 번도 실제로 회원을 고른 적이 없었다 — 실물에서 1001 이
+            #   마침 이력이 있어서 티가 안 났을 뿐이다. 조용히 틀리는 종류다.
+            r = query.run("get_purchase_history", {}) or {}
             if r.get("purchases"):
                 return mid
         except Exception:                                      # noqa: BLE001
             continue
-    return 1001
+    return cands[0]
 
 
 def main() -> int:
     # ⚠ **출하물을 먼저 올린다.** 서버는 lifespan 이 올리는데 이 검사기는
     #   loop 를 직접 부르므로 아무도 안 올린다 — 08-27 에 평가 러너가 정확히
     #   이 병으로 추론 5종을 "적재 안 됨"으로 채점했다(같은 병 네 번째).
-    got = infer.load_all()
+    # ⚠ 서버(`main.py` lifespan)는 `with_photo_encoder=config.LOAD_PHOTO_ENCODER`
+    #   로 부른다. 검사기가 기본값(False)으로 부르면 **서버와 다른 구성을 재게**
+    #   된다 — `.env` 에서 인코더를 켜 놨는데 표에는 계속 "안 켜져 있음"이 찍힌다.
+    #   검사기는 서버의 설정을 따라간다.
+    got = infer.load_all(with_photo_encoder=config.LOAD_PHOTO_ENCODER)
     print(f"tool_check — USE_MOCK_SOT={config.USE_MOCK_SOT} · "
           f"백엔드={config.BACKEND_BASE_URL}")
     print(f"출하물: {got}")
@@ -187,21 +249,34 @@ def main() -> int:
         print(" ❌ 상품을 하나도 못 찾았다 — 백엔드·시드부터 확인한다"
               " (backend_probe.py)")
         return 2
-    sku = int(found[0]["sku_id"])
-    # ⚠ 두 번째 재료는 **같은 축**이어야 한다. 아무거나 집으면 단위가격 도구가
-    #   축이 달라 거부하는데(설계대로), 검사기는 그걸 고장으로 센다 —
-    #   도구가 옳게 거부한 것을 ❌ 로 적는 것도 거짓 경보다.
-    sku2 = int(found[1]["sku_id"]) if len(found) > 1 else sku
     #   검색 투영에는 `unit` 이 없으므로 상품 조회로 축을 확인한다.
     def _axis(_s):
         q = sot_client.spec_quantity((sot_client.get_product(_s) or {}).get("spec"))
         return (q or {}).get("axis")
-    _u0 = _axis(sku)
-    for _c in found[1:]:
-        if _axis(int(_c["sku_id"])) == _u0:
-            sku2 = int(_c["sku_id"])
-            break
-    l2 = found[0].get("category_l2")
+
+    def _pair(cands):
+        """후보에서 **축이 같은 두 개**를 고른다. 없으면 축이 달라도 **서로 다른** 둘.
+
+        ⚠ 두 번째 재료가 같은 축이 아니면 단위가격 도구가 거부하는데(설계대로),
+          검사기는 그걸 고장으로 센다 — 도구가 옳게 거부한 것을 ❌ 로 적는 것도
+          거짓 경보다. 그래서 같은 축을 **먼저** 찾는다.
+
+        ⚠⚠ 그렇다고 **자기 자신을 짝으로 주면 안 된다.** 08-28 에 그렇게 했다가
+          mock 에서 비교 도구 셋이 한꺼번에 `need_multiple` 로 떨어졌다 —
+          "상품이 2개 이상 필요합니다"는 도구가 **옳게 거부한 것**인데 표에는
+          ❌ 로 찍혔다. 짝이 없으면 축을 포기하지 재료 수를 포기하지 않는다.
+        """
+        if not cands:
+            return None, None
+        a = int(cands[0])
+        others = [int(c) for c in cands[1:] if int(c) != a]
+        if not others:
+            return a, None                     # 부르는 쪽이 다른 재료로 물러선다
+        ax = _axis(a)
+        for c in others:
+            if _axis(c) == ax:
+                return a, c
+        return a, others[0]
     # ⚠ **`members` 에 있다고 유효한 재료가 아니다**(08-27 B 검수 A-2).
     #   `members` 는 세계 시드(구매이력의 주체)이고 `consumer` 는 백엔드 로그인
     #   사용자다 — **다른 테이블**이고, 장바구니·위시리스트·주문은 `consumer` 를
@@ -210,13 +285,59 @@ def main() -> int:
     #   ⚠ 그래도 **박지 않는다** — 이 파일의 규율이 "재료를 실행 시각에 세계에서
     #   뽑는다"이므로, 이력이 실제로 있는 회원을 골라 쓰고 실패하면 그대로 보고한다.
     member = _pick_member()
-    print(f" 상품 {sku}·{sku2} · 소분류 {l2} · 회원 {member}(이력 있는 회원을 실행 시각에 선정)")
+
+    # ── 상품 재료도 **세계에서** 뽑는다 (08-28) ─────────────────────────────
+    # 08-27 까지는 카탈로그 검색의 첫 두 개를 썼다. 그러면 이 검사기가
+    # **회원은 데모 슬라이스에서 뽑으면서 상품은 슬라이스 밖에서 집는다.**
+    # 그 짝은 이력·이벤트가 없는 조합이라, `get_change_events` 와
+    # `compare_purchase_popularity` 가 늘 빈 결과로 찍혔다 — 창구도 질의도
+    # 멀쩡한데 **물어본 상품이 그 세계에 안 살았을 뿐**이다.
+    #   → 고른 회원이 실제로 산 상품에서 뽑는다. 슬라이스 안이 보장된다.
+    #     이력이 없으면(그럴 수 있다) 검색 결과로 물러선다.
+    query.set_identity(member, _session_id())
+    _hist = (query.run("get_purchase_history", {}) or {}).get("purchases") or []
+    _seen, _from_hist = set(), []
+    for _r in _hist:
+        _v = _r.get("sku_id")
+        if _v is not None and _v not in _seen:
+            _seen.add(_v)
+            _from_hist.append(int(_v))
+    _search = [int(f["sku_id"]) for f in found]
+    sku, sku2 = _pair(_from_hist or _search)
+    src = "구매이력" if _from_hist else "카탈로그 검색"
+    if sku2 is None:                            # 이력에 쓸 만한 짝이 없으면
+        sku, sku2 = _pair(_search)              # 카탈로그에서 다시
+        src = "카탈로그 검색(이력에 짝이 없어 물러섬)"
+    if sku2 is None:
+        print(" ❌ 서로 다른 상품 두 개를 못 뽑았다 — 비교 도구를 잴 수 없다")
+        return 2
+    l2 = (sot_client.get_product(sku) or {}).get("category_l2")
+    print(f" 상품 {sku}·{sku2}({src}) · 소분류 {l2} · "
+          f"회원 {member}(이력 있는 회원을 실행 시각에 선정)")
     print()
 
     # 신원 주입 — 개인화 도구는 LLM 이 아니라 이 경로로 신원을 받는다(B안).
-    query.set_identity(member, "toolcheck-session")
+    query.set_identity(member, _session_id())
     from app.tools import compute as _c
     _c.set_position(2, 7, 15)          # 경로 도구의 기본 출발점
+
+    # ── 변경 이벤트·가용 곡선의 재료도 세계에서 뽑는다 ─────────────────────
+    # 임의 상품에는 최근 변경 이벤트가 거의 없다. 그러면 `get_change_events` 가
+    # 늘 빈 결과로 찍히는데, 그건 창구가 아니라 **물어본 상품이 조용했을 뿐**이다.
+    # 보충 큐에 든 sku 는 지금 움직이는 것들이라 여기서 고른다.
+    #   ⚠ 큐에 들었다고 이벤트가 있는 것은 아니다(대기 중일 수 있다) — 그래서
+    #     "골라 놓고 믿는" 게 아니라 **실제로 이벤트가 나오는 첫 번째**를 쓴다.
+    _pend = sot_client.get_pending_replenishments()
+    _queue = [r["sku_id"] for r in _pend] if isinstance(_pend, list) else []
+    pend_sku = _queue[0] if _queue else sku
+    ev_sku = sku
+    for _s in _queue[:15]:                      # 큐 전체를 두드리지 않는다(왕복 비용)
+        if sot_client.get_change_events([_s], within_hours=24):
+            ev_sku = _s
+            break
+    print(f" 보충 큐 {len(_queue)}건 · 가용 재료 {pend_sku} · 변경 이벤트 재료 {ev_sku}"
+          f"{'' if ev_sku != sku else ' (큐에서 못 골라 상품 재료로 물러섬)'}")
+    print()
 
     print("── 조회 10 ──")
     run("get_product", sku_id=sku)
@@ -225,7 +346,7 @@ def main() -> int:
     run("get_purchase_history")
     run("get_session_cart")
     run("get_wishlist")
-    run("get_change_events", sku_ids=[sku])
+    run("get_change_events", sku_ids=[ev_sku])
     run("get_popular_products")
     run("get_product_metrics", sku_ids=[sku])
     run("compare_purchase_popularity", sku_ids=[sku, sku2])
@@ -238,29 +359,85 @@ def main() -> int:
     run("optimize_route", sku_ids=[sku, sku2])
 
     print("\n── 추론 5 ──")
-    # 큐에 실제로 든 sku 를 지목해야 **곡선까지** 확인된다. 임의 상품은 거의
-    # 항상 not_pending 으로 떨어지는데, 그건 옳은 동작이라 통과로 세도 곡선은
-    # 못 본다 — 자산이 사는지를 보려면 재료를 골라야 한다(B 검수 A-3).
-    pend = sot_client.get_pending_replenishments()
-    pend_sku = (pend[0]["sku_id"]
-                if isinstance(pend, list) and pend else sku)
+    # 큐에 실제로 든 sku 를 지목해야 **곡선까지** 확인된다(위 재료 절에서 골랐다).
+    # 임의 상품은 거의 항상 not_pending 으로 떨어지는데, 그건 옳은 동작이라
+    # 통과로 세도 곡선은 못 본다 — 자산이 사는지를 보려면 재료를 골라야 한다
+    # (B 검수 A-3).
     run("predict_availability", sku_id=pend_sku)
     run("predict_repurchase")
     run("get_position")
     run("match_preferences")
-    run("identify_product_photo", image_ref="")
+    run("identify_product_photo", image_ref=_photo_fixture())
 
     print("\n── 액션 3 (스스로 치운다: 담기 → 수량 → 빼기) ──")
+    if config.USE_MOCK_SOT:
+        # ⚠ 액션 3 에는 **mock 분기가 없다.** 쓰기는 SoT 로만 간다(헌법 5) —
+        #   가짜 장바구니를 메모리에 만들면 그건 mock 이 아니라 **가짜 백엔드**다
+        #   (§2-5b 가 08-27 에 닫은 방향). 그래서 mock 에서는 실물 백엔드를
+        #   그대로 부르는데, mock 회원(9001)은 `consumer` 에 없어 FK 로 500 이
+        #   난다. **고장이 아니라 이 세계에 그 길이 없는 것**이다.
+        why = "mock 에는 액션 경로가 없다 — 쓰기는 SoT 로만 간다(설계)"
+        for _n in ("add_to_cart", "update_cart_quantity", "remove_from_cart"):
+            line(SKIP, _n, why)
+        added, cart_item_id = False, None
+        return _summary()
+
     action.set_consumer_id(member)
     added = run("add_to_cart", sku_id=sku, quantity=1)
+
+    # ⚠ 뒤의 둘은 **sku_id 가 아니라 cart_item_id** 를 받는다. 둘은 다른 것이다 —
+    #   sku 는 「상품 종류」의 번호이고 cart_item_id 는 「이 사람 장바구니의 이 줄」
+    #   의 번호다. 같은 상품이 여러 줄일 수 있으므로 sku 로는 지목이 안 된다.
+    #   08-28 까지 이 검사기가 sku_id 를 넘겨 `bad_arguments` 로 떨어졌다 —
+    #   **도구가 아니라 검사기가 틀린 것**이었다(담기가 500 이던 동안은 여기까지
+    #   도달하지 못해 안 보였다).
+    #
+    #   그 번호는 get_session_cart 로만 얻는데, 지금 백엔드 DTO
+    #   (SessionCartItemResponse)에 `cartItemId` 가 없다 → **사슬이 여기서 끊긴다.**
+    #   창구가 열리면 아래 분기가 저절로 산다. 없는 동안은 오류가 아니라 상태다.
+    cart_item_id = None
     if added:
-        run("update_cart_quantity", sku_id=sku, quantity=2)
-        run("remove_from_cart", sku_id=sku)
+        cart = query.run("get_session_cart", {}) or {}
+        items = cart.get("items") or []
+        for it in items:
+            if it.get("sku_id") == sku and it.get("cart_item_id") is not None:
+                cart_item_id = int(it["cart_item_id"])
+                break
+        # ⚠ `get_session_cart` 는 위 「조회 10」에서 **담기 전에** 재어 빈 결과로
+        #   찍힌다. 그건 창구가 틀린 게 아니라 그 시각에 장바구니가 빈 것이다.
+        #   그대로 두면 표에 ⚠ 가 영영 남아 다음 사람이 매번 쫓는다 —
+        #   담은 뒤 실제로 값이 오면 **그 줄을 고쳐 적는다.**
+        #   (없는 고장을 있다고 적는 것도 거짓 보고다 — 이 파일의 원칙)
+        if items:
+            for i, (m, name, _d) in enumerate(_rows):
+                if name == "get_session_cart" and m == EMPTY:
+                    _rows[i] = (OK, name, f"items {len(items)}건 (담은 뒤 재확인)")
+                    print(f" ↑ get_session_cart 정정 — 담기 전이라 비었던 것이다"
+                          f" (지금 {len(items)}건)")
+                    break
+
+    if added and cart_item_id is not None:
+        run("update_cart_quantity", cart_item_id=cart_item_id, quantity=2)
+        run("remove_from_cart", cart_item_id=cart_item_id)
+    elif added:
+        why = ("cart_item_id 를 얻을 창구가 없다 — SessionCartItemResponse 에 "
+               "cartItemId 부재(백엔드 요청 ⑤). 도구는 멀쩡하다")
+        line(SKIP, "update_cart_quantity", why)
+        line(SKIP, "remove_from_cart", why)
+        # ⚠ 치우지 못했다는 사실을 **말한다.** 조용히 넘기면 실행할 때마다 이
+        #   회원 장바구니에 한 줄씩 쌓이고, 다음 실행의 get_session_cart 가
+        #   그 찌꺼기를 "정상 데이터"로 보고한다.
+        print(f"   ⚠ 담은 것을 못 치웠다 — 회원 {member} 장바구니에 sku {sku} 가 "
+              f"남는다. 실행할수록 쌓인다.")
     else:
         line(SKIP, "update_cart_quantity", "담기가 안 돼 건너뜀")
         line(SKIP, "remove_from_cart", "담기가 안 돼 건너뜀")
 
-    # ── 집계 ─────────────────────────────────────────────────────────────────
+    return _summary()
+
+
+def _summary() -> int:
+    """표를 닫고 종료코드를 낸다. mock 은 액션 절에서 일찍 여기로 온다."""
     n = {m: sum(1 for r in _rows if r[0] == m) for m in (OK, EMPTY, BAD, SKIP)}
     print(f"\n{'='*66}")
     print(f"도구 {len(_rows)}종 — 실물 {n[OK]} · 빈결과 {n[EMPTY]} · "

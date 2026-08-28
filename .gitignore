@@ -46,3 +46,5 @@ CLAUDE.local.md
 .mcp.json
 
 src/main/resources/application-mysql.yml
+
+Agent/.demo_inject.json

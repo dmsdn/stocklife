@@ -53,7 +53,8 @@ ARTIFACTS = os.path.abspath(os.path.join(_HERE, "..", "artifacts"))
 # floormap은 joblib이 아니라 **백엔드에서 받아 오는** 자산이다(위치추정 규칙판의
 # 스냅 재료). 파일이 아니라도 "상주시키고 도구가 읽는다"는 계약은 같다.
 _STATE: dict = {"availability": None, "repurchase": None,
-                "photo": None, "photo_encoder": None, "floormap": None}
+                "photo": None, "photo_encoder": None, "floormap": None,
+                "preference": None}
 
 
 # ── 적재 ────────────────────────────────────────────────────────────────────
@@ -87,6 +88,48 @@ def load_all(with_photo_encoder: bool = False) -> dict:
         _STATE["repurchase"] = joblib.load(
             os.path.join(ARTIFACTS, "repurchase_model.joblib"))
         return _STATE["repurchase"].get("version", "?")
+
+    def _load_preference():
+        """취향 매칭 출하물 + **요청마다 안 변하는 것을 여기서 미리 굽는다.**
+
+        [무엇을 미리 굽나] 소분류 안의 인기 순위 g 와 그것을 cap 으로 끊은 blk.
+          둘 다 회원과 무관하다 — 회원이 바뀌어도 "우유 소분류에서 3번째로 잘
+          팔리는 것"은 그대로다. 요청마다 다시 세면 5,000개 정렬을 매번 돈다.
+
+        [g 를 어떻게 세나 — lexsort 의 키 순서에 주의]
+          `np.lexsort((-pop_n, l2))` 는 **마지막 키가 1순위**다. 즉 소분류로
+          먼저 묶고 그 안에서 인기 내림차순. 순서를 뒤집으면 소분류가 섞여
+          "소분류당 몇 개"라는 다양화 자체가 성립하지 않는다.
+        """
+        z = np.load(os.path.join(ARTIFACTS, "preference_model.npz"),
+                    allow_pickle=True)
+        b = {k: z[k] for k in z.files}
+        b["l2_names"] = [str(n) for n in b["l2_names"]]
+        b["alpha"] = float(b["alpha"])
+        b["axis_mult"] = float(b["axis_mult"])
+        b["div_cap"] = int(b["div_cap"])
+        b["version"] = str(b["version"])
+        b["method"] = str(b["method"])
+
+        l2 = b["l2_of_sku"].astype(np.int64)
+        b["l2_of_sku"] = l2
+        S = len(l2)
+        pop = b["pop"].astype(np.float64)
+        pop_n = pop / (pop.max() + 1.0)                        # [0, 1)
+        ordv = np.lexsort((-pop_n, l2))                        # 소분류별 인기순
+        g = np.empty(S, np.int64)
+        _, cuts = np.unique(l2[ordv], return_index=True)
+        # 각 소분류의 시작 위치를 그 소분류 길이만큼 늘려 빼면, 전체 순위가
+        # **소분류 안에서 0부터 세는 순위**로 바뀐다.
+        g[ordv] = np.arange(S) - np.repeat(cuts, np.diff(np.r_[cuts, S]))
+        b["g"] = g
+        b["blk"] = (g // b["div_cap"]).astype(np.float64)
+        b["sku_ix"] = {int(v): i for i, v in enumerate(b["sku"])}
+        _STATE["preference"] = b
+        return f'{b["version"]} ({S:,} SKU · 소분류 {len(b["l2_names"])})'
+
+    if os.path.exists(os.path.join(ARTIFACTS, "preference_model.npz")):
+        _try("preference", _load_preference)
 
     if os.path.exists(os.path.join(ARTIFACTS, "availability_model.joblib")):
         _try("availability", _load_availability)
@@ -834,12 +877,196 @@ def get_position() -> dict:
                         "'~쯤에 계시죠?' 정도로 말하세요.")}
 
 
-# ── ⑤ 아직 배선 전인 하나 ───────────────────────────────────────────────────
-def match_preferences(**kwargs) -> dict:
-    """취향 매칭. 자산(T15 npz)은 완주 — **배선이 08/29다**(요청 ④ history 의존)."""
-    return {"error": "not_implemented",
-            "message": "취향 매칭은 아직 준비 중입니다. 이 기능 없이 답할 수 "
-                       "있는 부분만 답하세요."}
+# ── ⑤ 취향 매칭 ─────────────────────────────────────────────────────────────
+# 한 번에 돌려줄 최대 후보 수. predict_repurchase 와 같은 이유다 — 발화가
+# 감당할 수 있는 길이가 곧 상한이고, **자른 개수는 반드시 결과에 적는다**.
+PREFERENCE_MAX_ITEMS = 5
+
+# 사전식(lexicographic) 점수의 자릿수. 대조표(preference_rank.py)가 채점에 쓴
+# 그 상수를 **그대로** 옮긴다. 여기서 다른 수를 쓰면 서빙이 채점된 것과 다른
+# 순위를 내므로, 대조표의 승리(P@5 0.0099)가 이 도구에 대해서는 무효가 된다.
+#   _LEX_BLOCK  다양화 블록 — 무엇보다 먼저 가른다
+#   _LEX_TASTE  소분류 사후확률 — 블록 안의 1순위
+#   (인기 순위 g 는 계수 없이 빼서 마지막 자리를 가른다)
+_LEX_BLOCK = 1e12
+_LEX_TASTE = 1e6
+
+
+def match_preferences(top_k: int = 3) -> dict:
+    """이 손님이 좋아할 만한 품목 — 소분류 사후확률로 고르고 다양화로 끊는다.
+
+    [무엇을 계산하나 — 세 줄]
+      ① 이력에서 **소분류별 습관 종수** n_l 을 센다(횟수가 아니다).
+      ② 사후:  post_l ∝ (n_l + α·전역사전_l) / (소분류크기_l × 축배율_l)
+      ③ 점수:  −블록·1e12 + post[소분류] × 축배율(회원) × 1e6 − 소분류내인기순위
+
+    [왜 「횟수」가 아니라 「종수」인가 — 이 한 줄이 자산의 요점이다]
+      구매 횟수 ≈ 취향 ÷ 주기다. 우유는 주기가 16.7일이라 취향이 보통이어도
+      횟수가 쌓인다. 횟수로 세면 **1위 소분류가 32.8% 갈린다**(T15 실측) —
+      즉 세 명 중 한 명에게 엉뚱한 취향을 짚는다. 종수는 주기에 안 흔들린다.
+
+    [왜 크기와 축으로 나누나] 세계가 습관을 뽑을 때
+      P(습관이 소분류 l 에) ∝ 취향_l × 축배율_l × (l 의 SKU 수) 였다.
+      관측한 종수에서 취향을 되찾으려면 **곱해진 것을 도로 나눠야** 한다.
+      안 나누면 SKU 가 많은 소분류(가공식품)가 전원의 취향 1위가 된다.
+
+    [왜 디리클레로 축소하나 — 콜드스타트가 특수 경로가 아닌 이유]
+      회원당 습관이 ~22개뿐이라 안 산 소분류는 종수 0 이다. 그대로 쓰면 0 이
+      "싫다"가 되는데 실제로는 **"모른다"**다. 전역 사전을 α만큼 섞어 축소하면
+      종수가 0 일 때 식이 자동으로 `전역사전 × 축배율`만 남는다 — 이력 0건
+      회원을 위한 별도 분기가 **필요 없다**. 실측: 이력 0건도 무작위의 1.7배,
+      1건이면 4배(대조표 §6). 그래서 "이력 1건이면 말을 걸어도 된다".
+
+    [다양화 cap 3 — 정확도를 얼마나 내주는지 재고 골랐다]
+      ⑤ 그대로의 상위 20은 커버리지 1.00, 즉 **20개가 전부 한 소분류**다.
+      맞고 틀리고 이전에 발화가 이상하다. cap 3 은 P@5 를 0.0106→0.0099(−7%)
+      만 내주고 커버리지를 9.62로 올린다. cap 1 은 절반(0.0052)이라 과했다.
+      ⚠ 그래도 top_k=3 이면 **한 소분류에서 셋**이 나올 수 있다. 정상이다 —
+        cap 은 "연달아 셋까지"이지 "셋을 흩어라"가 아니다. read_as 가 이걸 말한다.
+
+    [회원 축(반려·자녀)을 이력에서 **추정**한다 — 조회 창구가 없다]
+      학습 때는 members 테이블의 축을 그대로 썼는데, 서빙에는 그 창구가 없다
+      (predict_repurchase 도 같은 구멍을 안고 있다). 그렇다고 축배율을 1 로
+      두면 안 된다 — 분모의 `l2_boost` 가 반려·기저귀 소분류를 **전역적으로
+      깎아 놓았기** 때문에, 되돌려 주지 않으면 반려인이 반려용품을 영영 못 본다.
+      그래서 "그 소분류를 산 적이 있으면 그 축이 있다"로 추정한다. 이 세계에선
+      습관 표집이 축으로 가중되므로 강한 신호다. 다만 **추정이라 결과에 적는다**
+      (`axes_inferred`) — 나중에 창구가 열리면 이 세 줄만 갈아 끼우면 된다.
+
+    [반환] 오류가 아니면 items(0개 이상) + taste(상위 소분류) + read_as.
+    """
+    from app.tools import query                                # 순환 import 회피
+    b = _STATE["preference"]
+    if b is None:
+        return {"error": "model_not_loaded",
+                "message": "취향 매칭 자산이 적재되지 않았습니다."}
+
+    member_id = query.current_member_id()
+    if member_id is None:
+        return {"error": "no_member",
+                "message": ("비회원 세션이라 취향을 알 수 없습니다. "
+                            "로그인하면 추천할 수 있다고 안내하세요.")}
+
+    k = max(1, int(top_k or 3))
+    capped = k > PREFERENCE_MAX_ITEMS
+    k = min(k, PREFERENCE_MAX_ITEMS)
+
+    hist = sot_client.get_purchase_history(member_id) or []
+    # **종수**를 세는 것이므로 sku 를 집합으로 만든다(같은 sku 를 열 번 사도 1).
+    bought = {int(r["sku_id"]) for r in hist if r.get("sku_id") is not None}
+
+    l2 = b["l2_of_sku"]
+    S = len(l2)
+    L = len(b["l2_names"])
+    ix = b["sku_ix"]
+    # 이력의 sku 를 출하물 축의 자리번호로 옮긴다. 출하물에 없는 sku 는 빠진다
+    # (카탈로그가 갱신됐거나 세계가 다른 경우) — 아래 겹침 가드가 그걸 잡는다.
+    seen_ix = [ix[v] for v in bought if v in ix]
+
+    dst = np.zeros(L, np.float64)
+    if seen_ix:
+        np.add.at(dst, l2[np.array(seen_ix, np.int64)], 1.0)
+
+    post = ((dst + b["alpha"] * b["l2_prior"].astype(np.float64))
+            / (b["l2_size"].astype(np.float64) * b["l2_boost"].astype(np.float64)))
+    post /= post.sum()
+
+    # 축 추정 — 위 독스트링 [회원 축] 참조.
+    pet_l2, kid_l2 = b["axis_pet_l2"], b["axis_kid_l2"]
+    has_pet = bool(dst[pet_l2].sum() > 0)
+    has_kid = bool(dst[kid_l2].sum() > 0)
+    boost_l2 = np.ones(L, np.float64)                          # 이 회원의 소분류 배율
+    if has_pet:
+        boost_l2[pet_l2] *= b["axis_mult"]
+    if has_kid:
+        boost_l2[kid_l2] *= b["axis_mult"]
+    boost_s = boost_l2[l2]                                     # SKU 로 펼친 것
+
+    # **보고용 취향 = 배율까지 반영한 것.** post 만으로 순위를 적으면 근거가
+    # 결정과 달라진다 — 실측으로 걸렸다: 반려인 회원의 1위 후보가 「반려간식」인데
+    # `l2_rank` 는 6 이라고 적혔다(post 1위는 「신발」). 손님에게 읽어 줄 근거가
+    # "6위인데 왜 1등"이 되면, 그건 근거가 아니라 **다른 계산의 흔적**이다.
+    # 점수식 자체는 안 건드린다(대조표와 같아야 한다) — 보고만 바로잡는다.
+    post_eff = post * boost_l2
+    post_eff /= post_eff.sum()
+
+    # ⚠ **float64 여야 한다.** 사전식 점수는 앞자리가 1e12 인데 float32 는
+    #   그 근처에서 최소 간격이 6만이 넘는다 — 뒷자리(취향·인기)가 통째로
+    #   반올림돼 사라지고 전부 동점이 된다. 조용히 틀리는 종류의 버그다.
+    score = (-b["blk"] * _LEX_BLOCK
+             + post[l2] * boost_s * _LEX_TASTE
+             - b["g"].astype(np.float64))
+    if seen_ix:
+        score[np.array(seen_ix, np.int64)] = -np.inf           # 이미 산 것은 후보 아님
+
+    # 여유를 두고 뽑는다 — SoT 가 못 알아보는 sku(단종·미적재)가 섞일 수 있다.
+    order = np.argsort(-score)[: k * 4]
+    cand = [int(b["sku"][i]) for i in order if np.isfinite(score[i])]
+
+    # 이름·가격·행사는 **SoT 에서** 온다(헌법 1). 출하물에는 sku 와 점수뿐이다.
+    rows = sot_client.get_products_by_skus(cand) if cand else []
+    by_sku = {r.get("sku_id"): r for r in rows if r.get("sku_id") is not None}
+
+    # ⚠ 겹침 가드 — 후보는 뽑혔는데 SoT 가 하나도 못 알아본 경우.
+    #   출하물의 카탈로그와 지금 SoT 의 카탈로그가 **다른 세계**라는 뜻이다.
+    #   mock(6종)에서 늘 이렇게 되고, 실물에서도 카탈로그를 갈아엎으면 이렇게
+    #   된다. 빈 목록으로 돌려주면 "추천할 게 없네요"라는 **거짓 발화**가 나온다
+    #   — 실제로는 없는 게 아니라 못 알아본 것이다. 그래서 이유를 말한다.
+    if cand and not by_sku:
+        return {"state": "catalog_mismatch",
+                "member_id": int(member_id),
+                "message": ("취향 모델의 카탈로그와 지금 조회되는 상품 목록이 "
+                            "겹치지 않습니다. 추천을 만들 수 없으니 이 기능 "
+                            "없이 답하고, 추천이 '없다'고 말하지 마세요."),
+                "artifact_version": b["version"]}
+
+    items = []
+    for sku in cand:
+        r = by_sku.get(sku)
+        if r is None:
+            continue
+        i = ix[sku]
+        li = int(l2[i])
+        items.append({
+            "sku_id": sku,
+            "name": r.get("name"),
+            "category_l2": r.get("category_l2") or b["l2_names"][li],
+            "price_krw": r.get("price_krw"),
+            "final_price_krw": r.get("final_price_krw"),
+            "on_promo": bool(r.get("on_promo")),
+            # 근거는 **점수의 재료 그대로**다. 지어낸 문장을 주면 LLM 이 그걸
+            # 옮겨 적고, 우리는 왜 그렇게 말했는지 못 추적한다.
+            "why": {"l2": b["l2_names"][li],
+                    "bought_in_l2": int(dst[li]),
+                    "l2_rank": int(np.sum(post_eff > post_eff[li])) + 1,
+                    "axis_boosted": bool(boost_l2[li] > 1.0),
+                    "popularity_rank_in_l2": int(b["g"][i]) + 1},
+        })
+        if len(items) >= k:
+            break
+
+    top_l2 = np.argsort(-post_eff)[:3]
+    return {
+        "member_id": int(member_id),
+        "items": items,
+        "history_skus": len(bought),
+        "taste": [{"l2": b["l2_names"][int(j)],
+                   "bought": int(dst[int(j)]),
+                   "share": round(float(post_eff[int(j)]), 4)} for j in top_l2],
+        "axes_inferred": {"has_pet": has_pet, "has_child": has_kid},
+        "truncated_to": (PREFERENCE_MAX_ITEMS if capped else None),
+        "model": b["method"],
+        "artifact_version": b["version"],
+        "read_as": (
+            "후보와 근거만 말하고, 이유를 지어내지 마세요 — why 에 담긴 것만 "
+            "씁니다. 후보 여럿이 같은 소분류일 수 있습니다(다양화는 소분류당 "
+            "최대 3개까지 허용합니다). 이력이 적으면(history_skus 가 한 자리) "
+            "'아직 잘 모르지만'을 붙이세요. "
+            "⚠ axes_inferred(반려·자녀)는 **구매 이력에서 추정한 것**이지 "
+            "손님이 알려준 정보가 아닙니다 — '반려동물 키우시죠?'처럼 단정하지 "
+            "말고, 그 소분류를 사셨다는 사실까지만 말하세요. "
+            "⚠ 재고와 위치는 여기 없습니다. 필요하면 get_inventory 로 확인하세요."),
+    }
 
 
 REGISTRY = {

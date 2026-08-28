@@ -63,6 +63,17 @@ GAIN_WINDOW_DAYS = (10.0, 47.0)
 # 몇 항목까지 담나"다. 여기서 3을 만들어도 위치 이동이 함께 오면 저기서 잘린다.
 ENTRY_MAX_ITEMS = 3
 
+# 진입 브리핑에 올릴 **자리 이동** 항목 수 상한. 재구매(3)보다 적다 —
+# 자리가 바뀐 게 셋이면 그건 브리핑이 아니라 안내 방송이다.
+MOVED_MAX_ITEMS = 2
+# "늘 사시던"의 기준. 한 번 산 것은 습관이 아니다(소비주기가 간격을 못 재는
+# 것과 같은 선). 두 번부터가 습관이다.
+HABIT_MIN_BUYS = 2
+# 자리 이동을 얼마나 거슬러 볼 것인가의 **상한**. 실제 창은 「지난 구매 이후」로
+# 잡고(아래 _moved_items), 그게 터무니없이 길어지는 것만 여기서 막는다.
+# 90일: 데모 슬라이스의 이력 길이 — 그보다 앞은 우리 세계에 없다.
+MOVED_LOOKBACK_MAX_DAYS = 90
+
 # 매장 밖 푸시를 몇 시간마다 볼 것인가. 하루 한 번꼴 — 소비주기는 주 단위라
 # 더 자주 봐야 할 이유가 없고, 자주 보면 같은 사안에 쿨다운만 태운다.
 OUTSIDE_TICK_SEC = 6 * 3600
@@ -118,6 +129,74 @@ def _due_items(member_id: int, session_id: str | None) -> list[dict]:
     return out[:ENTRY_MAX_ITEMS]
 
 
+def _moved_items(member_id: int) -> list[dict]:
+    """**늘 사시던 것 중 자리가 바뀐 것.** 킬링 장면 3의 나머지 반쪽.
+
+    [왜 여기가 맡나 — 세계 감시자로는 안 되는 이유]
+      `world.on_event` 의 MOVE 갈래는 **장바구니에 든 물건**에만 반응한다
+      (`_CART_SKUS`). 그건 그것대로 맞다 — 담을 예정인 물건의 자리가 바뀌면
+      즉시 알려야 한다(모르면 빈 매대 앞에 선다).
+      그런데 진입 브리핑이 말하려는 것은 **"늘 사시던"** 이다. 진입 순간엔
+      장바구니가 비어 있으므로 그 갈래로는 **영영 안 나온다.**
+      08-28 까지 장면 3의 절반이 구조적으로 빠져 있었다.
+
+    [창을 어떻게 잡나 — 「지난번 오셨을 때와 달라진 것」]
+      상수로 "최근 7일" 같은 걸 박으면 두 가지가 틀린다: 자주 오는 손님에게는
+      이미 본 변화를 또 말하고, 오랜만에 온 손님에게는 그 사이의 변화를 놓친다.
+      그래서 **마지막 구매 이후**를 창으로 쓴다. 그 손님이 마지막으로 이 매장의
+      상태를 본 시각이 그때이기 때문이다.
+      ⚠ 상한을 두는 이유: 1년 만에 온 손님에게 1년치 이동을 다 말할 수는 없다.
+
+    [반환] [{"sku_id", "location_id"} …] — 없으면 빈 목록.
+    """
+    hist = sot_client.get_purchase_history(member_id) or []
+    if not hist:
+        return []
+
+    counts: dict[int, int] = {}
+    for r in hist:
+        v = r.get("sku_id")
+        if v is not None:
+            counts[int(v)] = counts.get(int(v), 0) + 1
+    habit = [k for k, c in counts.items() if c >= HABIT_MIN_BUYS]
+    if not habit:
+        return []
+
+    # 마지막 구매 시각 → 지금까지 몇 시간. `get_purchase_history` 는 시각
+    # **오름차순**이 계약이라 마지막 행이 가장 최근이다(sot_client 독스트링).
+    last = hist[-1].get("purchased_at")
+    hours = MOVED_LOOKBACK_MAX_DAYS * 24
+    if last:
+        try:
+            from datetime import datetime
+            t = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
+            if t.tzinfo is not None:
+                t = t.replace(tzinfo=None)
+            gap = (config.DEMO_NOW - t).total_seconds() / 3600.0
+            # 하한 24시간: 방금 사고 나간 손님에게도 "어제 바뀌었어요"는 유효하다.
+            hours = max(24.0, min(float(hours), gap))
+        except Exception:                                      # noqa: BLE001
+            pass                                                # 못 읽으면 상한 그대로
+
+    # ⚠ sku 를 통째로 넘기면 질의가 커진다. 습관 상위 몇 개로 좁힌다 —
+    #   많이 산 순이면 "늘 사시던"에 가장 가깝다.
+    top = sorted(habit, key=lambda k: -counts[k])[:50]
+    events = sot_client.get_change_events(top, within_hours=int(hours)) or []
+
+    out, seen = [], set()
+    for e in events:
+        if e.get("event_type") != "MOVE":
+            continue                       # RESTOCK_IN·STOCKOUT 은 브리핑거리가 아니다
+        sku = e.get("sku_id")
+        if sku is None or int(sku) in seen:
+            continue                       # 같은 상품이 두 번 옮겨졌어도 한 번만
+        seen.add(int(sku))
+        out.append({"sku_id": int(sku), "location_id": e.get("location_id")})
+        if len(out) >= MOVED_MAX_ITEMS:
+            break
+    return out
+
+
 def on_store_entry(session_id: str, member_id, now: float | None = None) -> list[dict]:
     """손님이 매장에 들어섰다 — **킬링 장면 3**의 방아쇠.
 
@@ -150,6 +229,22 @@ def on_store_entry(session_id: str, member_id, now: float | None = None) -> list
                 "sku_id": it["sku_id"],
                 "days_since_last": it["days_since_last"],
                 "typical_cycle_days": it["typical_cycle_days"]}
+        verdict = etiquette.permit(session_id, cand["topic_type"],
+                                   cand["topic_key"], now=now)
+        if verdict["allowed"]:
+            etiquette.stage(session_id, cand)
+            staged.append(cand)
+
+    # 늘 사시던 것의 자리가 바뀌었다면 **같은 묶음에** 넣는다.
+    #   topic_key 를 world 와 같은 `loc:{sku}` 로 맞춘다 — 진입 브리핑에서 말한
+    #   것을 나중에 장바구니에 담았다고 또 말하면 안 된다. 예절의 사안 장부가
+    #   같은 키를 보고 걸러 준다(사안당 1회).
+    for mv in _moved_items(int(member_id)):
+        cand = {"topic_type": "LOCATION_MOVED",
+                "topic_key": f"loc:{mv['sku_id']}",
+                "moment": "entry",
+                "session_id": session_id, "member_id": int(member_id),
+                "sku_id": mv["sku_id"], "location_id": mv.get("location_id")}
         verdict = etiquette.permit(session_id, cand["topic_type"],
                                    cand["topic_key"], now=now)
         if verdict["allowed"]:
@@ -238,6 +333,7 @@ if __name__ == "__main__":
     _self._due_items = lambda mid, sid: [
         {"sku_id": 101042, "days_since_last": 41.0, "typical_cycle_days": 37.0},
         {"sku_id": 101043, "days_since_last": 12.0, "typical_cycle_days": 14.0}]
+    _self._moved_items = lambda mid: []           # 자리 이동은 따로 잰다
     got = _self.on_store_entry("s2", 9001, now=1000.0)
     assert len(got) == 2, got
     assert all(c["moment"] == "entry" for c in got), "묶음 표시가 빠졌다"
@@ -248,11 +344,46 @@ if __name__ == "__main__":
     assert d is not None and d["mode"] == "bundle", d
     assert d["topic_type"] == "STORE_ENTRY_BRIEF" and d["topic_key"] == "entry:s2"
 
+    # 자리 이동이 **같은 묶음에** 들어간다 — 장면 3의 나머지 반쪽
+    etiquette.reset(); reset()
+    _self._due_items = lambda mid, sid: [
+        {"sku_id": 101042, "days_since_last": 41.0, "typical_cycle_days": 37.0}]
+    _self._moved_items = lambda mid: [{"sku_id": 101055, "location_id": "F1-A-R02-B03-L1"}]
+    got = _self.on_store_entry("s3", 9001, now=2000.0)
+    assert len(got) == 2, got
+    kinds = {c["topic_type"] for c in got}
+    assert kinds == {"STORE_ENTRY_BRIEF", "LOCATION_MOVED"}, kinds
+    assert all(c["moment"] == "entry" for c in got), "자리 이동도 묶음이어야 한다"
+    d3 = etiquette.drain("s3", now=2000.0)
+    assert d3 is not None and d3["mode"] == "bundle" and len(d3["items"]) == 2, d3
+
+    # 같은 사안을 두 번 말하지 않는다 — world 와 topic_key 가 같아야 걸린다.
+    # ⚠ 허가만으로는 안 걸린다. 장부는 **실제로 나간 뒤**에 적힌다
+    #   (etiquette.record — 허가받고도 가드에 막히면 말은 안 나간 것이다).
+    #   그래서 전달까지 흉내 내고 나서 확인한다.
+    etiquette.reset(); reset()
+    _self._due_items = lambda mid, sid: []
+    _self._moved_items = lambda mid: [{"sku_id": 101055, "location_id": "F1-A-R02-B03-L1"}]
+    _self.on_store_entry("s4", 9001, now=3000.0)
+    d4 = etiquette.drain("s4", now=3000.0)
+    assert d4 is not None, "자리 이동 하나만 있어도 묶음이 나와야 한다"
+    etiquette.record("s4", d4["topic_key"], now=3000.0,
+                     also=[i["topic_key"] for i in d4["items"]])
+    again = etiquette.permit("s4", "LOCATION_MOVED", "loc:101055", now=3001.0)
+    assert not again["allowed"], "진입에서 말한 자리 이동을 또 말하면 안 된다"
+    assert again["reason"] == "topic_already_done", again
+
     # 밖 푸시는 후보만 만들고 **스테이지에 안 넣는다**(채널이 없다)
+    #   ⚠ 앞 갈래에서 _due_items 를 빈 목록으로 바꿔 놨다 — 되돌려 놓고 잰다.
+    #     (스텁을 공유하는 스모크는 이런 순서 의존을 만든다. 되돌리는 한 줄이
+    #      다음 갈래를 남의 준비에 안 기대게 한다.)
+    _self._due_items = lambda mid, sid: [
+        {"sku_id": 101042, "days_since_last": 41.0, "typical_cycle_days": 37.0},
+        {"sku_id": 101043, "days_since_last": 12.0, "typical_cycle_days": 14.0}]
     etiquette.reset(); reset()
     outs = _self.tick_outside([9001], now=1000.0)
     assert len(outs) == 2 and outs[0]["channel"] == "push_unavailable"
     assert etiquette.drain("s2") is None, "채널도 없는데 스테이지에 들어갔다"
 
     etiquette.reset(); reset()
-    print("schedule 스모크 8갈래 전부 통과")
+    print("schedule 스모크 11갈래 전부 통과")

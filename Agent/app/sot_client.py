@@ -109,7 +109,13 @@ _API = {
     #   그래서 회원 단위로 갈아탔다. 지금 세계에선 한 회원이 한 세션이라
     #   데모에 차이가 없고, 실물과 맞는다. 비회원 장바구니는 열린 사안이다.
     "get_session_cart":     "/internal/cart/session",
-    "get_wishlist":         "/api/wishlist",                          # 구: /api/members/{id}/wishlist
+    # ⚠ 공개 `/api/wishlist` 는 **사용자 JWT** 를 요구한다 — Agent 는 서버라
+    #   쿠키가 없어 500 이 났다(`인증 토큰이 없습니다`). 08-28 에 내부판을 냈다.
+    #   ⚠⚠ 인자는 consumerId 가 아니라 **memberId** 다. 공개판 서비스는
+    #     consumerId→memberId 변환을 태우는데, 우리는 이미 member_id 축이라
+    #     그 길로 가면 1001 이 10,001,001 로 둔갑해 **항상 빈다**
+    #     (purchases/history 와 같은 함정 — 두 번째로 밟았다).
+    "get_wishlist":         "/internal/wishlist",                          # 구: /api/members/{id}/wishlist
     "get_change_events":    "/api/inventory/change-events",           # 구: /api/events/changes
     # ── 08-21 ai-server 인수로 새로 열린 창구들 ──
     "get_frequent":         "/internal/orders/frequent",              # 반복구매 집계(백엔드가 계산)
@@ -510,23 +516,23 @@ def get_session_cart(session_id: str) -> dict:
                       headers=_internal_headers()) or {}
         # camelCase → 우리 계약. 실물 DTO(SessionCartItemResponse)의 이름은
         # skuId · productName · priceKrw · quantity · subtotal 이다.
-        items = [{"sku_id": it.get("skuId"),
+        items = [{"cart_item_id": it.get("cartItemId"),
+                  "sku_id": it.get("skuId"),
                   "name": it.get("productName"),
                   "quantity": it.get("quantity"),
                   "price_krw": it.get("priceKrw"),
                   "line_total_krw": it.get("subtotal")}
                  for it in (r.get("items") or [])]
-        # ⚠ **`cart_item_id` 가 이 응답에 없다.** 그런데 수량변경·빼기는 그것을
-        #   받는다(sku 로는 못 부른다 — 같은 상품이 여러 줄일 수 있어서).
-        #   그래서 담기 → 수량변경의 사슬이 **아직 안 이어진다.**
-        #   조용히 비워 두면 LLM 이 sku 를 cart_item_id 로 넘겨 엉뚱한 줄을
-        #   지운다 — 그래서 **없다는 사실을 값으로 실어 보낸다.**
-        #   요청: SessionCartItemResponse 에 cartItemId 추가(백엔드 3줄).
+        # `cart_item_id` 는 수량변경·빼기가 받는 번호다. sku 와 다르다 —
+        # 같은 상품이 여러 줄일 수 있어 sku 로는 줄을 지목할 수 없다.
+        # 08-28 이전에는 이 칸이 응답에 없어 사슬이 끊겨 있었다(백엔드 DTO 보강).
+        # ⚠ 그래도 없이 오는 경우가 있으면(구 백엔드) **없다는 사실을 값으로
+        #   실어 보낸다** — 조용히 비우면 LLM 이 sku 를 넘겨 엉뚱한 줄을 지운다.
         out = {"session_id": session_id, "items": items,
                "total_krw": r.get("totalAmount", 0)}
-        if items:
-            out["note"] = ("이 목록에는 cart_item_id 가 없습니다. "
-                           "수량 변경·빼기는 지금 호출할 수 없으니, "
+        if items and any(it.get("cart_item_id") is None for it in items):
+            out["note"] = ("일부 줄에 cart_item_id 가 없습니다(구 백엔드). "
+                           "그 줄은 수량 변경·빼기를 호출하지 말고, "
                            "손님께 앱에서 직접 수정해 달라고 안내하세요. "
                            "sku_id 를 cart_item_id 로 넘기지 마세요.")
         return out
@@ -566,7 +572,13 @@ def get_wishlist(member_id: int) -> list[dict]:
     세계 감시자가 RESTOCK_IN 이벤트를 받으면 "이 sku를 위시리스트에 둔 회원"을 찾는다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_wishlist"].format(member_id=member_id))
+        rows = _http_get(_API["get_wishlist"], {"memberId": int(member_id)},
+                         headers=_internal_headers()) or []
+        # camelCase → 우리 계약(경계에서 한 번에 — 이 파일의 규율).
+        return [{"member_id": int(member_id), "sku_id": r.get("skuId"),
+                 "name": r.get("name"), "brand": r.get("brand"),
+                 "price_krw": r.get("priceKrw"), "image_url": r.get("imageUrl"),
+                 "added_at": r.get("addedAt")} for r in rows]
     return [w for w in mock_data.WISHLISTS if w["member_id"] == member_id]
 
 
@@ -596,8 +608,26 @@ def get_change_events(sku_ids: list[int] | None = None,
         #     지금은 무해하지만, 전체가 필요해지면 백엔드에 기본값을 요청한다.
         if not sku_ids:
             return []
+        # ⚠⚠ **시계가 둘이다.** 이 창구만 시간 계산을 백엔드가 한다:
+        #       InventoryService: Instant.now().minus(recentHours)
+        #   그런데 우리 세계의 「지금」은 벽시계가 아니라 `config.DEMO_NOW`
+        #   (2026-08-08 14:20 — DES 스냅샷 시각)다. 데모 데이터는 거기서
+        #   끝나므로, 벽시계 기준 "최근 24시간"에는 **이벤트가 영원히 0건**이다.
+        #   창구도 질의도 멀쩡한데 늘 빈 배열이 오는, 제일 안 잡히는 부류다
+        #   (08-28 실측: 그 sku 에 이벤트 312건이 있는데 24시간 창은 0건).
+        #
+        #   [고치는 법] 창의 **시작점**이 `DEMO_NOW - within_hours` 에 오도록
+        #   시간 수를 벌린다. 창이 뒤로 더 늘어나지만(DEMO_NOW ~ 벽시계) 그
+        #   구간에는 데이터가 없으므로 결과는 의도한 창과 **정확히 같다.**
+        #   세계가 벽시계를 따라잡는 날 skew 가 0이 되어 이 보정은 저절로
+        #   사라진다 — 상수를 박지 않는 이유다.
+        #
+        #   ⚠ 백엔드에 `since` 를 받는 인자가 생기면 이 보정을 지운다.
+        #     지금은 `hours` 뿐이라 부르는 쪽에서 감당한다.
+        skew_h = (datetime.now() - config.DEMO_NOW).total_seconds() / 3600.0
+        hours = int(within_hours) + max(0, int(skew_h) + 1)
         rows = _http_get(_API["get_change_events"],
-                         {"skuIds": list(sku_ids), "hours": int(within_hours)}) or []
+                         {"skuIds": list(sku_ids), "hours": hours}) or []
         # ⚠ 원시 camelCase 를 흘려보내면 안 된다 — 08-27 에 `get_inventory`·
         #   `search_products` 가 정확히 그래서 **값이 조용히 None** 이 됐다.
         #   경계에서 한 번 바꾼다(이 파일의 규율).
