@@ -24,6 +24,7 @@ public class ProductSearchResponse {
     private int finalPriceKrw;
     private String unit;
     private String specRaw;
+    private String spec;
     private String imageUrl;
     private String lifecycleStatus;
     private boolean discontinued;
@@ -43,6 +44,7 @@ public class ProductSearchResponse {
         this.priceKrw = product.getPriceKrw();
         this.unit = product.getUnit();
         this.specRaw = product.getSpecRaw();
+        this.spec = product.getSpec();
         this.imageUrl = product.getImageUrl();
         this.lifecycleStatus = product.getLifecycleStatus().name();
         this.discontinued = product.getLifecycleStatus() == Product.LifecycleStatus.DISCONTINUED;
@@ -70,6 +72,7 @@ public class ProductSearchResponse {
     public int getFinalPriceKrw() { return finalPriceKrw; }
     public String getUnit() { return unit; }
     public String getSpecRaw() { return specRaw; }
+    public String getSpec() { return spec; }
     public String getImageUrl() { return imageUrl; }
     public String getLifecycleStatus() { return lifecycleStatus; }
     public boolean isDiscontinued() { return discontinued; }

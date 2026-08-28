@@ -165,20 +165,25 @@ async def lifespan(app: FastAPI):
           f"LLM키={'있음' if os.environ.get('ANTHROPIC_API_KEY') else '**없음**'} · "
           f"내부키={'있음' if os.environ.get('INTERNAL_SERVICE_KEY') else '없음(액션 불가)'}")
 
-    # 자발형 감시자 기동 (08-21 ai-server 인수). asyncio.create_task = 이 코루틴을
-    # "배경에서 돌려라"로 등록만 하고 지나간다 — await로 기다리면 감시자가 무한
-    # 루프라 서버가 영영 안 뜬다. behavior.run()은 mock 모드면 스스로 즉시 끝나므로
-    # (SSE 줄 백엔드가 없다) 여기서 모드 분기를 중복하지 않는다.
+    # 자발형 감시자 기동. asyncio.create_task = 이 코루틴을 "배경에서 돌려라"로
+    # 등록만 하고 지나간다 — await로 기다리면 감시자가 무한 루프라 서버가 영영
+    # 안 뜬다. 모드 분기는 runner.run() 안에 있다(mock 이면 SSE 없이 틱만).
+    #
+    # ⚠ 08-27 전에는 여기가 `behavior.run()` 이었다. 감시자가 셋이 되면서
+    #   **구동부**(SSE 분배 + 주기 틱 + 스테이지 배출)를 `watchers/runner.py` 로
+    #   올렸다. 그때 드러난 것: 옛 `behavior.run()` 은 없는 함수를 부르고 있었고
+    #   `dispatch.pump()` 를 부르는 곳이 아무 데도 없어 **자발형이 통째로 죽어
+    #   있었다.** 08-26 스테이징 개편이 구동 루프를 데려간 자리다.
     import asyncio
-    from app.watchers import behavior
-    watcher_task = asyncio.create_task(behavior.run(), name="behavior-watcher")
+    from app.watchers import runner
+    watcher_task = asyncio.create_task(runner.run(), name="watchers")
 
     yield
 
     # 내려가는 길: 감시자에게 종료 신호를 주고, 일감이 정리될 때까지 기다린다.
     # cancel까지 부르는 이유: stop 신호만으로는 SSE 수신 대기(await) 한가운데를
     # 못 깨울 수 있다 — 신호(협조 종료)와 취소(강제 종료)를 순서대로 쓴다.
-    behavior.stop()
+    runner.stop()
     watcher_task.cancel()
     try:
         await watcher_task

@@ -64,15 +64,14 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
           AND p.skuId <> :excludeSkuId
           AND p.priceKrw BETWEEN :minPrice AND :maxPrice
           AND LOWER(p.name) LIKE LOWER(CONCAT('%', :itemKeyword, '%'))
-        ORDER BY ABS(p.priceKrw - :originalPrice) ASC, p.skuId ASC
+        ORDER BY p.skuId ASC
         """)
     List<Product> findAlternativesByKeyword(
             @Param("categoryL2") String categoryL2,
             @Param("excludeSkuId") Integer excludeSkuId,
             @Param("minPrice") int minPrice,
             @Param("maxPrice") int maxPrice,
-            @Param("itemKeyword") String itemKeyword,
-            @Param("originalPrice") int originalPrice
+            @Param("itemKeyword") String itemKeyword
     );
 
     @Query("""
@@ -81,14 +80,13 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
           AND p.categoryL2 = :categoryL2
           AND p.skuId <> :excludeSkuId
           AND p.priceKrw BETWEEN :minPrice AND :maxPrice
-        ORDER BY ABS(p.priceKrw - :originalPrice) ASC, p.skuId ASC
+        ORDER BY p.skuId ASC
         """)
     List<Product> findAlternativesByPriceBand(
             @Param("categoryL2") String categoryL2,
             @Param("excludeSkuId") Integer excludeSkuId,
             @Param("minPrice") int minPrice,
-            @Param("maxPrice") int maxPrice,
-            @Param("originalPrice") int originalPrice
+            @Param("maxPrice") int maxPrice
     );
 
     /**

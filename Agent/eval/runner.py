@@ -17,6 +17,9 @@
 #   cd Agent 옆(warehouse-store 루트)에서
 #   C:\venvs\2nd_project311\Scripts\python.exe -m eval.runner            # 전체
 #   C:\venvs\2nd_project311\Scripts\python.exe -m eval.runner --only scene1_restock
+#   C:\venvs\2nd_project311\Scripts\python.exe -m eval.runner --real
+#     ⚠ --real 은 백엔드 8080 + 시드 적재 + USE_MOCK_SOT=false 가 선행이다.
+#       `python backend_probe.py` 가 "전환 가능"이어야 한다.
 # ============================================================================
 #
 # ─── 개념 사전 — 이 파일에 처음 나오는 개념 3개 (㊽~㊿) ──────────────────────
@@ -73,6 +76,25 @@ use_utf8_stdout()
 load_env()
 
 from app import guard, loop                    # noqa: E402
+from app.tools import infer                    # noqa: E402
+
+# ── 출하물 적재 — 러너도 입구다 (08-27, 실물 골든셋 첫 실행에서 발견) ────────
+# [무엇이 문제였나] 서버는 main.py 의 lifespan 이 `infer.load_all()` 을 부르는데,
+#   러너는 **설계상 main 을 안 거치고 loop 를 직접 부른다**(서버 없이 채점하려고).
+#   그래서 추론 도구 5종이 전부 "model_not_loaded" 로 떨어진 채 채점됐다 —
+#   발화가 "소비주기 모델이 서버에서 로드가 안 돼서"라고 말하는데도 **케이스는
+#   PASS 였다**(must_not_include 에 안 걸려서). 자산이 통째로 빠진 채 13/15 를
+#   보고 "잘 된다"고 읽을 뻔했다.
+# [08-20 과 같은 계열이다] 그때는 `.env` 를 러너가 안 읽어 12케이스가 전멸했고,
+#   그 교훈으로 `env.load_env()` 를 두 입구가 명시 호출하게 했다. **입구가 둘이면
+#   준비 코드는 입구마다 명시적으로 부른다** — 이번엔 출하물이 그 대상이었다.
+# [사진 인코더는 안 올린다] 3.5GB 이고 골든셋에 사진 케이스가 없다. 필요해지면
+#   `with_photo_encoder=True` 로 켠다(config.LOAD_PHOTO_ENCODER 와 같은 판단).
+_loaded = infer.load_all()
+if not _loaded:
+    print("⚠ 출하물이 하나도 없습니다 — 추론 케이스가 전부 '준비 안 됨'으로 채점됩니다.")
+else:
+    print("출하물 " + " · ".join(f"{k}={v}" for k, v in _loaded.items()))
 from eval.golden_set import GOLDEN             # noqa: E402
 
 
@@ -154,12 +176,47 @@ def main() -> None:
     if "--only" in sys.argv:                            # ㊾
         only = sys.argv[sys.argv.index("--only") + 1]
 
-    cases = [c for c in GOLDEN if only is None or c["id"] == only]
+    # --real : 실물 골든셋(백엔드·DB 필요). 없으면 mock 판.
+    #   두 벌을 나란히 두는 이유는 golden_real.py 머리말 참조 —
+    #   mock 은 백엔드 없이 도는 유일한 검증이라 버리지 않는다.
+    real = "--real" in sys.argv
+    skipped = []
+    # ⚠ 가드는 **양쪽으로** 걸어야 한다(08-27). 전에는 `--real` 인데 mock 인
+    #   경우만 막았는데, 실연동 전환으로 .env 가 false 가 된 뒤로는 **반대쪽이
+    #   더 자주** 터진다: mock 판을 돌렸는데 도구가 실물 백엔드를 두드리고,
+    #   백엔드가 없으면 15케이스가 전부 "지금 조회가 안 되네요"로 FAIL 한다.
+    #   골든셋이 죽은 게 아니라 **백엔드를 안 켠 것**인데, 출력만 보면 구분이
+    #   안 돼서 코드를 뒤지게 된다.
+    from app import config, sot_client
+    if not real and not config.USE_MOCK_SOT:
+        print("⚠ mock 골든셋인데 USE_MOCK_SOT=false 다 — 도구가 실물 백엔드를 부른다.\n"
+              "   백엔드를 켠 상태면 `--real` 로 실물 골든셋을 돌리는 게 맞고,\n"
+              "   백엔드 없이 검증만 하려면 .env 의 USE_MOCK_SOT 를 true 로.")
+        sys.exit(2)
+    if real:
+        if config.USE_MOCK_SOT:
+            print("⚠ --real 인데 USE_MOCK_SOT=true 다. .env 를 고치고 다시.")
+            sys.exit(2)
+        from eval import golden_real
+        # 세계 상태(재고·큐·이력·인기)는 **실행 시각에** 뽑는다. 케이스에 박으면
+        # DES 를 다시 돌리는 날(설계 §10 세계 버전 대조) 통째로 죽는다.
+        fx = golden_real.fixtures(sot_client)
+        all_cases = golden_real.build(fx)
+        # 재료가 없는 케이스는 FAIL 이 아니라 SKIP 이다 — 세계 탓이지 코드 탓이 아니다.
+        skipped = [c["id"] for c in all_cases
+                   if c.get("needs") and not fx.get(c["needs"])]
+        pool = [c for c in all_cases if c["id"] not in skipped]
+    else:
+        pool = GOLDEN
+
+    cases = [c for c in pool if only is None or c["id"] == only]
     if not cases:
         print(f"해당 id 없음: {only}")
         sys.exit(2)
 
-    print(f"골든셋 v0 — {len(cases)}케이스 실행\n")
+    print(f"골든셋 {'실물' if real else 'mock'} — {len(cases)}케이스 실행"
+          + (f" (재료 없어 SKIP {len(skipped)}: {', '.join(skipped)})" if skipped else "")
+          + "\n")
     n_pass = 0
     for i, case in enumerate(cases, 1):                 # ㊽
         try:
