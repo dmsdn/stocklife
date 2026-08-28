@@ -29,6 +29,16 @@ public class WishlistService {
         return wishlistRepository.findWishlistByMemberId(memberId);
     }
 
+    /**
+     * 내부 창구(/internal/wishlist) 전용 — 에이전트는 이미 세계 시드 memberId를 알고
+     * 있으므로 변환 없이 그대로 받는다. consumerId 경유 변환을 태우면 0번 규약과 같은
+     * 이중 변환 문제가 재발한다.
+     */
+    @Transactional(readOnly = true)
+    public List<WishlistItemResponse> getWishlistByMemberId(Integer memberId) {
+        return wishlistRepository.findWishlistByMemberId(memberId);
+    }
+
     @Transactional
     public void addItem(Long consumerId, Integer skuId) {
         if (!productRepository.existsById(skuId)) {

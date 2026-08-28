@@ -45,10 +45,10 @@ public class InventoryService {
     private final EventBroadcastService eventBroadcastService;
 
     public InventoryService(StockRepository stockRepository,
-            ShelfConfigRepository shelfConfigRepository,
-            ShelfEventRepository shelfEventRepository,
-            ProductRepository productRepository,
-            EventBroadcastService eventBroadcastService) {
+                            ShelfConfigRepository shelfConfigRepository,
+                            ShelfEventRepository shelfEventRepository,
+                            ProductRepository productRepository,
+                            EventBroadcastService eventBroadcastService) {
         this.stockRepository = stockRepository;
         this.shelfConfigRepository = shelfConfigRepository;
         this.shelfEventRepository = shelfEventRepository;
@@ -69,7 +69,7 @@ public class InventoryService {
 
     @Transactional
     public void applyChange(Integer skuId, String locationId, int deltaQty,
-            ShelfEvent.EventType eventType, String taskId) {
+                            ShelfEvent.EventType eventType, String taskId) {
         Stock stock = stockRepository.findWithLockBySkuIdAndLocationId(skuId, locationId)
                 .orElseThrow(() -> new IllegalStateException(
                         "재고 행이 없습니다. skuId=" + skuId + ", locationId=" + locationId));
@@ -114,7 +114,7 @@ public class InventoryService {
                 .orElseThrow(() -> new IllegalStateException(
                         "이동할 재고가 없습니다. skuId=" + skuId + ", locationId=" + fromLocationId));
 
-        if (stockRepository.findWithLockBySkuIdAndLocationId(skuId, toLocationId).isPresent()) {
+        if (stockRepository.findWithLockByLocationId(toLocationId).isPresent()) {
             throw new IllegalStateException("대상 위치에 이미 재고가 있습니다. locationId=" + toLocationId);
         }
 
@@ -156,7 +156,7 @@ public class InventoryService {
                 .toList();
     }
 
-        /** replenishment/pending(③). 3개 쿼리를 합쳐서 최종 응답을 만든다. */
+    /** replenishment/pending(③). 3개 쿼리를 합쳐서 최종 응답을 만든다. */
     @Transactional(readOnly = true)
     public List<PendingReplenishmentResponse> getPendingReplenishments() {
         List<PendingReplenishmentRow> rows =

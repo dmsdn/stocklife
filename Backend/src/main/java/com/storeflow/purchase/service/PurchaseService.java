@@ -72,14 +72,16 @@ public class PurchaseService {
     }
 
     /**
-     * 취향 추천 1단계 — 이 회원(consumerId)이 최근 기간 동안 가장 많이 산 카테고리 상위 N개.
+     * 취향 추천 1단계 — 이 회원(memberId)이 최근 기간 동안 가장 많이 산 카테고리 상위 N개.
      * "청소용품을 많이 샀으면" 판단이 여기서 나온다. 실제 추천 상품(신상/행사)은 이 결과를
      * 받은 호출부(ai-server)가 search API로 다시 조회해서 채운다 — 이 메서드는 카테고리
      * 랭킹까지만 책임진다.
+     * purchases는 세계 시드 테이블이라 memberId를 그대로 받는다 — consumerId를 받아
+     * Member.toMemberId로 변환하면 이중 변환이 되어 존재하지 않는 memberId로 조회하게 된다
+     * (호출부인 ai-server는 이미 세계 시드 memberId를 알고 있음).
      */
     @Transactional(readOnly = true)
-    public List<CategoryPreferenceResponse> getTopCategories(Long consumerId, Integer lookbackDays, Integer limit) {
-        int memberId = Member.toMemberId(consumerId);
+    public List<CategoryPreferenceResponse> getTopCategories(Integer memberId, Integer lookbackDays, Integer limit) {
         Instant since = sinceFrom180(lookbackDays);
         int size = (limit == null || limit <= 0) ? DEFAULT_TOP_CATEGORY_LIMIT : Math.min(limit, MAX_TOP_CATEGORY_LIMIT);
         return purchaseRepository.findTopCategoriesByMemberId(memberId, since, PageRequest.of(0, size));
@@ -90,5 +92,15 @@ public class PurchaseService {
                 ? DEFAULT_PREFERENCE_LOOKBACK_DAYS
                 : Math.min(lookbackDays, MAX_LOOKBACK_DAYS);
         return Instant.now().minus(days, ChronoUnit.DAYS);
+    }
+
+    /**
+     * 회원 구매 원장(/internal/purchases/history) — memberId로 직접 조회하며 시각순(오름차순)
+     * 나열이다. /internal/orders/frequent는 orders(백엔드 고유)를 읽고 응답이 집계라 시각이
+     * 없어 이 용도로 대체될 수 없다.
+     */
+    @Transactional(readOnly = true)
+    public List<PurchaseHistoryResponse> getHistoryByMemberId(Integer memberId) {
+        return purchaseRepository.findHistoryByMemberIdOrderByPurchasedAtAsc(memberId);
     }
 }
