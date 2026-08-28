@@ -7,7 +7,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, Search as SearchIcon, X, Heart } from "lucide-react";
+import { ChevronLeft, Search as SearchIcon, X, Heart, Check } from "lucide-react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { ProductDetailDialog } from "@/components/domain/product-detail-dialog";
@@ -156,15 +156,28 @@ function SearchPageInner() {
     setInputFocused(true);
   };
 
-  const handleSaveSelect = (groupId: number) => {
+  // ✅ 여러 리스트에 동시에 담을 수 있게 됨(SaveToListDialog가 groupId 배열을 넘겨줌).
+  //   "저장됐다"는 상태를 리스트별로 안 나누고, 그냥 "방금 눌렀다"는 잠깐의 확인 표시로만 씁니다
+  //   (여러 리스트 중 어디에 담겼는지를 하트 하나로 표현하는 게 애매해서, 꽉 찬 하트 대신
+  //   체크 아이콘이 잠깐 떴다가 사라지는 방식으로 바꿨습니다).
+  const handleSaveSelect = (groupIds: number[]) => {
     if (!savePickerProduct) return;
-    addProductToCartGroup(groupId, {
-      id: savePickerProduct.skuId,
-      name: savePickerProduct.name,
-      category: savePickerProduct.categoryL1,
-      price: savePickerProduct.finalPriceKrw,
+    groupIds.forEach((groupId) => {
+      addProductToCartGroup(groupId, {
+        id: savePickerProduct.skuId,
+        name: savePickerProduct.name,
+        category: savePickerProduct.categoryL1,
+        price: savePickerProduct.finalPriceKrw,
+      });
     });
     setSavedIds((prev) => new Set(prev).add(savePickerProduct.skuId));
+    setTimeout(() => {
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(savePickerProduct.skuId);
+        return next;
+      });
+    }, 1500);
   };
 
   const priceActive = filters.priceRange[0] !== PRICE_MIN || filters.priceRange[1] !== PRICE_MAX;
@@ -271,7 +284,11 @@ function SearchPageInner() {
               aria-label="저장하기"
               className="flex h-8 w-8 shrink-0 items-center justify-center self-start text-muted-foreground disabled:opacity-30"
             >
-              <Heart size={20} fill={savedIds.has(product.skuId) ? "currentColor" : "none"} />
+              {savedIds.has(product.skuId) ? (
+                <Check size={20} className="text-success" />
+              ) : (
+                <Heart size={20} />
+              )}
             </button>
           </div>
         ))}

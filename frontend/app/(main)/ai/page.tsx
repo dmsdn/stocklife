@@ -4,7 +4,7 @@
 //   이 페이지가 실제 채팅 화면 역할을 합니다.
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HomeAiHeader } from "@/components/layout/home-ai-header";
 import { SwipeNav } from "@/components/layout/swipe-nav";
@@ -29,7 +29,7 @@ function AiPageBody() {
 export default function AiPage() {
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  const { open } = useAiPanel();
+  const { open, close } = useAiPanel();
 
   useEffect(() => {
     // ✅ 데스크톱 폭에서 이 라우트로 들어오면(주소 직접 입력, 모바일→웹 리사이즈 등)
@@ -39,6 +39,16 @@ export default function AiPage() {
       router.replace("/");
     }
   }, [isDesktop, open, router]);
+
+  // ✅ 이 라우트를 벗어날 때(하단탭으로 다른 화면 이동 등) isOpen을 꺼줍니다.
+  //   안 꺼주면 ai-panel.tsx의 "모바일인데 isOpen인데 /ai가 아니다" 감지 로직이
+  //   페이지 바뀔 때마다 계속 /ai로 강제로 되돌려서, 다른 하단탭이 전혀 안 눌리는
+  //   문제가 있었습니다. close를 ref로 잡아서 이 effect는 마운트/언마운트 때만 동작.
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    return () => closeRef.current();
+  }, []);
 
   if (isDesktop) return null;
 

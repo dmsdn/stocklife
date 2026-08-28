@@ -146,13 +146,15 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
       <SaveToListDialog
         open={savePickerOpen}
         onClose={() => setSavePickerOpen(false)}
-        onSelect={(groupId) => {
+        onSelect={(groupIds) => {
           if (!product) return;
-          addProductToCartGroup(groupId, {
-            id: product.skuId,
-            name: product.name,
-            category: product.categoryL1,
-            price: product.finalPriceKrw,
+          groupIds.forEach((groupId) => {
+            addProductToCartGroup(groupId, {
+              id: product.skuId,
+              name: product.name,
+              category: product.categoryL1,
+              price: product.finalPriceKrw,
+            });
           });
         }}
       />

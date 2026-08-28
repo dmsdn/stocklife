@@ -65,6 +65,7 @@ export function clearSignupProfileDraft() {
   const next: SignupDraft = {
     phoneNumber: current.phoneNumber,
     password: current.password,
+    name: current.name,
 
     personalInfoConsent:
       current.personalInfoConsent,

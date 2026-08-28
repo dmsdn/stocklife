@@ -183,6 +183,22 @@ public class InventoryService {
                 .toList();
     }
 
+    /** GET /api/locations/{locationId}/products(신규) — 매대 하나에 진열된 상품 목록. */
+    @Transactional(readOnly = true)
+    public List<com.storeflow.inventory.dto.LocationProductResponse> getProductsAtLocation(String locationId) {
+        return stockRepository.findProductsByLocationId(locationId);
+    }
+
+    /** GET /api/products/inventory?skuIds=1,2,3(신규, 박은우님 요청) — 여러 skuId의 위치별 재고를 한 번에 조회, skuId별로 그룹핑해서 반환. */
+    @Transactional(readOnly = true)
+    public Map<Integer, List<InventoryItemResponse>> getInventoryBatch(List<Integer> skuIds) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            throw new IllegalArgumentException("상품 목록(skuIds)은 필수입니다.");
+        }
+        return stockRepository.findInventoryBySkuIdIn(skuIds).stream()
+                .collect(Collectors.groupingBy(InventoryItemResponse::getSkuId));
+    }
+
     /** 환불 승인 시 재고 복원(33번). RESTOCK_IN 이벤트로 기록 — 판매 때 뺐던 PICK 위치에 되돌린다. */
     @Transactional
     public void restockForRefund(Integer skuId, int qty) {

@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MessageSquare, ChevronRight, Plus } from "lucide-react";
+import { MessageSquare, ChevronRight, Plus, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
@@ -19,6 +19,7 @@ interface ChatSession {
   sessionId: string;
   title: string | null;
   updatedAt: string;
+  groupId?: number | null;
 }
 
 function chatHeaders(): Record<string, string> {
@@ -123,7 +124,13 @@ export default function SavedPage() {
                 href={`/saved/${group.id}`}
                 className="flex aspect-[3/2] flex-col justify-between rounded-sm border border-border p-4 hover:bg-muted"
               >
-                <p className="text-sm font-medium">{group.title}</p>
+                <div className="flex items-start justify-between">
+                  <p className="text-sm font-medium">{group.title}</p>
+                  {/* ✅ 이 리스트에 연결된 AI 대화가 있으면 작은 아이콘으로 표시 */}
+                  {sessions.some((s) => s.groupId === group.id) && (
+                    <Bot size={14} className="shrink-0 text-muted-foreground" />
+                  )}
+                </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{group.products.length}개</p>
                   <p className="text-sm font-semibold">{groupTotal(group).toLocaleString()}원</p>
