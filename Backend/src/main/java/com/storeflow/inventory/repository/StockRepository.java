@@ -60,6 +60,22 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
         """)
     List<PendingReplenishmentRow> findPendingPickShortages(@Param("pick") Location.TierRole pick);
 
+    /**
+     * GET /api/floors/{floorNo}/low-stock-locations(신규) — 특정 층의 PICK 매대 중 minQty
+     * 미만인 것 전부(skuId 단위 행). findPendingPickShortages와 같은 조건에 floorNo 필터만
+     * 추가한 버전 — NPC가 매대 하나하나를 순차로 조회하던 걸 없애기 위한 것.
+     */
+    @Query("""
+        SELECT NEW com.storeflow.inventory.dto.PendingReplenishmentRow(
+            s.skuId, s.locationId, l.floorNo)
+        FROM Stock s, Location l, ShelfConfig c
+        WHERE s.locationId = l.locationId AND l.tierRole = :pick AND l.floorNo = :floorNo
+          AND c.skuId = s.skuId AND c.locationId = s.locationId
+          AND s.qty < c.minQty
+        """)
+    List<PendingReplenishmentRow> findPendingPickShortagesByFloor(@Param("pick") Location.TierRole pick,
+                                                                    @Param("floorNo") byte floorNo);
+
     /** replenishment/pending(③) 2단계 — 지금 재고(qty>0)가 있는 BULK 위치를 가진 skuId 전부. */
     @Query("""
         SELECT DISTINCT s.skuId FROM Stock s, Location l

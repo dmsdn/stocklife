@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 interface Props {
   title: string;
@@ -7,6 +7,17 @@ interface Props {
 }
 
 export default function Modal({ title, children, onClose }: Props) {
+  // 1번(ESC로 닫기): 모든 팝업/모달이 이 컴포넌트 하나를 감싸서 쓰므로 여기 한 번만
+  // 추가하면 장바구니/AI챗/쇼핑목록/상품팝업/층이동 선택 등 전부에 적용된다.
+  useEffect(() => {
+    if (!onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
       style={{

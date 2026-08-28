@@ -10,7 +10,7 @@ interface Props {
 
 export interface GameCanvasHandle {
   loadFloor: (floorData: FloorData, opts?: { startCell?: GridPoint; hidePlayer?: boolean }) => void;
-  walkTo: (goal: GridPoint, onArrive?: () => void) => void;
+  walkTo: (goal: GridPoint, onArrive?: (success: boolean) => void) => void;
   teleportTo: (cell: GridPoint) => void;
   setControlsEnabled: (enabled: boolean) => void;
   setPlayerVisible: (visible: boolean) => void;

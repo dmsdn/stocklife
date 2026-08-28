@@ -18,7 +18,7 @@ INSERT INTO zones (zone_id, floor_no, name, zone_type) VALUES
  ('F1-F',1,'음료·주류 구역','SALES'),
  ('F1-G',1,'냉장식품 구역','SALES'),
  ('F1-H',1,'냉동식품 구역','SALES'),
- ('F2-A',2,'반려용품 구역','SALES'),
+ ('F2-A',2,'반려동물용품 구역','SALES'),
  ('F2-B',2,'뷰티·헬스 구역','SALES'),
  ('F2-C',2,'수납·생활잡화 구역','SALES'),
  ('F2-D',2,'화장지·위생 구역','SALES'),

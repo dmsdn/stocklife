@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -197,6 +198,27 @@ public class InventoryService {
         }
         return stockRepository.findInventoryBySkuIdIn(skuIds).stream()
                 .collect(Collectors.groupingBy(InventoryItemResponse::getSkuId));
+    }
+
+    /**
+     * GET /api/floors/{floorNo}/low-stock-locations(신규) — 층 전체를 한 번의 쿼리로 훑어서
+     * 재고 부족 매대와 그 매대에서 부족한 skuId들을 매대 단위로 묶어서 돌려준다. NPC가
+     * findLowStockTarget에서 매대 하나마다 /api/locations/{id}/products를 순차 호출하던
+     * (매대 수천 개 x 1 요청) 구조를 없애기 위한 전용 엔드포인트.
+     */
+    @Transactional(readOnly = true)
+    public List<com.storeflow.inventory.dto.LowStockLocationResponse> getLowStockLocationsByFloor(int floorNo) {
+        List<PendingReplenishmentRow> rows =
+                stockRepository.findPendingPickShortagesByFloor(Location.TierRole.PICK, (byte) floorNo);
+
+        Map<String, List<Integer>> skuIdsByLocation = new LinkedHashMap<>();
+        for (PendingReplenishmentRow row : rows) {
+            skuIdsByLocation.computeIfAbsent(row.getLocationId(), k -> new java.util.ArrayList<>())
+                    .add(row.getSkuId());
+        }
+        return skuIdsByLocation.entrySet().stream()
+                .map(e -> new com.storeflow.inventory.dto.LowStockLocationResponse(e.getKey(), e.getValue()))
+                .toList();
     }
 
     /** 환불 승인 시 재고 복원(33번). RESTOCK_IN 이벤트로 기록 — 판매 때 뺐던 PICK 위치에 되돌린다. */
