@@ -115,16 +115,23 @@ from app.tools import action, compute, definitions, infer, query
 # 여기서 빼고 해당 REGISTRY로 옮긴다(아래 검산이 겹침·누락을 잡는다).
 #
 # 08-21 ai-server 인수로 계산 4종 중 3종(route·bundle·substitutes)이 compute.py
-# 실물로 옮겨 갔다. compare_unit_price만 남은 이유: 규격 파서(08/27 예정)가
-# 없이는 "100ml당"의 분모를 만들 수 없다 — 파서 없는 단위가격은 지어낸 숫자다.
+# 실물로 옮겨 갔고, **08-27 에 compare_unit_price 까지 서면서 계산이 5/5 가 됐다.**
+# 그래서 이 집합은 지금 **비어 있다.**
+#
+# ⚠ 남은 하나가 왜 오래 걸렸는지, 그리고 왜 결국 하루가 아니었는지 적어 둔다 —
+#   여기 있던 주석은 *"규격 파서 없이는 100ml당의 분모를 만들 수 없다"* 였다.
+#   실데이터를 열어 보니 **분모가 이미 있었다**(`spec.quantity`, 4,970개 100%).
+#   막고 있던 것은 파서가 아니라 `sot_client` 가 그 칸을 **버리고 있던 것**이다.
+#   *"없어서 못 한다"고 적어 둔 것을 한 번은 열어 봐야 한다* — 그 문장이
+#   두 달 전 전제 위에 서 있을 수 있다.
 #
 # frozenset = 수정 불가능한 집합(개념 ⑥의 set 중 못 바꾸는 판). 왜 set인가:
 # `name in _COMPUTE_STUB` 검사가 즉시 끝나기 때문이다(리스트면 처음부터 훑는다).
 # 왜 frozen인가: 이건 **고정된 명단**이지 실행 중에 늘었다 줄었다 할 것이 아니라서,
 # 실수로 .add()를 부르면 그 자리에서 에러가 나는 편이 낫다.
-_COMPUTE_STUB = frozenset({
-    "compare_unit_price",
-})
+# **비었어도 지우지 않는다** — 다음 도구가 스키마만 먼저 서는 날 이 자리가 필요하고,
+# 아래 두 검산(_EXECUTABLE 일치·스텁과 실물 겹침)이 그때 그물이 된다.
+_COMPUTE_STUB: frozenset = frozenset()
 # 추론 5종은 08-25에 `tools/infer.py`가 생기며 **스텁을 벗었다.**
 # 다만 "실물이다"와 "답할 수 있다"는 다르다 — infer가 자산 유무·입력 가용성을
 # 스스로 보고 error를 돌려준다(가용예측은 큐 창구가 없어 아직 못 답한다).
@@ -455,6 +462,25 @@ def run_chat(message: str,
             reply = "".join(landing_parts)
         trace.append({"turn": config.MAX_TURNS, "stop_reason": "forced_landing",
                       "tools": [], "web_results": len(ledgers["web"])})
+
+    # ── 이번 턴의 원장을 세계 감시자에게 넘긴다 (08-27) ─────────────────────
+    # [왜 루프가 이걸 하나] 매대 이벤트에는 **세션이 없다**(물티슈가 채워진 것은
+    #   매장의 사건이지 누구의 사건이 아니다). 그런데 개입은 세션 단위다. 그래서
+    #   "이 사건이 누구의 관심사인가"를 이어 줄 자리가 필요하고, 그것을 아는 것은
+    #   **손님과 대화한 이 루프**뿐이다.
+    # [무엇이 관심인지는 여기서 안 정한다] 원장을 **통째로** 넘긴다. 조건을
+    #   여기 박으면 관심의 정의가 바뀔 때마다 하네스의 중심 파일을 열게 된다 —
+    #   해석은 world.note_from_ledgers 가 한다(그 파일의 사정이므로).
+    # [지연 import] world → dispatch → (호출 시점에) loop 이라 모듈 최상단에서
+    #   import 하면 순환이 된다.
+    if session_id:
+        try:
+            from app.watchers import world as _world
+            _world.note_from_ledgers(session_id, consumer_id, ledgers)
+        except Exception as e:                                 # noqa: BLE001
+            # 관심 등록 실패가 **손님의 답변을 죽이면 안 된다.** 자발형은
+            # 부가 기능이고 반응형이 본체다 — 조용히 삼키되 흔적은 남긴다.
+            print(f"[loop] 관심 등록 실패: {type(e).__name__}: {e}")
 
     return {
         "reply": reply or "죄송합니다, 지금은 답변을 만들지 못했습니다.",

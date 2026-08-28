@@ -58,6 +58,20 @@ def _missing():
     return out
 
 
+# ⚠ 진입점이므로 표준출력을 먼저 utf-8로 (08-27). 이게 없어서 cp949 콘솔에서
+#   곡선 표의 `—`에 UnicodeEncodeError 가 나 **사진 갈래까지 도달조차 못 했다** —
+#   "사진은 계속 안 되던데"의 정체가 적재 실패가 아니라 그 앞줄의 print 였다.
+#   env.py 의 헌장과 같다: 공용 준비 코드는 입구가 명시 호출한다.
+from app.env import load_env, use_utf8_stdout                  # noqa: E402
+
+# ⚠ **`load_env()` 를 먼저 부른다.** 08-28 까지 이 파일은 그걸 안 불렀고,
+#   그래서 `.env` 를 못 읽어 **늘 기본값(mock)으로** 돌고 있었다.
+#   가용·소비주기는 출하물이 로컬이라 티가 안 났는데, 위치·취향·사진은
+#   실물 세계를 봐야 하는 것들이라 조용히 딴 세계를 재고 있었다.
+#   (tool_check 머리에 적어 둔 그 덫 — 같은 집에서 두 번 밟았다.)
+load_env()
+use_utf8_stdout()
+
 _gone = _missing()
 if "--photo" not in sys.argv:
     _gone.pop("transformers", None)      # 안 쓸 것으로 시끄럽게 하지 않는다
@@ -86,7 +100,7 @@ if _gone:
 if "numpy" in _gone:
     raise SystemExit("numpy가 없으면 아무것도 못 합니다 — venv를 확인하세요.")
 
-from app import loop                       # noqa: E402
+from app import config, loop               # noqa: E402
 from app.tools import compute, infer, query   # noqa: E402
 
 
@@ -97,7 +111,7 @@ def _arg(flag, default=None, cast=str):
 def _curve(r, indent="      "):
     for p in r.get("curve", []):
         note = f"  ({p['note']})" if p.get("note") else ""
-        print(f"{indent}{p['within']:>7s}  {p['prob']:>5.1f}%{note}")
+        print(f"{indent}{p['within']:>7s}  {p['prob_pct']:>5.1f}%{note}")
 
 
 def main():
@@ -108,7 +122,11 @@ def main():
     print("=" * 66)
     print("출하물 적재  (Agent/app/artifacts/)")
     print("=" * 66)
-    got = infer.load_all(with_photo_encoder=bool(photo))
+    # 사진을 넘겼으면 당연히 켜고, 안 넘겼어도 **서버가 켜는 설정이면 켠다**.
+    # 서버(`main.py` lifespan)는 `config.LOAD_PHOTO_ENCODER` 로 부른다 —
+    # 검사기가 그보다 좁게 부르면 `.env` 에서 켜 놔도 늘 "안 켜져 있음"이 뜬다
+    # (08-28 에 tool_check 도 같은 구멍이었다).
+    got = infer.load_all(with_photo_encoder=bool(photo) or config.LOAD_PHOTO_ENCODER)
     if not got:
         print("  ⚠ 하나도 없습니다 — models/*_ship.py · imagegen/photo_ship.py 를 돌리세요.")
     for k, v in got.items():
@@ -181,7 +199,27 @@ def main():
     # ── ⑥ 취향 ──────────────────────────────────────────────────────────
     r, src = loop._dispatch("match_preferences", {})
     print(f"\n■ match_preferences   [출처 {src}]")
-    print(f"    {r['error']} — {r['message']}")
+    # ⚠ 08-28 배선 전까지 이 도구는 **항상 error 를 냈다.** 그래서 여기가
+    #   `r['error']` 를 무조건 읽고 있었고, 배선된 날 KeyError 로 죽었다.
+    #   스텁을 전제한 코드는 스텁이 사라지는 날 반드시 깨진다 —
+    #   **모양을 가정하지 말고 물어본다.**
+    if "error" in r:
+        print(f"    {r['error']} — {r['message']}")
+    elif "state" in r:
+        print(f"    [{r['state']}] {r['message']}")
+    else:
+        t = r.get("taste") or []
+        print(f"    회원 {r['member_id']} · 이력 {r['history_skus']}종 · "
+              f"추정 축 {r['axes_inferred']}")
+        print("    취향: " + " · ".join(
+            f"{x['l2']}({x['bought']}종 {x['share']:.3f})" for x in t))
+        for it in r.get("items", []):
+            w = it["why"]
+            print(f"      · {it['sku_id']} {str(it['name'])[:24]:26s} "
+                  f"{w['l2']} 취향{w['l2_rank']}위"
+                  f"{' ·축보정' if w.get('axis_boosted') else ''}"
+                  f" · 소분류내 인기 {w['popularity_rank_in_l2']}위"
+                  f"{' · 행사' if it.get('on_promo') else ''}")
 
     print()
     print("=" * 66)

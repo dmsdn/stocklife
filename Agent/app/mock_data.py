@@ -118,9 +118,25 @@ SHELF_CONFIGS = {
 }
 
 # ── 행사 (sample §7) ─────────────────────────────────────────────────────────
+# ⚠ 기간을 **DEMO_NOW 에서 파생**시킨다 (08-27). 원래는 "2026-08-10 ~ 08-20"이
+#   박혀 있었는데, 같은 날 실물 세계의 데모 시점을 08-08 14:20(토요일 · 큐 95)로
+#   옮기면서 **mock 행사가 미래가 됐다.** discount 가 0 이 되니 골든셋의
+#   price_compare_promo·budget_combo 두 케이스가 조용히 깨졌다 — mock 자료의
+#   날짜와 세계의 시계가 **서로 모르는 채로** 박혀 있던 탓이다.
+#   같은 사고를 실물에서도 겪었다(행사 웨이브가 BASE_DATE 에서 끝나 유효 행사
+#   0건 → members_gen 에 열린 구간 웨이브 신설). **날짜를 두 군데 적으면 반드시
+#   갈라진다.** 한쪽에서 파생시키면 갈라질 자리가 없어진다.
+from datetime import timedelta                                    # noqa: E402
+
+from app import config                                            # noqa: E402
+
+_P0 = config.DEMO_NOW - timedelta(days=3)      # 데모 며칠 전 시작한 것으로
+_P1 = config.DEMO_NOW + timedelta(days=30)     # 데모 기간을 넉넉히 덮는다
+
 PROMOTIONS = [
     {"sku_id": 101043, "promo_type": "DISCOUNT", "discount_krw": 1000,
-     "starts_at": "2026-08-10 00:00:00.000", "ends_at": "2026-08-20 23:59:59.999"},
+     "starts_at": _P0.strftime("%Y-%m-%d 00:00:00.000"),
+     "ends_at": _P1.strftime("%Y-%m-%d 23:59:59.999")},
 ]
 
 # ── 회원·구매 이력 (sample §8) — 장면 3의 근거 ──────────────────────────────

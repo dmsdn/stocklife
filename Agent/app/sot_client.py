@@ -101,20 +101,33 @@ _API = {
     "get_product":          "/api/products/{sku_id}",
     "get_products_by_skus": "/api/products/by-skus",
     "get_inventory":        "/api/products/{sku_id}/inventory",       # 구: /api/inventory/{sku_id}
-    "get_purchase_history": "/api/members/{member_id}/purchases",     # ⚠ 백엔드 미확정 — 팀계약 갱신 대기
-    "get_session_cart":     "/api/sessions/{session_id}/cart",        # ⚠ 백엔드 미확정 — 팀계약 갱신 대기
-    "get_wishlist":         "/api/wishlist",                          # 구: /api/members/{id}/wishlist
+    "get_purchase_history": "/internal/purchases/history",           # 요청 ④ — 08-27 승인, 구현 대기
+    # ⚠ 08-27: `/api/sessions/{id}/cart` 는 **존재하지 않는다**(404). 팀계약에
+    #   "백엔드 미확정"으로 적어 두고 그대로 둔 자리였다. 실물에 있는 것은
+    #   `/internal/cart/session?consumerId=` — **이름은 session 인데 인자는 회원**
+    #   이다(B 검수 R-4). 세션 단위 장바구니는 스키마에만 있고 창구가 없다.
+    #   그래서 회원 단위로 갈아탔다. 지금 세계에선 한 회원이 한 세션이라
+    #   데모에 차이가 없고, 실물과 맞는다. 비회원 장바구니는 열린 사안이다.
+    "get_session_cart":     "/internal/cart/session",
+    # ⚠ 공개 `/api/wishlist` 는 **사용자 JWT** 를 요구한다 — Agent 는 서버라
+    #   쿠키가 없어 500 이 났다(`인증 토큰이 없습니다`). 08-28 에 내부판을 냈다.
+    #   ⚠⚠ 인자는 consumerId 가 아니라 **memberId** 다. 공개판 서비스는
+    #     consumerId→memberId 변환을 태우는데, 우리는 이미 member_id 축이라
+    #     그 길로 가면 1001 이 10,001,001 로 둔갑해 **항상 빈다**
+    #     (purchases/history 와 같은 함정 — 두 번째로 밟았다).
+    "get_wishlist":         "/internal/wishlist",                          # 구: /api/members/{id}/wishlist
     "get_change_events":    "/api/inventory/change-events",           # 구: /api/events/changes
     # ── 08-21 ai-server 인수로 새로 열린 창구들 ──
     "get_frequent":         "/internal/orders/frequent",              # 반복구매 집계(백엔드가 계산)
     "get_product_metrics":  "/internal/products/metrics",             # 30일 지표·재구매율
     "compare_popularity":   "/internal/purchases/compare",            # 상품 간 판매량 비교
-    "get_popular":          "/internal/purchases/popular",            # ⚠ 백엔드에 아직 없음(요청함)
+    "get_popular":          "/internal/purchases/popular",            # ✅ 08-27 구현 확인(요청 ①)
     "get_alt_candidates":   "/api/products/{sku_id}/alternatives/candidates",  # 대체 후보(공개)
     "navigation_route":     "/api/navigation/route",                  # A* 경로 계산(POST·공개)
+    "floor_map":            "/api/map/floors/{floor_no}",             # 보행 격자(공개) — 위치 스냅 재료
     "push_proactive":       "/internal/chat/proactive",               # 자발형 말풍선 전달
     # ── 08-25 신설 요청(jmy) — 가용예측이 이것 없이는 못 선다 ──
-    "pending_replenish":    "/internal/replenishment/pending",       # ⚠ 백엔드에 아직 없음(요청함)
+    "pending_replenish":    "/internal/replenishment/pending",       # ✅ 08-27 구현 확인(요청 ③)
 }
 # 이름 앞의 밑줄(_API, _http_get)은 파이썬 관례로 "이 모듈 내부용 — 밖에서
 # import해 쓰지 마라"는 표시다. 강제는 아니고 읽는 사람에 대한 신호다.
@@ -219,10 +232,21 @@ def search_products(keyword: str | None = None,
     [반환 예] [{"sku_id": 101042, "name": "아기 물티슈 …", …, "on_promo": False}, …]
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["search_products"], {
-            "keyword": keyword, "category_l1": category_l1, "category_l2": category_l2,
-            "max_price": max_price, "on_promo_only": on_promo_only,
-            "new_within_days": new_within_days})
+        # ⚠ **이름 정규화 — 08-27 첫 실연동에서 잡은 것.** 두 겹으로 어긋나 있었다:
+        #   ① 파라미터: 백엔드는 camelCase(categoryL1·maxPrice·onPromo·recentDays)를
+        #      받는데 snake 로 보내고 있었다 — Spring 은 모르는 파라미터를 조용히
+        #      무시하므로 **필터가 전부 풀린 채** 200 이 온다(에러가 아니다).
+        #   ② 응답: skuId·priceKrw·categoryL2 … camelCase 그대로 흘려보내면
+        #      query.py 의 투영이 snake 키만 집어 **sku_id 가 증발**한다. 그러면
+        #      LLM 은 재고·위치 조회로 넘어갈 열쇠가 없어 검색만 반복하다 도구
+        #      한도를 태운다 — "취급하는 건 확인했는데 재고는 확인이 어렵네요"가
+        #      바로 이 증상이었다. get_inventory 의 _norm_loc 과 같은 계열이며,
+        #      변환은 **경계(sot_client)에서 한 번**만 한다.
+        rows = _http_get(_API["search_products"], {
+            "keyword": keyword, "categoryL1": category_l1, "categoryL2": category_l2,
+            "maxPrice": max_price, "onPromo": on_promo_only,
+            "recentDays": new_within_days})
+        return [_norm_product(r) for r in (rows or [])]
 
     # ── 지금 행사 중인 sku 집합 만들기 ──
     # {… for … if …} = 집합 컴프리헨션: "PROMOTIONS의 각 행 p에 대해, 조건을
@@ -292,12 +316,80 @@ def get_product(sku_id: int) -> dict | None:
     자연스럽게 답할 재료이지, 서버가 죽을 일이 아니다.
     """
     if not config.USE_MOCK_SOT:
+        # ⚠ `search_products` 와 **같은 부류의 버그였다**(08-27 실물 골든셋 준비 중 발견).
+        #   백엔드는 camelCase 로 준다 — 원시를 흘려보내면 도구 결과에 `price_krw` 가
+        #   없어 **가격이 조용히 None** 이 된다. 404 도 500 도 아니라 안 보인다.
+        #   변환은 경계(이 파일)에서 한 번 — `_norm_loc`·search 와 같은 규율.
         # .format(sku_id=...) = _API 표의 "{sku_id}" 빈칸에 실제 값을 끼운다.
-        return _http_get(_API["get_product"].format(sku_id=sku_id))
+        r = _http_get(_API["get_product"].format(sku_id=sku_id))
+        return _norm_product(r) if r else None
     # dict.get(키) = 키가 있으면 그 값을, 없으면 None을 돌려준다.
     # mock_data.PRODUCTS[sku_id]로 쓰면 없는 키에서 KeyError 예외가 터진다 —
     # "없음"이 정상 케이스인 여기서는 get이 맞다.
     return mock_data.PRODUCTS.get(sku_id)
+
+
+def spec_quantity(spec) -> dict | None:
+    """상품의 `spec` 에서 **수량 축과 값**만 뽑아 낸다. 없으면 None.
+
+    [왜 파서가 아니라 이건가 — 08-27] 처음 계획은 `spec_raw`("500g")를 정규식+사전으로
+    파싱하는 것이었다. 실데이터를 열어 보니 **카탈로그가 이미 정답을 들고 있다** —
+    4,970개 전부 `quantity: {primary, value}` 가 정상이고, 복합 규격 331개
+    ("900ml × 3입")도 접혀 있다(→ volume_ml 2700). 당연하다: 그 문자열을 만든
+    `catalog.py` 가 수량을 알고 있다.
+
+    파싱으로 갔으면 막혔다 — `spec_raw` 의 **19.4%(965개)는 숫자가 아예 없다**
+    ("기본형"·"싱글"·"퀸"·"단품", 전부 count_ea 1). 정규식으로는 못 풀고 사전이
+    필요한데, 그 사전은 `catalog.py` 가 새 단어를 추가하는 날 조용히 낡는다.
+
+    > **업스트림이 이미 아는 것을 다운스트림에서 복원하지 않는다.**
+    > 문자열로 납작하게 만든 뒤 다시 세우는 일은, 왕복마다 정보를 잃는다.
+
+    [모양이 둘이다] mock 은 dict 를, 실물 백엔드는 JSON **문자열**을 준다
+    (DB 컬럼이 `json` 타입이고 DTO 가 String 으로 들고 온다). 둘 다 받는다.
+    **그래서 이 함수가 필요하다** — 도구가 "어느 쪽에서 왔나"를 알면 경계가 샌다.
+
+    [왜 상품 dict 에 미리 담아 두지 않나] `_norm_product` 에서 계산해 칸으로
+    넣으면 실물은 정규화를 타는데 **mock 은 안 탄다**(mock_data 는 이미
+    snake_case 라 그 함수를 안 거친다). 칸이 한쪽에만 생기면 도구가 두 모양을
+    받게 된다 — 창구를 하나로 두는 이 파일의 규율에 어긋난다.
+    쓰는 쪽에서 `sot_client.spec_quantity(p.get("spec"))` 로 부른다.
+    """
+    if not spec:
+        return None
+    if isinstance(spec, str):
+        import json
+        try:
+            spec = json.loads(spec)
+        except Exception:                                  # noqa: BLE001
+            return None                                    # 깨진 JSON — 모른다
+    q = (spec or {}).get("quantity") or {}
+    axis, value = q.get("primary"), q.get("value")
+    if not axis or not isinstance(value, (int, float)) or value <= 0:
+        return None                                        # 0·음수는 나눗셈이 안 된다
+    return {"axis": str(axis), "value": float(value)}
+
+
+def _norm_product(r: dict) -> dict:
+    """백엔드의 camelCase 상품 한 줄 → 우리 계약(snake_case).
+
+    [왜 공용인가] `search_products` 와 `get_product` 가 **같은 모양**을 돌려줘야
+    한다 — 도구가 어느 쪽으로 상품을 얻었든 뒤 코드가 같아야 하기 때문이다.
+    투영을 두 곳에 각각 적으면 한쪽만 고치는 날 조용히 갈린다.
+
+    [`final_price_krw` 를 살리는 이유] 행사 중이면 실판매가가 다르다. 가격 발화의
+    근거는 정가가 아니라 **손님이 계산대에서 낼 금액**이어야 한다.
+    """
+    g = r.get
+    return {"sku_id": g("skuId"), "name": g("name"), "brand": g("brand"),
+            "category_l1": g("categoryL1"), "category_l2": g("categoryL2"),
+            "price_krw": g("priceKrw"), "unit": g("unit"), "spec_raw": g("specRaw"),
+            # ⚠ 08-27 이전에는 `specRaw`(원문 문자열)만 살리고 `spec`(수량이 든
+            #   JSON)을 **버리고 있었다.** 그래서 단위가격 비교가 "파서를 만들어야
+            #   하는 일"로 보였다 — 실제로는 창구가 값을 안 넘긴 것뿐이다.
+            "spec": g("spec"),
+            "on_promo": bool(g("onPromo")),
+            "discount_krw": g("discountKrw"), "final_price_krw": g("finalPriceKrw")}
 
 
 def _norm_loc(r: dict) -> dict:
@@ -377,7 +469,14 @@ def get_purchase_history(member_id: int) -> list[dict]:
     방향 실수(최신→과거로 빼서 음수 간격)가 생긴다. 정렬 책임을 여기 고정한다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_purchase_history"].format(member_id=member_id))
+        # 요청 ④ — 08-27에 **우리가 직접 구현**했다(InternalPurchaseController /history).
+        # ⚠ consumerId 가 아니라 memberId 다: 공개판은 consumerId→toMemberId 변환을
+        #   거치는데, 그 길로 가면 시드 회원 1005 가 10,001,005 로 둔갑해 이력이
+        #   항상 빈다. 내부판은 member_id 축을 그대로 받는다.
+        rows = _http_get(_API["get_purchase_history"],
+                         {"memberId": member_id}, headers=_internal_headers())
+        return [{"sku_id": r.get("skuId"), "qty": r.get("qty"),
+                 "purchased_at": r.get("purchasedAt")} for r in (rows or [])]
     # 리스트 컴프리헨션: "PURCHASES의 각 행 p 중 member_id가 일치하는 것만 모아
     # 새 리스트로" — for문 3줄을 한 줄로 쓴 것.
     rows = [p for p in mock_data.PURCHASES if p["member_id"] == member_id]
@@ -402,7 +501,41 @@ def get_session_cart(session_id: str) -> dict:
     이벤트가 진실이고 장바구니는 그 파생이다 — append-only 세계의 읽기 방식.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_session_cart"].format(session_id=session_id))
+        # 실물은 **회원**으로 조회한다(위 _API 주석). 세션 id 는 안 쓰이지만
+        # 서명에는 남긴다 — mock 경로가 그것으로 이벤트를 재생하고, 세션 단위
+        # 창구가 열리는 날 부르는 쪽을 안 고치고 갈아탈 수 있다.
+        from app.tools import query as _q
+        cid = _q.current_member_id()
+        if cid is None:
+            # 비회원이면 조회할 장바구니가 없다. 오류가 아니라 **상태**다 —
+            # 액션 3종의 _require_member 와 같은 판정을 조회에서도 한다.
+            return {"session_id": session_id, "items": [], "total_krw": 0,
+                    "note": "비회원 세션이라 장바구니가 없습니다."}
+        r = _http_get(_API["get_session_cart"],
+                      {"consumerId": cid},
+                      headers=_internal_headers()) or {}
+        # camelCase → 우리 계약. 실물 DTO(SessionCartItemResponse)의 이름은
+        # skuId · productName · priceKrw · quantity · subtotal 이다.
+        items = [{"cart_item_id": it.get("cartItemId"),
+                  "sku_id": it.get("skuId"),
+                  "name": it.get("productName"),
+                  "quantity": it.get("quantity"),
+                  "price_krw": it.get("priceKrw"),
+                  "line_total_krw": it.get("subtotal")}
+                 for it in (r.get("items") or [])]
+        # `cart_item_id` 는 수량변경·빼기가 받는 번호다. sku 와 다르다 —
+        # 같은 상품이 여러 줄일 수 있어 sku 로는 줄을 지목할 수 없다.
+        # 08-28 이전에는 이 칸이 응답에 없어 사슬이 끊겨 있었다(백엔드 DTO 보강).
+        # ⚠ 그래도 없이 오는 경우가 있으면(구 백엔드) **없다는 사실을 값으로
+        #   실어 보낸다** — 조용히 비우면 LLM 이 sku 를 넘겨 엉뚱한 줄을 지운다.
+        out = {"session_id": session_id, "items": items,
+               "total_krw": r.get("totalAmount", 0)}
+        if items and any(it.get("cart_item_id") is None for it in items):
+            out["note"] = ("일부 줄에 cart_item_id 가 없습니다(구 백엔드). "
+                           "그 줄은 수량 변경·빼기를 호출하지 말고, "
+                           "손님께 앱에서 직접 수정해 달라고 안내하세요. "
+                           "sku_id 를 cart_item_id 로 넘기지 마세요.")
+        return out
 
     # counts = {sku_id: 순수 담긴 개수}. 담으면 +1, 빼면 -1로 누적한다.
     # `: dict[int, int]`는 타입 힌트(개념 ④ — 키도 값도 int라는 표시일 뿐).
@@ -439,7 +572,13 @@ def get_wishlist(member_id: int) -> list[dict]:
     세계 감시자가 RESTOCK_IN 이벤트를 받으면 "이 sku를 위시리스트에 둔 회원"을 찾는다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_wishlist"].format(member_id=member_id))
+        rows = _http_get(_API["get_wishlist"], {"memberId": int(member_id)},
+                         headers=_internal_headers()) or []
+        # camelCase → 우리 계약(경계에서 한 번에 — 이 파일의 규율).
+        return [{"member_id": int(member_id), "sku_id": r.get("skuId"),
+                 "name": r.get("name"), "brand": r.get("brand"),
+                 "price_krw": r.get("priceKrw"), "image_url": r.get("imageUrl"),
+                 "added_at": r.get("addedAt")} for r in rows]
     return [w for w in mock_data.WISHLISTS if w["member_id"] == member_id]
 
 
@@ -458,8 +597,44 @@ def get_change_events(sku_ids: list[int] | None = None,
     네트워크를 건너오게 된다.
     """
     if not config.USE_MOCK_SOT:
-        return _http_get(_API["get_change_events"],
-                         {"sku_ids": sku_ids, "within_hours": within_hours})
+        # ⚠ **이름 계약**이 어긋나 400 이었다(08-27 B 검수 R-3).
+        #   컨트롤러: @RequestParam List<Integer> skuIds, @RequestParam int hours
+        #   우리:     sku_ids · within_hours            → 400
+        #   기능은 처음부터 멀쩡했다. 404 도 500 도 아니라 "창구가 없나" 하고
+        #   엉뚱한 데를 봤다 — **이름만 틀린 실패가 제일 오래 안 잡힌다.**
+        #   다른 내부 창구가 전부 camelCase(skuIds·consumerId)라 우리가 맞춘다.
+        #   ⚠ skuIds 는 필수다(defaultValue 가 없다) — None 이면 400 이므로,
+        #     '전체 조회'는 이 창구로 못 한다. 감시자가 늘 sku 를 좁혀 부르므로
+        #     지금은 무해하지만, 전체가 필요해지면 백엔드에 기본값을 요청한다.
+        if not sku_ids:
+            return []
+        # ⚠⚠ **시계가 둘이다.** 이 창구만 시간 계산을 백엔드가 한다:
+        #       InventoryService: Instant.now().minus(recentHours)
+        #   그런데 우리 세계의 「지금」은 벽시계가 아니라 `config.DEMO_NOW`
+        #   (2026-08-08 14:20 — DES 스냅샷 시각)다. 데모 데이터는 거기서
+        #   끝나므로, 벽시계 기준 "최근 24시간"에는 **이벤트가 영원히 0건**이다.
+        #   창구도 질의도 멀쩡한데 늘 빈 배열이 오는, 제일 안 잡히는 부류다
+        #   (08-28 실측: 그 sku 에 이벤트 312건이 있는데 24시간 창은 0건).
+        #
+        #   [고치는 법] 창의 **시작점**이 `DEMO_NOW - within_hours` 에 오도록
+        #   시간 수를 벌린다. 창이 뒤로 더 늘어나지만(DEMO_NOW ~ 벽시계) 그
+        #   구간에는 데이터가 없으므로 결과는 의도한 창과 **정확히 같다.**
+        #   세계가 벽시계를 따라잡는 날 skew 가 0이 되어 이 보정은 저절로
+        #   사라진다 — 상수를 박지 않는 이유다.
+        #
+        #   ⚠ 백엔드에 `since` 를 받는 인자가 생기면 이 보정을 지운다.
+        #     지금은 `hours` 뿐이라 부르는 쪽에서 감당한다.
+        skew_h = (datetime.now() - config.DEMO_NOW).total_seconds() / 3600.0
+        hours = int(within_hours) + max(0, int(skew_h) + 1)
+        rows = _http_get(_API["get_change_events"],
+                         {"skuIds": list(sku_ids), "hours": hours}) or []
+        # ⚠ 원시 camelCase 를 흘려보내면 안 된다 — 08-27 에 `get_inventory`·
+        #   `search_products` 가 정확히 그래서 **값이 조용히 None** 이 됐다.
+        #   경계에서 한 번 바꾼다(이 파일의 규율).
+        return [{"event_id": r.get("eventId"), "event_type": r.get("eventType"),
+                 "sku_id": r.get("skuId"), "location_id": r.get("locationId"),
+                 "qty": r.get("qty"), "occurred_at": r.get("occurredAt"),
+                 "payload": r.get("payload")} for r in rows]
 
     # timedelta 산술(개념 ③): "지금 - N시간" = 조회 시작 시점.
     since = config.DEMO_NOW - timedelta(hours=within_hours)
@@ -508,10 +683,12 @@ def get_products_by_skus(sku_ids: list[int]) -> list[dict]:
         # 자바 쪽 파라미터 표기는 skuIds(camelCase) — 여기서 변환한다.
         rows = _http_get(_API["get_products_by_skus"], {"skuIds": sku_ids})
         # 실물 응답의 camelCase 키를 mock과 같은 snake_case로 맞춘다.
-        return [{"sku_id": r.get("skuId"), "name": r.get("name"), "brand": r.get("brand"),
-                 "price_krw": r.get("priceKrw"), "category_l1": r.get("categoryL1"),
-                 "category_l2": r.get("categoryL2"), "spec_raw": r.get("specRaw"),
-                 "lifecycle_status": r.get("lifecycleStatus")} for r in rows]
+        # ⚠ 여기서 `_norm_product` 를 안 쓰고 손으로 투영하던 것이 화근이었다 —
+        #   같은 상품인데 창구마다 칸이 달랐다(단위가격이 필요로 하는 `spec` 이
+        #   이쪽에만 없었다). 공용 투영으로 합친다: **한 곳만 고치면 둘 다 산다.**
+        #   `lifecycle_status` 는 _norm_product 에 없던 칸이라 얹어 준다.
+        return [dict(_norm_product(r), lifecycle_status=r.get("lifecycleStatus"))
+                for r in rows]
     # mock: PRODUCTS에서 있는 것만 골라 담는다. `if s in mock_data.PRODUCTS`가
     # 없으면 없는 sku에서 KeyError로 죽는다 — '없음'은 정상 입력(get_product와 동일).
     return [mock_data.PRODUCTS[s] for s in sku_ids if s in mock_data.PRODUCTS]
@@ -672,15 +849,28 @@ def get_popular_products(category_l2: str | None = None,
     """카테고리(또는 전체) 인기 순위 — '요즘 뭐가 잘 나가?'의 근거.
 
     [출력] compare_purchase_popularity와 같은 모양(같은 질문의 '순위판'이므로).
-    ⚠ 실물 경로 /internal/purchases/popular는 **백엔드에 아직 없다**(공개판
-    /api/purchases/popular는 JWT 필수라 서버 대 서버로 못 부른다). jmy에게
-    내부판 신설을 요청해 둔 상태 — 그 전에 실물 모드로 부르면 404가 나고,
-    query.py의 예외 처리(원칙 ④)가 이를 값으로 바꿔 LLM이 정직하게 착지한다.
+    ✅ **08-27 구현 확인** — 내부판이 열렸다. 이 경로가 따로 있는 이유는 남긴다:
+    공개판 /api/purchases/popular 는 JWT 필수라 서버 대 서버(사용자 토큰 없음)로는
+    못 부른다. 그래서 X-Internal-Service-Key 로 인증하는 내부판을 요청했다.
+
+    ⚠ **백엔드가 상한을 말없이 깎는다**(08-27 B 실측): lookbackDays 최대 365 ·
+      limit 최대 50. 넘겨도 400 이 아니라 **잘린 결과가 200 으로** 온다 —
+      "60개를 부탁했는데 50개만 왔다"를 두 번 조사하지 않도록 여기 적어 둔다.
+      발화가 틀리지는 않으므로 방어 코드는 넣지 않는다.
     """
     if not config.USE_MOCK_SOT:
-        rows = _http_get(_API["get_popular"],
-                         {"categoryL2": category_l2, "lookbackDays": lookback_days,
-                          "limit": limit},
+        # ⚠ **빈 문자열을 보내면 안 된다 — 08-27 실연동에서 잡았다.**
+        #   백엔드 쿼리는 `(:categoryL2 IS NULL OR pr.categoryL2 = :categoryL2)` 라
+        #   **null 이어야 "전체"** 다. 우리가 `""` 를 보내면 "카테고리 이름이
+        #   빈 문자열인 상품"을 찾게 되어 **항상 0건**이 온다.
+        #   404 도 500 도 아니고 200 + 빈 배열이라 조용히 틀린다 — 실제로
+        #   "이번 주에 뭐가 잘 팔려요?" 가 계속 "데이터가 없다"로 답했다.
+        #   None 인 칸은 아예 빼서 보낸다(httpx 는 None 을 그대로 &k=None 으로
+        #   직렬화하지 않고 빼 주지만, 빈 문자열은 빼지 않는다).
+        params = {"lookbackDays": lookback_days, "limit": limit}
+        if category_l2:                       # ""·None 이면 안 넣는다 = 전체
+            params["categoryL2"] = category_l2
+        rows = _http_get(_API["get_popular"], params,
                          headers=_internal_headers())
         items = [{"sku_id": r.get("skuId"), "name": r.get("productName"),
                   "total_qty": r.get("totalQty"), "purchaser_count": r.get("purchaserCount")}
@@ -775,6 +965,35 @@ def get_current_prices(sku_ids: list[int]) -> dict:
     return out
 
 
+class Unavailable(str):
+    """실패 사유를 담되 **거짓(falsy)으로 평가되는** 문자열.
+
+    [왜 이런 게 필요한가 — 08-27 사고] `get_pending_replenishments`가 실패 사유를
+    평범한 `str`로 돌려주게 바꿨더니, 이미 있던 호출부가 조용히 깨졌다.
+
+        for row in (sot.get_pending_replenishments() or [])[:300]:
+
+    `"sot_unreachable"`은 **참**이라 `or []`를 통과하고, 슬라이스가 되고,
+    루프가 **글자 하나하나를 행으로** 돌린다. 그래서 에러가 `row.get`에서
+    나 원인이 세 단계 떨어진 곳에 보인다("왜 str에 get이 없지?").
+
+    [고친 방식] 사유를 없애지 않고 **거짓으로 만든다.** 그러면
+      · `x or []`      → `[]`          (목록으로 쓰는 쪽은 그냥 산다)
+      · `if not x:`    → 참             (실패 처리도 자연스럽다)
+      · `isinstance(x, str)` · `x == "auth_failed"` → 그대로 (사유를 읽는 쪽도 산다)
+    **호출부가 앞으로 늘어나도 같은 사고가 안 난다** — 규율이 아니라 타입이
+    막는다(§2-5a "경계를 구조로 만드는 것").
+
+    [왜 예외가 아닌가] 예외로 올리면 `infer`가 `why`를 갈라 적을 수 없고,
+    골든셋 재료 수집처럼 **없으면 건너뛰면 그만인** 자리까지 죽는다.
+    """
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+
 def get_pending_replenishments() -> list[dict]:
     """지금 par 밑이라 **보충 대기 중인 매대 전부**. 매장 단위 집계다.
 
@@ -793,15 +1012,48 @@ def get_pending_replenishments() -> list[dict]:
                  있으면 수직(백룸에서 내려 채움·빠름), 없으면 수평/층간(느림).
       queued_at: par 밑으로 떨어진 시각. 대기 시간의 원점.
 
-    ⚠ 실물 경로는 **아직 백엔드에 없다**(jmy 요청 대기). 없으면 빈 목록을 돌려주고,
-      infer가 그것을 "큐를 모른다"로 읽어 확률을 안 낸다 — 0건과 미지원을 구분해야
-      하므로 예외를 삼키지 않고 None을 돌려준다.
+    ✅ **08-27 구현 확인**(요청 ③ — `InternalReplenishmentController`). 응답 다섯 칸이
+      우리 매핑과 1:1 이고, 부탁한 "큐가 없어도 200 []"(404 아님)까지 지켜져 있다.
+
+    [반환이 세 갈래인 이유] 0건과 미지원을 구분해야 하므로 예외를 삼키지 않는다:
+      list  정상 (빈 리스트 = 진짜 대기 0건)
+      None  창구 없음(404)
+      Unavailable("auth_failed" | "sot_unreachable") — 우리 쪽 설정·통신 문제.
+            **거짓으로 평가되는 str** 이라 `or []`·`if not` 관용구가 그대로 산다
+    ⚠ `queuedAt` 은 null 이 올 수 있다(BELOW_PAR 이벤트가 없으면 — 백엔드 DTO 주석).
+      지금 infer 는 이 값을 특징으로 쓰지 않아 무해하지만, 나중에 대기시간을
+      특징에 넣는다면 **null 이 0 이 되지 않게** 해야 한다.
     """
     if not config.USE_MOCK_SOT:
+        # ⚠ **실패를 가려서 잡는다 — 08-27 B 검수 지적.**
+        #   전에는 `except Exception: return None` 으로 모든 실패를 "창구 없음"으로
+        #   뭉갰다. 창구가 실제로 없던 동안(요청 ③ 구현 전)은 맞는 근사였지만
+        #   이제는 창구가 있다 — 그 상태에서 **키가 틀려 401이 와도** 에이전트가
+        #   *"보충 대기를 조회할 창구가 아직 없습니다"* 라고 **사용자에게 거짓**을
+        #   말한다. 원인은 인증인데 화면에는 미구현이라 뜨니 아무도 못 고친다.
+        #
+        #   그래서 셋을 가른다:
+        #     404          창구 없음        → None ("모른다" — infer 가 시간을 안 말한다)
+        #     그 외 실패    통신·인증 오류    → 예외를 그대로 올린다
+        #                                     (query.py 원칙 ④가 값으로 바꿔 LLM 이
+        #                                      "지금 조회가 안 된다"로 착지하고,
+        #                                      로그에는 진짜 원인이 남는다)
+        #   404 도 "모른다"인 것은 같지만, **왜 모르는지**가 로그에서 갈린다.
         try:
             rows = _http_get(_API["pending_replenish"], headers=_internal_headers())
-        except Exception:                                  # noqa: BLE001
-            return None                                    # 창구 없음 ≠ 대기 0건
+        except Exception as e:                             # noqa: BLE001
+            # 원인을 **문자열로 갈라** 돌려준다. 셋 다 확률을 안 내는 것은 같지만
+            # infer 가 `why` 를 다르게 적어야 운영자가 원인을 안다.
+            #   404      창구 없음        (지금 문구 그대로)
+            #   401·403  키·권한 — 우리 설정 문제
+            #   그 외     백엔드 미기동·타임아웃
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 404:
+                return None
+            reason = "auth_failed" if status in (401, 403) else "sot_unreachable"
+            print(f"[sot] pending 조회 실패 {reason}"
+                  f"({status or type(e).__name__}): {e}")
+            return Unavailable(reason)
         return [{"sku_id": r.get("skuId"), "location_id": r.get("locationId"),
                  "floor_no": r.get("floorNo"), "has_bulk": bool(r.get("hasBulk")),
                  "queued_at": r.get("queuedAt")}
@@ -841,6 +1093,26 @@ def resolve_location(location_id: str) -> dict | None:
     if loc is None:
         return None
     return {"floor_no": loc["floor_no"], "x": loc["x"], "y": loc["y"]}
+
+
+def get_floor_map(floor_no: int) -> dict | None:
+    """층 하나의 보행 격자 — GET /api/map/floors/{n} (공개 조회).
+
+    반환 {"floorNo": n, "cells": [{"x","y","passable","transitId"}, …], "zones": […]}.
+    위치 추정(infer.get_position)의 **스냅 재료**다. 격자의 정본은 백엔드
+    nav_cells 하나뿐이고(world_gen.py: "동선 솔버와 위치 스냅이 같은 격자를
+    봐야 한다"), 우리가 sim에서 따로 구우면 지도가 두 벌이 되어 프론트가
+    그리는 매장과 에이전트가 아는 매장이 갈린다.
+
+    [언제 불리나] lifespan에서 층별 1회 — 층당 7,125칸(95×75)이라 요청마다
+    받으면 그게 병목이다. 상주 캐시는 infer._STATE가 맡는다(헌법 6과 같은 규율).
+
+    [mock] None — mock 세계에는 격자가 없다(LOCATIONS 좌표는 근사 소품).
+    스냅은 실물 전용이고, mock의 get_position은 앵커를 그대로 돌려준다.
+    """
+    if config.USE_MOCK_SOT:
+        return None
+    return _http_get(_API["floor_map"].format(floor_no=int(floor_no)))
 
 
 def get_navigation_route(start_floor: int, start_x: int, start_y: int,
