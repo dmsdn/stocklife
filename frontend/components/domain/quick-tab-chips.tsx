@@ -24,7 +24,7 @@ export function QuickTabChips() {
         aria-label="새 목록 추가"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border"
       >
-        <Plus size={16} />
+        <Plus size={24} />
       </button>
     </div>
   );

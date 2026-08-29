@@ -94,13 +94,13 @@ function DiscoveredItem({
         </div>
 
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-muted">
-          <TrendingDown size={15} />
+          <TrendingDown size={24} />
         </div>
       </div>
 
       <div className="mt-3 flex items-start gap-1.5">
         <Sparkles
-          size={12}
+          size={24}
           className="mt-0.5 shrink-0 text-muted-foreground"
         />
 

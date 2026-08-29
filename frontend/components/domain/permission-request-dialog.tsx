@@ -26,7 +26,7 @@ export function PermissionRequestDialog({ open, kind, onConfirm, onClose }: Perm
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon size={18} />
+            <Icon size={24} />
             {title}
           </DialogTitle>
         </DialogHeader>
