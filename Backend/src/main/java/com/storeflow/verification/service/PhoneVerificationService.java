@@ -85,6 +85,14 @@ public class PhoneVerificationService {
     /**
      * 최종 가입/비밀번호 재설정 단계에서, 해당 phoneNumber+purpose가 실제로 인증을 마쳤는지 확인한다.
      * 통과하면 재사용 방지를 위해 레코드를 소비(삭제)한다.
+     *
+     * isExpired() 검사를 여기서 하지 않는 이유: 그 만료 시각(발송 시각 + 3분)은
+     * "인증번호를 입력하는 그 단계"(verifyCode)에서만 의미가 있다. verifyCode에서 이미
+     * 시간 안에 인증을 마쳤는지 확인이 끝났고 그 결과가 verified=true로 저장됐다면,
+     * 그 뒤로 이어지는 가입 단계(비밀번호·이름·추가정보 입력)에 시간이 얼마나 걸리든
+     * 인증 자체가 무효가 될 이유가 없다. 여기서 다시 검사하면 "인증번호 유효시간"이
+     * 인증 단계가 아니라 회원가입 전체 과정에 적용되는 셈이 되어, 정상적으로 인증을
+     * 마친 사용자가 뒷단계 입력이 조금만 늦어져도 최종 제출에서 튕겨난다.
      */
     @Transactional
     public void assertVerifiedAndConsume(String phoneNumber, VerificationPurpose purpose) {
@@ -94,9 +102,6 @@ public class PhoneVerificationService {
 
         if (!verification.isVerified()) {
             throw new VerificationNotCompletedException("휴대폰 인증이 필요합니다.");
-        }
-        if (verification.isExpired()) {
-            throw new VerificationCodeExpiredException("인증번호 유효시간이 만료되었습니다. 다시 인증해주세요.");
         }
 
         phoneVerificationRepository.delete(verification);
