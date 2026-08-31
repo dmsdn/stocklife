@@ -160,6 +160,31 @@ public class ChatController {
     }
 
     /**
+     * 3번: 대화 내용 검색.
+     *
+     * GET /api/chat/search?keyword=우유
+     * 매칭된 세션들을, 세션별 최근 매칭 메시지 5개와 함께 최신순으로 반환한다.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<?> search(
+            @RequestParam String keyword,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
+    ) {
+        try {
+            Long consumerId = resolveConsumerIdOrNull(authorization);
+
+            return ResponseEntity.ok(
+                    chatService.searchMessages(consumerId, anonymousId, keyword)
+            );
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
      * 비회원도 채팅 가능해야 하므로 토큰이 아예 없으면 null.
      * 토큰이 전달됐는데 잘못된 토큰이면 비회원으로 강등하지 않고 403 처리한다.
      */
@@ -180,4 +205,4 @@ public class ChatController {
 
         return jwtUtil.getConsumerIdFromToken(token);
     }
-}
+}  

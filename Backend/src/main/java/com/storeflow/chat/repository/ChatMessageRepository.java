@@ -2,6 +2,8 @@ package com.storeflow.chat.repository;
 
 import com.storeflow.chat.entity.ChatMessage;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -12,4 +14,14 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     // Agent에 넘길 "최근 대화"용: 최신 N개를 내림차순으로 가져온 뒤 서비스단에서 뒤집는다
     List<ChatMessage> findTop20ByChatSessionIdOrderByCreatedAtDesc(Long chatSessionId);
+
+    // 3번(대화 내용 검색)용: 소유한 세션들(sessionIds) 안에서 keyword가 포함된 메시지를
+    // 전부 최신순으로 가져온다. "세션별 최근 5개"는 결과가 많지 않은 해커톤/사이드프로젝트
+    // 규모라 SQL에서 세션당 LIMIT까지 걸지 않고, 서비스 레이어에서 세션별로 묶어 앞 5개만
+    // 취하는 방식으로 처리한다(그룹별 LIMIT은 DB/방언마다 문법이 갈려서 이쪽이 더 이식성 좋음).
+    @Query("SELECT m FROM ChatMessage m " +
+            "WHERE m.chatSessionId IN :sessionIds AND m.content LIKE %:keyword% " +
+            "ORDER BY m.createdAt DESC")
+    List<ChatMessage> searchByKeywordInSessions(@Param("sessionIds") List<Long> sessionIds,
+                                                @Param("keyword") String keyword);
 }

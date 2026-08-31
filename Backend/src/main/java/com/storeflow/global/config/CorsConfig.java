@@ -11,7 +11,7 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:3000", "http://192.168.0.80:3000") // 프론트 개발 서버 주소로 교체
+                .allowedOrigins("http://localhost:3000", "http://192.168.0.80:3000", "http://localhost:5173") // 프론트 개발 서버 주소로 교체 (5173: Simulation)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true);

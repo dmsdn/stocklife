@@ -57,7 +57,8 @@ public class CartService {
         CartGroup group = cartGroupRepository.save(new CartGroup(
                 consumerId,
                 request.getTitle().trim(),
-                request.getDescription() == null ? "새 장보기 목록" : request.getDescription().trim()));
+                request.getDescription() == null ? "새 장보기 목록" : request.getDescription().trim(),
+                request.getShoppingDate())); // 선택값 — 없으면 null 그대로 저장됨
         return new CartGroupResponse(group, List.of());
     }
 
@@ -73,6 +74,9 @@ public class CartService {
     public CartGroupResponse updateGroup(Long consumerId, Long groupId, UpdateCartGroupRequest request) {
         CartGroup group = requireOwnedGroup(consumerId, groupId);
         group.updateInfo(request.getTitle(), request.getDescription());
+        if (request.getShoppingDate() != null) {
+            group.updateShoppingDate(request.getShoppingDate());
+        }
         List<CartItemResponse> items = cartItemRepository.findByCartGroupId(groupId).stream()
                 .map(CartItemResponse::new).toList();
         return new CartGroupResponse(group, items);

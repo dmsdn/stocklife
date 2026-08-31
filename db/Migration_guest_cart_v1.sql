@@ -58,3 +58,7 @@ ALTER TABLE chat_session
 
 CREATE INDEX idx_chat_session_group
     ON chat_session (group_id);
+
+-- cart_group에 "장 볼 날짜" 컬럼 추가 (nullable, 선택 입력)
+ALTER TABLE cart_group
+    ADD COLUMN shopping_date DATE NULL AFTER description;
