@@ -70,12 +70,12 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
       { id: 'event-1', label: '행사 상품', x: 26, y: 27, w: 8, h: 10 },
       { id: 'event-2', label: '행사 상품', x: 65, y: 29, w: 18, h: 14 },
       // 정면 통로(y=66~67, 실측 h=2)에 왼쪽부터 겹치지 않게 한 줄 배치.
-      { id: 'entrance', label: '입구', x: 7, y: 7, w: 6, h: 2 },
+      { id: 'entrance', label: '입구', x: 7, y: 73, w: 6, h: 2 },
       { id: 'checkout', label: '계산대 / SCAN', x: 15, y: 66, w: 15, h: 3 },
-      { id: 'atm', label: 'ATM', x: 36, y: 66, w: 4, h: 2 },
-      { id: 'bakery-counter', label: '베이커리', x: 41, y: 66, w: 10, h: 2 },
-      { id: 'food-court', label: '푸드코트', x: 53, y: 66, w: 16, h: 2 },
-      { id: 'customer-center', label: '고객센터', x: 30, y: 68, w: 6, h: 4 },
+      { id: 'atm', label: 'ATM', x: 36, y: 67, w: 4, h: 2 },
+      { id: 'bakery-counter', label: '베이커리', x: 41, y: 66, w: 10, h: 3 },
+      { id: 'food-court', label: '푸드코트', x: 53, y: 66, w: 16, h: 3 },
+      { id: 'customer-center', label: '고객센터', x: 30, y: 69, w: 6, h: 4 },
     ],
   },
   2: {
@@ -99,12 +99,12 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
       { type: 'escalator_down', x: 89, y: 67 },
     ],
     serviceAreas: [
-      { id: 'event', label: '행사 상품', x: 78, y: 1, w: 6, h: 22 },
-      { id: 'event-2', label: '행사 상품', x: 79, y: 24, w: 9, h: 15 },
+      { id: 'event', label: '행사 상품', x: 84, y: 1, w: 9, h: 23 },
+      { id: 'event-2', label: '행사 상품', x: 72, y: 24, w: 7, h: 18 },
       // 2층 하단 실제 통로(y=61~62, h=2)에 왼쪽부터 겹치지 않게 배치.
-      { id: 'optical-hearing-center', label: '안경 / 보청기 센터', x: 2, y: 61, w: 17, h: 2 },
-      { id: 'pharmacy', label: '약국', x: 21, y: 61, w: 17, h: 2 },
-      { id: 'tasting-corner', label: '시식 코너', x: 15, y: 59, w: 66, h: 2 },
+      { id: 'optical-hearing-center', label: '안경 / 보청기 센터', x: 2, y: 61, w: 6, h: 4 },
+      { id: 'pharmacy', label: '약국', x: 2, y: 65, w: 6, h: 4 },
+      { id: 'tasting-corner', label: '시식 코너', x: 15, y: 61, w: 66, h: 4 },
     ],
   },
   3: {
@@ -124,9 +124,9 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
       { type: 'escalator_down', x: 89, y: 67 },
     ],
     serviceAreas: [
-      { id: 'as-center', label: 'A/S센터', x: 9, y: 57, w: 15, h: 4 },
-      { id: 'appliance-experience', label: '가전 체험존', x: 26, y: 57, w: 29, h: 4 },
-      { id: 'lounge', label: '휴게 라운지', x: 57, y: 57, w: 20, h: 4 },
+      { id: 'as-center', label: 'A/S센터', x: 1, y: 57, w: 6, h: 8 },
+      { id: 'appliance-experience', label: '가전 체험존', x: 1, y: 65, w: 29, h: 8 },
+      { id: 'lounge', label: '휴게 라운지', x: 30, y: 65, w: 40, h: 8 },
     ],
   },
 
