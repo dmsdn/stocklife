@@ -23,8 +23,14 @@ export function LoginRequiredDialog({ open, onClose }: LoginRequiredDialogProps)
           이 기능은 로그인 후에 이용할 수 있어요.
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" onClick={onClose}>
-            닫기
+          <Button
+            variant="outline"
+            onClick={() => {
+              onClose();
+              router.push("/auth/signup/terms");
+            }}
+          >
+            회원가입
           </Button>
           <Button
             onClick={() => {
@@ -32,7 +38,7 @@ export function LoginRequiredDialog({ open, onClose }: LoginRequiredDialogProps)
               router.push("/auth/login?next=/cart");
             }}
           >
-            로그인하고 이용하기
+            로그인
           </Button>
         </div>
       </DialogContent>

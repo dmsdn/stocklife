@@ -45,6 +45,7 @@ import { getClientId } from "@/lib/client-id";
 import { AttachListPickerDialog } from "@/components/domain/attach-list-picker-dialog";
 import { usePermissionStatus } from "@/lib/use-permission-status";
 import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
+import { useAiPanel } from "@/components/layout/ai-panel-context";
 
 interface ChatTurn {
   role: "user" | "assistant";
@@ -88,6 +89,7 @@ export function AiChatBody({
   suggestedPrompts = DEFAULT_PROMPTS,
   initialMessage,
 }: AiChatBodyProps) {
+  const { groupId } = useAiPanel();
   const [message, setMessage] = useState(initialMessage ?? "");
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [sending, setSending] = useState(false);
@@ -121,7 +123,7 @@ export function AiChatBody({
           setActiveSessionId(sessionIdOverride);
         }
 
-        const sessionId = await getOrCreateSessionId();
+        const sessionId = await getOrCreateSessionId(groupId);
 
         const messages = await apiFetch<
           { sender: string; content: string }[]
@@ -171,7 +173,7 @@ export function AiChatBody({
     setSending(true);
 
     try {
-      const sessionId = await getOrCreateSessionId();
+      const sessionId = await getOrCreateSessionId(groupId);
 
       const res = await apiFetch<{
         reply: string;

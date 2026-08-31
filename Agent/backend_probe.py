@@ -65,7 +65,15 @@ def main() -> int:
     print("── ① /internal/replenishment/pending ──")
     pending = sot_client.get_pending_replenishments()
     if pending is None:
-        line(BAD, "창구 응답", "None — 예외가 났다(404/401/연결 실패). 서버·키 확인")
+        line(BAD, "창구 응답", "None — 404. 창구 자체가 없다(경로·컨트롤러 확인)")
+        bad += 1
+    elif isinstance(pending, str):
+        # 08-27: 404 와 "우리 쪽 문제"를 가른 뒤로 사유가 문자열로 온다.
+        # 여기서 뭉치면 탐침의 존재 이유(빈 배열의 의미를 가른다)가 없어진다.
+        line(BAD, "창구 응답", {
+            "auth_failed": "auth_failed — INTERNAL_SERVICE_KEY 불일치(401/403)",
+            "sot_unreachable": "sot_unreachable — 백엔드 미기동·타임아웃",
+        }.get(pending, pending))
         bad += 1
     elif not pending:
         line(WARN, "빈 배열 []", "0건이다. **시드가 적재됐는지** 아래 ③으로 판별")
@@ -73,13 +81,22 @@ def main() -> int:
         line(OK, f"{len(pending)}건 수신")
         r = pending[0]
         # 우리가 읽는 키가 실제로 채워졌나. None이면 이름이 다른 것이다.
-        for k in ("sku_id", "location_id", "floor_no", "has_bulk", "queued_at"):
+        # queued_at 만 **null 이 정상일 수 있다** — 백엔드 DTO 주석대로
+        # "BELOW_PAR 이벤트가 없으면 null"(0건이 아니라 모름). 나머지 넷은
+        # null 이면 필드명 불일치다.
+        for k in ("sku_id", "location_id", "floor_no", "has_bulk"):
             v = r.get(k)
             if v is None:
                 line(BAD, f"필드 {k}", "None — 백엔드 필드명이 다르다(camelCase 확인)")
                 bad += 1
             else:
                 line(OK, f"필드 {k}", repr(v)[:44])
+        n_q = sum(1 for x in pending if x.get("queued_at"))
+        if n_q:
+            line(OK, "필드 queued_at", f"{n_q}/{len(pending)}건에 값 있음")
+        else:
+            line(WARN, "필드 queued_at", "전건 null — BELOW_PAR 이력이 없다는 뜻. "
+                                        "대기시간 원점이 없어 예측이 낙관 쪽으로 기운다")
 
     # ── ② 인기 상품 ───────────────────────────────────────────────────────
     print("\n── ② /internal/purchases/popular ──")

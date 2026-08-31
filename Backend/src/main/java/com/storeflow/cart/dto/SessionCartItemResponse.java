@@ -4,6 +4,7 @@ import com.storeflow.cart.entity.CartItem;
 import com.storeflow.product.entity.Product;
 
 public class SessionCartItemResponse {
+    private Long cartItemId;
     private Integer skuId;
     private String productName;
     private int priceKrw;
@@ -12,6 +13,7 @@ public class SessionCartItemResponse {
     private int subtotal;
 
     public SessionCartItemResponse(CartItem item, Product product, int subtotal) {
+        this.cartItemId = item.getCartItemId();
         this.skuId = item.getSkuId();
         this.productName = product.getName();
         this.priceKrw = product.getPriceKrw();
@@ -20,6 +22,7 @@ public class SessionCartItemResponse {
         this.subtotal = subtotal;
     }
 
+    public Long getCartItemId() { return cartItemId; }
     public Integer getSkuId() { return skuId; }
     public String getProductName() { return productName; }
     public int getPriceKrw() { return priceKrw; }

@@ -258,9 +258,9 @@ export default class StoreScene extends Phaser.Scene {
       const color = zone ? Phaser.Display.Color.HexStringToColor(zone.color).color : 0xcccccc;
       const c = Phaser.Display.Color.ValueToColor(color);
       const darker = Phaser.Display.Color.GetColor(
-        Math.max(0, c.red - 55),
-        Math.max(0, c.green - 55),
-        Math.max(0, c.blue - 55)
+          Math.max(0, c.red - 55),
+          Math.max(0, c.green - 55),
+          Math.max(0, c.blue - 55)
       );
       const cx = loc.x * TILE + TILE / 2;
       const cy = loc.y * TILE + TILE / 2;
@@ -403,14 +403,14 @@ export default class StoreScene extends Phaser.Scene {
   private randomWalkableCellNear(center: GridPoint, radius: number): GridPoint {
     for (let i = 0; i < 50; i++) {
       const x = Phaser.Math.Clamp(
-        center.x + Phaser.Math.Between(-radius, radius),
-        0,
-        this.floorData.gridWidth - 1
+          center.x + Phaser.Math.Between(-radius, radius),
+          0,
+          this.floorData.gridWidth - 1
       );
       const y = Phaser.Math.Clamp(
-        center.y + Phaser.Math.Between(-radius, radius),
-        0,
-        this.floorData.gridHeight - 1
+          center.y + Phaser.Math.Between(-radius, radius),
+          0,
+          this.floorData.gridHeight - 1
       );
       if (this.grid.isWalkable(x, y)) return { x, y };
     }
@@ -435,14 +435,14 @@ export default class StoreScene extends Phaser.Scene {
 
     this.npcHomeMarker?.destroy();
     this.npcHomeMarker = this.add
-      .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
-        fontSize: '9px',
-        color: '#78350f',
-        backgroundColor: '#fef3c7cc',
-        padding: { x: 2, y: 0 },
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(DEPTH_NPC);
+        .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
+          fontSize: '9px',
+          color: '#78350f',
+          backgroundColor: '#fef3c7cc',
+          padding: { x: 2, y: 0 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(DEPTH_NPC);
 
     for (let i = 0; i < count; i++) {
       const cell = this.npcHomeCell;
@@ -526,14 +526,14 @@ export default class StoreScene extends Phaser.Scene {
 
   private showRestockBubble(npc: NpcAgent, text: string) {
     const t = this.add
-      .text(npc.container.x, npc.container.y - 16, text, {
-        fontSize: '10px',
-        color: '#16a34a',
-        backgroundColor: '#ffffffcc',
-        padding: { x: 3, y: 1 },
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_NPC + 1);
+        .text(npc.container.x, npc.container.y - 16, text, {
+          fontSize: '10px',
+          color: '#16a34a',
+          backgroundColor: '#ffffffcc',
+          padding: { x: 3, y: 1 },
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH_NPC + 1);
     this.tweens.add({ targets: t, y: t.y - 14, alpha: 0, duration: 900, onComplete: () => t.destroy() });
   }
 

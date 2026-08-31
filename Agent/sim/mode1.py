@@ -47,6 +47,12 @@ DEMO_DAYS = 90          # 데모 슬라이스 최근 구간(일)
 _WINDOW_START = datetime(P.BASE_DATE.year, P.BASE_DATE.month, P.BASE_DATE.day) \
     - timedelta(days=P.HISTORY_DAYS)
 _EPOCH0 = _WINDOW_START.timestamp()
+
+# 데모 스냅샷 시각 — 마지막 **영업일**의 14:20. DEMO_NOW(config)와 한 쌍이다.
+#   종료 상태(마감 후)는 보충 큐가 다 비워져 킬링 장면 1의 표본이 0이 된다
+#   (08-27 실측: par 밑 0건). 영업 중의 한 순간을 얼려야 재고 스냅샷·이벤트
+#   이력·보충 큐가 **같은 시점**의 것이 된다.
+SNAP_HOUR_SEC = 14 * 3600 + 20 * 60
 _BASE_DOW = _WINDOW_START.weekday()      # 창 시작 요일(월=0)
 
 
@@ -140,6 +146,19 @@ def run(n_members: int, n_days: int):
     # ── 회원 상태 + 방문 이벤트 ──────────────────────────────────────────────
     states = {}
     eng = Engine()
+
+    # 스냅샷 그릇. 핸들러는 **복사만** 한다 — RNG 를 안 만지므로 이 이벤트가
+    # 있어도 이력 스트림은 바이트 단위로 그대로다(결정성 유지).
+    snap = {"stock": None, "ts": None}
+
+    def on_snapshot(engine, data):
+        snap["stock"] = dict(stock)
+        # 대기 중 SKU 집합 — 슬라이스가 이들의 매대 이벤트를 포함해야
+        # pending API 의 queuedAt(대기 원점)이 데모 SKU 밖에서도 채워진다
+        snap["pending_skus"] = set(pending.keys())
+        off = (engine.now - _EPOCH0) / 86400.0
+        snap["ts"] = _ts(off)[1]
+
     total_member_visits = 0
     for m in members:
         mid = m[0]
@@ -376,6 +395,17 @@ def run(n_members: int, n_days: int):
     eng.on("MEMBER_VISIT", on_member_visit)
     eng.on("GUEST_VISIT", on_guest_visit)
     eng.on("RESTOCK", on_restock)
+    eng.on("SNAPSHOT", on_snapshot)    # ── 스냅샷 날 = 창 안의 **마지막 토요일** 14:20 (08-27 확정) ──
+    # 처음엔 마지막 영업일(수요일)로 했다가 두 번 접었다:
+    #   · 종료 상태(마감 후): 큐가 다 비워져 par 밑 0건 — 무균 매장
+    #   · 평일 14:20: 실측 순간 큐 0~5건 — 승무원 5명이 금방 비운다(ρ≈0.4)
+    # 큐 L=75(리틀 법칙)는 주말·저녁·밤샘이 만든 **평균**이지 평일 낮의 순간이
+    # 아니다. 킬링 장면 1("약 15분 후 보충")은 혼잡이 있어야 성립하고, 이 세계의
+    # 혼잡은 주말 오후다(av-fig5 · 도착 배율 1.5~1.6). 실측: 토 14:20 큐 96건.
+    _snap_day = int(window_days) - 1
+    while (_WINDOW_START + timedelta(days=_snap_day)).weekday() != 5:   # 5 = 토
+        _snap_day -= 1
+    eng.schedule(_EPOCH0 + _snap_day * 86400 + SNAP_HOUR_SEC, "SNAPSHOT", None)
     eng.on("REQUEUE", on_requeue)
 
     # ── 구동 ─────────────────────────────────────────────────────────────────
@@ -390,13 +420,53 @@ def run(n_members: int, n_days: int):
             m["cens"] = ("WINDOW_END", obs)
     censored = [tid for tid, m in task_meta.items() if m["cens"] is not None]
 
-    _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, members)
+    _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, members,
+                   snap["ts"], snap.get("pending_skus") or set())
+    _write_stock_sync(snap["stock"] or stock, pick_loc, cfg, snap["ts"])
     _summary(counters, purchases, shelf_ev, consumer_ev, task_meta, censored,
              total_member_visits, len(guest_offs), time.perf_counter() - t_wall,
              n_members, n_days)
 
 
 # ── 출력 ────────────────────────────────────────────────────────────────────
+def _write_stock_sync(stock, pick_loc, cfg, snap_ts=None):
+    """DES **종료 시점**의 PICK 재고를 운영 DB에 맞추는 UPDATE 묶음.
+
+    [왜 필요한가 — 08-27 실연동에서 잡은 시점 불일치]
+      운영 DB의 stocks 는 world_seed 의 **t=0 스냅샷**이고, shelf_events 는
+      DES 가 굴린 **90일 이력**이다. 이력의 끝(= config.DEMO_NOW 직전)에서
+      매장은 이미 다른 상태다 — 실측으로 par 밑 매대 271곳 중 228곳이
+      BELOW_PAR 이력이 **없는** t=0 잔재였다. 그러면 /internal/replenishment/
+      pending 의 queuedAt 이 전부 null 이라(대기 원점 없음) 가용예측이 낙관
+      쪽으로 기운다. 재고 스냅샷과 이벤트 이력은 **한 시점의 것**이어야 한다.
+
+    [왜 UPDATE 이고 INSERT 가 아닌가] stocks 행 자체(어느 매대에 어느 SKU)는
+      world_seed 가 만든 그대로다 — 바뀐 것은 수량뿐이다. DELETE+INSERT 로
+      갈면 world_seed 와의 결정적 재생성 관계가 끊긴다.
+
+    [BULK 은 안 만진다] DES 는 보충 시 PICK 을 목표량까지 채우되 BULK 을
+      깎지 않는다(단순화 — replenish 주석). BULK 수량은 t=0 그대로가 맞다.
+
+    [적재 순서] world_seed → history_seed → **stock_sync** (이 파일이 마지막).
+      순서를 바꾸면 t=0 수량으로 되돌아간다. db/README_시드적재.md 에 등재.
+    """
+    path = os.path.join(OUT_DIR, "stock_sync.sql")
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(f"-- DES 스냅샷({snap_ts or '종료'}) 시점의 PICK 재고 동기화\n")
+        f.write("-- 적재 순서: world_seed -> history_seed -> 이 파일 (마지막)\n")
+        f.write("START TRANSACTION;\n")
+        n_low = 0
+        for sku in sorted(stock):
+            loc_id = pick_loc[sku][0]
+            qty = int(stock[sku])
+            if qty < cfg[sku][0]:
+                n_low += 1
+            f.write(f"UPDATE stocks SET qty={qty} "
+                    f"WHERE sku_id={sku} AND location_id='{loc_id}';\n")
+        f.write("COMMIT;\n")
+    print(f"  stock_sync.sql        PICK {len(stock):,}건 (par 밑 {n_low:,}건)")
+
+
 def _write_csv_gz(path, header, rows):
     with gzip.open(path, "wt", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
@@ -404,7 +474,8 @@ def _write_csv_gz(path, header, rows):
         w.writerows(rows)
 
 
-def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, members):
+def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, members,
+                   snap_ts=None, pending_skus=None):
     os.makedirs(OUT_DIR, exist_ok=True)
     _write_csv_gz(os.path.join(OUT_DIR, "purchases.csv.gz"),
                   ["purchase_id", "basket_id", "member_id", "sku_id", "qty",
@@ -451,7 +522,7 @@ def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, member
                    "q_vertical", "q_horizontal", "q_floor", "q_work_sec", "l2",
                    "wait_sec", "travel_sec", "handling_sec",
                    "duration_sec", "event", "censor_reason", "true_lead_sec"], lead_rows)
-    _write_demo_slice(purchases, shelf_ev, consumer_ev, members)
+    _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts, pending_skus)
 
 
 def _sqlstr(v):
@@ -462,18 +533,39 @@ def _sqlstr(v):
     return "'" + str(v).replace("\\", "\\\\").replace("'", "''") + "'"
 
 
-def _write_demo_slice(purchases, shelf_ev, consumer_ev, members):
-    """데모 회원(앞 DEMO_MEMBERS명) × 최근 DEMO_DAYS일만 SQL로. 운영 DB 적재용."""
+def _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts=None,
+                      pending_skus=None):
+    """데모 회원(앞 DEMO_MEMBERS명) × 최근 DEMO_DAYS일만 SQL로. 운영 DB 적재용.
+
+    [상한 컷 — 08-27] snap_ts(마지막 영업일 14:20) **이후** 행은 버린다.
+      DEMO_NOW 가 그 시각이므로 이후 행은 DB 관점에서 "미래"다 — 남겨 두면
+      재구매 도구가 미래 구매를 이력으로 읽고(경과일이 음수), 보충 큐는
+      "이미 채워졌는데 par 밑" 같은 자기모순 상태를 보인다.
+    """
     demo_ids = {m[0] for m in members[:DEMO_MEMBERS]}
     cut = (P.BASE_DATE - timedelta(days=DEMO_DAYS)).isoformat()
+    hi = snap_ts or "9999"
 
     def recent(ts):
-        return ts >= cut
+        return cut <= ts <= hi
 
     pur = [r for r in purchases if r[2] in demo_ids and recent(r[6])]
     demo_skus = {r[3] for r in pur}
     con = [r for r in consumer_ev if (r[3] in demo_ids) and recent(r[6])]
-    she = [r for r in shelf_ev if r[2] in demo_skus and recent(r[6])]
+    # 매대 이벤트는 두 집합의 합이다 (08-27 확장):
+    #   demo_skus     데모 회원이 산 상품 — 대화 맥락의 재료
+    #   pending_skus  스냅샷 순간 보충 대기 중이던 상품 — 이들의 BELOW_PAR 가
+    #                 슬라이스에 없으면 pending API 의 queuedAt 이 null 이 되어
+    #                 95건 중 78건이 "대기 원점 모름"으로 착지했다(08-27 실측).
+    #                 95개 SKU × 90일 이벤트라 슬라이스는 수천 행만 는다.
+    # ⚠ pending SKU 는 **작업 수명주기 이벤트만** 넣는다. SALE 까지 넣으면
+    #   인기 상품 95종의 90일 판매 행이 통째로 딸려와 슬라이스가 16.6→36MB 로
+    #   뛴다(08-27 실측). queuedAt 에 필요한 것은 BELOW_PAR 계열뿐이다.
+    _pend = (pending_skus or set()) - demo_skus
+    _task_ev = {"BELOW_PAR", "TASK_QUEUED", "RESTOCK_IN", "STOCKOUT"}
+    she = [r for r in shelf_ev if recent(r[6])
+           and (r[2] in demo_skus
+                or (r[2] in _pend and r[1] in _task_ev))]
 
     path = os.path.join(OUT_DIR, "history_seed.sql")
     with open(path, "w", encoding="utf-8", newline="\n") as f:

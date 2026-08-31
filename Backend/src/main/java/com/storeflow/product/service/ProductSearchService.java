@@ -192,16 +192,24 @@ public class ProductSearchService {
 
         if (categoryL2 != null && itemKeyword != null) {
             alternatives = productRepository.findAlternativesByKeyword(
-                    categoryL2, skuId, minPrice, maxPrice, itemKeyword, price);
+                    categoryL2, skuId, minPrice, maxPrice, itemKeyword);
         }
 
         if (alternatives.isEmpty() && categoryL2 != null) {
             alternatives = productRepository.findAlternativesByPriceBand(
-                    categoryL2, skuId, minPrice, maxPrice, price);
+                    categoryL2, skuId, minPrice, maxPrice);
         }
 
+        // 정렬은 애플리케이션 레벨에서 처리한다: price_krw가 BIGINT UNSIGNED라서
+        // DB에서 (싼 가격 - 비싼 기준가)를 계산하면 음수가 아니라 언더플로가 나서
+        // "Data truncation" 500 에러가 난다. Math.abs(int)는 부호 있는 계산이라 안전하다.
+        List<Product> sortedAlternatives = alternatives.stream()
+                .sorted(Comparator.comparingInt((Product p) -> Math.abs(p.getPriceKrw() - price))
+                        .thenComparing(Product::getSkuId))
+                .toList();
+
         List<ProductSearchResponse> altDtos = toResponses(
-                alternatives.stream().limit(MAX_ALTERNATIVES).toList());
+                sortedAlternatives.stream().limit(MAX_ALTERNATIVES).toList());
 
         ProductSearchResponse originalDto = new ProductSearchResponse(original, findActivePromotion(skuId));
 

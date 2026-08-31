@@ -50,8 +50,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 ARTIFACTS = os.path.abspath(os.path.join(_HERE, "..", "artifacts"))
 
 # (52) 모듈 전역 — lifespan이 채우고 도구가 읽는다. None이면 "아직 안 올렸다".
+# floormap은 joblib이 아니라 **백엔드에서 받아 오는** 자산이다(위치추정 규칙판의
+# 스냅 재료). 파일이 아니라도 "상주시키고 도구가 읽는다"는 계약은 같다.
 _STATE: dict = {"availability": None, "repurchase": None,
-                "photo": None, "photo_encoder": None}
+                "photo": None, "photo_encoder": None, "floormap": None,
+                "preference": None}
 
 
 # ── 적재 ────────────────────────────────────────────────────────────────────
@@ -86,6 +89,48 @@ def load_all(with_photo_encoder: bool = False) -> dict:
             os.path.join(ARTIFACTS, "repurchase_model.joblib"))
         return _STATE["repurchase"].get("version", "?")
 
+    def _load_preference():
+        """취향 매칭 출하물 + **요청마다 안 변하는 것을 여기서 미리 굽는다.**
+
+        [무엇을 미리 굽나] 소분류 안의 인기 순위 g 와 그것을 cap 으로 끊은 blk.
+          둘 다 회원과 무관하다 — 회원이 바뀌어도 "우유 소분류에서 3번째로 잘
+          팔리는 것"은 그대로다. 요청마다 다시 세면 5,000개 정렬을 매번 돈다.
+
+        [g 를 어떻게 세나 — lexsort 의 키 순서에 주의]
+          `np.lexsort((-pop_n, l2))` 는 **마지막 키가 1순위**다. 즉 소분류로
+          먼저 묶고 그 안에서 인기 내림차순. 순서를 뒤집으면 소분류가 섞여
+          "소분류당 몇 개"라는 다양화 자체가 성립하지 않는다.
+        """
+        z = np.load(os.path.join(ARTIFACTS, "preference_model.npz"),
+                    allow_pickle=True)
+        b = {k: z[k] for k in z.files}
+        b["l2_names"] = [str(n) for n in b["l2_names"]]
+        b["alpha"] = float(b["alpha"])
+        b["axis_mult"] = float(b["axis_mult"])
+        b["div_cap"] = int(b["div_cap"])
+        b["version"] = str(b["version"])
+        b["method"] = str(b["method"])
+
+        l2 = b["l2_of_sku"].astype(np.int64)
+        b["l2_of_sku"] = l2
+        S = len(l2)
+        pop = b["pop"].astype(np.float64)
+        pop_n = pop / (pop.max() + 1.0)                        # [0, 1)
+        ordv = np.lexsort((-pop_n, l2))                        # 소분류별 인기순
+        g = np.empty(S, np.int64)
+        _, cuts = np.unique(l2[ordv], return_index=True)
+        # 각 소분류의 시작 위치를 그 소분류 길이만큼 늘려 빼면, 전체 순위가
+        # **소분류 안에서 0부터 세는 순위**로 바뀐다.
+        g[ordv] = np.arange(S) - np.repeat(cuts, np.diff(np.r_[cuts, S]))
+        b["g"] = g
+        b["blk"] = (g // b["div_cap"]).astype(np.float64)
+        b["sku_ix"] = {int(v): i for i, v in enumerate(b["sku"])}
+        _STATE["preference"] = b
+        return f'{b["version"]} ({S:,} SKU · 소분류 {len(b["l2_names"])})'
+
+    if os.path.exists(os.path.join(ARTIFACTS, "preference_model.npz")):
+        _try("preference", _load_preference)
+
     if os.path.exists(os.path.join(ARTIFACTS, "availability_model.joblib")):
         _try("availability", _load_availability)
     if os.path.exists(os.path.join(ARTIFACTS, "repurchase_model.joblib")):
@@ -115,7 +160,96 @@ def load_all(with_photo_encoder: bool = False) -> dict:
         _load_photo_encoder()
         got["photo_encoder"] = _STATE["photo"]["model_id"]
 
+    # 위치추정의 스냅 재료 — 실물 모드에서만(백엔드가 격자의 정본이다).
+    # 백엔드가 아직 안 떠 있으면 여기서 실패해도 되고(_try가 삼킨다),
+    # 첫 사용 시 _ensure_floormap()이 다시 시도한다 — 기동 순서에 안 묶인다.
+    if not config.USE_MOCK_SOT:
+        _try("floormap", _load_floormap)
+
     return got
+
+
+def _load_floormap() -> str:
+    """보행 격자를 백엔드에서 받아 상주시킨다 — 위치추정 자산의 적재.
+
+    층당 7,125칸(95×75)을 매 요청마다 받으면 그게 병목이라, joblib 자산들과
+    같은 규율(헌법 6 — lifespan 1회 로드 상주)로 여기서 한 번 받는다.
+    담는 것은 층별 **통행 가능 칸의 집합** 하나다 — 스냅에 필요한 것은
+    "이 칸을 밟을 수 있나"라는 판정뿐이고, set의 in 검사는 O(1)이다.
+    """
+    fm = {}
+    for f in (1, 2, 3):
+        m = sot_client.get_floor_map(f)
+        cells = (m or {}).get("cells") or []
+        if not cells:
+            raise RuntimeError(f"{f}층 격자가 비어 있습니다 — nav_cells 시드 확인")
+        fm[f] = frozenset((int(c["x"]), int(c["y"])) for c in cells
+                          if c.get("passable"))
+    _STATE["floormap"] = fm
+    return "격자 " + " · ".join(f"{f}층 {len(s):,}칸" for f, s in fm.items())
+
+
+def _ensure_floormap() -> dict | None:
+    """격자를 지연 확보한다 — lifespan 때 백엔드가 안 떠 있었어도 살아난다.
+
+    기동 순서 문제는 08-27에 실제로 있었다(에이전트 먼저, 백엔드 나중).
+    적재 실패를 영구 상태로 만들면 "백엔드를 늦게 켠 날"은 재기동 전까지
+    스냅이 죽는다 — 그래서 None이면 쓸 때 한 번 더 시도한다.
+    """
+    if _STATE["floormap"] is None and not config.USE_MOCK_SOT:
+        try:
+            _load_floormap()
+        except Exception:                                      # noqa: BLE001
+            return None                # 여전히 못 받으면 스냅 없이 간다(앵커는 산다)
+    return _STATE["floormap"]
+
+
+def snap_to_walkable(floor: int, x: int, y: int, max_r: int = 4):
+    """(floor, x, y)를 가장 가까운 통행 가능 칸으로 스냅한다.
+
+    [왜 필요한가] 사람은 매대 위가 아니라 그 앞 통로에 서 있다. 통행 불가 칸을
+    출발점으로 넘기면 백엔드 A*가 "출발점이 통행 불가"로 경로를 못 만든다.
+
+    ⚠ **실측(08-27): 지금은 한 번도 안 옮긴다.** 실 시드의 위치 10,104개
+    (PICK 5,052 · BULK 5,052)가 **전부 이미 통행 칸**이다 — `world_gen`이
+    `FACE_D` 오프셋을 적용해 **접근 지점**을 `locations`에 넣기 때문이다.
+    처음엔 "매대 칸이라 반드시 옮겨야 한다"고 적었는데 난수 격자로만 재서
+    틀렸다(실데이터로 다시 재고 고쳤다).
+    그래도 남기는 이유: 앵커의 출처가 `locations`만이 아니다 — 프론트가 보내는
+    `posFloor/posX/posY`는 **스캔 시점의 기기 좌표**라 통행 칸 보장이 계약에
+    없다. 비용 0의 안전망이고, 배치가 바뀌면 그날 값을 한다.
+    **"없으면 죽는다"가 아니라 "지금은 무동작"이 정확한 서술이다.**
+
+    [탐색] 반경 r=0,1,2,…의 정사각 링을 안쪽부터 돈다 — 처음 만나는 통행 칸이
+    가장 가까운 답이다(체비셰프 거리 기준. 매대는 2×2라 r≤2에서 반드시 통로가
+    나오고, max_r=4는 시설 언저리 좌표까지 감당하는 여유다).
+
+    [반환] (x, y, snapped) — 격자가 없으면(모의 모드·백엔드 다운) 입력 그대로
+    돌려주고 snapped=False. 스냅 실패도 좌표를 버리지 않는다 — 층 정보만으로도
+    발화("2층에 계시죠")는 성립한다.
+    """
+    fm = _ensure_floormap()
+    grid = (fm or {}).get(int(floor))
+    if not grid:
+        return int(x), int(y), False
+    if (int(x), int(y)) in grid:
+        return int(x), int(y), False               # 이미 통로 — 스냅할 것 없음
+    for r in range(1, max_r + 1):
+        best = None
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if max(abs(dx), abs(dy)) != r:     # 링의 테두리만 (안쪽은 이미 봤다)
+                    continue
+                c = (int(x) + dx, int(y) + dy)
+                if c in grid:
+                    # 같은 링 안에서는 맨해튼 거리로 더 가까운 쪽을 고른다 —
+                    # 대각(2칸 걸음)보다 정면(1칸 걸음)이 실제로 가깝다.
+                    d = abs(dx) + abs(dy)
+                    if best is None or d < best[0]:
+                        best = (d, c)
+        if best is not None:
+            return best[1][0], best[1][1], True
+    return int(x), int(y), False                   # 반경 안에 통로가 없다 — 그대로
 
 
 def _load_photo_encoder():
@@ -135,6 +269,34 @@ def loaded() -> dict:
 
 
 # ── 공통 도구 ───────────────────────────────────────────────────────────────
+def _humanize(v: int, unit: str) -> str:
+    """구간 상한을 **손님이 쓰는 단위**로 적는다. 1800초 → "30분".
+
+    [왜 도구가 환산하나 — LLM 이 하면 안 되나]
+      08-27 실물 골든셋에서 곡선이 "1800초 내 40%"를 줬고, 모델은 당연히
+      "30분 내 40%"라고 말했다. 그런데 **30 은 원장에 없는 수**라 가드가 발화를
+      막았다. 여기서 선택지가 둘이었다:
+        (a) 가드에 "1800/60 은 봐준다"는 예외를 판다 → 산술 구멍이 열린다
+        (b) 도구가 사람 단위로 낸다 → LLM 은 인용만 한다
+      (b) 를 고른다. 헌법 2 는 "LLM 에게 산술 금지"인데, **단위 환산도 산술이다.**
+      그리고 애초에 "1800초 내 보충됩니다"는 손님에게 쓸 수 없는 문장이라,
+      환산은 표현 취향이 아니라 **도구가 마땅히 했어야 할 일**이었다.
+
+    [왜 반올림하지 않고 나누어떨어질 때만 바꾸나] 1500초는 "25분"이 되지만
+      1700초는 "1700초"로 남는다. 어정쩡한 값을 "약 28분"으로 만들면 그 '약'이
+      원장에 없는 새 수를 만든다 — 지금 고치는 바로 그 문제를 되풀이한다.
+      DES 의 구간 경계는 60·900·1800·3600 처럼 사람 단위로 잡혀 있어서
+      실제로는 거의 다 깔끔하게 떨어진다.
+    """
+    if unit != "초":
+        return f"{v}{unit}"                 # 일 단위(재구매)는 이미 사람 단위다
+    if v % 3600 == 0:
+        return f"{v // 3600}시간"
+    if v % 60 == 0:
+        return f"{v // 60}분"
+    return f"{v}초"                          # 안 떨어지면 원래 단위 그대로
+
+
 def _curve_to_points(F, edges, unit: str) -> list[dict]:
     """구간별 누적확률 → 손님에게 보여줄 (시점, 확률) 목록.
 
@@ -151,8 +313,17 @@ def _curve_to_points(F, edges, unit: str) -> list[dict]:
         if not np.isfinite(hi):
             break
         pct = float(f) * 100
-        out.append({"within": f"{int(hi)}{unit}",
-                    "prob": round(pct, 1),
+        # ⚠ 칸 이름이 `prob` 였다 (08-27 정정). 값은 **퍼센트**(0.4 = 0.4%)인데
+        #   이름이 확률이라, 모델이 "0.4 → 40%"로 읽고 손님에게 **100배 틀린 수**를
+        #   말했다("30분 내는 40% 정도고" — 실제로는 0.4%). 가드는 못 잡는다:
+        #   40 이 원장 어딘가에 있으면 "근거 있는 수"로 통과하고, 애초에 가드는
+        #   **수가 원장에 있나**를 보지 **그 수가 무엇의 값인가**를 안 본다.
+        #   골든셋도 PASS 를 줬다 — "%가 있는가"만 봤으니까.
+        # [교훈] 스키마의 이름은 주석이 아니라 **인터페이스**다. 단위가 이름에 없으면
+        #   읽는 쪽이 단위를 추측하고, LLM 은 가장 흔한 관행(0~1 확률)으로 추측한다.
+        #   `_pct` 접미사는 그 추측의 여지를 없앤다.
+        out.append({"within": _humanize(int(hi), unit),
+                    "prob_pct": round(pct, 1),
                     # 0.05% 미만·99.95% 초과는 그 사실을 문자로 적어 둔다
                     "note": ("거의 없음" if pct < 0.05 else
                              ("거의 확실" if pct > 99.95 else None))})
@@ -172,7 +343,7 @@ def predict_availability(sku_id: int) -> dict:
           큐 5칸 제거(78) Brier 0.07507   ← 85% 악화. 규칙 바닥(0.1248)에 가까워진다
       **큐가 이 자산의 절반이다.** 중앙값으로 채워 넣으면 "그럴듯한 거짓"이 된다.
 
-    → 백엔드에 창구 하나가 열려야 한다(jmy 요청 대기):
+    → 그 창구가 요청 ③이고 08-27에 열렸다(구현 확인):
           GET /internal/replenishment/pending
           → [{sku_id, location_id, floor, has_bulk, queued_at}, …]
       그것만 있으면 qlen·q_vertical·q_horizontal·q_work_sec를 전부 만들 수 있다.
@@ -183,14 +354,22 @@ def predict_availability(sku_id: int) -> dict:
                 "message": "가용예측 모델이 적재되지 않았습니다."}
 
     pending = sot_client.get_pending_replenishments()
-    if pending is None:
-        # 창구가 없다. **0건과 구분해야 한다** — 0건은 "한가하다"이고
-        # None은 "모른다"다. 모르는 채로 중앙값을 넣으면 그럴듯한 거짓이 된다.
+    # 큐를 못 얻은 이유가 셋이다. **발화 정책은 셋 다 같다**(시간을 지어내지
+    # 않는다) — 다른 것은 `why` 뿐이고, 그게 운영자가 원인을 아는 유일한 단서다.
+    # 08-27 B 검수: 전에는 셋을 전부 "창구가 아직 없습니다"로 접어, 키 오타
+    # 하나에 자산이 통째로 침묵하는데 로그엔 "미구현"만 남았다.
+    #   None            창구 없음(404)
+    #   "auth_failed"   키·권한 — 우리 설정 문제
+    #   "sot_unreachable" 백엔드 미기동·타임아웃
+    _WHY = {None: "매장 전체 보충 대기 상태를 조회할 창구가 아직 없습니다.",
+            "auth_failed": "백엔드 내부 API 인증에 실패했습니다(INTERNAL_SERVICE_KEY 불일치).",
+            "sot_unreachable": "백엔드에 연결하지 못했습니다(미기동·타임아웃)."}
+    if pending is None or isinstance(pending, str):
         return {"error": "queue_state_unavailable",
                 "message": ("지금은 보충 시점을 확률로 말할 수 없습니다. "
                             "매대 재고와 예비 재고(BULK) 유무까지만 말하고, "
                             "'약 N분'처럼 시간을 지어내지 마세요."),
-                "why": "매장 전체 보충 대기 상태를 조회할 창구가 아직 없습니다."}
+                "why": _WHY.get(pending, _WHY[None])}
 
     inv = sot_client.get_inventory(int(sku_id)) or {}
     locs = inv.get("locations") or []
@@ -278,8 +457,12 @@ def predict_availability(sku_id: int) -> dict:
 
 
 # ── ② 소비주기 ──────────────────────────────────────────────────────────────
-def predict_repurchase(sku_id: int) -> dict:
-    """이 손님이 이 상품을 다시 살 때가 됐나 — 시점별 확률 곡선.
+def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
+    """이 손님이 이 상품을 다시 살 때가 됐나 — 시점별 확률 곡선. **품목 하나.**
+
+    ⚠ 이것은 내부 함수다. LLM 이 부르는 도구는 아래 `predict_repurchase`(복수)다.
+      `hist` 를 받는 이유: 복수판이 이력을 **한 번만** 조회해 나눠 주기 위함이다.
+      품목마다 다시 조회하면 같은 회원의 같은 이력을 N 번 가져온다.
 
     가용예측과 달리 **필요한 것이 전부 SoT에 있다** — 그 쌍의 과거 구매 이력이면
     된다. 회원 번호는 LLM이 아니라 루프가 주입한 것을 쓴다(B안).
@@ -296,7 +479,8 @@ def predict_repurchase(sku_id: int) -> dict:
                 "message": "비회원 세션이라 구매 이력이 없습니다. 로그인하면 "
                            "재구매 시점을 안내할 수 있다고 알려주세요."}
 
-    hist = sot_client.get_purchase_history(member_id) or []
+    if hist is None:
+        hist = sot_client.get_purchase_history(member_id) or []
     days = sorted(_to_day(h["purchased_at"]) for h in hist
                   if int(h.get("sku_id", -1)) == int(sku_id))
     if not days:
@@ -380,6 +564,85 @@ def predict_repurchase(sku_id: int) -> dict:
                     "문장이나 알림의 근거로 쓰지 마세요. "
                     "⚠ 회원 축(가구·반려·자녀·차량)과 방문 리듬은 지금 조회 창구가 "
                     "없어 결측·평균으로 채웠습니다 — 개인화가 덜 된 값입니다."),
+    }
+
+
+# 한 번에 돌려줄 최대 품목 수. "뭐 사야 되지?"의 답으로 스무 개를 늘어놓으면
+# 손님이 아무것도 안 고른다 — 발화가 감당할 수 있는 길이가 곧 상한이다.
+# ⚠ 자른 개수는 반드시 결과에 적는다(no silent caps, 08-24 검수).
+REPURCHASE_MAX_ITEMS = 5
+
+
+def predict_repurchase(sku_ids: list | None = None) -> dict:
+    """살 때가 된 품목들 — **여러 개를 한 번에** 판정한다.
+
+    [왜 복수인가 — 08-27에 서명이 스키마와 어긋나 있었다]
+      스키마는 처음부터 `sku_ids`(배열, 비우면 전 품목)를 광고했는데 구현은
+      `predict_repurchase(sku_id)` 단수였다. `schema_check.py` 가 이것을 잡았다.
+      **스키마를 단수로 낮추는 선택지도 있었지만 그러면 기능이 사라진다** —
+      도구 설명문에 적힌 "'뭐 사야 되지?'·살 때가 된 품목 선별"은 전 품목을
+      훑어야만 답할 수 있고, 진입 브리핑(킬링 장면 3)의 "살 때 되신 것 2개"도
+      마찬가지다. 어긋남을 발견했을 때 **구현이 게으른 쪽이었지 스키마가 과한
+      쪽이 아니었다.**
+
+    [sku_ids 를 비우면] 이 손님이 **2회 이상 산 품목 전부**를 판정한다.
+      1회뿐인 품목은 간격이 없어 주기가 정의되지 않으므로 애초에 제외한다
+      (넣으면 사전평균으로 곡선이 나오는데, 그건 개인화가 아니라 소분류 평균이라
+      "당신은"으로 시작하는 문장의 근거가 못 된다).
+
+    [정렬 — 무엇이 '더 살 때'인가] 경과일 ÷ 평소 주기. 이 비가 1을 넘으면
+      평소보다 오래 안 산 것이다. 절대 경과일로 줄 세우면 원래 주기가 긴 품목
+      (세제·휴지)이 늘 위로 올라와 매번 같은 답이 된다.
+    """
+    from app.tools import query                                # 순환 import 회피
+    if _STATE["repurchase"] is None:
+        return {"error": "model_not_loaded",
+                "message": "소비주기 모델이 적재되지 않았습니다."}
+    member_id = query.current_member_id()
+    if member_id is None:
+        return {"error": "no_member",
+                "message": "비회원 세션이라 구매 이력이 없습니다. 로그인하면 "
+                           "재구매 시점을 안내할 수 있다고 알려주세요."}
+
+    hist = sot_client.get_purchase_history(member_id) or []
+    if sku_ids:
+        targets = list(dict.fromkeys(int(s) for s in sku_ids))
+    else:
+        # 이력 전 품목 — 단, 2회 이상 산 것만(위 독스트링)
+        cnt = {}
+        for h in hist:
+            cnt[int(h["sku_id"])] = cnt.get(int(h["sku_id"]), 0) + 1
+        targets = [s for s, n in cnt.items() if n >= 2]
+        if not targets:
+            return {"error": "no_history",
+                    "message": "두 번 이상 산 품목이 없어 소비주기를 낼 수 없습니다. "
+                               "재구매 시점을 말하지 말고 다른 방식으로 도우세요.",
+                    "member_history_items": len(cnt)}
+
+    results, failed = [], []
+    for sku in targets:
+        r = _repurchase_one(sku, hist=hist)
+        (failed if r.get("error") else results).append(
+            {"sku_id": sku, "error": r["error"]} if r.get("error") else r)
+
+    # 살 때가 된 순서로. 주기를 못 구한 것(past_intervals=0)은 뒤로 민다.
+    def _due(r):
+        cyc = r.get("typical_cycle_days")
+        return (r["days_since_last"] / cyc) if cyc else -1.0
+    results.sort(key=_due, reverse=True)
+    shown = results[:REPURCHASE_MAX_ITEMS]
+
+    return {
+        "member_id": member_id,
+        "evaluated": len(targets),
+        "returned": len(shown),
+        # 자른 사실을 명시한다 — 없으면 LLM 이 "전부 검토했다"고 말하게 된다
+        "truncated": len(results) - len(shown),
+        "items": shown,
+        "failed": failed,
+        "read_as": ("items 는 **살 때가 된 순서**(경과일÷평소 주기)로 정렬돼 "
+                    "있습니다. 각 항목의 curve·read_as 를 그대로 따르세요. "
+                    "truncated 가 0 보다 크면 그만큼 더 있다는 사실을 알리세요."),
     }
 
 
@@ -575,30 +838,235 @@ def _fetch_image(image_ref: str):
     return None
 
 
-# ── ④⑤ 아직 자산이 없는 둘 ─────────────────────────────────────────────────
+# ── ④ 위치 추정 — 규칙판 자산 (08-27 층 분해와 함께 출하) ────────────────────
 def get_position() -> dict:
-    """위치 추정. **자산이 아직 없다**(규칙판: 스캔 앵커 + 보행 그래프 스냅).
+    """위치 추정 — **스캔 앵커 + 보행 격자 스냅** (설계서 §7 출하 사양의 규칙판).
 
-    ⚠ 경로 도구는 이 도구를 안 기다린다 — 루프가 현재 위치를 주입하므로
-      `optimize_route`는 여기 없이도 돈다(compute.set_position).
+    [규칙 두 단] 센서가 없으므로 관측은 스캔뿐이다(설계 §4.1 — 맥락은 관측이
+    아니라 행동 증거로 추론한다).
+      ① 앵커: 마지막으로 스캔한 매대의 좌표 = 손님이 마지막으로 **확실히**
+        있었던 곳. 루프가 요청마다 주입한다(compute.set_position).
+      ② 스냅: 매대 칸은 장애물이라 사람이 서 있을 수 없다 — 백엔드 격자의
+        가장 가까운 통행 칸으로 옮긴다. 이 좌표라야 경로 계산의 출발점이 된다.
+
+    [한계를 값에 싣는다] 이것은 추정이고, 스캔 후 얼마나 걸었는지는 모른다.
+    read_as로 그 한계를 LLM에게 전달한다 — "정확한 현재 위치"로 단정해 말하면
+    손님이 자기 위치와 다른 안내를 받는다(가드가 아니라 표현 규율의 몫).
+
+    [이론 확장(야간)] 베이지안 필터(칼만/파티클) — 스캔 사이의 이동을 확률로
+    메운다. 규칙판은 그 필터의 관측 모델 자리에 그대로 들어간다.
+
+    ⚠ 경로 도구는 이 도구를 안 기다린다 — 루프가 같은 앵커를 직접 주입하므로
+      `optimize_route`는 여기 없이도 돈다. 이 도구의 소비자는 "지금 나 어디쯤
+      이에요?" 같은 **위치 질문 자체**다(기능 6·7·10).
     """
     from app.tools import compute
     pos = compute.current_position()
     if pos is None:
-        return {"error": "not_implemented",
-                "message": ("지금 위치를 알 수 없습니다. 손님에게 몇 층인지 "
-                            "물어보거나 위치 없이 답할 수 있는 부분만 답하세요.")}
+        return {"error": "no_scan_anchor",
+                "message": ("아직 스캔 기록이 없어 위치를 추정할 수 없습니다. "
+                            "손님에게 몇 층인지 물어보거나, 위치 없이 답할 수 "
+                            "있는 부분만 답하세요.")}
     f, x, y = pos
-    return {"floor_no": f, "x": x, "y": y,
-            "source": "last_scan",
-            "read_as": "마지막 스캔 위치입니다. 추정이라 정확하지 않을 수 있습니다."}
+    sx, sy, snapped = snap_to_walkable(f, x, y)
+    return {"floor_no": int(f), "x": sx, "y": sy,
+            "source": "scan_anchor+graph_snap",
+            "snapped": snapped,
+            "read_as": ("마지막 스캔 매대 앞 통로 기준의 추정 위치입니다. "
+                        "스캔 후 이동했을 수 있으니 단정하지 말고 "
+                        "'~쯤에 계시죠?' 정도로 말하세요.")}
 
 
-def match_preferences(**kwargs) -> dict:
-    """취향 매칭. 자산 미구현."""
-    return {"error": "not_implemented",
-            "message": "취향 매칭은 아직 준비 중입니다. 이 기능 없이 답할 수 "
-                       "있는 부분만 답하세요."}
+# ── ⑤ 취향 매칭 ─────────────────────────────────────────────────────────────
+# 한 번에 돌려줄 최대 후보 수. predict_repurchase 와 같은 이유다 — 발화가
+# 감당할 수 있는 길이가 곧 상한이고, **자른 개수는 반드시 결과에 적는다**.
+PREFERENCE_MAX_ITEMS = 5
+
+# 사전식(lexicographic) 점수의 자릿수. 대조표(preference_rank.py)가 채점에 쓴
+# 그 상수를 **그대로** 옮긴다. 여기서 다른 수를 쓰면 서빙이 채점된 것과 다른
+# 순위를 내므로, 대조표의 승리(P@5 0.0099)가 이 도구에 대해서는 무효가 된다.
+#   _LEX_BLOCK  다양화 블록 — 무엇보다 먼저 가른다
+#   _LEX_TASTE  소분류 사후확률 — 블록 안의 1순위
+#   (인기 순위 g 는 계수 없이 빼서 마지막 자리를 가른다)
+_LEX_BLOCK = 1e12
+_LEX_TASTE = 1e6
+
+
+def match_preferences(top_k: int = 3) -> dict:
+    """이 손님이 좋아할 만한 품목 — 소분류 사후확률로 고르고 다양화로 끊는다.
+
+    [무엇을 계산하나 — 세 줄]
+      ① 이력에서 **소분류별 습관 종수** n_l 을 센다(횟수가 아니다).
+      ② 사후:  post_l ∝ (n_l + α·전역사전_l) / (소분류크기_l × 축배율_l)
+      ③ 점수:  −블록·1e12 + post[소분류] × 축배율(회원) × 1e6 − 소분류내인기순위
+
+    [왜 「횟수」가 아니라 「종수」인가 — 이 한 줄이 자산의 요점이다]
+      구매 횟수 ≈ 취향 ÷ 주기다. 우유는 주기가 16.7일이라 취향이 보통이어도
+      횟수가 쌓인다. 횟수로 세면 **1위 소분류가 32.8% 갈린다**(T15 실측) —
+      즉 세 명 중 한 명에게 엉뚱한 취향을 짚는다. 종수는 주기에 안 흔들린다.
+
+    [왜 크기와 축으로 나누나] 세계가 습관을 뽑을 때
+      P(습관이 소분류 l 에) ∝ 취향_l × 축배율_l × (l 의 SKU 수) 였다.
+      관측한 종수에서 취향을 되찾으려면 **곱해진 것을 도로 나눠야** 한다.
+      안 나누면 SKU 가 많은 소분류(가공식품)가 전원의 취향 1위가 된다.
+
+    [왜 디리클레로 축소하나 — 콜드스타트가 특수 경로가 아닌 이유]
+      회원당 습관이 ~22개뿐이라 안 산 소분류는 종수 0 이다. 그대로 쓰면 0 이
+      "싫다"가 되는데 실제로는 **"모른다"**다. 전역 사전을 α만큼 섞어 축소하면
+      종수가 0 일 때 식이 자동으로 `전역사전 × 축배율`만 남는다 — 이력 0건
+      회원을 위한 별도 분기가 **필요 없다**. 실측: 이력 0건도 무작위의 1.7배,
+      1건이면 4배(대조표 §6). 그래서 "이력 1건이면 말을 걸어도 된다".
+
+    [다양화 cap 3 — 정확도를 얼마나 내주는지 재고 골랐다]
+      ⑤ 그대로의 상위 20은 커버리지 1.00, 즉 **20개가 전부 한 소분류**다.
+      맞고 틀리고 이전에 발화가 이상하다. cap 3 은 P@5 를 0.0106→0.0099(−7%)
+      만 내주고 커버리지를 9.62로 올린다. cap 1 은 절반(0.0052)이라 과했다.
+      ⚠ 그래도 top_k=3 이면 **한 소분류에서 셋**이 나올 수 있다. 정상이다 —
+        cap 은 "연달아 셋까지"이지 "셋을 흩어라"가 아니다. read_as 가 이걸 말한다.
+
+    [회원 축(반려·자녀)을 이력에서 **추정**한다 — 조회 창구가 없다]
+      학습 때는 members 테이블의 축을 그대로 썼는데, 서빙에는 그 창구가 없다
+      (predict_repurchase 도 같은 구멍을 안고 있다). 그렇다고 축배율을 1 로
+      두면 안 된다 — 분모의 `l2_boost` 가 반려·기저귀 소분류를 **전역적으로
+      깎아 놓았기** 때문에, 되돌려 주지 않으면 반려인이 반려용품을 영영 못 본다.
+      그래서 "그 소분류를 산 적이 있으면 그 축이 있다"로 추정한다. 이 세계에선
+      습관 표집이 축으로 가중되므로 강한 신호다. 다만 **추정이라 결과에 적는다**
+      (`axes_inferred`) — 나중에 창구가 열리면 이 세 줄만 갈아 끼우면 된다.
+
+    [반환] 오류가 아니면 items(0개 이상) + taste(상위 소분류) + read_as.
+    """
+    from app.tools import query                                # 순환 import 회피
+    b = _STATE["preference"]
+    if b is None:
+        return {"error": "model_not_loaded",
+                "message": "취향 매칭 자산이 적재되지 않았습니다."}
+
+    member_id = query.current_member_id()
+    if member_id is None:
+        return {"error": "no_member",
+                "message": ("비회원 세션이라 취향을 알 수 없습니다. "
+                            "로그인하면 추천할 수 있다고 안내하세요.")}
+
+    k = max(1, int(top_k or 3))
+    capped = k > PREFERENCE_MAX_ITEMS
+    k = min(k, PREFERENCE_MAX_ITEMS)
+
+    hist = sot_client.get_purchase_history(member_id) or []
+    # **종수**를 세는 것이므로 sku 를 집합으로 만든다(같은 sku 를 열 번 사도 1).
+    bought = {int(r["sku_id"]) for r in hist if r.get("sku_id") is not None}
+
+    l2 = b["l2_of_sku"]
+    S = len(l2)
+    L = len(b["l2_names"])
+    ix = b["sku_ix"]
+    # 이력의 sku 를 출하물 축의 자리번호로 옮긴다. 출하물에 없는 sku 는 빠진다
+    # (카탈로그가 갱신됐거나 세계가 다른 경우) — 아래 겹침 가드가 그걸 잡는다.
+    seen_ix = [ix[v] for v in bought if v in ix]
+
+    dst = np.zeros(L, np.float64)
+    if seen_ix:
+        np.add.at(dst, l2[np.array(seen_ix, np.int64)], 1.0)
+
+    post = ((dst + b["alpha"] * b["l2_prior"].astype(np.float64))
+            / (b["l2_size"].astype(np.float64) * b["l2_boost"].astype(np.float64)))
+    post /= post.sum()
+
+    # 축 추정 — 위 독스트링 [회원 축] 참조.
+    pet_l2, kid_l2 = b["axis_pet_l2"], b["axis_kid_l2"]
+    has_pet = bool(dst[pet_l2].sum() > 0)
+    has_kid = bool(dst[kid_l2].sum() > 0)
+    boost_l2 = np.ones(L, np.float64)                          # 이 회원의 소분류 배율
+    if has_pet:
+        boost_l2[pet_l2] *= b["axis_mult"]
+    if has_kid:
+        boost_l2[kid_l2] *= b["axis_mult"]
+    boost_s = boost_l2[l2]                                     # SKU 로 펼친 것
+
+    # **보고용 취향 = 배율까지 반영한 것.** post 만으로 순위를 적으면 근거가
+    # 결정과 달라진다 — 실측으로 걸렸다: 반려인 회원의 1위 후보가 「반려간식」인데
+    # `l2_rank` 는 6 이라고 적혔다(post 1위는 「신발」). 손님에게 읽어 줄 근거가
+    # "6위인데 왜 1등"이 되면, 그건 근거가 아니라 **다른 계산의 흔적**이다.
+    # 점수식 자체는 안 건드린다(대조표와 같아야 한다) — 보고만 바로잡는다.
+    post_eff = post * boost_l2
+    post_eff /= post_eff.sum()
+
+    # ⚠ **float64 여야 한다.** 사전식 점수는 앞자리가 1e12 인데 float32 는
+    #   그 근처에서 최소 간격이 6만이 넘는다 — 뒷자리(취향·인기)가 통째로
+    #   반올림돼 사라지고 전부 동점이 된다. 조용히 틀리는 종류의 버그다.
+    score = (-b["blk"] * _LEX_BLOCK
+             + post[l2] * boost_s * _LEX_TASTE
+             - b["g"].astype(np.float64))
+    if seen_ix:
+        score[np.array(seen_ix, np.int64)] = -np.inf           # 이미 산 것은 후보 아님
+
+    # 여유를 두고 뽑는다 — SoT 가 못 알아보는 sku(단종·미적재)가 섞일 수 있다.
+    order = np.argsort(-score)[: k * 4]
+    cand = [int(b["sku"][i]) for i in order if np.isfinite(score[i])]
+
+    # 이름·가격·행사는 **SoT 에서** 온다(헌법 1). 출하물에는 sku 와 점수뿐이다.
+    rows = sot_client.get_products_by_skus(cand) if cand else []
+    by_sku = {r.get("sku_id"): r for r in rows if r.get("sku_id") is not None}
+
+    # ⚠ 겹침 가드 — 후보는 뽑혔는데 SoT 가 하나도 못 알아본 경우.
+    #   출하물의 카탈로그와 지금 SoT 의 카탈로그가 **다른 세계**라는 뜻이다.
+    #   mock(6종)에서 늘 이렇게 되고, 실물에서도 카탈로그를 갈아엎으면 이렇게
+    #   된다. 빈 목록으로 돌려주면 "추천할 게 없네요"라는 **거짓 발화**가 나온다
+    #   — 실제로는 없는 게 아니라 못 알아본 것이다. 그래서 이유를 말한다.
+    if cand and not by_sku:
+        return {"state": "catalog_mismatch",
+                "member_id": int(member_id),
+                "message": ("취향 모델의 카탈로그와 지금 조회되는 상품 목록이 "
+                            "겹치지 않습니다. 추천을 만들 수 없으니 이 기능 "
+                            "없이 답하고, 추천이 '없다'고 말하지 마세요."),
+                "artifact_version": b["version"]}
+
+    items = []
+    for sku in cand:
+        r = by_sku.get(sku)
+        if r is None:
+            continue
+        i = ix[sku]
+        li = int(l2[i])
+        items.append({
+            "sku_id": sku,
+            "name": r.get("name"),
+            "category_l2": r.get("category_l2") or b["l2_names"][li],
+            "price_krw": r.get("price_krw"),
+            "final_price_krw": r.get("final_price_krw"),
+            "on_promo": bool(r.get("on_promo")),
+            # 근거는 **점수의 재료 그대로**다. 지어낸 문장을 주면 LLM 이 그걸
+            # 옮겨 적고, 우리는 왜 그렇게 말했는지 못 추적한다.
+            "why": {"l2": b["l2_names"][li],
+                    "bought_in_l2": int(dst[li]),
+                    "l2_rank": int(np.sum(post_eff > post_eff[li])) + 1,
+                    "axis_boosted": bool(boost_l2[li] > 1.0),
+                    "popularity_rank_in_l2": int(b["g"][i]) + 1},
+        })
+        if len(items) >= k:
+            break
+
+    top_l2 = np.argsort(-post_eff)[:3]
+    return {
+        "member_id": int(member_id),
+        "items": items,
+        "history_skus": len(bought),
+        "taste": [{"l2": b["l2_names"][int(j)],
+                   "bought": int(dst[int(j)]),
+                   "share": round(float(post_eff[int(j)]), 4)} for j in top_l2],
+        "axes_inferred": {"has_pet": has_pet, "has_child": has_kid},
+        "truncated_to": (PREFERENCE_MAX_ITEMS if capped else None),
+        "model": b["method"],
+        "artifact_version": b["version"],
+        "read_as": (
+            "후보와 근거만 말하고, 이유를 지어내지 마세요 — why 에 담긴 것만 "
+            "씁니다. 후보 여럿이 같은 소분류일 수 있습니다(다양화는 소분류당 "
+            "최대 3개까지 허용합니다). 이력이 적으면(history_skus 가 한 자리) "
+            "'아직 잘 모르지만'을 붙이세요. "
+            "⚠ axes_inferred(반려·자녀)는 **구매 이력에서 추정한 것**이지 "
+            "손님이 알려준 정보가 아닙니다 — '반려동물 키우시죠?'처럼 단정하지 "
+            "말고, 그 소분류를 사셨다는 사실까지만 말하세요. "
+            "⚠ 재고와 위치는 여기 없습니다. 필요하면 get_inventory 로 확인하세요."),
+    }
 
 
 REGISTRY = {

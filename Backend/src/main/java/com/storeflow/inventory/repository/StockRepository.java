@@ -20,6 +20,14 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Stock> findWithLockBySkuIdAndLocationId(Integer skuId, String locationId);
 
+    /**
+     * stocks.location_id는 UNIQUE(uq_stk_location) — 한 자리에 한 SKU만 재고를 가질 수 있다.
+     * move() 목적지 검사는 "같은 SKU 재고가 있나"가 아니라 "이 자리에 어떤 SKU든 재고가
+     * 있나"를 봐야 한다. 검사 범위가 좁으면 INSERT 시점에 제약 위반(500)으로 터진다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<Stock> findWithLockByLocationId(String locationId);
+
     List<Stock> findBySkuId(Integer skuId);
 
     @Query("""
@@ -27,7 +35,7 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
         WHERE s.skuId = :skuId AND s.locationId = l.locationId AND l.tierRole = :tierRole
         """)
     Optional<String> findLocationIdBySkuIdAndTierRole(@Param("skuId") Integer skuId,
-                                                        @Param("tierRole") Location.TierRole tierRole);
+                                                      @Param("tierRole") Location.TierRole tierRole);
 
     /** get_inventory(10번) — 위치별 재고를 합치지 않고 그대로 반환. */
     @Query("""
@@ -74,7 +82,7 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
           AND s.qty < c.minQty
         """)
     List<PendingReplenishmentRow> findPendingPickShortagesByFloor(@Param("pick") Location.TierRole pick,
-                                                                    @Param("floorNo") byte floorNo);
+                                                                  @Param("floorNo") byte floorNo);
 
     /** replenishment/pending(③) 2단계 — 지금 재고(qty>0)가 있는 BULK 위치를 가진 skuId 전부. */
     @Query("""

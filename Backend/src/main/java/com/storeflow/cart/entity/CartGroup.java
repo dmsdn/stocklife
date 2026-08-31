@@ -1,6 +1,7 @@
 package com.storeflow.cart.entity;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,6 +21,10 @@ public class CartGroup {
     @Column(name = "description", length = 255)
     private String description;
 
+    // 장 볼 날짜(선택) — 언제 장을 볼 계획인지. 미입력 시 null.
+    @Column(name = "shopping_date")
+    private LocalDate shoppingDate;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -29,9 +34,14 @@ public class CartGroup {
     protected CartGroup() {}
 
     public CartGroup(Long consumerId, String title, String description) {
+        this(consumerId, title, description, null);
+    }
+
+    public CartGroup(Long consumerId, String title, String description, LocalDate shoppingDate) {
         this.consumerId = consumerId;
         this.title = title;
         this.description = description;
+        this.shoppingDate = shoppingDate;
     }
 
     @PrePersist
@@ -48,9 +58,16 @@ public class CartGroup {
         if (description != null) this.description = description.trim();
     }
 
+    /** 장 볼 날짜 수정. null이 넘어오면 "미입력 상태로 지운다"는 의미로 그대로 반영한다. */
+    public void updateShoppingDate(LocalDate shoppingDate) {
+        this.shoppingDate = shoppingDate;
+    }
+
     public Long getCartGroupId() { return cartGroupId; }
     public Long getConsumerId() { return consumerId; }
     public String getTitle() { return title; }
     public String getDescription() { return description; }
+    public LocalDate getShoppingDate() { return shoppingDate; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

@@ -1,5 +1,6 @@
 package com.storeflow.purchase.controller;
 
+import com.storeflow.consumer.entity.Member;
 import com.storeflow.global.security.CurrentConsumer;
 import com.storeflow.purchase.dto.CategoryPreferenceResponse;
 import com.storeflow.purchase.dto.ProductPopularityResponse;
@@ -57,12 +58,18 @@ public class PurchaseController {
      * 취향 추천용 — 이 회원이 최근 많이 산 카테고리 랭킹. 예: /api/purchases/top-categories?limit=3
      * "청소용품을 많이 샀으면 새로 들어온/할인하는 청소용품 추천" 흐름의 1단계.
      * 실제 추천 상품(신상/행사)은 이 결과의 categoryL2로 /api/products/search를 다시 불러 채운다.
+     *
+     * purchases는 세계 시드 테이블이라 memberId로 조회해야 한다. 여기서는 JWT로 인증된
+     * 본인 consumerId를 Member.toMemberId로 변환해서 넘긴다(getPurchaseHistory와 동일 패턴).
+     * ai-server가 서버 대 서버로 호출하는 내부 창구(InternalPurchaseController)는 이미
+     * memberId를 알고 있으므로 변환 없이 그대로 넘긴다 — 혼동해서 이중 변환하지 말 것.
      */
     @GetMapping("/top-categories")
     public ResponseEntity<List<CategoryPreferenceResponse>> getTopCategories(
             @CurrentConsumer Long consumerId,
             @RequestParam(required = false) Integer lookbackDays,
             @RequestParam(required = false) Integer limit) {
-        return ResponseEntity.ok(purchaseService.getTopCategories(consumerId, lookbackDays, limit));
+        int memberId = Member.toMemberId(consumerId);
+        return ResponseEntity.ok(purchaseService.getTopCategories(memberId, lookbackDays, limit));
     }
 }
