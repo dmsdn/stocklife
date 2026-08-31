@@ -11,6 +11,9 @@ import com.storeflow.inventory.entity.Stock;
 import com.storeflow.inventory.repository.ShelfConfigRepository;
 import com.storeflow.inventory.repository.ShelfEventRepository;
 import com.storeflow.inventory.repository.StockRepository;
+import com.storeflow.cart.repository.CartItemRepository;
+import com.storeflow.notification.service.NotificationService;
+import com.storeflow.product.entity.Product;
 import com.storeflow.product.repository.ProductRepository;
 import com.storeflow.realtime.service.EventBroadcastService;
 import org.springframework.stereotype.Service;
@@ -43,17 +46,23 @@ public class InventoryService {
     private final ShelfEventRepository shelfEventRepository;
     private final ProductRepository productRepository;
     private final EventBroadcastService eventBroadcastService;
+    private final CartItemRepository cartItemRepository;
+    private final NotificationService notificationService;
 
     public InventoryService(StockRepository stockRepository,
                             ShelfConfigRepository shelfConfigRepository,
                             ShelfEventRepository shelfEventRepository,
                             ProductRepository productRepository,
-                            EventBroadcastService eventBroadcastService) {
+                            EventBroadcastService eventBroadcastService,
+                            CartItemRepository cartItemRepository,
+                            NotificationService notificationService) {
         this.stockRepository = stockRepository;
         this.shelfConfigRepository = shelfConfigRepository;
         this.shelfEventRepository = shelfEventRepository;
         this.productRepository = productRepository;
         this.eventBroadcastService = eventBroadcastService;
+        this.cartItemRepository = cartItemRepository;
+        this.notificationService = notificationService;
     }
 
     /** 요구사항 21: shelf_event는 저장한 걸 그대로 Agent 스트림에 흘려보낸다. */
@@ -96,6 +105,32 @@ public class InventoryService {
         if (oldQty > 0 && newQty == 0) {
             broadcast(shelfEventRepository.save(new ShelfEvent(
                     ShelfEvent.EventType.STOCKOUT, skuId, locationId, 0, null, now, null)));
+        }
+
+        // 5-5(알림 트리거) "재입고": 품절(0) 상태였다가 다시 채워졌을 때만 알린다.
+        // 그냥 수량이 조금씩 오르내리는 것까지 매번 알리면 스팸이 되므로, "없다가 생겼다"는
+        // 순간에만 트리거한다. 이 상품을 자기 리스트(장바구니)에 담아둔 회원들에게만 발송.
+        if (eventType == ShelfEvent.EventType.RESTOCK_IN && oldQty == 0 && newQty > 0) {
+            notifyCartOwnersOfRestock(skuId);
+        }
+    }
+
+    private void notifyCartOwnersOfRestock(Integer skuId) {
+        List<Long> consumerIds = cartItemRepository.findConsumerIdsBySkuId(skuId);
+        if (consumerIds.isEmpty()) {
+            return;
+        }
+        Product product = productRepository.findById(skuId).orElse(null);
+        String productName = product != null ? product.getName() : ("상품 #" + skuId);
+
+        for (Long consumerId : consumerIds) {
+            notificationService.createNotification(
+                    consumerId,
+                    "RESTOCK",
+                    "재입고 알림",
+                    productName + "이(가) 다시 입고됐어요. 장바구니에 담아두신 상품이에요!",
+                    null
+            );
         }
     }
 

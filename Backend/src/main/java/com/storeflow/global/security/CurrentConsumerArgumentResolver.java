@@ -25,18 +25,18 @@ public class CurrentConsumerArgumentResolver implements HandlerMethodArgumentRes
 
     @Override
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
-                                   NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
+                                  NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
         HttpServletRequest request = (HttpServletRequest) webRequest.getNativeRequest();
         String header = request.getHeader("Authorization");
 
         if (header == null || !header.startsWith("Bearer ")) {
-            throw new IllegalStateException("인증 토큰이 없습니다.");
+            throw new MissingOrInvalidTokenException("인증 토큰이 없습니다.");
         }
 
         String token = header.substring(7);
 
         if (!jwtUtil.validateToken(token)) {
-            throw new IllegalStateException("유효하지 않은 토큰입니다.");
+            throw new MissingOrInvalidTokenException("유효하지 않은 토큰입니다.");
         }
 
         return jwtUtil.getConsumerIdFromToken(token);

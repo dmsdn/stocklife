@@ -4,12 +4,14 @@ import com.storeflow.cart.entity.CartItem;
 import com.storeflow.cart.repository.CartGroupRepository;
 import com.storeflow.cart.repository.CartItemRepository;
 import com.storeflow.consumer.entity.Consumer;
+import com.storeflow.consumer.entity.Grade;
 import com.storeflow.consumer.entity.Member;
 import com.storeflow.consumer.repository.ConsumerRepository;
 import com.storeflow.order.dto.FrequentPurchaseResponse;
 import com.storeflow.inventory.entity.ConsumerEvent;
 import com.storeflow.inventory.service.ConsumerEventService;
 import com.storeflow.inventory.service.InventoryService;
+import com.storeflow.notification.service.NotificationService;
 import com.storeflow.order.dto.OrderResponse;
 import com.storeflow.order.entity.Order;
 import com.storeflow.order.entity.OrderItem;
@@ -40,6 +42,7 @@ public class OrderService {
         private final InventoryService inventoryService;
         private final PurchaseRepository purchaseRepository;
         private final ConsumerEventService consumerEventService;
+        private final NotificationService notificationService;
 
         public OrderService(CartItemRepository cartItemRepository,
                             CartGroupRepository cartGroupRepository,
@@ -48,7 +51,8 @@ public class OrderService {
                             ConsumerRepository consumerRepository,
                             InventoryService inventoryService,
                             PurchaseRepository purchaseRepository,
-                            ConsumerEventService consumerEventService) {
+                            ConsumerEventService consumerEventService,
+                            NotificationService notificationService) {
                 this.cartItemRepository = cartItemRepository;
                 this.cartGroupRepository = cartGroupRepository;
                 this.productRepository = productRepository;
@@ -57,10 +61,11 @@ public class OrderService {
                 this.inventoryService = inventoryService;
                 this.purchaseRepository = purchaseRepository;
                 this.consumerEventService = consumerEventService;
+                this.notificationService = notificationService;
         }
 
         @Transactional
-        public OrderResponse checkout(Long consumerId, Long groupId) {
+        public OrderResponse checkout(Long consumerId, Long groupId, Integer pointsToUseOrNull) {
                 List<CartItem> allCheckedItems = cartItemRepository.findByConsumerId(consumerId).stream()
                         .filter(CartItem::isChecked)
                         .toList();
@@ -112,15 +117,58 @@ public class OrderService {
                                 cartItem.getQuantity(), product.getPriceKrw(), purchasedAt));
                 }
 
+                // 5-3(포인트 사용): 상품 총액을 넘겨서 쓸 수는 없고(음수 결제 방지), 잔액도 넘길 수 없다.
+                // 두 검증 다 여기서 하고, 실제 차감은 consumer.usePoints()가 잔액 기준으로 한 번 더 막는다.
+                int pointsToUse = (pointsToUseOrNull == null) ? 0 : pointsToUseOrNull;
+                if (pointsToUse < 0) {
+                        throw new IllegalArgumentException("사용 포인트는 0 이상이어야 합니다.");
+                }
+                if (pointsToUse > order.getTotalAmount()) {
+                        throw new IllegalStateException(
+                                "사용 포인트가 결제 금액을 초과할 수 없습니다. 결제금액=" + order.getTotalAmount() + ", 요청=" + pointsToUse);
+                }
+                if (pointsToUse > 0) {
+                        consumer.usePoints(pointsToUse); // 잔액 부족하면 여기서 예외
+                        order.applyPointsUsed(pointsToUse);
+                }
+
                 orderRepository.save(order);
 
                 // session_id 개념이 아직 없어서 basketId로 대신함 (이전에 말씀드렸던 부분, 여전히 남아있음)
                 consumerEventService.record(ConsumerEvent.EventType.PURCHASE, basketId,
                         memberId, null, null, "{\"basketId\":\"" + basketId + "\"}");
 
-                consumer.addSpend(order.getTotalAmount());
+                // 포인트로 낸 만큼은 "실제 지출"이 아니므로 적립 대상에서 뺀다.
+                // 안 그러면 포인트로 포인트를 버는 무한 루프가 생김.
+                int netCashPaid = order.getTotalAmount() - pointsToUse;
+
+                Grade gradeBefore = consumer.getGrade();
+                int earnedPoints = consumer.earnPoints(netCashPaid); // 2% 적립, 등급도 여기서 즉시 재계산됨
+                Grade gradeAfter = consumer.getGrade();
+                order.applyPointsEarned(earnedPoints);
 
                 cartItemRepository.deleteAll(checkedItems);
+
+                // 5-5(알림 트리거): 주문 결제 완료
+                notificationService.createNotification(
+                        consumerId, "ORDER", "주문이 완료됐어요",
+                        String.format("%,d원 결제가 완료됐어요.", order.getTotalAmount()),
+                        "/orders/" + order.getOrderId());
+
+                // 5-5(알림 트리거): 포인트 적립 (2%, Consumer.earnPoints에서 실제로 잔액/누적에 반영된 값)
+                notificationService.createNotification(
+                        consumerId, "POINT", "포인트가 적립됐어요",
+                        String.format("이번 결제(%,d원)로 %,dP(2%%)가 적립됐어요.",
+                                netCashPaid, earnedPoints),
+                        null);
+
+                // 5-5(알림 트리거): 등급 변경 — 적립 직후 즉시 판단(스케줄러 아님).
+                if (gradeBefore != gradeAfter) {
+                        notificationService.createNotification(
+                                consumerId, "GRADE", "등급이 변경됐어요",
+                                gradeBefore + " → " + gradeAfter + " 등급으로 변경됐어요.",
+                                null);
+                }
 
                 return new OrderResponse(order);
         }
@@ -160,6 +208,13 @@ public class OrderService {
                 Order order = orderRepository.findByOrderIdAndConsumerId(orderId, consumerId)
                         .orElseThrow(() -> new IllegalStateException("주문을 찾을 수 없습니다."));
                 order.requestRefund();
+
+                // 5-5(알림 트리거): 환불 요청 접수
+                notificationService.createNotification(
+                        consumerId, "ORDER", "환불 요청이 접수됐어요",
+                        "주문 #" + order.getOrderId() + " 환불 요청이 접수됐어요. 승인까지 기다려주세요.",
+                        "/orders/" + order.getOrderId());
+
                 return new OrderResponse(order);
         }
 
@@ -177,6 +232,23 @@ public class OrderService {
                 for (OrderItem item : order.getOrderItems()) {
                         inventoryService.restockForRefund(item.getSkuId(), item.getQuantity());
                 }
+
+                // 포인트 원상복구: 이 주문으로 "적립"됐던 건 취소하고(잔액+누적 둘 다 차감, 등급 재계산),
+                // 이 주문에서 "사용"했던 포인트는 잔액으로 되돌려준다(누적/등급엔 영향 없음).
+                Consumer consumer = consumerRepository.findById(consumerId)
+                        .orElseThrow(() -> new IllegalStateException("존재하지 않는 회원입니다."));
+                if (order.getPointsEarned() > 0) {
+                        consumer.reverseEarnedPoints(order.getPointsEarned());
+                }
+                if (order.getPointsUsed() > 0) {
+                        consumer.refundUsedPoints(order.getPointsUsed());
+                }
+
+                // 5-5(알림 트리거): 환불 승인·완료
+                notificationService.createNotification(
+                        consumerId, "ORDER", "환불이 완료됐어요",
+                        "주문 #" + order.getOrderId() + " 환불이 승인·완료됐어요.",
+                        "/orders/" + order.getOrderId());
 
                 return new OrderResponse(order);
         }

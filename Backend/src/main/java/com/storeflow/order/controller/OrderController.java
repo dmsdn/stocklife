@@ -29,8 +29,9 @@ public class OrderController {
      */
     @PostMapping("/checkout")
     public ResponseEntity<OrderResponse> checkout(@CurrentConsumer Long consumerId,
-                                                  @RequestParam(required = false) Long groupId) {
-        OrderResponse response = orderService.checkout(consumerId, groupId);
+                                                  @RequestParam(required = false) Long groupId,
+                                                  @RequestParam(required = false) Integer pointsToUse) {
+        OrderResponse response = orderService.checkout(consumerId, groupId, pointsToUse);
         return ResponseEntity.status(201).body(response);
     }
 
