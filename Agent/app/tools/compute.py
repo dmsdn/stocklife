@@ -1,22 +1,62 @@
-#===============================================
-# Agent 하네스 - 계산형 도구 실행부
-#===============================================
-
-# [역할] "계산은 솔버, 이해·표현은 LLM"의 솔버 부분 절반
-# 방문순서·예산조합·가격정렬·대체후보순위를 **결정적으로 계산. LLM은 이 결과를 숫자를 읽기만 하고 스스로 만들지 않음
-
-# [남긴 개조 예약] optimize_route는 현재 **단일 Held-Karp**
-# 층 이동을 비용에 녹임). 파일명세 §2.4의 출하 사양은 "층 분해 TSP"(층 순서 전수 ≤4! + 층내 TSP)
-# 실물 모드에서 백엔드 A* 호출이 n²+n으로 늘어나는 비용 폭발을 막기 위해서다.
-
-# [경계] 여기에는 조회의 가공(그건 query.py)도, 학습 모델(그건 infer.py)도 없음
-
-#===============================================
+# ============================================================================
+# StoreFlow 하네스 — 계산형 도구 실행부 (definitions.py의 짝, 헌법 2의 집)
+# ============================================================================
+# [역할] "계산은 솔버가, 이해·표현은 LLM이"의 솔버 쪽 절반. 방문 순서·예산 조합·
+#   가격 정렬·대체 후보 순위를 **결정적으로** 계산한다. LLM은 이 결과의 숫자를
+#   읽기만 하고 스스로 만들지 않는다.
+#
+# [출처: 2026-08-21 ai-server 인수] optimize_route와 optimize_bundle의 알고리즘
+#   본체(Held-Karp·다중선택 배낭 DP)와 find_substitutes의 정렬 규칙은 jmy가
+#   ai-server에서 실물 백엔드로 검증한 것을 옮겨 왔다. 옮기며 바꾼 것 셋:
+#   ① mock_data 직접 접근 제거 — 세계에 닿는 길은 sot_client 하나(그 파일의 계약).
+#   ② 개인화의 신원을 query.current_member_id()에서 받는다(B안 — LLM 손이 안 닿는 경로).
+#   ③ 실패는 전부 값으로 돌려준다(query.run과 같은 원칙 ④).
+#
+# [남긴 개조 예약 — 08/26] optimize_route는 현재 jmy판 그대로 **단일 Held-Karp**다
+#   (층 이동을 비용에 녹임). 파일명세 §2.4의 출하 사양은 "층 분해 TSP"(층 순서
+#   전수 ≤4! + 층내 TSP) — 실물 모드에서 백엔드 A* 호출이 n²+n으로 늘어나는
+#   비용 폭발을 막기 위해서다. mock·소규모(n≤10)에서는 지금 판으로 충분해서
+#   오늘은 동작을 보존하고, 개조는 08/26 일정에 한다.
+#
+# [경계] 여기에는 조회의 가공(그건 query.py)도, 학습 모델(그건 infer.py)도 없다.
+#   규격 파서(compare_unit_price·find_substitutes 공유)는 08/27 — 그때까지
+#   compare_unit_price는 루프의 스텁으로 남는다.
+# ============================================================================
+#
+# ─── 개념 사전 — 이 파일에 처음 나오는 개념 3개 (㊽~㊿) ──────────────────────
+# (①~㊼: 앞 파일들의 사전은 아는 것으로 전제. 유니코드 원문자가 ㊿(50)에서
+#  끝나므로 51부터는 (51) 표기로 잇는다 — 중간 삽입은 기존처럼 ㊽-a 방식.)
+#
+# ㊽ 비트마스크(bitmask) — 정수 하나로 "집합"을 표현하기
+#    Held-Karp가 "지금까지 방문한 목적지들의 집합"을 상태로 들고 다녀야 하는데,
+#    set을 dict의 키로 쓸 수 없다(수정 가능한 것은 키가 못 된다 — 개념 ⑥).
+#    그래서 정수의 **이진수 자릿수**를 집합처럼 쓴다: i번째 자리가 1이면
+#    "i번 목적지를 방문했다"는 뜻이다. 목적지가 3개면 상태는 0b000~0b111.
+#      1 << i   : 1을 왼쪽으로 i칸 민다 → i번째 자리만 1인 정수 (원소 하나짜리 집합)
+#      m | b    : OR — 두 집합의 합집합 (그 자리를 1로 켠다)
+#      m & b    : AND — 교집합. `mask & (1 << i)`가 0이 아니면 "i를 이미 방문했다"
+#      m ^= b   : XOR 후 대입 — 켜진 자리를 끈다 (경로 복원 때 하나씩 빼며 되감기)
+#    왜 이 표현이 표준인가: 정수는 수정 불가라 dict 키가 되고, 자리 연산이
+#    집합 연산보다 훨씬 빠르며, "모든 부분집합을 순회"가 range(1 << n)으로 끝난다.
+#
+# ㊾ 무한대 — float("inf")
+#    어떤 실수보다 큰 특별한 값. "아직 도달 불가능한 경로의 비용"의 초기값으로
+#    쓴다 — 0이나 -1로 표시하면 진짜 비용 0과 구분되지 않고 min() 비교가 꼬인다.
+#    inf는 min()에서 항상 지고, inf와의 비교(c < inf)로 "도달 가능했나"를 물을
+#    수 있다. math.inf와 같은 값인데, 이 파일에선 import 없이 되는 float("inf")를 쓴다.
+#
+# ㊿ while 루프 — "조건이 참인 동안 반복"
+#    for는 "목록의 각 원소에 대해"지만, while은 **몇 번 돌지 미리 모를 때** 쓴다.
+#    여기서는 Held-Karp의 경로 복원이 그렇다: 마지막 목적지에서 출발점 방향으로
+#    "이전 목적지"를 따라 한 칸씩 되감는데, 몇 칸인지는 다 감아봐야 안다.
+#        while last is not None:   ← "이전이 없다(출발점에 닿았다)"가 종료 조건
+#    조건이 영원히 참이면 무한 루프가 되므로, 루프 몸통 안에서 반드시 조건을
+#    변화시키는 줄(last = prev)이 있어야 한다 — 그 줄이 빠지는 것이 이 문법의
+#    대표적 실패 시나리오다.
+# ────────────────────────────────────────────────────────────────────────────
 
 from app import config, sot_client
 from app.tools import query
-
-#===============================================
 
 # ── 상한 상수 ───────────────────────────────────────────────────────────────
 # Held-Karp의 상태 수는 2^n × n. n=10이면 10,240 상태로 즉시 끝나지만 n=20이면
@@ -29,8 +69,9 @@ MAX_EXACT_STOPS = 10
 # 실물 모드에서는 백엔드 A*가 실제 무빙워크 경로로 계산하므로 이 값은 안 쓰인다.
 MOCK_FLOOR_CHANGE_COST = 30
 
+
 # ════════════════════════════════════════════════════════════════════════════
-# optimize_route — 방문 순서 최적화 (open TSP)
+# optimize_route — 방문 순서 최적화 (open TSP, jmy 이관)
 # ════════════════════════════════════════════════════════════════════════════
 
 def _choose_destination(sku_id: int) -> dict | None:
@@ -77,11 +118,56 @@ def _product_name(sku_id: int) -> str:
     return str(sku_id)
 
 
+# ── 현재 위치 주입 (2026-08-25) ──────────────────────────────────────────────
+# [왜] `optimize_route`의 스키마는 start_floor/x/y를 LLM이 채우게 두고, description은
+#   "get_position 결과의 floor_no"라고 적어 두었다. 즉 **LLM에게 "A를 부르고 결과에서
+#   숫자 셋을 B에 옮겨 적어라"를 시키고 있었다.** 이건 B안 신원 주입에서 이미 걷어낸
+#   것과 같은 부류다 — 회원번호를 LLM이 옮겨 적게 뒀다가 되묻기·보안 구멍이 났다.
+#
+#   게다가 `get_position`은 아직 스텁(`loop._INFER_STUB`)이라 그 지시를 따르면
+#   `not_implemented`가 돌아온다. **막다른 길을 안내하고 있었다.**
+#
+# [무엇] 루프가 요청 시작에 현재 위치를 등록하고, 아래 `_resolve_start`가 LLM이 안 준
+#   경우에만 그것을 쓴다. **칸은 스키마에 그대로 남는다** — "3층 입구에서 출발해서"
+#   같은 명시 지정은 계속 가능해야 하므로 지우지 않고 **기본값만** 준다.
+#
+# [출처가 바뀌어도 이 자리는 안 바뀐다] 지금은 호출자(프론트/백엔드)가 마지막 스캔
+#   좌표를 넘긴다. 나중에 `infer.py`의 위치 추정(스캔 앵커 + 보행 그래프 스냅)이
+#   서면 **더 정확한 값이 같은 창구로 들어온다.** 주입 지점을 먼저 고정해 두는 이유다.
+_CURRENT_POSITION: tuple[int, int, int] | None = None
+
+
+def set_position(floor: int | None, x: int | None = None, y: int | None = None) -> None:
+    """루프가 요청을 시작할 때 현재 위치를 등록한다. 모르면 set_position(None).
+
+    셋 중 하나라도 없으면 등록하지 않는다 — 층만 알고 좌표를 모르는 반쪽 상태로
+    경로를 짜면 같은 층 아무 데나에서 출발한 답이 나온다. 그건 없느니만 못하다.
+    """
+    global _CURRENT_POSITION
+    if floor is None or x is None or y is None:
+        _CURRENT_POSITION = None
+    else:
+        _CURRENT_POSITION = (int(floor), int(x), int(y))
+
+
+def current_position() -> tuple[int, int, int] | None:
+    """지금 요청의 위치(없으면 None) — 읽기 전용 공개 창구.
+
+    query.current_member_id()와 같은 이유로 함수 한 겹을 둔다: 밑줄 변수를 다른
+    모듈이 집어 쓰면 '내부용'이라는 신호가 죽는다.
+    """
+    return _CURRENT_POSITION
+
+
 def _resolve_start(start_location_id, start_floor, start_x, start_y):
     """출발점을 (층, x, y) 튜플로 통일한다. 해석 불가면 None.
 
-    가장 신뢰할 수 있는 것은 get_position이 준 좌표 3종이다. location_id는
-    mock에서만 좌표로 풀 수 있다(sot_client.resolve_location의 주석 참조).
+    우선순위가 셋이고 **순서에 뜻이 있다**:
+      ① LLM이 준 좌표 3종      — 손님이 "3층 입구에서 출발해서"라고 **명시**한 경우.
+                                 주입값보다 앞선다. 사람 말이 추정보다 세다.
+      ② LLM이 준 location_id   — 좌표를 모를 때의 차선(mock에서만 풀린다)
+      ③ **주입된 현재 위치**    — LLM이 아무것도 안 줬을 때의 기본값
+    ①이 ③보다 앞이라는 것이 이 함수의 유일한 판단이다.
     """
     if start_floor is not None and start_x is not None and start_y is not None:
         return int(start_floor), int(start_x), int(start_y)
@@ -89,7 +175,7 @@ def _resolve_start(start_location_id, start_floor, start_x, start_y):
         loc = sot_client.resolve_location(start_location_id)
         if loc:
             return int(loc["floor_no"]), int(loc["x"]), int(loc["y"])
-    return None
+    return _CURRENT_POSITION            # ③ 없으면 None — 호출부가 에러로 돌린다
 
 
 def _mock_cost(a: tuple, b: tuple) -> int:
@@ -204,9 +290,12 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
 
     start = _resolve_start(start_location_id, start_floor, start_x, start_y)
     if start is None:
+        # 주입도 없고 LLM도 안 줬을 때만 여기 온다. **get_position을 부르라고 하지
+        # 않는다** — 그건 아직 스텁이라 막다른 길이다(위 주입 블록 주석 참조).
         return {"error": "missing_start_position",
-                "message": ("현재 위치 좌표가 필요합니다. get_position 결과의 floor_no/x/y를 "
-                            "start_floor/start_x/start_y로 넘기세요. 입구 좌표를 추측하지 마세요.")}
+                "message": ("현재 위치를 알 수 없습니다. 손님에게 지금 어디쯤인지"
+                            " 물어보거나(예: '몇 층에 계세요?'), 위치 없이 답할 수 있는"
+                            " 부분만 답하세요. 입구 좌표를 추측하지 마세요.")}
 
     destinations, unresolved = [], []
     for sku in sku_ids:
@@ -295,7 +384,7 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# optimize_bundle — 예산 조합 (다중선택 배낭 DP)
+# optimize_bundle — 예산 조합 (다중선택 배낭 DP, jmy budget_bundle.py 이관)
 # ════════════════════════════════════════════════════════════════════════════
 
 # 목적형 템플릿: "캠핑에 필요한 것"의 품목 사전. priority = 필요도 점수(가격 아님 —
@@ -491,7 +580,7 @@ def _optimize_bundle(budget_krw: int, purpose: str | None = None,
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# compare_products — 실판매가 정렬
+# compare_products — 실판매가 정렬 (08-21 인수 신규 도구)
 # ════════════════════════════════════════════════════════════════════════════
 
 def _compare_products(sku_ids: list, sort_by: str = "price_asc") -> dict:
@@ -522,7 +611,7 @@ def _compare_products(sku_ids: list, sort_by: str = "price_asc") -> dict:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# find_substitutes — 대체 후보 + 순위
+# find_substitutes — 대체 후보 + 순위 (jmy 정렬 규칙 이관)
 # ════════════════════════════════════════════════════════════════════════════
 
 def _find_substitutes(sku_id: int) -> dict:
