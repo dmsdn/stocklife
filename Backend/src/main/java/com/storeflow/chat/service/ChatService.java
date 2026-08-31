@@ -88,6 +88,71 @@ public class ChatService {
     }
 
     /**
+     * 3번(대화 내용 검색): 검색어가 포함된 메시지를 세션 단위로 묶어서, 세션별
+     * 최근 매칭 5개 + 세션 메타(title, groupId)를 반환한다. 세션 목록은 이 사용자
+     * 소유인 것만 대상으로 하고(로그인/비회원 소유권 규칙은 getSessions와 동일),
+     * 결과는 "가장 최근에 매칭된 메시지가 있는 세션" 순으로 정렬한다.
+     */
+    @Transactional(readOnly = true)
+    public List<ChatSearchResultResponse> searchMessages(Long consumerIdOrNull,
+                                                         String anonymousIdOrNull,
+                                                         String keyword) {
+        requireOwnerIdentity(consumerIdOrNull, anonymousIdOrNull);
+
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        String trimmedKeyword = keyword.trim();
+
+        List<ChatSession> ownedSessions =
+                consumerIdOrNull != null
+                        ? chatSessionRepository.findByConsumerIdOrderByUpdatedAtDesc(consumerIdOrNull)
+                        : chatSessionRepository.findByAnonymousIdOrderByUpdatedAtDesc(
+                        normalizeAnonymousId(anonymousIdOrNull)
+                );
+
+        if (ownedSessions.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, ChatSession> sessionsByPk = new HashMap<>();
+        List<Long> sessionPks = new ArrayList<>();
+        for (ChatSession session : ownedSessions) {
+            sessionsByPk.put(session.getChatSessionId(), session);
+            sessionPks.add(session.getChatSessionId());
+        }
+
+        List<ChatMessage> matched =
+                chatMessageRepository.searchByKeywordInSessions(sessionPks, trimmedKeyword);
+
+        // chatSessionId별로 묶되, 입력 순서(= createdAt 내림차순)를 그대로 유지해서
+        // 세션당 앞의 5개만 남긴다.
+        LinkedHashMap<Long, List<ChatMessage>> grouped = new LinkedHashMap<>();
+        for (ChatMessage message : matched) {
+            List<ChatMessage> bucket = grouped.computeIfAbsent(message.getChatSessionId(), k -> new ArrayList<>());
+            if (bucket.size() < 5) {
+                bucket.add(message);
+            }
+        }
+
+        return grouped.entrySet().stream()
+                .map(entry -> {
+                    ChatSession session = sessionsByPk.get(entry.getKey());
+                    List<ChatMessageResponse> messages = entry.getValue().stream()
+                            .map(ChatMessageResponse::from)
+                            .toList();
+                    return new ChatSearchResultResponse(
+                            session.getSessionId(),
+                            session.getTitle(),
+                            session.getGroupId(),
+                            messages
+                    );
+                })
+                // grouped는 이미 "가장 최근 매칭 메시지가 처음 나온 순서"대로 쌓였으므로 그대로 최신순.
+                .toList();
+    }
+
+    /**
      * ChatGPT 좌측 사이드바의 "채팅 목록"에 해당.
      */
     @Transactional(readOnly = true)
