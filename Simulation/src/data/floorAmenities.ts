@@ -12,6 +12,17 @@
 // 쌓아서, 실제 건물처럼 층마다 같은 자리에 있는 것처럼 보이게 했다.
 //
 // pitchPx도 여기 둔다 — 렌더링 배율일 뿐 DB 데이터가 아니다.
+// 2026-08-31 재배치(4차, 라이브 DB seed 재검증): AWS RDS에 실제로 적재된
+// Agent/sim/out/world_seed.sql을 다시 직접 파싱해서 검증한 결과, 화장실/정수기/
+// 엘리베이터가 지금까지 x=90~92,y=68~70의 좁은 3x3 칸에 5개가 겹쳐 있었다는 걸
+// 확인했다 — 이 자리는 원래 db/seed/world_seed.sql(구 시드) 기준으로 잡은 것인데,
+// 라이브 DB는 Agent/sim/out/world_seed.sql(신 시드)로 적재되어 있어서(성원님이 준
+// 참고 도면 이미지와도 안 맞았다) 좌표가 어긋나 있었다. 신 시드의 map_cells를 다시
+// BFS로 훑어서 각 층 가장 오른쪽 존(1F: F1-H, 2F: F2-A, 3F: F3-A)의 오른쪽 통로인
+// x=86~88이 세 층 모두 y=26~45 구간에서 통행 가능하다는 걸 확인했고, 참고 도면처럼
+// 이 통로에 세로로 5칸(엘리베이터→화장실 3종→정수기) 나눠 배치했다. 에스컬레이터는
+// map_cells.transit_id='ESC' 칸(x=88~89,y=66~67, 세 층 모두 동일)을 그대로 쓴다 —
+// 이건 신/구 시드 모두에서 일치해서 원래도 맞았다.
 import type { FacilityInfo, ServiceArea } from '../game/types';
 
 export interface FloorAmenities {
@@ -47,24 +58,24 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
     // 재배치했다(예전 h=3~4짜리 박스는 실제로 존재하지 않는 폭이라 전부 안전 칸 밖으로
     // 삐져나가 있었다).
     facilities: [
-      { type: 'family_restroom', x: 90, y: 68 },
-      { type: 'restroom_male', x: 91, y: 69 },
-      { type: 'water', x: 92, y: 69 },
-      { type: 'restroom_female', x: 90, y: 70 },
+      { type: 'elevator', x: 87, y: 27 },
+      { type: 'family_restroom', x: 87, y: 31 },
+      { type: 'restroom_male', x: 87, y: 35 },
+      { type: 'water', x: 87, y: 39 },
+      { type: 'restroom_female', x: 87, y: 43 },
       { type: 'escalator_up', x: 88, y: 66 },
-      { type: 'elevator', x: 91, y: 70 },
     ],
     serviceAreas: [
       // F1-D/F1-A 오른쪽 통로 안전 칸에 맞춘 행사대(기존보다 축소).
-      { id: 'event-1', label: '행사 상품', x: 34, y: 28, w: 6, h: 8 },
-      { id: 'event-2', label: '행사 상품', x: 19, y: 57, w: 20, h: 7 },
+      { id: 'event-1', label: '행사 상품', x: 26, y: 27, w: 8, h: 10 },
+      { id: 'event-2', label: '행사 상품', x: 65, y: 29, w: 18, h: 14 },
       // 정면 통로(y=66~67, 실측 h=2)에 왼쪽부터 겹치지 않게 한 줄 배치.
-      { id: 'entrance', label: '입구', x: 7, y: 66, w: 6, h: 2 },
-      { id: 'checkout', label: '계산대 / SCAN', x: 15, y: 66, w: 18, h: 2 },
-      { id: 'atm', label: 'ATM', x: 35, y: 66, w: 4, h: 2 },
+      { id: 'entrance', label: '입구', x: 7, y: 7, w: 6, h: 2 },
+      { id: 'checkout', label: '계산대 / SCAN', x: 15, y: 66, w: 15, h: 3 },
+      { id: 'atm', label: 'ATM', x: 36, y: 66, w: 4, h: 2 },
       { id: 'bakery-counter', label: '베이커리', x: 41, y: 66, w: 10, h: 2 },
       { id: 'food-court', label: '푸드코트', x: 53, y: 66, w: 16, h: 2 },
-      { id: 'customer-center', label: '고객센터', x: 71, y: 66, w: 14, h: 2 },
+      { id: 'customer-center', label: '고객센터', x: 30, y: 68, w: 6, h: 4 },
     ],
   },
   2: {
@@ -79,13 +90,13 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
     // 시식코너/안경보청기센터/약국을 이 폭(h=2)에 맞춰 재배치했다. 오른쪽 행사대 2개는
     // 실제 안전 칸 세로 통로(x=78~88 부근)에 맞춰 폭을 줄였다.
     facilities: [
-      { type: 'family_restroom', x: 90, y: 68 },
-      { type: 'restroom_male', x: 91, y: 69 },
-      { type: 'water', x: 92, y: 69 },
-      { type: 'restroom_female', x: 90, y: 70 },
+      { type: 'elevator', x: 87, y: 27 },
+      { type: 'family_restroom', x: 87, y: 31 },
+      { type: 'restroom_male', x: 87, y: 35 },
+      { type: 'water', x: 87, y: 39 },
+      { type: 'restroom_female', x: 87, y: 43 },
       { type: 'escalator_up', x: 88, y: 66 },
       { type: 'escalator_down', x: 89, y: 67 },
-      { type: 'elevator', x: 91, y: 70 },
     ],
     serviceAreas: [
       { id: 'event', label: '행사 상품', x: 78, y: 1, w: 6, h: 22 },
@@ -105,12 +116,12 @@ export const FLOOR_AMENITIES: Record<number, FloorAmenities> = {
     // 2026-08-27 재배치(3차, DB seed 원본 검증) — 방법은 1F 주석 참고. 3층은 y=57 줄이
     // 실제로 h=4까지 안전 칸이라 기존 폭 그대로 한 줄에 배치할 수 있었다.
     facilities: [
-      { type: 'family_restroom', x: 90, y: 68 },
-      { type: 'restroom_male', x: 91, y: 69 },
-      { type: 'water', x: 92, y: 69 },
-      { type: 'restroom_female', x: 90, y: 70 },
+      { type: 'elevator', x: 87, y: 27 },
+      { type: 'family_restroom', x: 87, y: 31 },
+      { type: 'restroom_male', x: 87, y: 35 },
+      { type: 'water', x: 87, y: 39 },
+      { type: 'restroom_female', x: 87, y: 43 },
       { type: 'escalator_down', x: 89, y: 67 },
-      { type: 'elevator', x: 91, y: 70 },
     ],
     serviceAreas: [
       { id: 'as-center', label: 'A/S센터', x: 9, y: 57, w: 15, h: 4 },

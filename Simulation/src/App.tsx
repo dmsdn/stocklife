@@ -449,7 +449,7 @@ export default function App() {
       </header>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <GameCanvas
             ref={canvasRef}
             floorData={viewFloorData}

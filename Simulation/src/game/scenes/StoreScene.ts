@@ -10,19 +10,10 @@ import { confirmRestock } from '../../api/locations';
 // 아래는 코드를 직접 손보려는 사람을 위한 전체 지도(map) 겸 설명이다 — 각 항목이 파일의
 // 어느 부분에 해당하는지 적어뒀으니, 이 주석만 읽고도 어디를 고쳐야 할지 감을 잡을 수 있다.
 //
-// 1) 이미지(텍스처) 교체는 여기서 한다 — 아래 3개의 Record<string, string> 상수
-//    - ZONE_TEXTURE        : 존(zoneId)마다 "칸 하나짜리"(48x48) 매대 이미지. 합쳐지지 못하고
-//                            혼자 남는 칸이나, mergedTex가 없는 존에서 쓰인다.
-//    - ZONE_TEXTURE_MERGED : 존마다 "여러 칸을 합친" 이미지(원본 96x96, "-m" 접미사 파일).
-//                            같은 존의 인접한 두세 칸을 하나의 큰 이미지로 그릴 때 이 값을 쓴다.
-//                            실제 이미지 파일은 public/assets/tiles/ 폴더에 있고, preload()에서
-//                            이 파일 이름 그대로 텍스처로 로드한다(파일명 = 텍스처 키).
-//    - FACILITY_IMAGE      : 엘리베이터·화장실·정수기 같은 "시설"용 이미지(예: 정수기 =
-//                            facility-water.png). 이 맵에 없는 시설 타입은 이미지 대신
-//                            이모지 원형 배지(FACILITY_ICON/FACILITY_COLOR)로 그려진다.
-//    ⇒ 이미지를 바꾸고 싶으면: (a) public/assets/tiles/에 새 PNG를 넣고 (b) preload()의 로드
-//      목록에 추가하고 (c) 위 3개 맵 중 해당하는 곳의 값(파일명, 확장자 뺀 텍스처 키)을
-//      바꾸면 된다. 코드의 나머지 부분(좌표 계산, 합치기 로직 등)은 손댈 필요 없다.
+// 1) 매대(선반)는 이미지가 아니라 zone.color(ZONE_COLORS, floorAmenities.ts)로 채운 단색
+//    사각형으로 그린다. 시설(엘리베이터·화장실·정수기 등)과 서비스 구역(계산대·ATM 등)도
+//    2026-08-31부로 이미지를 전부 걷어내고 이모지 원형 배지(FACILITY_ICON/FACILITY_COLOR)
+//    또는 회색 박스+글자만으로 통일했다 — 참고 도면 이미지와 스타일을 맞추기 위함.
 //
 // 2) 좌표계 — 그리드 1칸 = TILE px(현재 24px). 화면(world) 좌표는 항상 "그리드 좌표 * TILE".
 //    예: 그리드 (x=3, y=5) 칸의 왼쪽 위 모서리는 화면 좌표 (72, 120). 매대 이미지는 칸의
@@ -33,14 +24,9 @@ import { confirmRestock } from '../../api/locations';
 //    시설 아이콘(20) → 존 이름표(30) → 이동 경로 표시선(40) → NPC(900) → 플레이어(1000).
 //    buildFloor()가 층을 바꿀 때마다 이 레이어들을 통째로 새로 그린다.
 //
-// 4) 매대 "칸 합치기" 로직(buildFloor() 안, rackGroups 순회 부분) — 원래는 매대 1칸에
-//    이미지 1개씩이었는데, 그러면 실제 매장처럼 안 보여서 인접한 칸들을 묶어 큰 이미지 하나로
-//    그리도록 바꿨다. 같은 rack(매대 묶음) 안에서 "2행짜리(세로로 두 줄)"면 ZONE_ROWS2_MODE,
-//    "2열짜리(가로로 두 줄)"면 ZONE_COLS2_MODE 설정을 보고 2칸씩(1x2/2x1) 또는 2x2로 묶는다.
-//    2x2로 묶다가 칸 수가 홀수라 짝이 안 맞아 혼자 남는 줄/칸도, 다른 매대들과 크기가
-//    똑같아 보이도록 일부러 2x2 크기 그대로 크게 그린다(실제 칸은 좁아도 이미지가 옆
-//    통로 쪽으로 살짝 넘치는 걸 감수함 — "칸 하나하나를 정확히 표현"하는 것보다 "매장처럼
-//    커 보이는 것"을 우선하기로 한 팀 결정).
+// 4) (2026-08-31 삭제) 예전에는 인접한 매대 칸을 2x2 등으로 묶어 큰 이미지 하나로 그리는
+//    "칸 합치기" 로직이 있었지만, 단색 블록 렌더링으로 바뀌면서 필요 없어져 제거했다 —
+//    이제 buildFloor()는 location마다 정확히 그 칸 크기의 사각형 하나를 그린다.
 //
 // 5) 화면 맞춤(fitCameraToWorld()) — 층 전체(worldW x worldH)가 "절대 잘리지 않고" 화면
 //    (canvasW x canvasH) 안에 다 들어오도록 줌을 계산한다. 가로 기준 배율과 세로 기준 배율
@@ -125,19 +111,8 @@ const FACILITY_ICON: Record<string, string> = {
   water: '💧',
 };
 
-// 시설 중 실제 타일팩 이미지가 있는 것만 여기 등록 — 나머지는 계속 이모지 아이콘을 쓴다.
-// (정수기는 "Modern Supermarket" 팩에 냉온수기 스프라이트가 있어서 이모지 대신 이걸 쓴다.
-// 엘리베이터/에스컬레이터는 새로 받은 "Modern Shopping Mall" 팩에서 잘라 넣었다. 남녀 화장실은
-// AI 생성 프롬프트로 만든 문 표지판 이미지를 추가했다. 가족 화장실(family_restroom)은 마땅한
-// 그림이 없어서 계속 이모지 배지를 쓴다.)
-const FACILITY_IMAGE: Record<string, string> = {
-  water: 'facility-water',
-  elevator: 'facility-elevator',
-  escalator_up: 'facility-escalator-up',
-  escalator_down: 'facility-escalator-down',
-  restroom_male: 'facility-restroom-male',
-  restroom_female: 'facility-restroom-female',
-};
+// 2026-08-31: 참고 도면 이미지와 스타일을 맞추기 위해 시설도 사진풍 타일 이미지 대신
+// 전부 단순한 이모지 원형 배지(FACILITY_ICON/FACILITY_COLOR)로 통일했다.
 
 // 엘리베이터/에스컬레이터가 너무 작아서 잘 안 보인다는 피드백 — 기본 TILE(24px) 크기의
 // 이 배수만큼 키워서 그린다. 정수기(water)는 원래 크기가 딱 맞아서 그대로 둔다.
@@ -167,184 +142,14 @@ const FACILITY_LABEL: Record<string, string> = {
   water: '정수기',
 };
 
-// ServiceArea(계산대·ATM·베이커리 같은 "표시용 구역")도 "Modern Shopping Mall" 팩에서
-// 잘라 넣은 이미지가 있으면 회색 박스 대신 그 이미지를 그린다. 키는 floor{N}.json의
-// serviceAreas[].id — 1F의 event-1/event-2 두 곳은 같은 이미지(행사 매대)를 재사용한다.
-// 이 표에 없는 id(예: 안경·보청기 센터, 약국, A/S센터 — 이 팩에도 마땅한 그림이 없었음)는
-// 계속 예전처럼 회색 박스 + 글자만 표시된다.
-const SERVICE_AREA_IMAGE: Record<string, string> = {
-  checkout: 'service-checkout',
-  atm: 'service-atm',
-  'bakery-counter': 'service-bakery',
-  'food-court': 'service-food-court',
-  'customer-center': 'service-customer-center',
-  entrance: 'service-entrance',
-  'event-1': 'service-event-1f',
-  'event-2': 'service-event-1f',
-  event: 'service-event-2f',
-  'tasting-corner': 'service-tasting-corner',
-  'appliance-experience': 'service-appliance',
-  lounge: 'service-lounge',
-  'as-center': 'service-as-center', // 모니터·카메라·키보드 진열 이미지로 대체 — 전자기기 A/S 이미지에 가장 가까움
-  'optical-hearing-center': 'service-optical-hearing',
-  pharmacy: 'service-pharmacy',
-};
+// 2026-08-31: 참고 도면 이미지와 동일하게 계산대·ATM·베이커리 같은 서비스 구역도
+// 이미지 없이 회색 박스 + 이름표만으로 단순화했다(아래 buildFloor()의 serviceAreas 렌더링
+// 참고).
 
-// ── 매대/바닥 스프라이트 (Kenney가 아니라 "Modern Supermarket" 유료 픽셀아트 타일팩,
-// comshadow/Cute SCKR, CC 상업이용 허용) ──
-// public/assets/tiles/*.png 로 슬라이스해서 넣어둔 48x48 원본을 TILE 크기로 축소해서 그린다.
-// zoneId(예: 'F1-A') 단위로 매핑 — 층마다 zoneId가 겹치지 않으므로 이걸로 충분하다.
-const ZONE_TEXTURE: Record<string, string> = {
-  'F1-A': 'zone-f1-a-canned',
-  'F1-B': 'zone-f1-b-snack',
-  'F1-C': 'zone-f1-c-produce',
-  'F1-D': 'zone-f1-d-meat',
-  'F1-E': 'zone-f1-e-sauce',
-  'F1-F': 'zone-f1-f-drinks',
-  'F1-G': 'zone-f1-g-refrigerated',
-  'F1-H': 'zone-f1-h-frozen',
-  'F2-A': 'zone-f2-a-pet',
-  'F2-B': 'zone-f2-b-beauty',
-  'F2-C': 'zone-f2-c-storage',
-  'F2-D': 'zone-f2-d-hygiene',
-  'F2-E': 'zone-f2-e-kitchen',
-  'F2-F': 'zone-f2-f-cleaning',
-  'F3-A': 'zone-f3-a-sports',
-  'F3-B': 'zone-f3-b-appliance',
-  'F3-C': 'zone-f3-c-toys',
-  'F3-D': 'zone-f3-d-clothing',
-  'F3-E': 'zone-f3-e-bags',
-};
-
-// zoneId별 "합쳐진 매대" 텍스처(96x48 원본, 여러 상품이 한 이미지에 진열된 형태) — 인접한 두 칸을
-// 하나로 합쳐서 그릴 때 씀(칸마다 매대 하나를 반복해서 그리는 대신, 실제 매대처럼 넓게 진열된
-// 이미지를 쓰기 위함). 세로로 합칠 땐 TILE x TILE*2로, 가로로 합칠 땐 TILE*2 x TILE로 늘려서 그린다.
-const ZONE_TEXTURE_MERGED: Record<string, string> = {
-  'F1-A': 'zone-f1-a-canned-m',
-  'F1-B': 'zone-f1-b-snack-m',
-  'F1-C': 'zone-f1-c-produce-m',
-  'F1-D': 'zone-f1-d-meat-m',
-  'F1-E': 'zone-f1-e-sauce-m',
-  'F1-F': 'zone-f1-f-drinks-m',
-  'F1-G': 'zone-f1-g-refrigerated-m',
-  'F1-H': 'zone-f1-h-frozen-m',
-  'F2-A': 'zone-f2-a-pet-m',
-  'F2-B': 'zone-f2-b-beauty-m',
-  'F2-C': 'zone-f2-c-storage-m',
-  'F2-D': 'zone-f2-d-hygiene-m',
-  'F2-E': 'zone-f2-e-kitchen-m',
-  'F2-F': 'zone-f2-f-cleaning-m',
-  'F3-A': 'zone-f3-a-sports-m',
-  'F3-B': 'zone-f3-b-appliance-m',
-  'F3-C': 'zone-f3-c-toys-m',
-  'F3-D': 'zone-f3-d-clothing-m',
-  'F3-E': 'zone-f3-e-bags-m',
-};
-
-// B1(중앙창고)은 존이 하나(B1-W)뿐이라 텍스처도 하나면 단조로우므로, 위치 인덱스에 따라
-// 상자/크레이트 몇 종을 순환시켜 창고답게 섞어 놓는다.
-const WAREHOUSE_CRATES = ['crate-red', 'crate-green', 'crate-blue', 'crate-box', 'crate-wood'];
-
-// 특정 존은 "매대(rack) 하나당 텍스처 하나"를 고정으로 반복하지 않고, 그 존 안의 rack마다
-// 서로 다른 이미지를 순환해서 쓴다 — 완구·문구(F3-C) 존이 "매대 구성: 서로 다른 인형매대
-// 2종류 + 자동차매대"로 채워달라는 요청을 받아 추가한 구조. rackGroups를 순회하면서
-// zoneId가 여기 등록돼 있으면, ZONE_TEXTURE/ZONE_TEXTURE_MERGED의 고정 텍스처 대신
-// 아래 배열을 rack 등장 순서대로 순환시켜 골라 쓴다(WAREHOUSE_CRATES와 같은 방식이지만
-// "칸 단위"가 아니라 "rack 단위"로 순환한다는 점이 다르다).
-const ZONE_RACK_TEXTURE_VARIANTS: Record<string, { single: string; merged: string }[]> = {
-  // 1층 식료품 존들 — "Modern Supermarket2" 팩(실사 수퍼마켓 상품 아이콘)을 받아서 추가.
-  // 기존 zone-f1-*(단일 텍스처)는 ZONE_TEXTURE/ZONE_TEXTURE_MERGED에 남겨두고 그대로
-  // variant 1번으로 재사용 — 매대마다 완전히 다른 상품이 보이도록 2~3종을 더했다.
-  'F1-A': [
-    { single: 'zone-f1-a-canned', merged: 'zone-f1-a-canned-m' }, // 기존 통조림 매대
-    { single: 'zone-f1-a-canned-1', merged: 'zone-f1-a-canned-1-m' }, // 토마토/과일 통조림
-    { single: 'zone-f1-a-canned-2', merged: 'zone-f1-a-canned-2-m' }, // 채소 통조림
-    { single: 'zone-f1-a-canned-3', merged: 'zone-f1-a-canned-3-m' }, // 시리얼·파스타
-  ],
-  'F1-B': [
-    { single: 'zone-f1-b-snack', merged: 'zone-f1-b-snack-m' }, // 기존 과자 매대
-    { single: 'zone-f1-b-snack-1', merged: 'zone-f1-b-snack-1-m' }, // 초콜릿바
-    { single: 'zone-f1-b-snack-2', merged: 'zone-f1-b-snack-2-m' }, // 빵(번)
-    { single: 'zone-f1-b-snack-3', merged: 'zone-f1-b-snack-3-m' }, // 페이스트리·케이크
-  ],
-  'F1-C': [
-    { single: 'zone-f1-c-produce', merged: 'zone-f1-c-produce-m' }, // 기존 채소 매대
-    { single: 'zone-f1-c-produce-1', merged: 'zone-f1-c-produce-1-m' }, // 사과
-    { single: 'zone-f1-c-produce-2', merged: 'zone-f1-c-produce-2-m' }, // 오렌지
-    { single: 'zone-f1-c-produce-3', merged: 'zone-f1-c-produce-3-m' }, // 청사과·오렌지
-  ],
-  'F1-D': [
-    { single: 'zone-f1-d-meat', merged: 'zone-f1-d-meat-m' }, // 기존 정육 진열대
-    { single: 'zone-f1-d-meat-2', merged: 'zone-f1-d-meat-2-m' }, // 정육(스테이크·덩어리)
-    { single: 'zone-f1-d-meat-3', merged: 'zone-f1-d-meat-3-m' }, // 델리(햄) 진열대
-  ],
-  'F1-E': [
-    { single: 'zone-f1-e-sauce', merged: 'zone-f1-e-sauce-m' }, // 기존 소스 매대
-    { single: 'zone-f1-e-sauce-1', merged: 'zone-f1-e-sauce-1-m' }, // 향신료 병 진열대
-    { single: 'zone-f1-e-sauce-2', merged: 'zone-f1-e-sauce-2-m' }, // 향신료 벌크 디스펜서
-  ],
-  'F1-F': [
-    { single: 'zone-f1-f-drinks', merged: 'zone-f1-f-drinks-m' }, // 기존 음료 매대
-    { single: 'zone-f1-f-drinks-1', merged: 'zone-f1-f-drinks-1-m' }, // 콜라
-    { single: 'zone-f1-f-drinks-2', merged: 'zone-f1-f-drinks-2-m' }, // 사이다·환타
-    { single: 'zone-f1-f-drinks-3', merged: 'zone-f1-f-drinks-3-m' }, // 과일주스
-    { single: 'zone-f1-f-drinks-4', merged: 'zone-f1-f-drinks-4-m' }, // 이온음료·차
-  ],
-  'F1-G': [
-    { single: 'zone-f1-g-refrigerated', merged: 'zone-f1-g-refrigerated-m' }, // 기존 냉장 매대
-    { single: 'zone-f1-g-refrigerated-1', merged: 'zone-f1-g-refrigerated-1-m' }, // 냉장 음료 케이스
-    { single: 'zone-f1-g-refrigerated-2', merged: 'zone-f1-g-refrigerated-2-m' }, // 냉장 케이스(다른 색)
-    { single: 'zone-f1-g-refrigerated-3', merged: 'zone-f1-g-refrigerated-3-m' }, // 냉장 진열 상품
-  ],
-  'F1-H': [
-    { single: 'zone-f1-h-frozen', merged: 'zone-f1-h-frozen-m' }, // 기존 냉동 매대
-    { single: 'zone-f1-h-frozen-1', merged: 'zone-f1-h-frozen-1-m' }, // 냉동고 케이스
-    { single: 'zone-f1-h-frozen-2', merged: 'zone-f1-h-frozen-2-m' }, // 냉동고 케이스(대형)
-    { single: 'zone-f1-h-frozen-3', merged: 'zone-f1-h-frozen-3-m' }, // 냉동고 케이스(세로형)
-  ],
-  'F3-C': [
-    { single: 'zone-f3-c-toys-plush1', merged: 'zone-f3-c-toys-plush1-m' }, // 곰인형 매대
-    { single: 'zone-f3-c-toys-plush2', merged: 'zone-f3-c-toys-plush2-m' }, // 인형뽑기 기계
-    { single: 'zone-f3-c-toys-cars', merged: 'zone-f3-c-toys-cars-m' }, // 자동차 장난감 매대
-  ],
-  'F3-D': [
-    { single: 'zone-f3-d-clothing-1', merged: 'zone-f3-d-clothing-1-m' }, // 접힌 옷 진열대
-    { single: 'zone-f3-d-clothing-2', merged: 'zone-f3-d-clothing-2-m' }, // 청바지 옷걸이
-    { single: 'zone-f3-d-clothing-3', merged: 'zone-f3-d-clothing-3-m' }, // 컬러풀 옷걸이 랙
-    { single: 'zone-f3-d-clothing-4', merged: 'zone-f3-d-clothing-4-m' }, // 회전식 원형 옷걸이
-    { single: 'zone-f3-d-clothing-5', merged: 'zone-f3-d-clothing-5-m' }, // 서랍장 진열대
-  ],
-  // 2층 뷰티·헬스 구역 — "Shopping Mall" 팩의 화장품 매대 3종을 받아서 추가. 나머지
-  // 5개 구역(세탁·청소/화장지·위생/반려용품/수납·생활잡화/주방용품)은 두 팩(Modern Shopping
-  // Mall2, Shopping Mall) 어디에도 다른 상품과 섞이지 않은 깔끔한 매대형 이미지가 없어서
-  // AI 생성 프롬프트로 매대형 이미지를 새로 만들어 추가했다(채팅 답변 참고).
-  'F2-B': [
-    { single: 'zone-f2-b-beauty', merged: 'zone-f2-b-beauty-m' }, // 기존 단품 아이콘 매대
-    { single: 'zone-f2-b-beauty-2', merged: 'zone-f2-b-beauty-2-m' }, // 로션·튜브 매대
-    { single: 'zone-f2-b-beauty-3', merged: 'zone-f2-b-beauty-3-m' }, // 아이섀도·립스틱 매대
-    { single: 'zone-f2-b-beauty-4', merged: 'zone-f2-b-beauty-4-m' }, // 마스카라·향수 매대
-  ],
-  'F2-F': [
-    { single: 'zone-f2-f-cleaning', merged: 'zone-f2-f-cleaning-m' }, // 기존 단품 아이콘 매대
-    { single: 'zone-f2-f-cleaning-rack', merged: 'zone-f2-f-cleaning-rack-m' }, // AI 생성 세제·청소용품 매대
-  ],
-  'F2-D': [
-    { single: 'zone-f2-d-hygiene', merged: 'zone-f2-d-hygiene-m' }, // 기존 단품 아이콘 매대
-    { single: 'zone-f2-d-hygiene-rack', merged: 'zone-f2-d-hygiene-rack-m' }, // AI 생성 화장지·위생용품 매대
-  ],
-  'F2-A': [
-    { single: 'zone-f2-a-pet', merged: 'zone-f2-a-pet-m' }, // 기존 단품 아이콘 매대
-    { single: 'zone-f2-a-pet-rack', merged: 'zone-f2-a-pet-rack-m' }, // AI 생성 반려용품 매대
-  ],
-  'F2-C': [
-    { single: 'zone-f2-c-storage', merged: 'zone-f2-c-storage-m' }, // 기존 단품 아이콘 매대
-    { single: 'zone-f2-c-storage-rack', merged: 'zone-f2-c-storage-rack-m' }, // AI 생성 수납·생활잡화 매대
-  ],
-  'F2-E': [
-    { single: 'zone-f2-e-kitchen', merged: 'zone-f2-e-kitchen-m' }, // 기존 단품 아이콘 매대
-    { single: 'zone-f2-e-kitchen-rack', merged: 'zone-f2-e-kitchen-rack-m' }, // AI 생성 주방용품 매대
-  ],
-};
+// ── 매대(선반) 렌더링: 이미지 대신 zone별 단색 블록으로 그린다 ──
+// 팀 도면(1F/2F/3F 참고 이미지)과 완전히 동일하게 맞추기 위해 매대 이미지(픽셀아트 타일팩)
+// 렌더링은 걷어내고, buildFloor()에서 매대 칸마다 zoneById로 구한 zone.color로 채운 단색
+// 사각형을 그린다. 캐릭터/시설(엘리베이터·화장실·정수기 등) 이미지는 그대로 유지한다.
 
 // 바닥 텍스처 — 타일팩의 RPG Maker 오토타일(칸마다 경계선이 박혀있어 반복하면 "격자"처럼
 // 보임) 대신, 큰 패널(6칸=144px) 단위로만 아주 옅게 명암이 바뀌는 자체 제작 시임리스 텍스처를
@@ -358,37 +163,10 @@ function floorTexFor(floor: number): string {
   return floor === 0 ? WAREHOUSE_FLOOR_TEX : SALES_FLOOR_TEX;
 }
 
-// 매대 스프라이트를 칸 크기 그대로 꽉 채우지 않고 살짝 인셋을 줘서, 옆 칸 매대와 완전히
-// 붙어있지 않고 사이에 얇은 바닥 틈이 보이게 한다 — "다닥다닥 붙어있다"는 인상을 줄이기 위함.
-// 0.92 → 0.85로 더 낮춰서 매대 사이 틈을 눈에 띄게 넓혔다.
-const SHELF_INSET = 0.85;
-
-// rack이 "여러 칸 x 2행"(가로로 긴 두 줄) 모양일 때, 기본은 한 칸씩 세로로만 합쳐서
-// 1x2(칸 하나 너비 x 2칸 높이)로 그린다. 존별로 '2x2'를 지정하면 가로로도 두 칸씩 묶어서
-// 2x2(정사각형에 가까운) 큰 이미지 하나로 그린다 — 이미지가 원래 정사각형(96x96)이라 2x2로
-// 그리면 늘리지 않고 그대로 보여줄 수 있어서 더 선명하게 보인다.
-// 처음엔 1F 일부 존만 2x2로 바꿨었는데, 2F·3F가 여전히 얇은 1x2 줄로 남아 다닥다닥해 보인다는
-// 피드백을 받아 아래에 명시 안 된 존도 기본값을 '2x2'로 올렸다 — 결과적으로 거의 모든 존이 2x2.
-const ZONE_ROWS2_MODE_DEFAULT: '1x2' | '2x2' = '2x2';
-const ZONE_ROWS2_MODE: Record<string, '1x2' | '2x2'> = {
-  'F1-A': '2x2', // 쌀·면·통조림
-  'F1-D': '2x2', // 정육·수산·계란
-  'F1-E': '2x2', // 소스·조미료·오일
-  'F1-F': '2x2', // 음료·주류
-  'F1-B': '1x2', // 간식·베이커리 — 위쪽(폭 넓은) 매대는 1x2 유지
-  // F2/F3는 아래 명시 안 된 나머지 전부 위 기본값('2x2')을 그대로 따름
-};
-
-// rack이 "2칸 x 여러 행"(세로로 긴 두 줄) 모양일 때, 기본은 한 행씩 가로로만 합쳐서
-// 2x1(2칸 너비 x 칸 하나 높이)로 그린다. 존별로 '2x2'를 지정하면 세로로도 두 칸씩 묶는다.
-// ROWS2와 마찬가지로 기본값을 '2x2'로 올려서 2F·3F도 큼직하게 보이게 한다.
-const ZONE_COLS2_MODE_DEFAULT: '2x1' | '2x2' = '2x2';
-const ZONE_COLS2_MODE: Record<string, '2x1' | '2x2'> = {
-  'F1-C': '2x2', // 청과·채소
-  'F1-H': '2x2', // 냉동식품
-  'F1-B': '2x2', // 간식·베이커리 — 아래쪽(폭 좁은) 매대는 2x2로
-  'F1-G': '2x1', // 냉장식품 — 그대로 유지
-};
+// 매대 사각형을 칸 크기 그대로 꽉 채우지 않고 살짝만 인셋을 줘서, 옆 칸 매대와 완전히
+// 붙어있지 않고 사이에 아주 얇은 틈만 보이게 한다(도면 이미지처럼 칸 사이 흰 여백).
+// 2026-08-31: 매대 칸을 더 크게 키워달라는 요청으로 0.85 -> 0.95로 올림.
+const SHELF_INSET = 0.95;
 
 // 재고를 채우러 다니는 직원 NPC 한 명의 상태. 플레이어(this.playerGrid/currentPath/moving)와
 // 똑같은 구조지만 여러 명이 동시에 독립적으로 움직여야 해서 배열로 관리한다.
@@ -435,6 +213,8 @@ export default class StoreScene extends Phaser.Scene {
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private debugKey!: Phaser.Input.Keyboard.Key;
   private debugOccupiedLayer?: Phaser.GameObjects.Graphics;
+  private cellAddressKey!: Phaser.Input.Keyboard.Key; // P키 — 마우스 아래 칸의 좌표를 화면에 표시(맵 좌표를 직접 알아내기 위한 디버그용)
+  private cellAddressLabel?: Phaser.GameObjects.Text;
 
   // ── NPC(재입고 직원) 상태 ──
   // loadFloor()로 층이 바뀔 때마다 그 층 소속 NPC를 새로 만들고 이전 NPC의 비동기 루프는
@@ -460,16 +240,8 @@ export default class StoreScene extends Phaser.Scene {
   preload() {
     const base = 'assets/tiles';
     const keys = new Set<string>([
-      ...Object.values(ZONE_TEXTURE),
-      ...Object.values(ZONE_TEXTURE_MERGED),
-      ...WAREHOUSE_CRATES,
-      ...Object.values(ZONE_RACK_TEXTURE_VARIANTS).flatMap((variants) =>
-        variants.flatMap((v) => [v.single, v.merged]),
-      ),
       SALES_FLOOR_TEX,
       WAREHOUSE_FLOOR_TEX,
-      ...Object.values(FACILITY_IMAGE),
-      ...Object.values(SERVICE_AREA_IMAGE),
     ]);
     for (const key of keys) this.load.image(key, `${base}/${key}.png`);
 
@@ -538,12 +310,23 @@ export default class StoreScene extends Phaser.Scene {
     this.debugKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.O);
     this.debugKey.on('down', () => this.toggleOccupiedDebugOverlay());
 
+    // P키: 지금 마우스 커서가 올라가 있는 칸의 그리드 좌표(x,y)를 그 칸 위에 표시한다.
+    // floorAmenities.ts에서 facilities/serviceAreas 좌표를 손으로 넣을 때, 원하는 칸의
+    // 정확한 x,y 값을 화면에서 바로 읽을 수 있게 하기 위한 디버그 기능. 다시 누르면 지워진다.
+    this.cellAddressKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    this.cellAddressKey.on('down', () => this.showCellAddressAtPointer());
+
     this.fitCameraToWorld();
     this.setupCameraDrag();
-    // 브라우저 창 크기가 바뀌면(캔버스 컨테이너 크기 변경 포함) 항상 매장 전체가
-    // 다시 화면에 들어오도록 재조정한다 — 그렇지 않으면 창이 좁을 때 매장 오른쪽
-    // (화장실/엘리베이터/에스컬레이터 등)이 화면 밖으로 잘려 나가 안 보이게 된다.
-    this.scale.on('resize', () => this.fitCameraToWorld());
+    // 브라우저 창 크기가 바뀔 때(캔버스 컨테이너 크기 변경 포함) 매장이 화면 밖으로
+    // 잘리지 않게 최소 줌만 다시 계산한다 — 예전엔 여기서 fitCameraToWorld()를 그대로
+    // 불러서 줌 자체를 강제로 초기화했는데, 그러면 확대해서 보고 있다가 사이드패널
+    // 토글이나 브라우저의 아주 미세한 레이아웃 재계산(ResizeObserver)만 일어나도 줌이
+    // 도로 축소돼버렸다("확대해도 자꾸 자동으로 축소된다" 버그의 원인). handleResize()는
+    // 화면에 다 담기는 데 필요한 최소 줌(minZoom)만 다시 계산하고, 사용자가 그보다 더
+    // 확대해놓은 상태는 그대로 둔다 — 층을 새로 불러올 때(loadFloor)만 fitCameraToWorld()로
+    // 다시 리셋한다.
+    this.scale.on('resize', () => this.handleResize());
   }
 
   // 매장 "전체"가 화면 안에 항상 다 들어오도록(위아래/좌우 어느 쪽도 잘리지 않게) 줌을 맞추고
@@ -580,9 +363,81 @@ export default class StoreScene extends Phaser.Scene {
     this.cameras.main.centerOn(worldW / 2, worldH / 2);
   }
 
+  // ── 하단 드래그바(React가 그리는 HTML 스크롤바)를 위한 카메라 조회/설정 ──
+  // 확대(zoom > minZoom)했을 때만 실제로 좌우로 옮길 여백(worldWidth - viewWidth)이 생긴다.
+  // GameCanvas.tsx가 매 프레임 이 값을 읽어서 스크롤바 두께/위치를 계산하고, 스크롤바를
+  // 드래그하면 setScrollX()를 불러서 반대로 카메라를 옮긴다 — 우클릭 드래그/휠 줌과
+  // 같은 this.cameras.main을 그대로 공유하므로 서로 항상 동기화된 상태를 유지한다.
+  getScrollInfo(): {
+    scrollX: number; minX: number; maxX: number; worldWidth: number; viewWidth: number;
+    scrollY: number; minY: number; maxY: number; worldHeight: number; viewHeight: number;
+  } | null {
+    if (!this.floorData) return null;
+    const cam = this.cameras.main;
+    const worldWidth = this.floorData.gridWidth * TILE;
+    const worldHeight = this.floorData.gridHeight * TILE;
+    const viewWidth = cam.width / cam.zoom;
+    const viewHeight = cam.height / cam.zoom;
+    const maxX = Math.max(0, worldWidth - viewWidth);
+    const maxY = Math.max(0, worldHeight - viewHeight);
+    return {
+      scrollX: cam.scrollX, minX: 0, maxX, worldWidth, viewWidth,
+      scrollY: cam.scrollY, minY: 0, maxY, worldHeight, viewHeight,
+    };
+  }
+
+  setScrollX(x: number) {
+    if (!this.floorData) return;
+    const cam = this.cameras.main;
+    const worldWidth = this.floorData.gridWidth * TILE;
+    const viewWidth = cam.width / cam.zoom;
+    const maxX = Math.max(0, worldWidth - viewWidth);
+    cam.scrollX = Phaser.Math.Clamp(x, 0, maxX);
+  }
+
+  setScrollY(y: number) {
+    if (!this.floorData) return;
+    const cam = this.cameras.main;
+    const worldHeight = this.floorData.gridHeight * TILE;
+    const viewHeight = cam.height / cam.zoom;
+    const maxY = Math.max(0, worldHeight - viewHeight);
+    cam.scrollY = Phaser.Math.Clamp(y, 0, maxY);
+  }
+
+  // 창/컨테이너 크기가 바뀔 때 호출된다 — fitCameraToWorld()와 달리 사용자가 이미 확대해
+  // 놓은 배율이나 스크롤 위치는 그대로 두고, "화면에 다 들어오는 최소 줌(minZoom)"만 새
+  // 캔버스 크기에 맞게 다시 계산한다.
+  private handleResize() {
+    if (!this.floorData) return;
+    const worldW = this.floorData.gridWidth * TILE;
+    const worldH = this.floorData.gridHeight * TILE;
+    const canvasW = this.scale.width || worldW;
+    const canvasH = this.scale.height || worldH;
+    const FILL_RATIO = 0.96;
+    const containZoom = Math.min(
+      (canvasW * FILL_RATIO) / worldW,
+      (canvasH * FILL_RATIO) / worldH,
+    );
+    this.minZoom = Phaser.Math.Clamp(containZoom, 0.1, 3);
+    const cam = this.cameras.main;
+    // 지금 줌이 새로 계산된 최소 줌보다 작아졌을 때만(창이 커져서 최소 줌 자체가 올라간
+    // 경우) 끌어올린다 — 사용자가 확대해놓은 상태는 절대 강제로 건드리지 않는다.
+    if (cam.zoom < this.minZoom) cam.setZoom(this.minZoom);
+    // 캔버스 크기가 바뀌면 한 화면에 보이는 world 폭/높이도 바뀌므로, 지금 스크롤 위치가
+    // 새 범위를 벗어나 있으면(예: 확대된 채로 창이 커진 경우) 범위 안으로만 당겨준다.
+    const viewW = cam.width / cam.zoom;
+    const viewH = cam.height / cam.zoom;
+    const maxX = Math.max(0, worldW - viewW);
+    const maxY = Math.max(0, worldH - viewH);
+    cam.scrollX = Phaser.Math.Clamp(cam.scrollX, 0, maxX);
+    cam.scrollY = Phaser.Math.Clamp(cam.scrollY, 0, maxY);
+  }
+
   // ── 층 전환/트립 진행 중 씬 재사용 ──
   loadFloor(floorData: FloorData, opts?: { startCell?: GridPoint; hidePlayer?: boolean }) {
     this.floorData = floorData;
+    this.cellAddressLabel?.destroy();
+    this.cellAddressLabel = undefined;
     this.shelfLayer.destroy();
     this.labelLayer.destroy();
     this.facilityLayer.destroy();
@@ -656,23 +511,10 @@ export default class StoreScene extends Phaser.Scene {
 
     const worldW0 = this.floorData.gridWidth * TILE;
     const worldH0 = this.floorData.gridHeight * TILE;
-    // 바닥은 큰 패널 단위로만 아주 은은하게 명암이 바뀌는 시임리스 텍스처 — 1F·2F·3F는 같은
-    // 텍스처, B1만 창고 느낌으로 다르게. 텍스처가 TILE=24 배수(288px = 12칸)로 만들어져 있어
-    // 별도 스케일 조정 없이 1:1로 반복하면 된다.
-    const floorTexKey = floorTexFor(this.floorData.floor);
-    if (this.textures.exists(floorTexKey)) {
-      const floorTiles = this.add.tileSprite(0, 0, worldW0, worldH0, floorTexKey);
-      floorTiles.setOrigin(0, 0);
-      this.floorTileLayer.setVisible(false);
-      this.floorTileLayer.setDepth(DEPTH_FLOOR_TILE - 1); // fallback은 텍스처보다 더 아래
-      this.shelfLayer.add(floorTiles);
-      floorTiles.setDepth(DEPTH_FLOOR_TILE);
-    } else {
-      // 텍스처 로드 실패 시 안전망(단색).
-      const fallbackColor = this.floorData.floor === 0 ? 0x9a9a9a : 0xe9e4d8;
-      this.floorTileLayer.fillStyle(fallbackColor, 1);
-      this.floorTileLayer.fillRect(0, 0, worldW0, worldH0);
-    }
+    // 배경은 참고 도면 이미지와 동일하게 흰색 단색으로 단순화한다(2026-08-31 변경 —
+    // 예전엔 타일 텍스처를 깔았지만 참고 도면이 순수 흰 배경이라 통일했다).
+    this.floorTileLayer.fillStyle(0xffffff, 1);
+    this.floorTileLayer.fillRect(0, 0, worldW0, worldH0);
 
     // ── 행사 상품·계산대·ATM 같은 "표시용 구역"(ServiceArea) 그리기 ──
     // 팀이 준 매장 도면(1F/2F/3F 이미지)에 나온, 매대는 아니지만 매장을 구성하는 공간들을
@@ -694,41 +536,15 @@ export default class StoreScene extends Phaser.Scene {
       box.setStrokeStyle(1.5, 0x757575, 0.9);
       this.shelfLayer.add(box);
 
-      const imageKey = SERVICE_AREA_IMAGE[area.id];
-      const hasImage = !!imageKey && this.textures.exists(imageKey);
-      if (hasImage) {
-        // 회색 박스는 "이 구역이 여기까지"라는 경계 표시로 옅게 남겨두고, 그 위에 실제
-        // 이미지를 원본 비율 그대로(찌그러뜨리지 않고) 박스 안에 최대한 크게 맞춰 그린다.
-        // 라벨은 이미지에 가리지 않도록 박스 아래쪽 끝에 작게 배치.
-        box.setFillStyle(0x9e9e9e, 0.22);
-        const src = this.textures.get(imageKey).getSourceImage() as HTMLImageElement;
-        const availW = aw * 0.88;
-        const availH = ah * 0.78; // 라벨 자리를 남겨두기 위해 세로는 더 여유를 둔다
-        const scale = Math.min(availW / src.width, availH / src.height, 4);
-        const img = this.add.image(ax + aw / 2, ay + ah * 0.42, imageKey);
-        img.setDisplaySize(src.width * scale, src.height * scale);
-        this.shelfLayer.add(img);
-        const label = this.add.text(ax + aw / 2, ay + ah - 3, area.label, {
-          fontSize: '20px',
-          color: '#3a3a3a',
-          align: 'center',
-          backgroundColor: '#ffffffaa',
-          padding: { x: 2, y: 0 },
-          wordWrap: { width: aw - 6 },
-        });
-        label.setOrigin(0.5, 1);
-        this.shelfLayer.add(label);
-      } else {
-        const fontSize = '20px';
-        const label = this.add.text(ax + aw / 2, ay + ah / 2, area.label, {
-          fontSize,
-          color: '#3a3a3a',
-          align: 'center',
-          wordWrap: { width: aw - 6 },
-        });
-        label.setOrigin(0.5);
-        this.shelfLayer.add(label);
-      }
+      // 참고 도면과 동일하게 이미지 없이 회색 박스 + 가운데 이름표만 그린다.
+      const label = this.add.text(ax + aw / 2, ay + ah / 2, area.label, {
+        fontSize: '20px',
+        color: '#3a3a3a',
+        align: 'center',
+        wordWrap: { width: aw - 6 },
+      });
+      label.setOrigin(0.5);
+      this.shelfLayer.add(label);
     }
 
     const zoneById = new Map(this.floorData.zones.map((z) => [z.zoneId, z]));
@@ -737,242 +553,85 @@ export default class StoreScene extends Phaser.Scene {
       this.locationByCell.set(`${loc.x},${loc.y}`, loc);
     });
 
-    // ── 매대를 "칸 하나당 상품 하나"가 아니라, 실제 매대처럼 여러 상품이 한 이미지에 진열된
-    // 큰 그림으로 채운다. rack(같은 매대 묶음) 안에서 두 칸이 자연스럽게 짝지어지는 경우
-    // (같은 x에 y·y+1이 나란히 있거나, 같은 y에 x·x+1이 나란히 있는 경우) 그 둘을 하나로
-    // 합쳐서 TILE x TILE*2(세로) 또는 TILE*2 x TILE(가로) 크기의 "합쳐진 매대" 이미지 하나로
-    // 그린다. 짝을 못 찾은 칸만 예전처럼 1칸짜리 이미지로 그린다 — 칸 하나하나를 다 다르게
-    // 표현하려는 집착을 버리고, 실제 매대처럼 뭉텅이로 보이게 하는 게 목적.
-    const rackGroups = new Map<string, LocationInfo[]>();
-    this.floorData.locations.forEach((loc) => {
-      const key = `${loc.zoneId}::${loc.rack}`;
-      const arr = rackGroups.get(key);
-      if (arr) arr.push(loc);
-      else rackGroups.set(key, [loc]);
-    });
-
-    const merged = new Set<string>(); // 이미 합쳐진 칸(재사용 방지)
-    let warehouseIdx = 0;
-    // ZONE_RACK_TEXTURE_VARIANTS에 등록된 존은 rack(매대)마다 다른 텍스처를 순환시켜 써야
-    // 하므로, zoneId별로 "지금까지 몇 번째 rack을 그렸는지"를 따로 센다.
-    const rackVariantIdx = new Map<string, number>();
-
-    const cellKey = (x: number, y: number) => `${x},${y}`;
-    const drawSprite = (
-      cx: number,
-      cy: number,
-      w: number,
-      h: number,
-      texKey: string,
-      fallbackColor: number,
-      flip?: boolean,
-    ) => {
-      // 옆 칸과 완전히 붙어 보이지 않도록 살짝 인셋을 줘서 그린다(SHELF_INSET) — 매대 사이
-      // 바닥이 얇게 보여서 "매대 하나하나"라는 게 눈에 들어오게 하기 위함.
-      const dw = w * SHELF_INSET;
-      const dh = h * SHELF_INSET;
-      if (this.textures.exists(texKey)) {
-        const shadow = this.add.ellipse(cx + 1, cy + dh * 0.32, dw * 0.8, dh * 0.24, 0x000000, 0.18);
-        const sprite = this.add.image(cx, cy, texKey);
-        sprite.setDisplaySize(dw, dh);
-        // 같은 존 안의 매대들이 완전히 똑같은 이미지를 그대로 반복해서 "상품 하나만 잔뜩
-        // 진열된 것처럼" 단조롭게 보인다는 피드백 — 새 이미지를 더 만들기 전 우선, 매대마다
-        // 좌우로 번갈아 뒤집어서(flipX) 같은 텍스처라도 조금씩 다르게 보이도록 했다.
-        if (flip) sprite.setFlipX(true);
-        this.shelfLayer.add(shadow);
-        this.shelfLayer.add(sprite);
+    // 매대 칸은 locations(매대 "옆" 접근 지점 좌표 — rack_no/bay_no 기준 통로 위치)가 아니라
+    // map_cells의 실제 점유(통행 불가) 칸을 기준으로 그린다. DB seed(Agent/sim/out/world_seed.sql)를
+    // 직접 파싱해서 확인한 결과, locations.x/y는 매대 몸체 칸과 단 1칸도 겹치지 않는 별도의
+    // 좌표(캐릭터가 서서 상호작용하는 통로 칸)였고, 실제 매대 몸체는 그 옆에 붙은 점유 칸
+    // 뭉치였다 — "O키 디버그 오버레이(점유 칸)가 참고 도면과 더 잘 맞아 보인다"는 관찰이
+    // 정확했다. 그래서 점유 칸 하나하나에 "가장 가까운 location의 zone 색"을 입혀서 매대
+    // 몸체 전체가 도면처럼 색칠되게 한다. B1(창고)은 seed에 점유 칸 자체가 없어서 예전 방식
+    // (location 칸 하나씩 칠하기)으로 대체한다.
+    //
+    // 2026-08-31: 실제 seed를 다시 전수 조사해보니, 점유 칸 중 "진짜 매대인데 안 칠해지는"
+    // 칸(성원님이 보고한 "네 칸 이상 깊은 매대" 안쪽)과 "원래 벽/구조물이라 안 칠하는 게 맞는"
+    // 칸(예: 3층 x=90~94 오른쪽 설비 샤프트, 3층 x=0~1 왼쪽 외벽)이 맨해튼 거리만으로는
+    // 절대 구분되지 않았다 — 둘 다 거리 5~13 구간에 고르게 섞여 있어서, 거리 기준만 올리면
+    // (예: 4→13) 진짜 깊은 매대는 살지만 벽/구조물까지 같이 매대 색으로 칠해지는 새 버그가
+    // 생긴다. 그래서 기준을 하나 더 추가했다: "가장 가까운 location의 zone" 것만으로는
+    // 부족하고, 그 zone 소속 location들의 실제 좌표 범위(zoneBBox) 안에 있는 점유 칸만
+    // 그 zone 매대로 인정한다 — 벽/구조물 칸은 항상 모든 zone의 좌표 범위 바깥에 있었다
+    // (실측: 이 조건 추가 후 거리 기준을 4→8로 올려도 벽 칸 3,699개는 그대로 안 칠해지고,
+    // 진짜 깊은 매대 칸 67개만 새로 칠해짐 — 1층 F1-D(x26~32,y29~33), 2층 F2-A(x72~76,y41),
+    // 3층 F3-A(x89,y29~43), 3층 F3-B(x2~8,y51~55)).
+    const OCCUPIED_ZONE_MAX_DIST = 8;
+    const occupiedCells = this.floorData.occupied ?? [];
+    const colorForZone = (zoneId: string) => {
+      const zone = zoneById.get(zoneId);
+      return zone ? Phaser.Display.Color.HexStringToColor(zone.color).color : 0xcccccc;
+    };
+    // zone별 실제 location 좌표 범위 — 위 "벽/구조물 오인 방지" 판정에만 쓰인다.
+    const shelfZoneBBox = new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>();
+    for (const loc of this.floorData.locations) {
+      const b = shelfZoneBBox.get(loc.zoneId);
+      if (!b) {
+        shelfZoneBBox.set(loc.zoneId, { minX: loc.x, minY: loc.y, maxX: loc.x, maxY: loc.y });
       } else {
-        const rect = this.add.rectangle(cx, cy, dw - 2, dh - 2, fallbackColor);
+        b.minX = Math.min(b.minX, loc.x);
+        b.minY = Math.min(b.minY, loc.y);
+        b.maxX = Math.max(b.maxX, loc.x);
+        b.maxY = Math.max(b.maxY, loc.y);
+      }
+    }
+    if (occupiedCells.length > 0) {
+      for (const [ox, oy] of occupiedCells) {
+        let nearest: LocationInfo | null = null;
+        let bestDist = Infinity;
+        for (const loc of this.floorData.locations) {
+          const d = Math.abs(loc.x - ox) + Math.abs(loc.y - oy);
+          if (d < bestDist) {
+            bestDist = d;
+            nearest = loc;
+            if (d <= 1) break;
+          }
+        }
+        if (!nearest || bestDist > OCCUPIED_ZONE_MAX_DIST) continue;
+        const bbox = shelfZoneBBox.get(nearest.zoneId);
+        const insideOwnZone =
+          !!bbox && ox >= bbox.minX && ox <= bbox.maxX && oy >= bbox.minY && oy <= bbox.maxY;
+        if (!insideOwnZone) continue; // 이 zone 매대 범위 밖 = 벽/구조물로 보고 색칠하지 않는다.
+        // 화면에 색칠되는 칸(occupied)과 클릭했을 때 찾는 칸(locationByCell)이 서로 다른
+        // 좌표를 쓰고 있어서(위 주석 참고) "매대를 클릭해도 반응이 없다"는 버그가 있었다 —
+        // locations.x/y(통로 접근 지점)만 locationByCell에 등록돼 있고, 실제로 화면에 보이는
+        // 매대 몸체 칸(occupied)은 하나도 등록되어 있지 않았기 때문. 그래서 점유 칸도 그
+        // 칸에 색을 입힌 것과 동일한 location으로 등록해서, 눈에 보이는 매대 어디를 클릭해도
+        // 반응하게 한다. 단, locations.x/y 자기 자신(통로 접근 지점, 위에서 이미 등록됨)은
+        // 덮어쓰지 않는다 — 그 칸은 통로이지 이 매대의 몸체가 아니므로 원래 있던 값(대개
+        // undefined 또는 그 통로 자리에 진짜로 있는 다른 매대)을 그대로 둔다.
+        const occKey = `${ox},${oy}`;
+        if (!this.locationByCell.has(occKey)) {
+          this.locationByCell.set(occKey, nearest);
+        }
+        const cx = ox * TILE + TILE / 2;
+        const cy = oy * TILE + TILE / 2;
+        const rect = this.add.rectangle(cx, cy, TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(nearest.zoneId));
         this.shelfLayer.add(rect);
       }
-    };
-
-    for (const [key, locs] of rackGroups) {
-      const zoneId = key.split('::')[0];
-      const zone = zoneById.get(zoneId);
-      const fallbackColor = zone ? Phaser.Display.Color.HexStringToColor(zone.color).color : 0xcccccc;
-      let singleTex = zone && ZONE_TEXTURE[zone.zoneId];
-      let mergedTex = zone && ZONE_TEXTURE_MERGED[zone.zoneId];
-      // 이 존이 "rack마다 다른 텍스처"를 쓰는 존이면(예: F3-C 완구·문구), 위에서 구한 고정
-      // singleTex/mergedTex 대신 rack 등장 순서에 맞는 variant로 덮어쓴다.
-      const variants = zone && ZONE_RACK_TEXTURE_VARIANTS[zone.zoneId];
-      if (variants && variants.length > 0) {
-        const idx = rackVariantIdx.get(zoneId) ?? 0;
-        const variant = variants[idx % variants.length];
-        singleTex = variant.single;
-        mergedTex = variant.merged;
-        rackVariantIdx.set(zoneId, idx + 1);
-      }
-
-      const xs = new Set(locs.map((l) => l.x));
-      const ys = new Set(locs.map((l) => l.y));
-      const byCell = new Map(locs.map((l) => [cellKey(l.x, l.y), l]));
-      // 이 rack 안에서 합쳐진 매대 이미지를 몇 번째로 그리는지 세서, 짝수/홀수마다 좌우로
-      // 뒤집어 그린다(위 drawSprite의 flip 인자) — 같은 텍스처가 나란히 반복될 때의 단조로움을
-      // 줄이기 위함.
-      let mergeIdx = 0;
-
-      // 세로 합침: 이 rack이 정확히 두 개의 y값(=2행 깊이)으로 이루어진 경우, 같은 x에서
-      // y·y+1을 하나로 합친다. 존별 설정이 '2x2'면 x도 두 칸씩 짝지어 정사각형(2x2)으로,
-      // 짝이 안 맞는 마지막 칸은 1x2로 대체한다.
-      if (mergedTex && ys.size === 2) {
-        const [y0, y1] = [...ys].sort((a, b) => a - b);
-        if (y1 === y0 + 1) {
-          const mode = ZONE_ROWS2_MODE[zoneId] ?? ZONE_ROWS2_MODE_DEFAULT;
-          const sortedXs = [...xs].sort((a, b) => a - b);
-          if (mode === '2x2') {
-            let i = 0;
-            while (i < sortedXs.length) {
-              const x0 = sortedXs[i];
-              const x1 = sortedXs[i + 1];
-              if (
-                x1 !== undefined &&
-                x1 === x0 + 1 &&
-                byCell.has(cellKey(x0, y0)) &&
-                byCell.has(cellKey(x0, y1)) &&
-                byCell.has(cellKey(x1, y0)) &&
-                byCell.has(cellKey(x1, y1))
-              ) {
-                const cx = x0 * TILE + TILE;
-                const cy = y0 * TILE + TILE;
-                drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-                merged.add(cellKey(x0, y0));
-                merged.add(cellKey(x0, y1));
-                merged.add(cellKey(x1, y0));
-                merged.add(cellKey(x1, y1));
-                i += 2;
-                continue;
-              }
-              // 짝이 안 맞아 혼자 남은 칸도, 옆의 2x2 매대들과 크기가 달라 눈에 띄게 작아
-              // 보이지 않도록 똑같이 2x2 크기(TILE*2 x TILE*2)로 크게 그린다 — 실제로는 칸 한 줄
-              // 뿐이라 옆 통로 쪽으로 이미지가 살짝 넘치지만, 칸 하나하나의 정확한 경계보다
-              // "다른 매대들과 똑같이 커 보이는 것"을 우선한다.
-              if (byCell.has(cellKey(x0, y0)) && byCell.has(cellKey(x0, y1))) {
-                const cx = x0 * TILE + TILE / 2;
-                const cy = y0 * TILE + TILE;
-                drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-                merged.add(cellKey(x0, y0));
-                merged.add(cellKey(x0, y1));
-                // 짝 없이 혼자 2x2 크기로 그려서 옆 칸(x0±1)까지 이미지가 살짝 넘치는데, 그
-                // 옆 칸이 실제로는 매대 데이터가 없는 통로라 클릭해도 상품 정보가 안 뜨던
-                // 문제(5번) — 이미지가 넘친 만큼 클릭도 이 매대로 이어지도록 등록해둔다.
-                // 이미 진짜 매대가 있는 칸은 절대 덮어쓰지 않는다(has 체크).
-                const loc0 = byCell.get(cellKey(x0, y0))!;
-                const loc1 = byCell.get(cellKey(x0, y1))!;
-                for (const nx of [x0 - 1, x0 + 1]) {
-                  const k0 = cellKey(nx, y0);
-                  if (!this.locationByCell.has(k0)) this.locationByCell.set(k0, loc0);
-                  const k1 = cellKey(nx, y1);
-                  if (!this.locationByCell.has(k1)) this.locationByCell.set(k1, loc1);
-                }
-              }
-              i += 1;
-            }
-          } else {
-            for (const x of xs) {
-              const a = byCell.get(cellKey(x, y0));
-              const b = byCell.get(cellKey(x, y1));
-              if (!a || !b) continue;
-              const cx = x * TILE + TILE / 2;
-              const cy = y0 * TILE + TILE;
-              drawSprite(cx, cy, TILE, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-              merged.add(cellKey(x, y0));
-              merged.add(cellKey(x, y1));
-            }
-          }
-        }
-      }
-      // 가로 합침: 정확히 두 개의 x값(=2열 폭)으로 이루어진 경우, 같은 y에서 x·x+1을 합친다.
-      // 존별 설정이 '2x2'면 y도 두 칸씩 짝지어 정사각형(2x2)으로, 짝이 안 맞는 마지막 행은
-      // 2x1로 대체한다.
-      else if (mergedTex && xs.size === 2) {
-        const [x0, x1] = [...xs].sort((a, b) => a - b);
-        if (x1 === x0 + 1) {
-          const mode = ZONE_COLS2_MODE[zoneId] ?? ZONE_COLS2_MODE_DEFAULT;
-          const sortedYs = [...ys].sort((a, b) => a - b);
-          if (mode === '2x2') {
-            let i = 0;
-            while (i < sortedYs.length) {
-              const y0 = sortedYs[i];
-              const y1 = sortedYs[i + 1];
-              if (
-                y1 !== undefined &&
-                y1 === y0 + 1 &&
-                byCell.has(cellKey(x0, y0)) &&
-                byCell.has(cellKey(x1, y0)) &&
-                byCell.has(cellKey(x0, y1)) &&
-                byCell.has(cellKey(x1, y1))
-              ) {
-                const cx = x0 * TILE + TILE;
-                const cy = y0 * TILE + TILE;
-                drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-                merged.add(cellKey(x0, y0));
-                merged.add(cellKey(x1, y0));
-                merged.add(cellKey(x0, y1));
-                merged.add(cellKey(x1, y1));
-                i += 2;
-                continue;
-              }
-              // 짝이 안 맞아 혼자 남은 행도 위와 같은 이유로 2x2 크기로 크게 그린다.
-              if (byCell.has(cellKey(x0, y0)) && byCell.has(cellKey(x1, y0))) {
-                const cx = x0 * TILE + TILE;
-                const cy = y0 * TILE + TILE / 2;
-                drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-                merged.add(cellKey(x0, y0));
-                merged.add(cellKey(x1, y0));
-                // 위와 같은 이유 — 위아래(y0±1)로 넘치는 이미지 영역도 클릭이 되게 등록.
-                const loc0 = byCell.get(cellKey(x0, y0))!;
-                const loc1 = byCell.get(cellKey(x1, y0))!;
-                for (const ny of [y0 - 1, y0 + 1]) {
-                  const k0 = cellKey(x0, ny);
-                  if (!this.locationByCell.has(k0)) this.locationByCell.set(k0, loc0);
-                  const k1 = cellKey(x1, ny);
-                  if (!this.locationByCell.has(k1)) this.locationByCell.set(k1, loc1);
-                }
-              }
-              i += 1;
-            }
-          } else {
-            for (const y of ys) {
-              const a = byCell.get(cellKey(x0, y));
-              const b = byCell.get(cellKey(x1, y));
-              if (!a || !b) continue;
-              const cx = x0 * TILE + TILE;
-              const cy = y * TILE + TILE / 2;
-              drawSprite(cx, cy, TILE * 2, TILE, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-              merged.add(cellKey(x0, y));
-              merged.add(cellKey(x1, y));
-            }
-          }
-        }
-      }
-
-      // 위 두 합침 로직 어디에도 안 걸려 혼자 남은 칸도, 그 존에 합쳐진 매대 이미지
-      // (mergedTex)가 있으면 다른 매대들과 똑같이 2x2 크기로 크게 그린다 — 칸 하나짜리 자리라도
-      // 작게 튀지 않도록. mergedTex가 없는 곳(B1 창고 등)은 예전처럼 1칸짜리 이미지 그대로.
-      for (const loc of locs) {
-        const k = cellKey(loc.x, loc.y);
-        if (merged.has(k)) continue;
+    } else {
+      for (const loc of this.floorData.locations) {
         const cx = loc.x * TILE + TILE / 2;
         const cy = loc.y * TILE + TILE / 2;
-        if (mergedTex) {
-          drawSprite(cx, cy, TILE * 2, TILE * 2, mergedTex, fallbackColor, mergeIdx++ % 2 === 1);
-          // 완전히 혼자인 칸도 2x2로 크게 그려서 상하좌우로 이미지가 넘친다 — 그 넘친 칸들도
-          // (진짜 매대가 없는 한) 이 매대 클릭으로 이어지게 등록.
-          for (const [nx, ny] of [
-            [loc.x - 1, loc.y],
-            [loc.x + 1, loc.y],
-            [loc.x, loc.y - 1],
-            [loc.x, loc.y + 1],
-          ]) {
-            const nk = cellKey(nx, ny);
-            if (!this.locationByCell.has(nk)) this.locationByCell.set(nk, loc);
-          }
-        } else {
-          const texKey = singleTex || WAREHOUSE_CRATES[warehouseIdx % WAREHOUSE_CRATES.length];
-          if (!singleTex) warehouseIdx++;
-          drawSprite(cx, cy, TILE, TILE, texKey, fallbackColor);
-        }
+        const rect = this.add.rectangle(cx, cy, TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(loc.zoneId));
+        this.shelfLayer.add(rect);
       }
     }
 
@@ -1031,9 +690,6 @@ export default class StoreScene extends Phaser.Scene {
       this.facilityByCell.set(`${fac.x},${fac.y}`, fac);
       const fx = fac.x * TILE + TILE / 2;
       const fy = fac.y * TILE + TILE / 2;
-      const imageKey = FACILITY_IMAGE[fac.type];
-      const hasImage = !!imageKey && this.textures.exists(imageKey);
-
       // 원하는 확대 배율(FACILITY_ICON_SCALE)을 그대로 적용하면, 바로 옆칸에 다른 시설이
       // 붙어있는 경우(예: 3층의 에스컬레이터 상/하행이 1칸 간격) 아이콘끼리 겹쳐버린다.
       // 그래서 가장 가까운 다른 시설까지의 실제 거리를 구해서, 그 거리를 넘지 않는 선까지만
@@ -1054,19 +710,13 @@ export default class StoreScene extends Phaser.Scene {
 
       const shadow = this.add.circle(fx + 1, fy + 1.5, iconRadius, 0x000000, 0.15);
       this.facilityLayer.add(shadow);
-      if (hasImage) {
-        // 실제 타일팩 스프라이트가 있는 시설(정수기 등)은 이모지 원형 배지 대신 이미지를 쓴다.
-        const sprite = this.add.image(fx, fy, imageKey);
-        sprite.setDisplaySize(displaySize, displaySize);
-        this.facilityLayer.add(sprite);
-      } else {
-        const bg = this.add.circle(fx, fy, iconRadius, FACILITY_COLOR[fac.type] ?? 0x1f2937, 0.92);
-        bg.setStrokeStyle(1.5, 0xffffff, 0.7);
-        const icon = this.add.text(fx, fy, FACILITY_ICON[fac.type] ?? '?', { fontSize: '14px' });
-        icon.setOrigin(0.5);
-        this.facilityLayer.add(bg);
-        this.facilityLayer.add(icon);
-      }
+      // 참고 도면과 스타일을 맞추기 위해 이미지 대신 항상 이모지 원형 배지로 그린다.
+      const bg = this.add.circle(fx, fy, iconRadius, FACILITY_COLOR[fac.type] ?? 0x1f2937, 0.92);
+      bg.setStrokeStyle(1.5, 0xffffff, 0.7);
+      const icon = this.add.text(fx, fy, FACILITY_ICON[fac.type] ?? '?', { fontSize: '14px' });
+      icon.setOrigin(0.5);
+      this.facilityLayer.add(bg);
+      this.facilityLayer.add(icon);
       // 엘리베이터/에스컬레이터(상행)/에스컬레이터(하행)가 한 줄에 나란히 붙어있어서
       // 라벨을 같은 높이에 두면 옆칸 라벨과 겹친다 — 종류별로 다른 높이(tier)에 배치해서 피한다.
       // 오프셋도 위에서 구한 iconRadius(=실제로 커진 아이콘 크기) 기준으로 계산해서, 아이콘을
@@ -1383,6 +1033,36 @@ export default class StoreScene extends Phaser.Scene {
       g.fillRect(x * TILE, y * TILE, TILE, TILE);
     }
     this.debugOccupiedLayer = g;
+  }
+
+  // P키로 호출됨 — 지금 마우스가 있는 칸의 grid 좌표(x,y)와, 그 칸이 매대/시설이면 관련
+  // 정보(zoneId, locationId, 시설 타입)까지 같이 보여준다. 다시 누르면 사라진다(토글).
+  private showCellAddressAtPointer() {
+    if (this.cellAddressLabel) {
+      this.cellAddressLabel.destroy();
+      this.cellAddressLabel = undefined;
+      return;
+    }
+    const pointer = this.input.activePointer;
+    const gx = Math.floor(pointer.worldX / TILE);
+    const gy = Math.floor(pointer.worldY / TILE);
+    const loc = this.locationByCell.get(`${gx},${gy}`);
+    const fac = this.facilityByCell.get(`${gx},${gy}`);
+    const blocked = !this.grid.isWalkable(gx, gy);
+    let info = `x: ${gx}, y: ${gy}`;
+    if (loc) info += `\n${loc.zoneId} / ${loc.locationId}`;
+    if (fac) info += `\n시설: ${fac.type}`;
+    if (blocked && !loc && !fac) info += `\n[점유칸(매대/벽)]`;
+    const label = this.add.text(gx * TILE + TILE / 2, gy * TILE, info, {
+      fontSize: '16px',
+      color: '#ffffff',
+      backgroundColor: '#000000cc',
+      align: 'center',
+      padding: { x: 4, y: 2 },
+    });
+    label.setOrigin(0.5, 1);
+    label.setDepth(DEPTH_LABEL + 2);
+    this.cellAddressLabel = label;
   }
 
   private handleSpacePress() {
