@@ -157,6 +157,15 @@ export const ZONE_COLORS: Record<string, string> = {
   'F3-E': '#d4cfe9',
 };
 
+// 2026-08-31: DB 시드 데이터 이상으로 실제로는 지나갈 수 있어야 할 칸이 통행 불가(passable=false)로
+// 잘못 들어와 있는 경우를 화면에서만 가려주는 프론트 전용 예외 목록.
+// DB, SQL은 이정기 팀원 허락 없이 건드리면 안 되므로, DB 값은 그대로 두고 여기서만
+// 렌더링/경로탐색/O키 디버그 오버레이에서 제외시킨다.
+// floor(1=1F 등) -> "x,y" 형태의 좌표 문자열 집합.
+export const OCCUPIED_CELL_OVERRIDES: Record<number, Set<string>> = {
+  1: new Set(['10,70', '10,71', '10,72']),
+};
+
 export function fallbackZoneColor(zoneId: string): string {
   let h = 0;
   for (let i = 0; i < zoneId.length; i++) h = (h * 31 + zoneId.charCodeAt(i)) >>> 0;
