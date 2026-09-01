@@ -5,7 +5,7 @@
 // 결과만 보므로 전혀 수정할 필요가 없다.
 
 import type { FloorData, LocationInfo, ZoneInfo } from '../game/types';
-import { FLOOR_AMENITIES, ZONE_COLORS, fallbackZoneColor } from '../data/floorAmenities';
+import { FLOOR_AMENITIES, ZONE_COLORS, fallbackZoneColor, OCCUPIED_CELL_OVERRIDES } from '../data/floorAmenities';
 import { fetchProductsAtLocation } from './products';
 
 const FLOOR_LABELS: Record<number, string> = { 0: 'B1', 1: '1F', 2: '2F', 3: '3F' };
@@ -75,8 +75,11 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
     y: l.y,
   }));
 
+  // OCCUPIED_CELL_OVERRIDES에 있는 칸은 DB상으로는 여전히 통행 불가(passable=false)지만,
+  // 화면/길찾기에서는 없는 셈 치고 걸러낸다 — DB/seed는 그대로 두고 프론트에서만 고친다.
+  const overrides = OCCUPIED_CELL_OVERRIDES[floor];
   const occupied: [number, number][] = dto.cells
-    .filter((c) => !c.passable)
+    .filter((c) => !c.passable && !overrides?.has(`${c.x},${c.y}`))
     .map((c) => [c.x, c.y]);
 
   const amenities = FLOOR_AMENITIES[floor] ?? { pitchPx: 20, facilities: [], serviceAreas: [] };
