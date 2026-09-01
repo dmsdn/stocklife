@@ -61,6 +61,12 @@ DB="-h127.0.0.1 -P3307 -uroot -p storeflow_db"
 "$MYSQL" $OPTS $DB < Agent/sim/out/wishlist_seed.sql
 "$MYSQL" $OPTS $DB < Agent/sim/out/mode1/history_seed.sql
 "$MYSQL" $OPTS $DB < Agent/sim/out/mode1/stock_sync.sql
+# ⑫~⑮ 09-01 추가분 — **빠뜨리면 로그인부터 500 이고, 개인화는 오류 없이 죽는다**
+#   상세·검산·되돌리기는 db/DB변경_09-01_에이전트.md (⚠ ⑮는 ⑭ 뒤여야 한다)
+"$MYSQL" $OPTS $DB < db/seed/05_backend_gaps.sql
+"$MYSQL" $OPTS $DB < db/Chat_attachment.sql
+"$MYSQL" $OPTS $DB < db/seed/04_demo_accounts.sql
+"$MYSQL" $OPTS $DB < db/seed/06_demo_orders.sql
 ```
 
 **다 돌린 뒤 컬럼이 실제로 섰는지 본다** — `--force` 는 오류를 넘기므로
