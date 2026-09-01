@@ -44,6 +44,34 @@ SERVICE_NAME = "StoreFlow Agent Harness"
 # (백엔드 쪽도 yml 한 줄이라, 양쪽 합쳐 두 곳만 맞추면 끝난다.)
 AGENT_PORT = 8000
 
+# ── 신원 축 변환 — consumer_id → member_id (09-01 신설) ──────────────────────
+# [두 축이 있다] 백엔드의 로그인 사용자는 `consumer_id`(1, 2, 3 …)이고, 우리
+#   세계(구매·찜·행동)의 주인은 `member_id`(1001 … 11000, 그리고 실사용자는
+#   10,000,000+)다. 백엔드가 `Member.toMemberId` 로 `10,000,000 + consumer_id`
+#   를 쓰므로 **우리도 같은 식을 써야 같은 사람을 가리킨다.**
+#
+# ⚠ **09-01 에 이것이 없어서 개인화가 통째로 조용히 틀렸다.** `loop.run_chat`
+#   이 백엔드가 준 `consumer_id`(예: 1)를 그대로 `set_identity` 에 넣었고,
+#   `/internal/purchases/history?memberId=1` 은 **200 에 빈 배열**을 돌려준다.
+#   그러면 에이전트는 "이력이 없는 손님"으로 알고 그럴듯하게 답한다 —
+#   오류도 경고도 없다. 도구 23/23·골든셋 45/45 가 전부 초록인 채로,
+#   실물 로그인으로 챗을 쓴 첫날 `history_skus=0` 이 화면에 새어 나와서 잡혔다.
+#
+# [왜 상수가 아니라 함수인가] `None`(비회원) 처리를 부르는 쪽마다 적으면
+#   한 곳이 빠지는 날 비회원이 회원 10,000,000 이 된다. 판정을 여기 한 번만 둔다.
+MEMBER_ID_OFFSET = 10_000_000
+
+
+def to_member_id(consumer_id: int | None) -> int | None:
+    """로그인 사용자 번호 → 우리 세계의 회원 번호. 비회원이면 None 그대로.
+
+    ⚠ 반대 방향(member → consumer)은 만들지 않는다. 시드 회원(1001~11000)은
+      대응하는 로그인 계정이 없어서 **되돌릴 수 없기 때문**이다 — 만들어 두면
+      언젠가 음수 consumer_id 가 생긴다.
+    """
+    return None if consumer_id is None else MEMBER_ID_OFFSET + int(consumer_id)
+
+
 # ── SoT 연결 ────────────────────────────────────────────────────────────────
 # True면 sot_client가 mock_data를 읽고, False면 백엔드 HTTP를 부른다.
 # 스위치를 sot_client "내부"가 아니라 여기 둔 이유: 루프·도구 코드는

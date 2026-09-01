@@ -305,8 +305,13 @@ def run_chat(message: str,
     # ① 이 요청의 주인을 등록한다. 액션의 consumer_id도, 조회·추론의
     #    member_id·session_id도 LLM이 아니라 여기서 주입된다 — definitions의
     #    해당 스키마에 그 칸들이 없는 이유의 완성(B안 확장, 08-20).
-    action.set_consumer_id(consumer_id)
-    query.set_identity(consumer_id, session_id)
+    #    ⚠ **두 축이 다르다** — 액션(장바구니)은 백엔드의 `consumer_id` 를 그대로
+    #    쓰고, 조회·추론은 우리 세계의 `member_id` 를 쓴다. 09-01 이전에는 여기서
+    #    둘 다 `consumer_id` 를 넣어 **개인화가 통째로 빈 결과**였다(config.to_member_id
+    #    의 주석 참조). 같은 줄에 나란히 두는 이유는, 다음에 고치는 사람이 두 축이
+    #    다르다는 것을 **눈으로 보게** 하기 위해서다.
+    action.set_consumer_id(consumer_id)                  # 백엔드 축 (장바구니)
+    query.set_identity(config.to_member_id(consumer_id), session_id)   # 세계 축
     # 위치도 같은 부류다(08-25). LLM이 좌표를 옮겨 적게 두지 않는다 —
     # optimize_route의 start_* 칸은 남아 있지만 **비우는 것이 기본**이고
     # compute._resolve_start가 이 값을 채운다. 자세히는 compute.py의 주입 블록.

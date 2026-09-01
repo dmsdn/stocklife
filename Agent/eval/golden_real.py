@@ -39,7 +39,13 @@ from __future__ import annotations
 # ── 고정 재료 — 카탈로그는 결정적이라 세계 버전이 바뀌어도 그대로다 ──────────
 # (`catalog.py` 는 append-only 이고 sku_id 는 품목×10+변형으로 결정된다)
 SKU_IN_STOCK = 202233          # 쿡프리즈 라자냐 700g — 매대에 재고가 있는 쪽
-MEMBER_WITH_HISTORY = 1005     # 데모 슬라이스 30명 중 하나(이력 33건)
+# ⚠ 09-01: 이 칸의 정체가 바뀌었다. 예전에는 `"consumer_id"` 자리에 **member_id**
+#   (1005)를 넣었고, `run_chat` 이 변환 없이 그대로 썼기 때문에 우연히 맞았다.
+#   이제 `run_chat` 이 `config.to_member_id`(+10,000,000)로 변환하므로 여기에는
+#   **진짜 consumer_id** 를 넣어야 한다. 5 → member 10,000,005 (= 1005 의 사본,
+#   이력 33건). 다리는 `db/seed/04_demo_accounts.sql` 이 놓는다.
+CONSUMER_WITH_HISTORY = 5              # 로그인 계정 (010-8000-0005 / test1234)
+MEMBER_WITH_HISTORY = 10_000_005       # 위 계정이 가리키는 세계 회원 (이력 33건)
 MEMBER_NONE = None             # 비회원
 
 
@@ -264,7 +270,7 @@ def build(f: dict) -> list[dict]:
         # ── 킬링 장면 1 — 실물 큐 상태에서 재고 3분기가 서는가 ──────────────
         {"id": "real_scene1", "needs": "restock_name",
          "q": f"{_n(f.get('restock_name'))} 있어요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-1",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-1",
          # ⚠ 08-27 상향: `predict_availability` 를 필수로 올렸다.
          #   [왜 빠져 있었나] 이 케이스를 쓸 때 가용 예측이 스텁이었다. 그래서
          #   **되는 것에 맞춰** get_inventory 까지만 기대했고, 케이스는 PASS 인데
@@ -290,7 +296,7 @@ def build(f: dict) -> list[dict]:
         # ── 재고 있음 → 위치를 사람 말로 ────────────────────────────────────
         {"id": "real_in_stock", "needs": "in_stock_name",
          "q": f"{_n(f.get('in_stock_name'))} 어디 있어요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-2",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-2",
          "expect_tools": ["search_products", "get_inventory"],
          "must_include": [("1층", "F1")],
          # ⚠ 08-30: 그냥 `품절` 이면 **부정문까지 잡는다.** 실측 —
@@ -316,7 +322,7 @@ def build(f: dict) -> list[dict]:
         # ── 이력 기반 — 요청 ④ history API 가 붙었는가 ──────────────────────
         {"id": "real_repurchase", "needs": "repeat_name",
          "q": f"{_n(f.get('repeat_name'))} 다시 살 때 됐나요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-4",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-4",
          # ⚠ 08-27 정정: `get_purchase_history` 를 기대했는데 모델은
          #   `predict_repurchase` 를 썼고, **그쪽이 옳다** — 그 도구가 이력 조회를
          #   내부에서 하고 곡선까지 낸다. 원시 이력만 보고 "살 때 됐다"를 판정하면
@@ -334,7 +340,7 @@ def build(f: dict) -> list[dict]:
         # ── 인기 — 집계를 지어내지도 회피하지도 않는가 ──────────────────────
         {"id": "real_popular", "needs": "top_name",
          "q": "요즘 뭐가 잘 나가요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-5",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-5",
          "expect_tools": ["get_popular_products"],
          "must_include": [(_n(f.get("top_name")),)],
          "must_not_include": [r"확인이 어렵|모르겠|데이터가 없"],
@@ -364,7 +370,7 @@ def build(f: dict) -> list[dict]:
         {"id": "real_compare", "needs": "pair_names",
          "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 뭐가 더 싸요?"
               if f.get("pair_names") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-9",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-9",
          "expect_tools": ["compare_products"],
          # ⚠ **문서화된 배타 규칙을 자로 지킨다** (08-31).
          #   `compare_products` 설명문: *"쓰지 말 때: **용량 대비** 이득
@@ -392,7 +398,7 @@ def build(f: dict) -> list[dict]:
         {"id": "real_compare_promo", "needs": "promo_pair_names",
          "q": f"{_n(f.get('promo_pair_names'),0)}랑 {_n(f.get('promo_pair_names'),1)} "
               "중에 뭐가 더 싸요?" if f.get("promo_pair_names") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-20",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-20",
          "expect_tools": ["compare_products"],
          "must_include": [("행사", "할인", "세일"),
                           (_p(_at(f.get("promo_pair_regulars"), 0)),
@@ -409,7 +415,7 @@ def build(f: dict) -> list[dict]:
         #    믿는다.** 그 갈래를 잡으려고 **친 낱말**을 필수로 건다.
         {"id": "real_typo_corrected", "needs": "typo_word",
          "q": f"{_n(f.get('typo_word'))} 제품 있어요?" if f.get("typo_word") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-21",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-21",
          "expect_tools": ["search_products"],
          # ⚠ 08-30: 친 낱말만 요구했더니 **판정 둘이 섞였다.** 8회 실측에서
          #   갈래가 셋이었다 —
@@ -433,7 +439,7 @@ def build(f: dict) -> list[dict]:
         {"id": "real_total_found_cap", "needs": "broad_keyword",
          "q": f"{_n(f.get('broad_keyword'))} 어떤 거 있어요?"
               if f.get("broad_keyword") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-22",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-22",
          "expect_tools": ["search_products"],
          "must_include": [],
          "must_not_include": [r"총\s*\d+\s*(개|건|가지|종)"],
@@ -447,7 +453,7 @@ def build(f: dict) -> list[dict]:
         {"id": "real_cold_start_repurchase", "needs": "never_bought_name",
          "q": f"{_n(f.get('never_bought_name'))} 이거 또 살 때 됐나요?"
               if f.get("never_bought_name") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-23",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-23",
          "expect_tools": ["predict_repurchase"],
          # ⚠ 조사를 넘기려고 정규식(`re:`)을 쓴다. 실측 발화 넷이 이랬다 —
          #   "구매하신 이력**이** 없어서" · "구매 이력**에** 없어서" ·
@@ -466,7 +472,7 @@ def build(f: dict) -> list[dict]:
         #    **심판 셋이 다 통과시킨다**(숫자·계약·구조가 다 맞고 문장만 거짓).
         {"id": "real_last_purchase", "needs": "hist_recent_name",
          "q": "지난번에 산 거 뭐였죠?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-24",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-24",
          "expect_tools": ["get_purchase_history"],
          "must_include": [_n(f.get("hist_recent_name"))],
          "must_not_include": [],
@@ -481,7 +487,7 @@ def build(f: dict) -> list[dict]:
          "q": (f"{_n(f.get('unit_mixed_names'),0)}랑 {_n(f.get('unit_mixed_names'),1)}랑 "
                f"{_n(f.get('unit_mixed_names'),2)} 중에 100ml당 뭐가 이득이에요?"
                if f.get("unit_mixed_names") else ""),
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-25",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-25",
          "expect_tools": ["compare_unit_price"],
          # ⚠ **전체 이름을 요구하지 않는다.** 모델은 두 번째 언급부터
          #   "PB-두꺼운 물티슈 100매" 를 "물티슈" 로 줄여 부른다(실측 3/3).
@@ -504,7 +510,7 @@ def build(f: dict) -> list[dict]:
         #      금지하는 자**가 된다.
         {"id": "real_preference_basis", "needs": "pref_ready",
          "q": "제가 좋아할 만한 거 추천해 주세요.",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-26",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-26",
          "expect_tools": ["match_preferences"],
          "must_include": [("자주", "즐겨", "많이 사", "구매하", "사시는", "사셔서")],
          "must_not_include": [r"(키우시|기르시)"],
@@ -522,7 +528,7 @@ def build(f: dict) -> list[dict]:
         #      그래서 `forbid_tools` 축을 새로 만들었다(runner ①-b).
         {"id": "real_web_not_for_stock", "needs": "in_stock_name",
          "q": f"{_n(f.get('in_stock_name'))} 지금 재고 있어요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-27",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-27",
          "expect_tools": ["get_inventory"],
          # ⚠ `forbid_tools: ["web_search"]` 로 쓰면 **영영 안 걸린다** —
          #   서버 사이드 도구라 `trace[].tools` 에 안 실린다(runner ①-c).
@@ -547,7 +553,7 @@ def build(f: dict) -> list[dict]:
         #    **영영 안 한다.** 5분 뒤면 됐을 것인데도.
         {"id": "real_tool_fail_not_scope", "needs": "in_stock_name",
          "q": f"{_n(f.get('in_stock_name'))} 지금 몇 개 남았어요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-28",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-28",
          "inject_fault": ("get_inventory",
                           {"error": "backend_unavailable",
                            "message": "재고 창구에 연결하지 못했습니다."}),
@@ -564,7 +570,7 @@ def build(f: dict) -> list[dict]:
          "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 "
               f"{_p(f.get('pair_budget'))}원 안에서 살 수 있는 만큼 골라줘"
               if f.get("pair_names") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-10",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-10",
          "expect_tools": ["optimize_bundle"],
          # 솔버가 고른 총액이 발화에 있어야 한다 — "하나만 담긴다"는 결론만 있고
          # 금액이 없으면 손님이 계산대에서 확인할 방법이 없다.
@@ -585,7 +591,7 @@ def build(f: dict) -> list[dict]:
         # ── 대체 제안 — 원 상품 확인이 먼저 ─────────────────────────────────
         {"id": "real_substitute", "needs": "in_stock_name",
          "q": f"{_n(f.get('in_stock_name'))} 말고 비슷한 거 있어요?",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-11",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-11",
          "expect_tools": ["search_products", "find_substitutes"],
          "must_include": [],
          "must_not_include": [r"개발 중|준비 중인 기능|not_implemented|오류"],
@@ -604,7 +610,7 @@ def build(f: dict) -> list[dict]:
         # ── 명령형 — 되묻지 않는가 ──────────────────────────────────────────
         {"id": "real_imperative", "needs": "in_stock_name",
          "q": f"{_n(f.get('in_stock_name'))} 어디 있는지 알려줘",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-12",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-12",
          "expect_tools": ["search_products"],
          "must_include": [("층", "구역")],
          "must_not_include": [r"어떤\s*(걸|것을|상품을)", r"드릴까요\?$"],
@@ -633,7 +639,7 @@ def build(f: dict) -> list[dict]:
         {"id": "real_unit_axis_mismatch", "needs": "pair_names",
          "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 100ml당 뭐가 이득?"
               if f.get("pair_names") else "",
-         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-15",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "real-15",
          "expect_tools": ["compare_unit_price"],
          "must_include": [],
          "must_not_include": [r"개발 중|준비 중인 기능|not_implemented",
