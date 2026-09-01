@@ -11,7 +11,14 @@ import AIChatModal from './components/AIChatModal';
 import ShoppingListModal from './components/ShoppingListModal';
 import { fetchFloorData } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
-import { addItemToDbCart } from './api/cart';
+import { addItemToDbCart, fetchCartFromDb } from './api/cart';
+import {
+    setCurrentConsumer,
+    resetCurrentConsumerToDefault,
+    getCurrentConsumerName,
+    getCurrentConsumerId,
+    subscribeCurrentConsumer,
+} from './state/currentConsumer';
 import {
     loadShoppingList,
     saveShoppingList,
@@ -43,6 +50,7 @@ export default function App() {
     const [busy, setBusy] = useState(false);
     const [showFrontend, setShowFrontend] = useState(true);
     const [frontendWidth, setFrontendWidth] = useState(640);
+    const [loggedInName, setLoggedInName] = useState<string | null>(getCurrentConsumerName());
     const draggingRef = useRef(false);
 
     // 상단바 — 지금은 실제 결제 API 연동 전이라 잔액/구매내역은 프론트 로컬 상태(placeholder)다.
@@ -53,6 +61,25 @@ export default function App() {
     const [cartOpen, setCartOpen] = useState(false);
     const [chatOpen, setChatOpen] = useState(false);
     const [productPopup, setProductPopup] = useState<{ location: LocationInfo; products: ProductInfo[] } | null>(null);
+
+    // 상단 장바구니 배지가 새로고침하면 0개로 보이던 문제 — cart state를 로컬에만 두지 않고
+    // (1) 처음 켜질 때, (2) 로그인/로그아웃으로 계정이 바뀔 때마다 DB(cart_group/cart_item)에서
+    // 실제 값을 다시 읽어와 채운다. 계정이 바뀌면 그 계정의 기존 장바구니로 통째로 교체된다.
+    useEffect(() => {
+        const loadCartFromDb = (consumerId: number) => {
+            fetchCartFromDb(consumerId)
+                .then((items) => setCart(items))
+                .catch((err) => console.error('[DB장바구니] 조회 실패:', err));
+        };
+
+        loadCartFromDb(getCurrentConsumerId());
+
+        const unsubscribe = subscribeCurrentConsumer((consumerId) => {
+            loadCartFromDb(consumerId);
+        });
+        return unsubscribe;
+    }, []);
+
 
     // 쇼핑목록(9~11번): 검색해서 담고, 순서를 바꾸고, 그 순서대로 캐릭터를 안내한다.
     const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>(() => loadShoppingList());
@@ -79,6 +106,29 @@ export default function App() {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
         };
+    }, []);
+
+    // 오른쪽 frontend(iframe)에서 로그인/로그아웃하면 postMessage로 알려온다 —
+    // 그걸 받아서 캐릭터가 이후부터 이 계정으로 장바구니 등 API를 호출하게 전환한다.
+    // 보안 참고: iframe src를 우리가 직접 지정하므로(FrontendPanel의 VITE_FRONTEND_URL)
+    // 완전히 낯선 origin은 아니지만, 그래도 메시지 형태(source 필드)는 꼭 확인한다.
+    useEffect(() => {
+        const onMessage = (event: MessageEvent) => {
+            const data = event.data;
+            if (!data || data.source !== 'storeflow-frontend') return;
+
+            console.log('[시뮬레이션] frontend로부터 메시지 수신:', data);
+
+            if (data.type === 'LOGIN' && typeof data.consumerId === 'number') {
+                setCurrentConsumer(data.consumerId, data.name ?? null);
+                setLoggedInName(data.name ?? `회원#${data.consumerId}`);
+            } else if (data.type === 'LOGOUT') {
+                resetCurrentConsumerToDefault();
+                setLoggedInName(null);
+            }
+        };
+        window.addEventListener('message', onMessage);
+        return () => window.removeEventListener('message', onMessage);
     }, []);
 
 
@@ -493,6 +543,20 @@ export default function App() {
                     >
                         🖥️ 웹 UI {showFrontend ? '숨기기' : '보기'}
                     </button>
+
+                    <span
+                        style={{
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            background: '#1e2128',
+                            color: loggedInName ? '#34d399' : '#9ca3af',
+                            fontSize: 13,
+                            fontWeight: 600,
+                        }}
+                        title="frontend에서 로그인한 계정을 따라갑니다"
+                    >
+                        👤 {loggedInName ? `${loggedInName}님` : '기본 캐릭터(비로그인)'}
+                    </span>
 
                     {viewFloor !== playerFloor && (
                         <div style={{ fontSize: 11, color: '#9ca3af' }}>
