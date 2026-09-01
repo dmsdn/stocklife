@@ -193,6 +193,48 @@ def _get_client():
 
 # ── 도구 실행 + 출처 판정 ───────────────────────────────────────────────────
 
+# 두 번 불러도 잘릴 때 내보내는 말. **반쪽 문장 대신** 이것을 준다.
+# 사과만 하고 끝내지 않고 **손님이 할 수 있는 다음 행동**을 준다 — "다시
+# 물어봐 주세요"는 같은 결과를 부르고, 좁혀 물으면 실제로 짧아진다.
+_TRUNCATED_REPLY = ("답변이 길어져서 중간에 끊겼어요. 조금만 좁혀서 "
+                    "다시 물어봐 주시겠어요?")
+
+
+def _land(client, messages: list, system_blocks: list, response,
+          note: str) -> tuple[str, str]:
+    """도구를 잠그고 **한 번만 더** 불러 마무리를 강제한다. (발화, stop_reason)
+
+    [왜 도구를 잠그나] 도구를 열어 두면 모델이 또 부를 수 있고, 그러면
+      「마무리하라」는 지시가 무한 왕복으로 돌아온다. `tool_choice: none` 이
+      그 문을 닫는다. ⚠ 단 `tools` 목록 자체는 **줘야 한다** — 대화에 tool
+      블록이 이미 쌓여 있어서 목록 없이 부르면 API 가 거부한다.
+    [왜 직전 응답을 대화에 넣나] 모델은 자기가 뭘 쓰다 말았는지 알아야
+      같은 내용을 짧게 다시 쓸 수 있다. 안 넣으면 처음부터 다시 생각한다.
+    [왜 messages 를 복사하나] 부르는 쪽의 대화를 늘리지 않기 위해서다 —
+      이 호출은 **곁가지**라 본 흐름의 이력에 남으면 다음 턴이 오염된다.
+
+    ⚠ **텍스트 블록만 넣는다.** `max_tokens` 로 끊긴 응답에는 **미완성
+      `tool_use` 블록**이 섞여 있을 수 있는데, 그것을 그대로 assistant 턴으로
+      넣으면 API 가 «tool_use 뒤에는 tool_result 가 와야 한다»며 400 을 낸다.
+      우리는 도구를 잠그고 부르는 참이라 결과를 만들 수도 없다.
+      텍스트가 하나도 없으면 assistant 턴 자체를 넣지 않는다(빈 턴도 400).
+    """
+    said = "".join(b.text for b in response.content if b.type == "text").strip()
+    convo = list(messages)
+    if said:
+        convo.append({"role": "assistant", "content": said})
+    convo.append({"role": "user", "content": note})
+    r = client.messages.create(
+        model=config.LLM_MODEL,
+        max_tokens=config.LLM_MAX_TOKENS,
+        system=system_blocks,
+        messages=convo,
+        tools=_CACHED_TOOLS,
+        tool_choice={"type": "none"},
+    )
+    return "".join(b.text for b in r.content if b.type == "text"), r.stop_reason
+
+
 def _dispatch(name: str, tool_input: dict) -> tuple[dict, str]:
     """도구 하나를 실행하고 (결과, 출처)를 돌려준다.
 
@@ -410,8 +452,36 @@ def run_chat(message: str,
                       "tools": [b.name for b in tool_calls],
                       "web_results": len(ledgers["web"])})   # len() = 개수
 
-        # ── 종료 판정. stop_reason이 "tool_use"면 LLM이 도구 결과를 기다리는
-        # 중이고, 그 외("end_turn" 등)면 발화로 끝냈다는 뜻이다.
+        # ── 종료 판정 ────────────────────────────────────────────────────
+        # `stop_reason`은 "tool_use"와 "그 외" 둘이 아니다. **셋이다.**
+        #   tool_use   — 도구 결과를 기다리는 중 (계속)
+        #   end_turn   — 말을 마쳤다 (발화 확정)
+        #   max_tokens — **토큰이 떨어져 문장 중간에 끊겼다**
+        #
+        # ⚠ 09-01 이전에는 `!= "tool_use"` 하나로 갈라서 **max_tokens 를
+        #   「마쳤다」로 취급**했다. 그래서 반쪽 문장이 그대로 손님에게 갔다 —
+        #   실측: *"…다시 정확히 확인한 결과를 말씀"* 에서 끝난 77자 응답.
+        #   가드는 문장이 완성됐는지 검사하지 않으므로 초록불로 통과한다.
+        #
+        # [왜 간헐적인가] 한 응답 안에서 **텍스트와 도구 호출이 예산을 나눠 쓴다.**
+        #   개인화가 붙어 문맥이 길어진 뒤로 아슬아슬해졌고, 그래서 어떤 요청은
+        #   넘고 어떤 요청은 걸린다. 드물다는 것은 안전하다는 뜻이 아니라
+        #   **발표 당일에 처음 볼 확률**이라는 뜻이다.
+        if response.stop_reason == "max_tokens":
+            print(f"[loop] ⚠ 응답이 잘렸다(max_tokens={config.LLM_MAX_TOKENS}) — "
+                  f"짧게 다시 부른다. 잘린 길이={len(last_text or '')}자")
+            reply, landed_stop = _land(
+                client, messages, system_blocks, response,
+                "(직전 답변이 길이 제한으로 중간에 끊겼습니다. 같은 내용을 "
+                "3~4문장으로 **짧게** 다시 말해 주세요. 끊겼다는 사실은 언급하지 마세요.)")
+            # 두 번째도 잘렸으면 반쪽을 내보내지 않는다 — 못 하는 것을 못 한다고
+            # 말하는 쪽이, 문장 중간에서 끝나는 것보다 언제나 낫다.
+            if landed_stop == "max_tokens" or not reply.strip():
+                reply = _TRUNCATED_REPLY
+            trace.append({"turn": turn, "stop_reason": "truncated_relanded",
+                          "tools": [], "web_results": len(ledgers["web"])})
+            break
+
         if response.stop_reason != "tool_use":
             reply = last_text
             break
