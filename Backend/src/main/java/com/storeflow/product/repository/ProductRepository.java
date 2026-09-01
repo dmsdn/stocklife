@@ -19,6 +19,10 @@ public interface ProductRepository extends JpaRepository<Product, Integer> {
 
     Optional<Product> findByBarcode(String barcode);
 
+    /** 소비 분석 화면의 대분류 필터/범례용 — 전체 대분류(categoryL1) 목록(중복 제거, 이름순). */
+    @Query("SELECT DISTINCT p.categoryL1 FROM Product p ORDER BY p.categoryL1 ASC")
+    List<String> findAllCategoryL1();
+
     List<Product> findByCategoryL2AndSkuIdNotAndLifecycleStatus(
             String categoryL2,
             Integer excludeSkuId,
