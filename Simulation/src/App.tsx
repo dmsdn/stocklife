@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import GameCanvas, { type GameCanvasHandle } from './game/GameCanvas';
 import FloorDropdown from './components/FloorDropdown';
 import SidePanel from './components/SidePanel';
+import FrontendPanel from './components/FrontendPanel';
 import TransferChoiceModal from './components/TransferChoiceModal';
 import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
@@ -40,6 +41,9 @@ export default function App() {
     const [elevatorPrompt, setElevatorPrompt] = useState(false);
     const [statusMessage, setStatusMessage] = useState<string>('');
     const [busy, setBusy] = useState(false);
+    const [showFrontend, setShowFrontend] = useState(true);
+    const [frontendWidth, setFrontendWidth] = useState(640);
+    const draggingRef = useRef(false);
 
     // 상단바 — 지금은 실제 결제 API 연동 전이라 잔액/구매내역은 프론트 로컬 상태(placeholder)다.
     // 구매하기/환불하기는 이 로컬 상태 안에서만 금액 차감·환급 및 재고 증감(products.ts의 오버레이)을 흉내낸다.
@@ -58,6 +62,26 @@ export default function App() {
     useEffect(() => {
         saveShoppingList(shoppingList);
     }, [shoppingList]);
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!draggingRef.current) return;
+            const newWidth = window.innerWidth - e.clientX;
+            setFrontendWidth(Math.min(Math.max(newWidth, 280), window.innerWidth - 320));
+        };
+        const onUp = () => {
+            draggingRef.current = false;
+            document.body.style.cursor = '';
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, []);
+
+
 
     const floorCacheRef = useRef<Map<number, FloorData>>(new Map());
     const getFloorData = useCallback(async (floor: number): Promise<FloorData> => {
@@ -452,6 +476,24 @@ export default function App() {
                         📝 쇼핑목록 {shoppingList.length}
                     </button>
 
+                    <button
+                        onClick={() => setShowFrontend((v) => !v)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            border: '1px solid #3a3f4b',
+                            background: '#1e2128',
+                            color: '#34d399',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        🖥️ 웹 UI {showFrontend ? '숨기기' : '보기'}
+                    </button>
+
                     {viewFloor !== playerFloor && (
                         <div style={{ fontSize: 11, color: '#9ca3af' }}>
                             (캐릭터 위치: {floorLabel(playerFloor)})
@@ -491,6 +533,23 @@ export default function App() {
                     )}
                 </div>
                 <SidePanel selectedLocation={selectedLocation} />
+                {showFrontend && (
+                    <>
+                        <div
+                            onMouseDown={() => {
+                                draggingRef.current = true;
+                                document.body.style.cursor = 'col-resize';
+                            }}
+                            style={{
+                                width: 6,
+                                flexShrink: 0,
+                                cursor: 'col-resize',
+                                background: '#2a2f3a',
+                            }}
+                        />
+                        <FrontendPanel width={frontendWidth} />
+                    </>
+                )}
             </div>
 
             {transferPrompt && (

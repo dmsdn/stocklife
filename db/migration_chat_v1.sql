@@ -131,3 +131,30 @@ ALTER TABLE cart_item
         FOREIGN KEY (cart_group_id)
             REFERENCES cart_group (cart_group_id)
             ON DELETE CASCADE;
+
+
+
+
+CREATE TABLE point_transaction (
+                                   point_transaction_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                                   consumer_id BIGINT NOT NULL,
+                                   order_id BIGINT NULL,
+
+                                   transaction_type VARCHAR(30) NOT NULL,
+
+                                   amount INT NOT NULL,
+                                   balance_after INT NOT NULL,
+
+                                   description VARCHAR(255) NULL,
+
+                                   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                                   CONSTRAINT fk_point_transaction_consumer
+                                       FOREIGN KEY (consumer_id)
+                                           REFERENCES consumer(consumer_id),
+
+                                   INDEX idx_point_transaction_consumer_created (
+        consumer_id,
+        created_at
+    )
+);
