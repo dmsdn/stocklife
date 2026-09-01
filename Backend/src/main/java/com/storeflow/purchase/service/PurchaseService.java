@@ -103,4 +103,16 @@ public class PurchaseService {
     public List<PurchaseHistoryResponse> getHistoryByMemberId(Integer memberId) {
         return purchaseRepository.findHistoryByMemberIdOrderByPurchasedAtAsc(memberId);
     }
+
+    /**
+     * 소비 분석 화면(대분류 + 지출 금액) 전용 — 이 회원(consumerId)이 최근 기간 동안
+     * 대분류(categoryL1)별로 얼마나 썼는지 집계. getTopCategories와 달리 categoryL2로
+     * 더 쪼개지 않고 대분류 단위로만 묶어서 반환하며, 정렬 기준도 수량이 아니라 지출 금액이다.
+     */
+    @Transactional(readOnly = true)
+    public List<CategoryPreferenceResponse> getSpendingByCategoryL1(Long consumerId, Integer lookbackDays) {
+        int memberId = Member.toMemberId(consumerId);
+        Instant since = sinceFrom180(lookbackDays);
+        return purchaseRepository.findSpendingByCategoryL1(memberId, since);
+    }
 }

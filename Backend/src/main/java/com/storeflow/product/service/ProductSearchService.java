@@ -278,4 +278,10 @@ public class ProductSearchService {
         List<Promotion> active = promotionRepository.findActiveBySkuId(skuId, Instant.now());
         return active.isEmpty() ? null : active.get(0);
     }
+
+    /** 소비 분석 화면의 대분류 필터/범례용 — 전체 대분류(categoryL1) 목록. */
+    @Transactional(readOnly = true)
+    public List<String> getAllCategoryL1() {
+        return productRepository.findAllCategoryL1();
+    }
 }

@@ -14,10 +14,11 @@ import java.util.List;
 
 public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
 
-    /** get_purchase_history. 상품명·이미지까지 조인해서 반환. */
+    /** get_purchase_history. 상품명·이미지·카테고리까지 조인해서 반환. */
     @Query("""
         SELECT NEW com.storeflow.purchase.dto.PurchaseHistoryResponse(
-            p.purchaseId, p.skuId, pr.name, pr.imageUrl, p.qty, p.unitPriceKrw, p.purchasedAt)
+            p.purchaseId, p.skuId, pr.name, pr.imageUrl, pr.categoryL1, pr.categoryL2,
+            p.qty, p.unitPriceKrw, p.purchasedAt)
         FROM Purchase p, Product pr
         WHERE p.memberId = :memberId AND p.skuId = pr.skuId
         ORDER BY p.purchasedAt DESC
@@ -31,7 +32,8 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
      */
     @Query("""
         SELECT NEW com.storeflow.purchase.dto.PurchaseHistoryResponse(
-            p.purchaseId, p.skuId, pr.name, pr.imageUrl, p.qty, p.unitPriceKrw, p.purchasedAt)
+            p.purchaseId, p.skuId, pr.name, pr.imageUrl, pr.categoryL1, pr.categoryL2,
+            p.qty, p.unitPriceKrw, p.purchasedAt)
         FROM Purchase p, Product pr
         WHERE p.memberId = :memberId AND p.skuId = pr.skuId
         ORDER BY p.purchasedAt ASC
@@ -73,23 +75,43 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
                                                 Pageable pageable);
 
     /**
-     * "청소용품을 많이 샀으면" 판단의 근거 — 이 회원이 최근 기간 동안 가장 많이 산 카테고리(categoryL2) 순위.
+     * "청소용품을 많이 샀으면" 판단의 근거 — 이 회원이 최근 기간 동안 가장 많이 산 카테고리(categoryL1/categoryL2) 순위.
+     * 소비 분석 화면(대분류별 지출 금액)의 데이터 소스도 겸한다 — totalSpentKrw = SUM(qty * unitPriceKrw).
      * totalQty(수량 합) 내림차순. 취향 추천은 이 결과의 상위 N개 카테고리를 기준으로
      * 신상/행사 상품(search API)을 다시 조회하는 2단계 구조다 — 이 쿼리 자체는 상품을 추천하지 않는다.
      */
     @Query("""
         SELECT NEW com.storeflow.purchase.dto.CategoryPreferenceResponse(
-            pr.categoryL2, SUM(p.qty), COUNT(p))
+            pr.categoryL1, pr.categoryL2, SUM(p.qty), COUNT(p), SUM(p.qty * p.unitPriceKrw))
         FROM Purchase p, Product pr
         WHERE p.skuId = pr.skuId
           AND p.memberId = :memberId
           AND p.purchasedAt >= :since
-        GROUP BY pr.categoryL2
+        GROUP BY pr.categoryL1, pr.categoryL2
         ORDER BY SUM(p.qty) DESC
         """)
     List<CategoryPreferenceResponse> findTopCategoriesByMemberId(@Param("memberId") Integer memberId,
                                                                  @Param("since") Instant since,
                                                                  Pageable pageable);
+
+    /**
+     * 소비 분석(대분류 + 지출 금액) 화면용 — categoryL2 세분 없이 categoryL1 단위로만 묶어서
+     * 이 회원이 최근 기간 동안 대분류별로 얼마나 썼는지 집계한다. totalSpentKrw 내림차순.
+     * findTopCategoriesByMemberId는 categoryL2까지 세분해서 묶으므로, 대분류만 필요한
+     * 소비 분석 화면에서는 같은 대분류가 여러 행으로 쪼개져 나온다 — 이 쿼리로 대체한다.
+     */
+    @Query("""
+        SELECT NEW com.storeflow.purchase.dto.CategoryPreferenceResponse(
+            pr.categoryL1, NULL, SUM(p.qty), COUNT(p), SUM(p.qty * p.unitPriceKrw))
+        FROM Purchase p, Product pr
+        WHERE p.skuId = pr.skuId
+          AND p.memberId = :memberId
+          AND p.purchasedAt >= :since
+        GROUP BY pr.categoryL1
+        ORDER BY SUM(p.qty * p.unitPriceKrw) DESC
+        """)
+    List<CategoryPreferenceResponse> findSpendingByCategoryL1(@Param("memberId") Integer memberId,
+                                                              @Param("since") Instant since);
 
     /** 상품 지표: 최근 기간 판매수량. */
     @Query("SELECT COALESCE(SUM(p.qty), 0) FROM Purchase p WHERE p.skuId = :skuId AND p.purchasedAt >= :since")

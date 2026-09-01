@@ -72,4 +72,16 @@ public class PurchaseController {
         int memberId = Member.toMemberId(consumerId);
         return ResponseEntity.ok(purchaseService.getTopCategories(memberId, lookbackDays, limit));
     }
+
+    /**
+     * 소비 분석 화면용 — 본인이 최근 기간 동안 대분류(categoryL1)별로 얼마나 썼는지.
+     * 예: /api/purchases/spending-by-category?lookbackDays=90
+     * top-categories(categoryL2까지 세분, 수량 기준)와 달리 대분류 단위 + 지출 금액 기준 정렬.
+     */
+    @GetMapping("/spending-by-category")
+    public ResponseEntity<List<CategoryPreferenceResponse>> getSpendingByCategoryL1(
+            @CurrentConsumer Long consumerId,
+            @RequestParam(required = false) Integer lookbackDays) {
+        return ResponseEntity.ok(purchaseService.getSpendingByCategoryL1(consumerId, lookbackDays));
+    }
 }
