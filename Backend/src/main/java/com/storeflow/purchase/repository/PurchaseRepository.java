@@ -41,6 +41,22 @@ public interface PurchaseRepository extends JpaRepository<Purchase, Long> {
     List<PurchaseHistoryResponse> findHistoryByMemberIdOrderByPurchasedAtAsc(@Param("memberId") Integer memberId);
 
     /**
+     * /internal/purchases/history 전용 — lookbackDays 필터가 있는 버전.
+     * 소비주기 예측 등은 전체 이력을 매번 다 훑을 필요가 없어서 기간으로 자른다.
+     */
+    @Query("""
+        SELECT NEW com.storeflow.purchase.dto.PurchaseHistoryResponse(
+            p.purchaseId, p.skuId, pr.name, pr.imageUrl, pr.categoryL1, pr.categoryL2,
+            p.qty, p.unitPriceKrw, p.purchasedAt)
+        FROM Purchase p, Product pr
+        WHERE p.memberId = :memberId AND p.skuId = pr.skuId
+          AND p.purchasedAt >= :since
+        ORDER BY p.purchasedAt ASC
+        """)
+    List<PurchaseHistoryResponse> findHistoryByMemberIdSince(@Param("memberId") Integer memberId,
+                                                             @Param("since") Instant since);
+
+    /**
      * "A샴푸보다 B샴푸가 더 잘 나가나?" — 지정한 skuId들만 골라 전체 회원 기준으로 집계한다.
      * 개인별 구매내역은 절대 섞이지 않고 합계·구매자 수만 나간다.
      */
