@@ -73,7 +73,7 @@
 #    넘기기", dict 리터럴 안에서 쓰면 "쏟아 넣기".
 # ────────────────────────────────────────────────────────────────────────────
 
-from app import sot_client
+from app import searchterm, sot_client
 
 # ── 현재 요청의 신원 (B안 확장, 2026-08-20) ─────────────────────────────────
 # action.py의 _CURRENT_CONSUMER_ID와 같은 설계를 조회 쪽으로 확장한 것.
@@ -146,12 +146,66 @@ def _pick(row: dict, fields: tuple) -> dict:
 # 이름 앞 밑줄 = 모듈 내부용. 밖에서는 아래 REGISTRY를 통해서만 부른다.
 
 def _search_products(**kw) -> dict:
-    """조회 결과를 LLM용으로 다듬어 반환. (개념 ⑰: 인자를 dict로 받아 그대로 위임)"""
+    """조회 결과를 LLM용으로 다듬어 반환. (개념 ⑰: 인자를 dict로 받아 그대로 위임)
+
+    [0건이면 한 번 더 — 검색어 후보정 (08-28)]
+    백엔드 검색은 `LIKE '%키워드%'` 라 글자가 한 칸만 어긋나도 0건이다.
+    "무리슈"·"물치슈" 는 타이핑 오타이자 STT 오인식의 실제 모양이다.
+    그래서 **0건일 때만** 자모 편집거리로 가장 가까운 카탈로그 낱말을 찾아
+    다시 부른다(`app/searchterm.py`).
+
+    ⚠ **0건일 때만** 인 것이 중요하다. 매번 고치면 멀쩡한 "우유"가 "우육"으로
+      갈 수 있다. 편집거리는 가까운 것을 찾을 뿐 맞는 것을 모른다.
+    ⚠ 고쳤으면 `corrected_from` 으로 **말한다.** 조용히 다른 낱말을 검색하면
+      손님은 자기가 물은 것의 답을 들었다고 믿는다.
+    """
     rows = sot_client.search_products(**kw)
+    corrected = None
+    if not rows and kw.get("keyword"):
+        hit = searchterm.suggest(kw["keyword"])
+        # 같은 낱말로 다시 부르면 또 0건이다 — 무한이 아니라 낭비.
+        if hit and hit[0] != kw["keyword"]:
+            retry = dict(kw, keyword=hit[0])
+            rows = sot_client.search_products(**retry)
+            if rows:
+                corrected = {"from": kw["keyword"], "to": hit[0], "matched_as": hit[1]}
     # 잘라내기 전에 전체 개수를 먼저 센다 — LLM에게 "몇 개 중 몇 개를 보여주는지"
     # 알려줘야 "이게 전부인가요?"에 정직하게 답할 수 있다.
     total = len(rows)
     trimmed = [_pick(r, _SEARCH_FIELDS) for r in rows[:MAX_SEARCH_RESULTS]]  # 개념 ⑳
+
+    # ── 규율을 **쌓는다** (08-29 결함) ───────────────────────────────────────
+    # [무엇이 있었나] 아래 두 갈래가 `**{...}` 로 **같은 `read_as` 칸**에 값을
+    #   넣고 있었다. dict 리터럴에서 뒤엣것이 앞엣것을 덮으므로, **둘 다
+    #   해당하는 판에서는 잘림 경고가 조용히 사라졌다.**
+    #
+    #   실측(08-29): `"쿡프리즉 제품 있어요?"` → 후보정 O · 잘림 O 인데
+    #   결과에는 후보정 규율만 실렸고, Claude 는 잃어버린 규율을 그대로 어겼다 —
+    #   *"'쿡프리즈' 브랜드로 찾아봤어요 — **총 20건** 있네요."*
+    #   같은 질문에서 오타만 빼면(`"물티슈"`) 잘림 규율이 살아 있다.
+    #
+    # [왜 못 봤나] 두 갈래가 **따로따로는 옳다.** 겹치는 판이 드물어서
+    #   눈에 안 띄고, 겹쳐도 **에러가 아니라 규율 하나가 없어질 뿐**이다.
+    #   `read_as` 자리를 세는 커버리지 계측기도 "하나는 실렸다"로 초록이었다.
+    #
+    # [왜 리스트가 아니라 문자열로 잇나] 소비자가 LLM 이라 **읽는 꼴이
+    #   문장**이어야 한다. 리스트로 주면 모델이 첫 항목만 읽는 쪽으로 기운다.
+    # ⚠ **순서가 규율의 일부다.** 후보정 규율은 *"답할 때 이 사실을 **먼저**
+    #   말하세요"* 인데, 쌓는 순서에서 뒤에 두면 그 규율이 **자기 문장과
+    #   모순되는 자리**에 놓인다. 실측으로 값이 있었다 — 잘림을 앞에 뒀을 때
+    #   후보정 고지가 3회 중 2회로 떨어졌고, 앞으로 옮기니 3/3 이 됐다.
+    #   문장 안의 "먼저"와 문맥 안의 위치가 같은 것을 가리켜야 한다.
+    notes = []
+    if corrected:
+        notes.append(f"손님이 친 '{corrected['from']}' 로는 결과가 없어서 "
+                     f"'{corrected['to']}' 로 찾았습니다. **답할 때 이 사실을 "
+                     f"먼저 말하세요** — 다른 낱말로 찾았다는 것을 모르면 "
+                     f"손님은 자기가 물은 것의 답을 들었다고 믿습니다.")
+    if total > len(trimmed):
+        notes.append("결과가 많아 일부만 확인했습니다. **'총 N개'라고 말하지 "
+                     "마세요** — total_found 는 창구가 돌려준 행의 수지 매장 "
+                     "전체의 수가 아닙니다. '여러 개 있는데 그중 몇 개를 "
+                     "봤다'까지가 말할 수 있는 전부입니다.")
     return {
         "total_found": total,
         "returned": len(trimmed),
@@ -159,6 +213,22 @@ def _search_products(**kw) -> dict:
         # 착각하고 "그 조건에는 8개뿐이에요"라는 틀린 말을 한다.
         "truncated": total > len(trimmed),
         "products": trimmed,
+        # ⚠ 잘렸을 때의 규율을 **결과에 실어 보낸다**(08-28 B 요청).
+        #
+        #   지금까지 이 규율은 도구 정의(description)에만 있었다. 그런데 정의는
+        #   문맥 **맨 앞**이라 긴 대화에서 발화 시점과 멀어지고, 로컬 모델의
+        #   학습 데이터에서는 축약 대상이라 아예 사라질 수도 있다.
+        #   `read_as` 는 **결과에 붙어 발화 직전에 도착한다** — 규율이 필요한
+        #   바로 그 자리다.
+        #
+        #   ⚠ `total_found` 를 그대로 말하면 안 되는 이유: 이 수는
+        #   **창구가 돌려준 행의 수**지 매장 전체의 수가 아니다. 백엔드가
+        #   상위 몇 건만 주면 total_found 도 그만큼이다. "총 20개"라고 말하면
+        #   원장에 있는 숫자를 인용했는데도 **거짓**이 된다 — J1 이 못 잡는
+        #   부류다(숫자 자체는 원장에 있다).
+        # 없으면 아예 칸을 안 만든다 — 늘 None 이 실리면 LLM 이 그 칸을 읽지 않게 된다.
+        **({"corrected_from": corrected} if corrected else {}),
+        **({"read_as": " ".join(notes)} if notes else {}),
     }
 
 
@@ -196,6 +266,31 @@ def _get_inventory(sku_id: int) -> dict:
         #   pick=0, backup>0  → "매대엔 없지만 보충 예정" (predict_availability로)
         #   둘 다 0           → "없습니다" (find_substitutes로)
         "on_shelf": pick_qty > 0,
+        # ── 3분기의 갈림길을 **결과에 실어 보낸다** (㉠ 08-31) ────────────────
+        # [왜] 이 규율은 지금까지 도구 정의에만 있었다 — *"매대 수량이 0이어도
+        #   BULK 에 재고가 있으면 품절이라 단정하지 말고 predict_availability 로
+        #   보충 시점을 이어서 확인할 것."* 그런데 정의는 문맥 맨 앞이라 이
+        #   판단이 실제로 필요한 순간(재고를 막 받아 본 지금)과 멀다.
+        #
+        # ⚠ **이 갈래에서 킬링 장면 1 이 죽었다**(08-30 · B 실측). 로컬 모델이
+        #   같은 세계 상태에서 `predict_availability` 를 안 부르고 착지했고,
+        #   손님은 확률을 못 들었다. 그때 원인은 학습 데이터의 라우팅 충돌
+        #   이었지만, **규율이 결정 지점에 없었던 것도 같이 작용한다.**
+        #
+        # [왜 갈래마다 다르게 쓰나] 세 갈래의 처방이 서로 다르다 —
+        #   있으면 위치를, 매대만 비었으면 **다음 도구를**, 아예 없으면
+        #   **대체품을**. 하나로 뭉뚱그린 문장은 세 번 중 두 번 헛것이다.
+        **({"read_as": (
+            "**매대는 비었지만 예비 재고가 있습니다.** 품절이라고 말하지 "
+            "마세요 — 이 매장에서 가장 나쁜 답입니다. **predict_availability 를 "
+            "이어서 불러** 언제쯤 채워지는지 확률로 말하고, 예비 재고가 "
+            f"{other_qty}개 있다는 사실을 함께 알리세요.")}
+           if pick_qty == 0 and other_qty > 0 else {}),
+        **({"read_as": (
+            "**매대에도 예비에도 없습니다.** 여기서 끝내지 말고 "
+            "**find_substitutes 로 대체품을 찾아** 함께 제안하세요 — "
+            "손님이 빈손으로 돌아가면 그 자체가 실패입니다.")}
+           if pick_qty == 0 and other_qty == 0 else {}),
     }
 
 
@@ -209,8 +304,28 @@ def _get_purchase_history(member_id: int) -> dict:
     rows = sot_client.get_purchase_history(member_id)
     total = len(rows)
     recent = rows[-MAX_HISTORY_ROWS:]
-    return {"member_id": member_id, "total_rows": total,
-            "truncated": total > len(recent), "purchases": recent}
+    out = {"member_id": member_id, "total_rows": total,
+           "truncated": total > len(recent), "purchases": recent}
+    # ⚠ **방향을 결과에 싣는다** — 08-28 발견. 도구 설명문은 "시간순으로
+    #   가져온다"고만 해서 **어느 쪽 끝이 최신인지 안 말했다.** 그러면
+    #   `purchases[0]` 을 「가장 최근에 사신 것」으로 읽는 발화가 나오는데,
+    #   실제로는 **가장 오래된 것**이다.
+    #
+    #   [왜 심판이 못 잡나] 도구는 옳게 불렀고(계약 O), 값도 진짜 구매고
+    #   (원장 O), 시퀀스도 맞다(구조 O). **문장만 거짓**이라 J1·J2·J3 가
+    #   전부 통과한다. 골든셋도 상품 이름만 맞으면 통과한다.
+    #
+    #   [왜 설명문이 아니라 여기인가] 설명문은 문맥 맨 앞이라 발화 시점과
+    #   멀고 ㉠ 축약의 대상이다. 방향은 **결과에 대한 사실**이므로 결과에
+    #   붙는 것이 제자리이고, 축약해도 안 사라진다(compare_unit_price ·
+    #   search_products 의 read_as 와 같은 계열).
+    if recent:
+        out["order"] = "purchased_at_asc"
+        out["read_as"] = (
+            "구매 목록은 **과거→최근 순**입니다. 마지막 항목이 가장 최근이고 "
+            "첫 항목이 가장 오래된 것입니다. '지난번에 산 것'을 물으면 "
+            "**마지막 항목**을 말하세요.")
+    return out
 
 
 def _get_session_cart(session_id: str) -> dict:

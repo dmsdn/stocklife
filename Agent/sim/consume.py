@@ -106,16 +106,30 @@ def build_member_state(rng: np.random.Generator, member_row, products,
     return st
 
 
-def basket_at(rng: np.random.Generator, st: MemberState, day: float) -> list[tuple[int, int]]:
+def basket_at(rng: np.random.Generator, st: MemberState, day: float,
+              on_promo=None) -> list[tuple[int, int]]:
     """이 회원이 `day`(창 시작 이후 일수)에 방문했을 때 담는 (sku, qty) 목록.
 
     담길 확률 = Φ((경과일 − 주기·frailty) / (주기·산포)) — 주기가 다 될수록 1에 가까움.
     담기로 정해지면 수량은 복합 포아송(케이스 덩어리). 담은 품목은 last_day를 갱신.
+
+    on_promo: `(sku, day) -> bool` 또는 None. **세계 버전 축 v2**(DES설계 §10.1).
+      None 이면 행사가 수요와 무관하다 — 지금(v1)의 세계다.
+      주면 행사 중인 품목의 **유효 주기를 `P.PROMO_CYCLE_MULT` 배**로 줄인다:
+      주기가 짧아지면 같은 경과일에서 z 가 커져 담길 확률이 오른다.
+
+      [왜 확률에 직접 더하지 않고 주기를 줄이나] 확률에 상수를 더하면 주기가
+      한참 남은 품목까지 같은 폭으로 올라 **"행사면 아무거나 산다"** 가 된다.
+      주기를 줄이면 **살 때가 가까워진 사람만** 앞당겨 산다 — 행사가 수요를
+      새로 만드는 게 아니라 **시점을 옮긴다**는 것이 우리가 재려는 가설이다.
     """
     from math import erf, sqrt
     basket = []
     for s in st.habits:
         cyc = st.cycle[s] * st.frailty[s]
+        # v2 축 — 기본(None)에서는 이 줄이 통째로 건너뛰어진다. 난수 소비 없음.
+        if on_promo is not None and on_promo(s, day):
+            cyc *= P.PROMO_CYCLE_MULT
         elapsed = day - st.last_day[s]
         if elapsed <= 0:
             continue

@@ -112,6 +112,34 @@ def fixtures(sot) -> dict:
     f["promo_name"] = promo[0]["name"] if promo else None
     f["promo_final"] = promo[0].get("final_price_krw") if promo else None
 
+    # ⑤-b 행사 중인 상품 **둘** — `compare_products` 가 행사와 만나는 자리.
+    #    [왜 따로 필요한가] `real_compare` 의 `pair_names` 는 같은 소분류 아무
+    #      둘이라 **행사가 걸릴 때도 있고 안 걸릴 때도 있다.** 08-29 실측에서
+    #      둘 다 정가라 행사 갈래를 한 번도 안 밟았다. 그런데 그날 행사 안내
+    #      규율을 도구 정의에서 결과(`read_as`)로 옮겼다 —
+    #      **옮긴 규율을 재는 자가 골든셋에 없었다.**
+    #      "있지도 않은 것을 검사한 자는 늘 초록이다"의 다른 얼굴이다.
+    #    [왜 둘 다 행사여야 하나] 하나만 행사면 모델이 그쪽을 안 고를 때
+    #      행사 얘기가 안 나오는 것이 **정답**이라 자가 흐려진다.
+    f["promo_pair_names"] = f["promo_pair_regulars"] = None
+    # ⚠ 검색 결과의 정가 칸 이름은 `price_krw` 다(`regular_price_krw` 가 아니다).
+    #   처음에 후자로 썼더니 재료가 늘 None 이라 **케이스가 조용히 SKIP** 됐다 —
+    #   빨간불도 안 뜨고 "재는 자를 만들었다"는 착각만 남는다. 실측으로 잡았다.
+    # ⚠ **같은 소분류**에서 고른다. 처음엔 앞에서 둘을 그냥 집었더니
+    #   "강낭콩캔이랑 경량 패딩 중에 뭐가 더 싸요?" 가 나왔다 — 성립은 하지만
+    #   손님이 안 하는 질문이라, 모델이 비교 대신 **되묻는 쪽**으로 갈 수 있다.
+    #   그러면 이 케이스는 행사 규율이 아니라 **엉뚱함 처리**를 재게 된다.
+    _by = {}
+    for x in promo:
+        if (x.get("name") and x.get("price_krw") and x.get("final_price_krw")
+                and x["price_krw"] != x["final_price_krw"]):
+            _by.setdefault(x.get("category_l2"), []).append(x)
+    _pp = next((v[:2] for k, v in sorted(_by.items(), key=lambda kv: str(kv[0]))
+                if len(v) >= 2), [])
+    if len(_pp) == 2:
+        f["promo_pair_names"] = [x["name"] for x in _pp]
+        f["promo_pair_regulars"] = [x["price_krw"] for x in _pp]
+
     # ⑥ 같은 소분류 두 상품 — 비교·조합의 재료. 이름이 겹치지 않아야 발화가 안 헷갈린다
     f["pair_names"] = f["pair_budget"] = None
     if f.get("in_stock_name"):
@@ -123,6 +151,75 @@ def fixtures(sot) -> dict:
             # 둘 다 담기엔 모자라고 하나는 되는 예산 — 솔버가 실제로 고르게 한다
             lo, hi = sorted(x["final_price_krw"] for x in same)
             f["pair_budget"] = hi + lo // 2
+
+    # ⑧ 오타 후보정 재료 — **LLM 이 스스로 못 고치는 오타**라야 한다 (08-29)
+    #    [왜 흔한 낱말이면 안 되나] `"물티슉"` 은 Claude 가 도구를 부르기 **전에**
+    #      스스로 `"물티슈"` 로 고쳐서 넘긴다(실측). 그러면 하네스 후보정이
+    #      아예 안 돌고 `corrected_from` 도 안 붙어서, **재려던 규율이 한 번도
+    #      안 나온다.** 브랜드·고유명은 LLM 이 정규화를 못 해 그대로 통과한다.
+    #    [왜 결과 유무까지 보나] 후보정 뒤에도 0건이면 그건 "정말 없다" 갈래라
+    #      이 케이스가 재려는 것과 다르다.
+    f["typo_word"] = f["typo_to"] = None
+    from app.tools import query as _q
+    for _base in ("쿡프리즈", "베이직홈", "순수생활", "액티브존"):
+        _bad = _base[:-1] + chr(ord(_base[-1]) + 1)
+        _r = _q._search_products(keyword=_bad)
+        if _r.get("corrected_from") and (_r.get("products") or []):
+            f["typo_word"] = _bad
+            f["typo_to"] = _r["corrected_from"]["to"]
+            break
+
+    # ⑨ 결과가 잘리는 검색어 — `total_found` 를 그대로 말하면 안 되는 갈래
+    f["broad_keyword"] = None
+    for _kw in ("물티슈", "세제", "우유", "라면"):
+        _r = _q._search_products(keyword=_kw)
+        if _r.get("truncated"):
+            f["broad_keyword"] = _kw
+            break
+
+    # ⑩ 이 회원이 **한 번도 안 산** 상품 — 콜드스타트 갈래(basis != history)
+    #    `predict_repurchase` 는 이력이 없으면 소분류 전형 주기를 내는데,
+    #    그때 말할 수 있는 문장이 다르다(주어가 "손님"이 아니라 "보통").
+    f["never_bought_name"] = None
+    _bought = {r["sku_id"] for r in (hist or [])}
+    for _kw in ("치약", "샴푸", "건전지", "양말"):
+        _hit = next((x for x in (sot.search_products(keyword=_kw) or [])
+                     if int(x["sku_id"]) not in _bought and x.get("name")), None)
+        if _hit:
+            f["never_bought_name"] = _hit["name"]
+            break
+
+    # ⑪ 이력의 **양 끝** — 구매 목록은 과거→최근 순이다(`purchased_at_asc`).
+    #    ⚠ 이름이 같으면 자가 못 가른다. 다를 때만 재료로 쓴다.
+    f["hist_recent_name"] = f["hist_oldest_name"] = None
+    if hist and len(hist) >= 2:
+        _new = (sot.get_product(hist[-1]["sku_id"]) or {}).get("name")
+        _old = (sot.get_product(hist[0]["sku_id"]) or {}).get("name")
+        if _new and _old and _new != _old:
+            f["hist_recent_name"], f["hist_oldest_name"] = _new, _old
+
+    # ⑫ 단위가격 **부분 비교** 재료 — 같은 축 둘 + 다른 축 하나 (08-30)
+    #    [왜 일부러 조합하나] `compare_unit_price` 에는 갈래가 셋이다 —
+    #      전부 견줌 / **일부만 견줌** / 하나도 못 견줌(no_comparable_pair).
+    #      기존 `real_unit_axis_mismatch` 는 셋째를 밟는다. 둘째가 제일
+    #      위험한데(비교가 **성립했으므로** LLM 이 "비교했다"고 말하고, 빠진
+    #      상품이 발화에서 사라진다) 그 갈래를 밟는 케이스가 없었다.
+    #    [왜 축을 직접 세나] 검색만으로는 축이 섞인 셋이 잘 안 잡힌다.
+    #      단위로 묶어 **같은 축 둘 + 다른 축 하나**를 손으로 만든다.
+    f["unit_mixed_names"] = f["unit_excluded_name"] = None
+    _by_unit = {}
+    for _kw in ("세제", "우유", "티슈", "커피", "음료"):
+        for _p in (sot.search_products(keyword=_kw) or [])[:20]:
+            if _p.get("unit") and _p.get("name"):
+                _by_unit.setdefault(_p["unit"], []).append(_p["name"])
+    _big = [u for u, v in _by_unit.items() if len(v) >= 2]
+    if len(_big) >= 2:
+        _a, _b = sorted(_big)[:2]
+        f["unit_mixed_names"] = [_by_unit[_a][0], _by_unit[_a][1], _by_unit[_b][0]]
+        f["unit_excluded_name"] = _by_unit[_b][0]
+
+    # ⑬ 취향 매칭 — 이력이 있어야 축을 뽑는다
+    f["pref_ready"] = True if hist else None
 
     # ⑦ 장바구니·위시리스트 — 실물 백엔드에 **행이 없어** 지금은 못 쓴다
     #    (consumer 0행 · cart_group 0행 · wishlists 0행 — 08-27 실측).
@@ -144,6 +241,19 @@ def build(f: dict) -> list[dict]:
     """
     def _p(v):                      # 가격 → "1,234" (없으면 매칭 안 될 문자열)
         return f"{v:,}" if isinstance(v, int) else "__NO_FIXTURE__"
+
+    def _core(v):                   # 상품명의 **줄여 불러도 남는 토막**
+        # `app.read_as_check._name_core` 와 같은 규칙이다. 여기서 다시 쓰지 않고
+        # 빌려 쓴다 — 두 곳에 같은 규칙을 적으면 언젠가 갈라진다.
+        from app.read_as_check import _name_core
+        return _name_core(v) if isinstance(v, str) else "__NO_FIXTURE__"
+
+    def _tail(v):                   # 핵심의 **마지막 낱말** — 모델이 제일 많이 줄이는 꼴
+        c = _core(v)
+        return c.split()[-1] if isinstance(c, str) and c.split() else "__NO_FIXTURE__"
+
+    def _at(v, i):                  # 리스트의 i번째 (없으면 None → _p 가 막는다)
+        return v[i] if isinstance(v, (list, tuple)) and len(v) > i else None
 
     def _n(v, i=0):                 # 이름/쌍 → 문자열 (없으면 빈 질문 → SKIP 됨)
         if isinstance(v, (list, tuple)):
@@ -183,7 +293,14 @@ def build(f: dict) -> list[dict]:
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-2",
          "expect_tools": ["search_products", "get_inventory"],
          "must_include": [("1층", "F1")],
-         "must_not_include": [r"품절", r"F1-H-R\d"],   # 코드 그대로 노출 금지
+         # ⚠ 08-30: 그냥 `품절` 이면 **부정문까지 잡는다.** 실측 —
+         #   *"여유 재고도 넉넉해서 당분간 **품절 걱정은 없어요**"* 가 위반으로
+         #   찍혔다. 그건 품절 주장이 아니라 그 반대다.
+         #   가드의 `stockout_denial` 은 이미 같은 면제를 갖고 있었는데
+         #   (`(품절|없\S{0,2})\s*\S{0,3}\s*아니`) **채점표에는 안 옮겼다.**
+         #   > 금지 패턴은 낱말이 아니라 **주장**을 잡아야 한다.
+         "must_not_include": [r"품절(?![^.!?]{0,12}(없|아니|걱정))",
+                              r"F1-H-R\d"],   # 코드 그대로 노출 금지
          "why": "위치는 사람 말로. location_id 를 그대로 읽으면 손님이 못 찾는다"},
 
         # ── 가격 정확성 — `_norm_product` 가 없으면 여기서 죽는다 ───────────
@@ -208,7 +325,9 @@ def build(f: dict) -> list[dict]:
          #   확인해야 하는 것은 "이력 창구가 산다"이지 "어느 함수를 부른다"가 아니다.
          "expect_tools": ["predict_repurchase"],
          "must_include": [],
-         "must_not_include": [r"이력이 없|구매 기록이 없|처음 (구매|사)"],
+         # ⚠ 08-30: `이력이 없` 은 조사가 바뀌면 **못 잡는다**("이력은 없").
+         #   금지 패턴에서 놓치는 것은 위반이 그냥 통과한다는 뜻이라 더 나쁘다.
+         "must_not_include": [r"이력\S{0,2}\s*없|구매 기록\S{0,2}\s*없|처음 (구매|사)"],
          "why": "실제로 2회 이상 산 상품이다. '이력 없음'이 나오면 history 창구가"
                 " 안 붙은 것(memberId vs consumerId 함정 포함)"},
 
@@ -247,10 +366,198 @@ def build(f: dict) -> list[dict]:
               if f.get("pair_names") else "",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-9",
          "expect_tools": ["compare_products"],
+         # ⚠ **문서화된 배타 규칙을 자로 지킨다** (08-31).
+         #   `compare_products` 설명문: *"쓰지 말 때: **용량 대비** 이득
+         #   ('어느 쪽이 이득?'·'100ml당') — compare_unit_price"*.
+         #   반대로 '뭐가 더 싸요?'는 총액 질문이라 단위가격이 아니다.
+         #   ①(부분 수열)은 **더 부르는 것을 잘못으로 안 보므로** 이 규칙을
+         #   못 잡는다 — 발화가 그럴듯하면 통과하는데 **어디서 가져왔는지**가
+         #   틀린 것이다. 08-28 에 골든셋이 흔들린 자리도 이 축이었다.
+         #   ⚠ 지금은 초록이다. 그래도 `forbid_web` 과 다르다 —
+         #     저건 **구조적으로 못 걸리는 자**였고, 이건 **걸릴 수 있는데
+         #     지금 안 걸리는 자**다. 회귀 방지의 값이 거기 있다.
+         "forbid_tools": ["compare_unit_price"],
          "must_include": [],
          "must_not_include": [r"비슷|비등|차이가 (거의 )?없"],
          "why": "총액 비교는 compare_products 를 거친다(헌법 2 — 산술은 솔버)."
                 " '비슷하다'로 얼버무리면 비교를 안 한 것이다"},
+
+        # ── 비교 × 행사 — **옮긴 규율이 실제로 지켜지나** (㉠ 08-29) ────────
+        #    행사 안내 규율을 도구 정의에서 `compare_products` 의 결과
+        #    `read_as` 로 옮겼다. 그 자리 바꿈이 옳았는지는 **행사 상품을
+        #    비교시켜 봐야만** 알 수 있는데, 그 케이스가 없었다.
+        #    정가를 필수 요소로 거는 이유: '원래 O원인데 O원 할인된 O원'이라는
+        #    문장은 **정가가 발화에 있어야만** 성립한다. "행사 중이에요"만으로는
+        #    규율을 지킨 것이 아니다.
+        {"id": "real_compare_promo", "needs": "promo_pair_names",
+         "q": f"{_n(f.get('promo_pair_names'),0)}랑 {_n(f.get('promo_pair_names'),1)} "
+              "중에 뭐가 더 싸요?" if f.get("promo_pair_names") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-20",
+         "expect_tools": ["compare_products"],
+         "must_include": [("행사", "할인", "세일"),
+                          (_p(_at(f.get("promo_pair_regulars"), 0)),
+                           _p(_at(f.get("promo_pair_regulars"), 1)))],
+         "must_not_include": [r"비슷|비등|차이가 (거의 )?없"],
+         "why": "행사 안내 규율을 결과 read_as 로 옮긴 뒤, 그 규율이 실제로 "
+                "발화에 나오는지 재는 유일한 케이스다. 정가가 없으면 "
+                "'원래 O원인데'를 안 말한 것이다"},
+
+        # ── 오타 후보정 — **바꾼 사실을 말했는가** (㉠ 08-29) ────────────────
+        #    실측: 6회 중 5회는 손님이 친 낱말을 그대로 인용한다
+        #    ("'쿡프리즉'으로는 안 나와서 '쿡프리즈' 브랜드로 찾아봤어요").
+        #    1회는 바뀐 낱말만 말한다 — **손님은 자기가 친 것의 답을 들었다고
+        #    믿는다.** 그 갈래를 잡으려고 **친 낱말**을 필수로 건다.
+        {"id": "real_typo_corrected", "needs": "typo_word",
+         "q": f"{_n(f.get('typo_word'))} 제품 있어요?" if f.get("typo_word") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-21",
+         "expect_tools": ["search_products"],
+         # ⚠ 08-30: 친 낱말만 요구했더니 **판정 둘이 섞였다.** 8회 실측에서
+         #   갈래가 셋이었다 —
+         #     ① "'쿡프리즉'으로는 못 찾았는데 '쿡프리즈'로…"   6회 · 고지 O
+         #     ② "쿡프리즈 브랜드 제품은 …"                    1회 · 고지 X  ← 표적
+         #     ③ "'쿡프리즘'이 아니라 '쿡프리즈'로…"            1회 · 고지 O, **인용 틀림**
+         #   ③을 ②와 같이 처리하면 이 케이스가 "고지했나"가 아니라 "정확히
+         #   인용했나"를 재게 된다. **규율이 말하는 것은 고지**다.
+         #   ⇒ 친 낱말 **또는** 바꿨다는 신호. ③의 오인용은 별개 판정이라
+         #     여기서 안 섞는다(빈도 1/8 · 필요하면 케이스를 따로 만든다).
+         "must_include": [(_n(f.get("typo_word")),
+                           r"re:(못 찾|안 나와|안 나오|아니라|없어서|검색이 안)")],
+         "must_not_include": [],
+         "why": "하네스가 낱말을 바꿔 찾았으면 그 사실을 먼저 말해야 한다. "
+                "바뀐 낱말만 말하면 손님은 자기가 친 것의 답을 들었다고 믿는다"},
+
+        # ── 결과 잘림 — `total_found` 를 그대로 말하지 않는가 ─────────────────
+        #    ⚠ 위 케이스와 **일부러 나눴다.** 오타 질문에서도 이 규율이 걸리는데,
+        #    한 케이스에 판단 둘을 섞으면 FAIL 이 떠도 무엇이 깨진 것인지
+        #    분리되지 않는다(`트러블슈팅/골든셋_케이스_복합판단.md`).
+        {"id": "real_total_found_cap", "needs": "broad_keyword",
+         "q": f"{_n(f.get('broad_keyword'))} 어떤 거 있어요?"
+              if f.get("broad_keyword") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-22",
+         "expect_tools": ["search_products"],
+         "must_include": [],
+         "must_not_include": [r"총\s*\d+\s*(개|건|가지|종)"],
+         "why": "total_found 는 창구가 돌려준 행의 수지 매장 전체의 수가 아니다. "
+                "**원장의 숫자를 인용하고도 거짓**이 되는 부류라 J1 이 못 잡는다"},
+
+        # ── 콜드스타트 재구매 — **주어를 손님으로 두지 않는가** ──────────────
+        #    이 갈래가 위험한 이유: 숫자가 전부 원장에 있어 가드가 통과시킨다.
+        #    틀리는 것은 값이 아니라 **주어**다("손님은 3주쯤 뒤에 다시 사실
+        #    거예요" — 없는 개인화를 지어내고 손님은 자기 얘기로 듣는다).
+        {"id": "real_cold_start_repurchase", "needs": "never_bought_name",
+         "q": f"{_n(f.get('never_bought_name'))} 이거 또 살 때 됐나요?"
+              if f.get("never_bought_name") else "",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-23",
+         "expect_tools": ["predict_repurchase"],
+         # ⚠ 조사를 넘기려고 정규식(`re:`)을 쓴다. 실측 발화 넷이 이랬다 —
+         #   "구매하신 이력**이** 없어서" · "구매 이력**에** 없어서" ·
+         #   "구매하신 이력**은** 없으시네요" · "이력**이** 없으셔서".
+         #   부분문자열로 잡으면 조사 하나에 갈리고, 낱말을 늘리면
+         #   두더지잡기가 된다(runner._check_includes 머리말).
+         "must_include": [(r"re:이력\S{0,2}\s*(없|안 )", "사신 적",
+                           "구매하신 적", "처음")],
+         "must_not_include": [r"손님(은|이|께서|께서는)[^.]{0,25}다시\s*사"],
+         "why": "이력이 없으면 곡선은 '이 상품군의 전형'이지 이 손님의 예측이 "
+                "아니다. 먼저 사시는 상품이라는 사실을 숨기면 안 된다"},
+
+        # ── 지난번 산 것 — **목록의 어느 끝인가** ────────────────────────────
+        #    구매 목록은 과거→최근 순(`purchased_at_asc`)이라 마지막 항목이
+        #    가장 최근이다. 첫 항목을 "최근"이라 말하는 것이 BAD-2 이고,
+        #    **심판 셋이 다 통과시킨다**(숫자·계약·구조가 다 맞고 문장만 거짓).
+        {"id": "real_last_purchase", "needs": "hist_recent_name",
+         "q": "지난번에 산 거 뭐였죠?",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-24",
+         "expect_tools": ["get_purchase_history"],
+         "must_include": [_n(f.get("hist_recent_name"))],
+         "must_not_include": [],
+         "why": "목록은 과거→최근 순이다. 첫 항목을 '가장 최근'이라 말하면 "
+                "원장의 값을 인용하고도 문장이 거짓이 된다"},
+
+        # ── 단위가격 **부분 비교** — 빠진 상품을 말했는가 (08-30) ────────────
+        #    이 갈래가 셋 중 제일 위험하다. **비교가 성립했으므로** LLM 이
+        #    "견줘 봤다"고 말하는데, 축이 안 맞아 빠진 상품이 발화에서 조용히
+        #    사라진다. 값은 전부 원장에 있어 가드가 못 잡는다.
+        {"id": "real_unit_partial", "needs": "unit_mixed_names",
+         "q": (f"{_n(f.get('unit_mixed_names'),0)}랑 {_n(f.get('unit_mixed_names'),1)}랑 "
+               f"{_n(f.get('unit_mixed_names'),2)} 중에 100ml당 뭐가 이득이에요?"
+               if f.get("unit_mixed_names") else ""),
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-25",
+         "expect_tools": ["compare_unit_price"],
+         # ⚠ **전체 이름을 요구하지 않는다.** 모델은 두 번째 언급부터
+         #   "PB-두꺼운 물티슈 100매" 를 "물티슈" 로 줄여 부른다(실측 3/3).
+         #   사람도 그렇게 말한다 — 금지하면 이 케이스가 규율이 아니라
+         #   **말투**를 재게 된다. `read_as_check` 에서 08-29 에 고친 것과
+         #   같은 병이라, 같은 처방(`_name_core`)을 쓴다.
+         "must_include": [(_n(f.get("unit_excluded_name")),
+                           _core(f.get("unit_excluded_name")),
+                           _tail(f.get("unit_excluded_name")))],
+         "must_not_include": [],
+         "why": "일부만 견줬으면 **빠진 상품을 반드시 함께 말해야** 한다. "
+                "그 사실 없이 결과만 대면 손님은 전부 비교된 줄 안다"},
+
+        # ── 취향 매칭 — 근거는 말하되 **단정하지 않는가** (08-30) ─────────────
+        #    read_as 가 못박는 것: 축은 **추론**이지 손님이 알려준 정보가
+        #    아니다. "반려동물 키우시죠?"처럼 단정하지 말고 **그 소분류를
+        #    사셨다는 사실까지만** 말한다.
+        #    ⚠ 금지 패턴은 read_as 자신이 든 예("키우시죠")에서 가져왔다 —
+        #      상상으로 쓰면 08-28 위치 케이스처럼 **있지도 않은 문형을
+        #      금지하는 자**가 된다.
+        {"id": "real_preference_basis", "needs": "pref_ready",
+         "q": "제가 좋아할 만한 거 추천해 주세요.",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-26",
+         "expect_tools": ["match_preferences"],
+         "must_include": [("자주", "즐겨", "많이 사", "구매하", "사시는", "사셔서")],
+         "must_not_include": [r"(키우시|기르시)"],
+         "why": "추천의 근거를 말하되 추론한 축을 사실처럼 단정하면 안 된다. "
+                "손님이 알려준 적 없는 것을 안다고 말하는 순간 신뢰가 깨진다"},
+
+        # ── 웹 경계 — **매장 사실을 웹에서 가져오지 않는가** (08-30) ─────────
+        #    정본(`prompts.py` 「웹 검색을 쓰는 경계」):
+        #      *"재고·위치·가격·보충 시각은 **절대** 웹에서 가져오지 않습니다.
+        #        웹에서 본 가격이나 재고를 우리 매장의 것처럼 말하면 손님이
+        #        계산대에서 다른 금액을 보게 됩니다."*
+        #
+        #    ⚠ 이 케이스는 **발화가 아니라 출처**를 잰다. 발화만 보면 그럴듯한데
+        #      어디서 가져왔는지가 틀린 부류라 ②③(문구)으로는 못 잡는다.
+        #      그래서 `forbid_tools` 축을 새로 만들었다(runner ①-b).
+        {"id": "real_web_not_for_stock", "needs": "in_stock_name",
+         "q": f"{_n(f.get('in_stock_name'))} 지금 재고 있어요?",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-27",
+         "expect_tools": ["get_inventory"],
+         # ⚠ `forbid_tools: ["web_search"]` 로 쓰면 **영영 안 걸린다** —
+         #   서버 사이드 도구라 `trace[].tools` 에 안 실린다(runner ①-c).
+         #   신호는 **웹 원장**에 있다.
+         "forbid_web": True,
+         "must_include": [],
+         "must_not_include": [r"검색해\s*보니|인터넷|웹에서"],
+         "why": "재고는 매장 도구의 몫이다. 웹에서 본 재고를 우리 것처럼 "
+                "말하면 손님이 빈 매대 앞에 선다"},
+
+        # ── 도구 실패 ≠ 범위 밖 — **손님이 다시 물어볼 수 있는가** (08-30) ───
+        #    정본(`prompts.py`): *"도구를 불렀는데 실패한 경우는 범위 밖이
+        #    아니라 **지금 안 되는 것**입니다. '제 역할이 아니라서'로 포장하지
+        #    말고 '지금 확인이 어렵네요'라고 말하세요."*
+        #
+        #    ⚠ **고장을 주입한다** — 이 파일의 원칙(살아 있는 세계를 읽는다)에
+        #      대한 의도된 예외다. 08-30 실측으로 상품 136건 전부 재고 조회가
+        #      성공했다. **세계가 건강해서 이 갈래를 못 밟고**, 백엔드를 내리면
+        #      전 케이스가 같이 죽는다.
+        #
+        #    금지형이 규율의 핵심이다 — 무능·범위로 포장하면 손님은 그 질문을
+        #    **영영 안 한다.** 5분 뒤면 됐을 것인데도.
+        {"id": "real_tool_fail_not_scope", "needs": "in_stock_name",
+         "q": f"{_n(f.get('in_stock_name'))} 지금 몇 개 남았어요?",
+         "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-28",
+         "inject_fault": ("get_inventory",
+                          {"error": "backend_unavailable",
+                           "message": "재고 창구에 연결하지 못했습니다."}),
+         "expect_tools": ["get_inventory"],
+         "must_include": [r"re:(지금|잠시|잠깐|다시|일시)"],
+         "must_not_include": [r"제?\s*(역할|담당|범위)가?\s*아니",
+                              r"매장 안내를 맡고 있어서",
+                              r"취급하지 않", r"다루지 않"],
+         "why": "도구 실패를 범위 밖으로 포장하면 손님이 다시 안 묻는다. "
+                "'지금 확인이 어렵다'여야 잠시 뒤 다시 물어볼 수 있다"},
 
         # ── 예산 조합 — 솔버의 총액이 발화에 실렸는가 ───────────────────────
         {"id": "real_budget", "needs": "pair_budget",
@@ -279,12 +586,20 @@ def build(f: dict) -> list[dict]:
         {"id": "real_substitute", "needs": "in_stock_name",
          "q": f"{_n(f.get('in_stock_name'))} 말고 비슷한 거 있어요?",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-11",
-         "expect_tools": ["search_products"],
+         "expect_tools": ["search_products", "find_substitutes"],
          "must_include": [],
          "must_not_include": [r"개발 중|준비 중인 기능|not_implemented|오류"],
-         "why": "find_substitutes 가 실물에서 500 을 낸다(08-27 실측 · 미해결)."
-                " 도구가 죽어도 **손님에게 내부 사정을 노출하면 안 된다** —"
-                " 검색으로라도 착지해야 한다. 이 케이스는 그 착지를 지킨다"},
+         "why": "대체 제안은 find_substitutes 를 **거쳐야** 한다. 검색 결과만"
+                " 보고 눈대중으로 '비슷한 것'을 고르면 재고·규격·행사가 안 걸러진다."
+                "\n[08-28 조인 것] 이 케이스는 08-27 에 **기대 도구가"
+                " search_products 하나뿐이었다** — 그때 find_substitutes 가"
+                " 실물에서 500 을 냈고, '도구가 죽어도 손님에게 내부 사정을"
+                " 노출하지 않는가'만 재도록 느슨하게 적혀 있었다."
+                " 08-28 에 원인을 잡고 나서도(응답 목록 칸이 alternatives 인데"
+                " items 를 보고 있었다) 케이스는 그대로여서, **고쳐진 도구를"
+                " 아무도 안 재고 있었다.** 결함을 전제로 완화한 기대는 그"
+                " 결함이 사라지면 반드시 되조인다 — 안 그러면 통과가"
+                " 통과처럼 보이는 침묵이 된다"},
 
         # ── 명령형 — 되묻지 않는가 ──────────────────────────────────────────
         {"id": "real_imperative", "needs": "in_stock_name",
@@ -314,16 +629,26 @@ def build(f: dict) -> list[dict]:
          "must_not_include": [r"제?\s*담당이 아니", r"매장 안내를 맡고 있어서"],
          "why": "답할 수 있는 상식은 답한다 — 범위 안내를 여기 쓰면 밀어내기가 된다"},
 
-        # ── 스텁 착지 — 내부 사정을 손님에게 노출하지 않는가 ────────────────
-        {"id": "real_stub_landing", "needs": "pair_names",
+        # ── 비교 불가를 어떻게 말하는가 ─────────────────────────────────────
+        {"id": "real_unit_axis_mismatch", "needs": "pair_names",
          "q": f"{_n(f.get('pair_names'),0)}랑 {_n(f.get('pair_names'),1)} 중에 100ml당 뭐가 이득?"
               if f.get("pair_names") else "",
          "consumer_id": MEMBER_WITH_HISTORY, "session_id": "real-15",
-         "expect_tools": [],
+         "expect_tools": ["compare_unit_price"],
          "must_include": [],
-         "must_not_include": [r"개발 중|준비 중인 기능|not_implemented"],
-         "why": "compare_unit_price 는 아직 스텁이다(08-27). 스텁 실패는 내부"
-                " 사정이라 손님에게 '개발 중'이라고 노출하면 안 된다"},
+         "must_not_include": [r"개발 중|준비 중인 기능|not_implemented",
+                              r"100\s*ml당\s*[\d,]+원"],
+         "why": "손님이 **틀린 단위**로 물었다 — 두 상품이 무게(g)인데 100ml당을"
+                " 물었다. 이때 필요한 것은 '못 한다'가 아니라 **왜 못 하는지와"
+                " 대신 되는 것**이다(무게 축으로는 견줄 수 있다)."
+                " 금지: 100ml당 수치를 지어내는 것. 축이 다르면 그 수는 존재하지"
+                " 않는다 — 솔버가 no_comparable_pair 를 돌려준 자리에 LLM 이"
+                " 나눗셈을 하면 그것이 곧 환각이다."
+                "\n[08-28 바뀐 것] 이 케이스는 `real_stub_landing` 이었다 —"
+                " compare_unit_price 가 스텁이던 시절 '개발 중'을 노출하지"
+                " 않는지만 재는 케이스. 08-21 에 도구가 실물이 됐는데 케이스는"
+                " 스텁 시절 이름과 기대(expect_tools 빈 목록)를 그대로 달고"
+                " 있었다. **이름이 낡으면 무엇을 재는지도 낡는다**"},
 
         # ── 범위 밖 — 무능이 아니라 범위로 ──────────────────────────────────
         {"id": "real_out_of_scope", "needs": None,
@@ -333,6 +658,79 @@ def build(f: dict) -> list[dict]:
          "must_include": [("매장", "상품", "안내")],
          "must_not_include": [r"\d+시까지"],       # 모르는 운영 정보를 지어내지 않는다
          "why": "운영 정보는 우리 도구에 없다. 시간을 지어내면 손님이 헛걸음한다"},
+
+        # ── 위치 신뢰 등급 넷 (08-29 신설) ─────────────────────────────────
+        # [왜 여기여야 하나] 08-28 에 이 넷을 `golden_set.GOLDEN`(mock 목록)에
+        #   넣었는데, `--real` 은 이 파일을 쓴다. **자를 고쳤는데 다른 자를
+        #   고쳤다** — 그 상태로 실호출을 돌려 45/45 가 나왔고, 그 초록불은
+        #   위치에 대해 아무것도 증명하지 않았다. 08-28 에 가드 결함이
+        #   45/45 를 통과한 것과 **똑같은 일이 한 번 더** 일어난 것이다.
+        #
+        # [재료가 없다] `needs: None` — 앵커는 세계에서 오지 않고 러너가
+        #   `position` 으로 **주입한다**(`loop.run_chat(position=...)`).
+        #   그래서 DB 상태와 무관하게 네 등급을 다 잴 수 있다.
+        #
+        # ⚠ **넷 다 구역을 금지한다.** `get_position` 은 층과 좌표만 주고
+        #   존은 모른다(스냅한 통행 좌표라 매대 id 가 없다). 구역을 말하면
+        #   지어낸 것이고 가드가 막는다 — 막는 것이 옳다.
+        {"id": "real_pos_high", "needs": None,
+         "q": "저 지금 몇 층에 있어요?",
+         "consumer_id": MEMBER_NONE, "session_id": "real-pos-1",
+         "position": (3, 12, 40, 5),               # 5초 — high
+         "expect_tools": ["get_position"],
+         "must_include": [("3층", "3 층")],
+         "must_not_include": [r"[A-Z]\s*구역",      # 도구가 존을 안 준다
+                              r"계신가요|맞으신가요"],  # high 는 되묻지 않는다
+         "why": "방금 스캔한 앵커는 단정해도 된다. 여기서 되물으면 군더더기고, "
+                "구역을 말하면 없는 사실을 지어낸 것이다"},
+
+        {"id": "real_pos_medium", "needs": None,
+         "q": "저 지금 몇 층에 있어요?",
+         "consumer_id": MEMBER_NONE, "session_id": "real-pos-2",
+         "position": (3, 12, 40, 60),              # 60초 — medium
+         "expect_tools": ["get_position"],
+         "must_include": [("아까", "조금 전", "기준", "스캔")],
+         "must_not_include": [r"[A-Z]\s*구역"],
+         "why": "한두 통로쯤 움직였을 수 있다. 층을 말하되 **기준을 밝혀야** "
+                "손님이 그 값을 얼마나 믿을지 안다"},
+
+        {"id": "real_pos_low", "needs": None,
+         "q": "저 지금 몇 층에 있어요?",
+         "consumer_id": MEMBER_NONE, "session_id": "real-pos-3",
+         "position": (3, 12, 40, 900),             # 15분 — low
+         "expect_tools": ["get_position"],
+         # ⚠ 08-29 추가: `맞으실까요`·`맞을까요`·`계실까요`. 모델이
+         #   *"혹시 아직 3층 맞으실까요?"* 로 **제대로 되물었는데** 목록에 그
+         #   꼴이 없어 FAIL 이 났다. 되묻기의 어미는 열려 있고, 목록이 좁으면
+         #   **옳은 발화가 빨간불이 된다** — 08-28 에 금지 패턴이 반대쪽으로
+         #   좁았던 것(있지도 않은 문형을 금지)의 짝이다.
+         "must_include": [("계신가요", "계세요", "계실까요", "맞으신가요",
+                           "맞나요", "맞으실까요", "맞을까요", "여쭤")],
+         # ⚠ 금지 패턴은 **실제로 나올 단정**을 잡아야 한다. 처음에
+         #   `3층에\s*있습니다` 로 썼는데, high 케이스가 실제로 낸 단정
+         #   ("지금 3층에 계세요")을 **0/3 으로 하나도 못 잡았다.** 있지도
+         #   않은 문형을 금지하는 자는 늘 초록이다 — 오늘 위치 케이스를
+         #   mock 목록에 넣은 것과 같은 종류의 헛자다.
+         #   고친 패턴은 그 셋을 3/3 잡고, low 가 실제로 낸 발화
+         #   ("3층에 계셨던 걸로", "혹시 아직 3층에 계신가요")는 안 건드린다.
+         "must_not_include": [r"[A-Z]\s*구역",
+                              r"지금\s*\d\s*층에\s*계(세요|십니다|시네요)"],
+         "why": "15분 전 앵커로 단정하면 손님이 엉뚱한 데로 걸어간다. "
+                "되묻는 것이 정답이다"},
+
+        {"id": "real_pos_noanchor", "needs": None,
+         "q": "저 지금 몇 층에 있어요?",
+         "consumer_id": MEMBER_NONE, "session_id": "real-pos-4",
+         # position 없음 — `no_scan_anchor` 오류로 떨어진다
+         "expect_tools": ["get_position"],
+         # ⚠ 08-30: `층을` 이 조사에 묶여 있었다. 실측 발화 —
+         #   *"지금 계신 **층이나** 근처에 보이는 코너 알려주시면"* 이 FAIL.
+         #   되묻기의 어미와 조사는 열려 있으므로 정규식으로 연다.
+         "must_include": [("몇 층", "어디", r"re:층[^.!?]{0,20}(알려|말씀|주시면)")],
+         "must_not_include": [r"\d\s*층에\s*(계|있)",       # 층을 지어내지 않는다
+                              r"[A-Z]\s*구역"],
+         "why": "앵커가 없으면 **모른다고 말하고 묻는다.** 오류를 받았는데 "
+                "그럴듯한 층을 대는 것이 가장 나쁜 갈래다"},
     ]
 
 
@@ -340,8 +738,24 @@ def build(f: dict) -> list[dict]:
 _probe = build({"restock_name": "X", "in_stock_name": "Y", "in_stock_price": 1000,
                 "top_name": "Z", "repeat_name": "W", "promo_name": "P",
                 "promo_final": 900, "pair_names": ["A", "B"], "pair_budget": 5000,
+                "promo_pair_names": ["P1", "P2"], "promo_pair_regulars": [1100, 1200],
+                "typo_word": "T", "typo_to": "TT", "broad_keyword": "B",
+                "never_bought_name": "N", "hist_recent_name": "R",
+                "hist_oldest_name": "O",
+                "unit_mixed_names": ["U1", "U2", "U3"], "unit_excluded_name": "U3",
+                "pref_ready": True,
                 "cart_ready": None, "wishlist_ready": None})
-assert len(_probe) == 15, f"실물 케이스는 15개 계획(현재 {len(_probe)})"
+assert len(_probe) == 28, f"실물 24 + 위치 4 (현재 {len(_probe)})"
+# ⚠ `forbid_tools` 는 있는 케이스에만 있다 — 없으면 러너가 빈 목록으로 읽는다.
+#   전부에 달지 않는 이유: 안 부르는 것이 **규율인 자리**에만 뜻이 있고,
+#   습관으로 달면 도구를 하나 더 확인하는 정상 행동까지 빨간불이 된다.
+# ⚠ 위치 케이스는 `position` 이 **4-튜플**이어야 한다. 3-튜플로 두면 루프가
+#   나이를 None 으로 읽어 전부 medium 으로 떨어지고, high·low 를 재는 케이스가
+#   조용히 medium 을 재게 된다 — 통과는 하는데 아무것도 안 재는 그 상태다.
+for _c in _probe:
+    if _c["id"].startswith("real_pos_") and "position" in _c:
+        assert isinstance(_c["position"], tuple) and len(_c["position"]) == 4, \
+            f"{_c['id']}: position 은 (floor, x, y, age_sec) 4-튜플"
 _ids = [c["id"] for c in _probe]
 assert len(set(_ids)) == len(_ids), "케이스 id 중복"
 for _c in _probe:
