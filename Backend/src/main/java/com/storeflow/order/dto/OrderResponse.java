@@ -19,6 +19,8 @@ public class OrderResponse {
     private Long orderId;
     private int totalAmount;
     private String status;
+    private int pointsUsed;
+    private int pointsEarned;
     private List<ItemDto> items;
     private LocalDateTime orderedAt;
     private String paymentMethod;
@@ -27,6 +29,8 @@ public class OrderResponse {
         this.orderId = order.getOrderId();
         this.totalAmount = order.getTotalAmount();
         this.status = order.getStatus();
+        this.pointsUsed = order.getPointsUsed();
+        this.pointsEarned = order.getPointsEarned();
         this.items = order.getOrderItems().stream()
                 .map(ItemDto::new)
                 .collect(Collectors.toList());
@@ -45,6 +49,8 @@ public class OrderResponse {
     public Long getOrderId() { return orderId; }
     public int getTotalAmount() { return totalAmount; }
     public String getStatus() { return status; }
+    public int getPointsUsed() { return pointsUsed; }
+    public int getPointsEarned() { return pointsEarned; }
     public List<ItemDto> getItems() { return items; }
     public LocalDateTime getOrderedAt() { return orderedAt; }
     public String getPaymentMethod() { return paymentMethod; }

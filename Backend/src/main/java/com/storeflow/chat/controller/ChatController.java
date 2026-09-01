@@ -205,4 +205,4 @@ public class ChatController {
 
         return jwtUtil.getConsumerIdFromToken(token);
     }
-}  
+}
