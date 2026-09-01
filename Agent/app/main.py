@@ -107,6 +107,7 @@ from fastapi import FastAPI                    # noqa: E402
 from pydantic import BaseModel, Field          # noqa: E402
 
 from app import guard, loop                    # noqa: E402
+from app import searchterm                     # noqa: E402
 from app.tools import definitions, infer       # noqa: E402
 
 
@@ -133,6 +134,16 @@ class ChatRequest(BaseModel):
     posFloor: int | None = None
     posX: int | None = None
     posY: int | None = None
+    # ⚠ **앵커의 나이**(초). 08-28에 신뢰 등급을 넣으면서 빠뜨렸다.
+    #   `get_position`이 나이로 등급을 가르는데(high/medium/low) 이 칸이 없어
+    #   `age_sec`가 늘 None이었고, 그러면 등급이 **영원히 medium 하나**다.
+    #   `high`(방금 스캔 — 단정 가능)와 `low`(오래됨 — 되묻기)가 **실서비스에서
+    #   도달 불가능**했다. 등급을 만들어 놓고 그 등급이 안 나오는 상태였다.
+    #
+    #   [왜 시각이 아니라 나이인가] 시각으로 받으면 프론트와 서버의 시계가
+    #   어긋날 때 나이가 틀어진다. **경과 시간은 한 기계 안에서 재므로**
+    #   시계 동기화가 필요 없다 — 프론트가 자기 스캔 이후 흐른 초를 센다.
+    posAgeSec: float | None = None
 
 
 class ChatResponse(BaseModel):
@@ -159,6 +170,11 @@ async def lifespan(app: FastAPI):
     if not loaded:
         print("[agent] ⚠ 출하물이 하나도 없습니다 — 추론 도구가 전부 "
               "'준비 안 됨'으로 답합니다. models/*_ship.py 를 돌리세요.")
+
+    # 검색어 후보정 색인(08-28). 자모 색인 29KB짜리 표라 추론 자산과 성격이
+    # 달라 load_all 에 안 넣었다 — 저것은 모델이고 이것은 사전이다.
+    # 없어도 서버는 뜬다. 그때는 오타가 그냥 0건으로 돌아갈 뿐이다.
+    print(f"[agent] 검색어 색인   {searchterm.load()}")
 
     print(f"[agent] 기동 — mock={config.USE_MOCK_SOT} · port={config.AGENT_PORT} · "
           f"도구 {len(definitions.TOOLS)}+서버 {len(definitions.SERVER_TOOLS)} · "
@@ -228,7 +244,9 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     # 위치 셋이 다 있을 때만 튜플로 넘긴다. 하나라도 없으면 None —
     # 판정을 여기서 한 번에 하고 아래로는 "있다/없다"만 내려보낸다.
-    pos = ((body.posFloor, body.posX, body.posY)
+    # 좌표 셋이 다 있을 때만 튜플로 넘긴다. 나이는 **없어도 된다** —
+    # 없으면 compute._confidence가 medium(안전한 쪽)으로 둔다.
+    pos = ((body.posFloor, body.posX, body.posY, body.posAgeSec)
            if None not in (body.posFloor, body.posX, body.posY) else None)
 
     result = loop.run_chat(body.message, consumer_id=body.consumerId,
@@ -281,7 +299,8 @@ def health() -> dict:
     from app.tools import infer
     return {"ok": True, "mock_sot": config.USE_MOCK_SOT,
             "tools": len(definitions.TOOLS), "model": config.LLM_MODEL,
-            "assets": infer.loaded()}
+            "assets": infer.loaded(),
+            "search_index": searchterm.count()}
 
 
 # ── 직접 실행 (개발용) ──────────────────────────────────────────────────────

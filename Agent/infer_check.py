@@ -104,6 +104,30 @@ from app import config, loop               # noqa: E402
 from app.tools import compute, infer, query   # noqa: E402
 
 
+def _pick_fixture(member, sku):
+    """회원·상품을 **실행 시각에 세계에서** 뽑는다. 인자로 주면 그것을 쓴다.
+
+    [왜] mock 과 실물은 회원·상품 번호 축이 아예 다르다(mock 9001·101042 /
+      실물 시드 1001~·2000xx). 한쪽을 박아 두면 다른 쪽에서 404 로 죽는데,
+      그건 도구가 아니라 검사기가 없는 것을 물어본 것이다.
+
+    [어떻게] 구매 이력이 있는 회원을 순서대로 두드려 찾고, 그 사람이 산 상품을
+      쓴다. 그러면 소비주기·취향이 실제로 값을 낼 재료가 된다.
+    """
+    from app import sot_client as _s
+    cands = ([9001, 9002] if config.USE_MOCK_SOT else []) + list(range(1001, 1031))
+    if member is not None:
+        cands = [member]
+    for mid in cands:
+        try:
+            hist = _s.get_purchase_history(mid) or []
+        except Exception:                                      # noqa: BLE001
+            continue
+        if hist:
+            return mid, (sku if sku is not None else int(hist[-1]["sku_id"]))
+    return (member or cands[0]), (sku or 0)
+
+
 def _arg(flag, default=None, cast=str):
     return cast(sys.argv[sys.argv.index(flag) + 1]) if flag in sys.argv else default
 
@@ -115,7 +139,12 @@ def _curve(r, indent="      "):
 
 
 def main():
-    sku = _arg("--sku", 101042, int)
+    # ⚠ 재료를 코드에 박지 않는다 — `tool_check` 과 같은 규율이다.
+    #   08-28 까지 sku 101042 · 회원 9001 을 박아 뒀는데 **그 둘은 mock 세계의
+    #   것**이라, 실물 모드에서는 상품 조회가 404 로 죽었다. 검사기가 자기가
+    #   재는 세계를 안 보고 있었던 셈이다.
+    sku = _arg("--sku", None, int)
+    member = _arg("--member", None, int)
     photo = _arg("--photo")
 
     # ── ① 적재 ──────────────────────────────────────────────────────────
@@ -135,12 +164,14 @@ def main():
     # ── 요청 하나를 흉내 낸다 ────────────────────────────────────────────
     # 루프가 요청마다 하는 주입을 여기서 손으로 한다. 이게 없으면 도구가
     # "회원이 누구인지 모른다"로 답한다(B안 — LLM이 정할 값이 아니다).
-    query.set_identity(9001, "sess-7f3a9c")     # 회원 + 세션(= 매장 안)
+    member, sku = _pick_fixture(member, sku)
+    session = "sess-7f3a9c" if config.USE_MOCK_SOT else "inferchk-session"
+    query.set_identity(member, session)          # 회원 + 세션(= 매장 안)
     compute.set_position(2, 5, 15)              # 마지막 스캔 위치
 
     print()
     print("=" * 66)
-    print(f"도구 5종  (회원 9001 · 세션 있음 · 위치 2층 (5,15) · sku {sku})")
+    print(f"도구 5종  (회원 {member} · 세션 있음 · 위치 2층 (5,15) · sku {sku})")
     print("=" * 66)
 
     # ── ② 가용예측 ──────────────────────────────────────────────────────
@@ -157,24 +188,39 @@ def main():
     # ── ③ 소비주기 ──────────────────────────────────────────────────────
     def _repurchase(label, member, session):
         query.set_identity(member, session)
-        r, src = loop._dispatch("predict_repurchase", {"sku_id": sku})
+        # ⚠ 인자는 **`sku_ids`(복수)** 다. 08-27 에 이 도구가 단수에서 복수로
+        #   바뀌었는데(schema_check 가 잡은 계약 구멍) 여기가 안 따라왔다 —
+        #   `sku_id` 를 넘겨 `bad_arguments` 로 죽고 있었다.
+        #   ⚠⚠ 내가 이걸 못 본 이유: 출력에서 `^■` 로 시작하는 줄만 훑었다.
+        #     에러는 **그 다음 줄**에 찍힌다. 요약만 보면 실패가 요약 밖에 숨는다.
+        r, src = loop._dispatch("predict_repurchase", {"sku_ids": [sku]})
         print(f"\n■ predict_repurchase   [출처 {src}]  {label}")
         if "error" in r:
-            print(f"    {r['error']} — {r['message']}")
+            print(f"    ✗ {r['error']} — {r['message']}")
             return
-        print(f"    모델 {r['model']} · 마지막 구매 {r['days_since_last']}일 전"
-              f" · 과거 간격 {r['past_intervals']}회 · 전형 주기 {r['typical_cycle_days']}일")
-        print("    언제까지 다시 살 확률:")
-        _curve(r)
+        items = r.get("items") or []
+        if not items:
+            print(f"    (후보 없음) {r.get('message', '')}")
+            return
+        for it in items[:3]:
+            if it.get("basis"):
+                # 콜드스타트 — 개인 예측이 아니다. 표기를 갈라야 눈으로 안 헷갈린다.
+                print(f"    [{it['basis']}] sku {it['sku_id']} · 이 상품군 전형 주기 "
+                      f"{it['typical_cycle_days']}일 — **개인 예측 아님**")
+            else:
+                print(f"    모델 {it['model']} · sku {it['sku_id']} · 마지막 구매 "
+                      f"{it['days_since_last']}일 전 · 과거 간격 "
+                      f"{it['past_intervals']}회 · 전형 주기 {it['typical_cycle_days']}일")
+            _curve(it)
 
     if "--both" in sys.argv:
         # 세션이 있으면 conditional(매장 안), 없으면 unconditional(매장 밖).
         # 같은 손님·같은 상품인데 **접점이 다르면 답이 다르다** — 그걸 눈으로 본다.
-        _repurchase("← 세션 있음(매장 안)", 9001, "sess-7f3a9c")
-        _repurchase("← 세션 없음(매장 밖·푸시)", 9001, None)
-        query.set_identity(9001, "sess-7f3a9c")
+        _repurchase("← 세션 있음(매장 안)", member, session)
+        _repurchase("← 세션 없음(매장 밖·푸시)", member, None)
+        query.set_identity(member, session)
     else:
-        _repurchase("", 9001, "sess-7f3a9c")
+        _repurchase("", member, session)
 
     # ── ④ 위치 ──────────────────────────────────────────────────────────
     r, src = loop._dispatch("get_position", {})

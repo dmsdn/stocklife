@@ -312,7 +312,13 @@ def run_chat(message: str,
     # compute._resolve_start가 이 값을 채운다. 자세히는 compute.py의 주입 블록.
     # position이 None이면 등록도 None — 그 경우 경로 도구가 "위치를 모른다"고
     # 답하고, 손님에게 되묻는다(입구를 추측하지 않는다).
-    compute.set_position(*(position or (None, None, None)))
+    # ⚠ 네 칸이다 — (층, x, y, 나이초). 나이를 빠뜨리면 신뢰 등급이 늘
+    #   medium 이 되어 high·low 가 실서비스에서 안 나온다(08-28 정정).
+    #   position 이 3칸으로 와도 받는다 — 옛 호출부(검사기·시험)를 안 깬다.
+    _p = tuple(position) if position else (None, None, None, None)
+    if len(_p) == 3:
+        _p = _p + (None,)
+    compute.set_position(*_p)
 
     # ② 대화 목록 조립 (개념 ㉚). history는 프론트가 보낸 그대로 받되
     #    뒤에서 20건만 — 오래된 대화보다 최근 대화가 판단에 중요하다(query.py의

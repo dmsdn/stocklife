@@ -92,7 +92,31 @@ def build_world(n_members: int):
     l2_by_sku = {r[consume.SKU]: r[consume.L2] for r in products}
 
     members = membergen.gen_members()[:n_members]
-    return products, pick_loc, bulk_loc, cfg, stock0, l2_by_sku, members
+
+    # ── v2 축: 행사 반응 ────────────────────────────────────────────────────
+    # 기본(배율 1.0)에서는 **행사를 만들지도 않는다.** 만들면 `gen_promotions` 의
+    # 난수 소비가 끼어들어 v1 이 더 이상 v1 이 아니게 된다.
+    on_promo = None
+    if P.PROMO_CYCLE_MULT != 1.0:
+        _iv: dict = {}
+        for _sku, _typ, _disc, _s, _e in membergen.gen_promotions(products):
+            # members_gen 은 TIMESTAMP 문자열로 낸다("2026-05-01 07:00:00.000").
+            # 창 시작 이후 **일수**로 바꿔 둔다 — basket_at 의 day 와 같은 축.
+            _a = (datetime.strptime(_s[:19], "%Y-%m-%d %H:%M:%S") - _WINDOW_START)
+            _b = (datetime.strptime(_e[:19], "%Y-%m-%d %H:%M:%S") - _WINDOW_START)
+            _iv.setdefault(int(_sku), []).append(
+                (_a.total_seconds() / 86400.0, _b.total_seconds() / 86400.0))
+
+        def on_promo(sku, day, _iv=_iv):
+            """그 SKU 가 그날 행사 중인가. day 는 창 시작 이후 일수."""
+            for a, b in _iv.get(int(sku), ()):
+                if a <= day <= b:
+                    return True
+            return False
+
+        print(f"[v2] 행사 반응 켜짐 — 주기 배율 {P.PROMO_CYCLE_MULT} · "
+              f"행사 걸린 SKU {len(_iv):,}종")
+    return products, pick_loc, bulk_loc, cfg, stock0, l2_by_sku, members, on_promo
 
 
 def _member_prefs(member_row, all_l2) -> dict:
@@ -108,7 +132,8 @@ def _member_prefs(member_row, all_l2) -> dict:
 
 def run(n_members: int, n_days: int):
     t_wall = time.perf_counter()
-    products, pick_loc, bulk_loc, cfg, stock0, l2_by_sku, members = build_world(n_members)
+    (products, pick_loc, bulk_loc, cfg, stock0, l2_by_sku, members,
+     on_promo) = build_world(n_members)
     all_l2 = sorted(set(l2_by_sku.values()))
     window_days = float(n_days)
 
@@ -256,6 +281,15 @@ def run(n_members: int, n_days: int):
             q_kind[_k] += 1
             q_work += _e
 
+        # v3 축 — 이동 잡음. 기본(sd=0)에서는 `if` 가 거짓이라 **난수를 안 뽑는다.**
+        # 로그정규로 곱하는 이유: 이동시간은 음수가 될 수 없고 실제 산포도
+        # "평균의 ±몇 %" 형태라, 덧셈 잡음보다 곱셈 잡음이 맞는다.
+        # μ = −σ²/2 로 잡아 **평균을 보존한다**(E[exp(X)] = 1) — 안 그러면
+        # 잡음을 켜는 것만으로 이동시간 평균이 올라가, 축의 효과와 섞인다.
+        if P.TRAVEL_NOISE_SD > 0:
+            _sd = P.TRAVEL_NOISE_SD
+            tsec *= float(np.exp(staff.rng.normal(-0.5 * _sd * _sd, _sd)))
+
         start, finish, wait, handling = staff.assign(t, f, tsec, hmult)
         # ── 예측 시점 공변량 ──
         # 학습의 X는 **작업이 큐에 들어간 순간 알 수 있는 것**만이어야 한다.
@@ -297,7 +331,7 @@ def run(n_members: int, n_days: int):
         mid, off = data
         st = states[mid]
         rng = _rng(mid, int(off * 1000) + 5)
-        basket = consume.basket_at(rng, st, off)
+        basket = consume.basket_at(rng, st, off, on_promo=on_promo)
         if not basket:
             return
         t = engine.now

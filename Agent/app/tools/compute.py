@@ -145,17 +145,41 @@ def _product_name(sku_id: int) -> str:
 _CURRENT_POSITION: tuple[int, int, int] | None = None
 
 
-def set_position(floor: int | None, x: int | None = None, y: int | None = None) -> None:
+_POSITION_AGE: float | None = None    # 앵커의 나이(초). set_position 이 채운다
+
+
+def set_position(floor: int | None, x: int | None = None, y: int | None = None,
+                 age_sec: float | None = None) -> None:
     """루프가 요청을 시작할 때 현재 위치를 등록한다. 모르면 set_position(None).
 
     셋 중 하나라도 없으면 등록하지 않는다 — 층만 알고 좌표를 모르는 반쪽 상태로
     경로를 짜면 같은 층 아무 데나에서 출발한 답이 나온다. 그건 없느니만 못하다.
+
+    age_sec: **마지막 스캔으로부터 몇 초 지났나.** 모르면 None(전과 같음).
+
+    [왜 나이가 필요한가 — 08-28 대조표의 유일한 소득]
+      `models/position_filter.py` 가 파티클 필터를 규칙판과 겨뤘다. 결과는
+      **가정에 따라 순위가 뒤집혔다**(머무름·이탈을 0으로 두면 필터가 이기고,
+      크게 두면 규칙이 이긴다). 우리는 센서가 없어 어느 가정이 맞는지 알 수
+      없으므로 **필터를 채택하지 않았다.**
+
+      대신 **모든 설정에서 흔들리지 않은 사실**이 하나 있었다:
+      *스캔 직후엔 앵커가 거의 정확하고(≈2m), 시간이 지날수록 급격히 나빠진다.*
+      그 사실은 위치를 **옮겨서** 쓰는 게 아니라, **얼마나 믿을지**를 바꿔서
+      쓴다. 그러려면 나이가 필요하다.
     """
-    global _CURRENT_POSITION
+    global _CURRENT_POSITION, _POSITION_AGE
     if floor is None or x is None or y is None:
         _CURRENT_POSITION = None
+        _POSITION_AGE = None
     else:
         _CURRENT_POSITION = (int(floor), int(x), int(y))
+        _POSITION_AGE = None if age_sec is None else float(age_sec)
+
+
+def position_age() -> float | None:
+    """마지막 스캔으로부터 경과 초. 모르면 None."""
+    return _POSITION_AGE
 
 
 def current_position() -> tuple[int, int, int] | None:
@@ -519,8 +543,44 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
             "visit_order": ordered, "floor_order": floor_order,
             "optimized_cost": optimized_cost,
             "total_distance": int(final_route.get("totalDistance", optimized_cost)),
-            "legs": final_route.get("legs", []),
+            "legs": _fold_legs(final_route.get("legs", [])),
             "unresolved_sku_ids": unresolved}
+
+
+def _fold_legs(legs: list) -> list:
+    """구간에서 **폴리라인을 접는다** — 칸 수만 남기고 좌표 열은 버린다.
+
+    [무엇이 문제였나 — 08-28 B 실측]
+      경로 도구 출력 19,286자 중 `legs[].path` 가 **18,691자(97%)** 였다.
+      A* 가 지나간 격자 칸이 구간당 277개씩 실린다.
+
+      ⚠ 그리고 **그 값이 가는 곳은 LLM 뿐이다.** `main.py` 의 `ChatResponse` 는
+      `reply` 와 `actions` 만 실어 보내므로 **프론트는 이 폴리라인을 못 받는다.**
+      지도에 선을 그리려면 프론트가 백엔드 A* 창구를 직접 부르는 것이 맞고,
+      그게 원래 구조다(우리는 추론·판단 전용 — 헌법 4).
+
+      그래서 이 필드는 **경로 질문마다 Claude 입력에 12,000 토큰**을 밀어
+      넣고 있었다. 값도 안 쓰이고, 문맥만 묽어진다.
+
+    [왜 LLM 이 이걸 쓰면 안 되나] 발화가 인용해야 하는 것은 `visit_order`·
+      `floor_order`·`total_distance` 다. 폴리라인을 읽고 길을 설명하기 시작하면
+      **솔버가 낸 순서를 LLM 이 다시 해석하는 것**이라, 헌법 2 가 막으려던
+      바로 그 자리다.
+
+    ⚠ **내부 계산은 안 건드린다.** `_backend_single_leg` 가 `path[-1]` 로 도착
+      좌표를 쓰는데, 그건 **백엔드 응답을 직접** 읽으므로 여기서 접어도 산다
+      (이 함수는 우리 반환값을 만드는 자리다).
+    """
+    out = []
+    for leg in legs or []:
+        folded = {k: v for k, v in leg.items() if k != "path"}
+        p = leg.get("path") or []
+        if p:
+            # 칸 수는 남긴다 — "얼마나 걷나"의 근거가 되고, 없으면 LLM 이
+            # total_distance 만으로 구간을 못 가른다.
+            folded["path_steps"] = len(p)
+        out.append(folded)
+    return out
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -591,9 +651,51 @@ def _better(a: dict, b: dict | None) -> bool:
     """
     if b is None:
         return True
-    ka = (a["score"], len(a["items"]), -a["total_krw"])
-    kb = (b["score"], len(b["items"]), -b["total_krw"])
+    ka, kb = _bundle_key(a), _bundle_key(b)
     return ka > kb
+
+
+def _walk_penalty(items) -> int:
+    """이 조합을 사려면 밟아야 하는 층·존의 **개수**로 만든 벌점.
+
+    [왜 층에 10배인가] 층 이동은 무빙워크 90초 고정이고 층내 통로 이동은
+      몇 걸음이다(`params.FLOOR_CHANGE_SEC`). 존 하나와 층 하나가 같은
+      무게일 수는 없다. 10은 정확한 환산비가 아니라 **순서를 고정하는 값**이다
+      — 층을 하나 아끼려고 존을 아홉 개 늘리는 일은 실제로 안 일어난다.
+
+    [왜 실제 경로 길이가 아닌가] 경로 길이를 넣으면 조합 문제 안에 TSP 가
+      들어온다. 우리 매장에서 걸음의 지배항은 층 이동이고(`route_check` 가
+      실 좌표로 확인한 성질), 층·존 개수는 그 지배항의 대리값이다.
+
+    [없으면 0] 후보에 floor 칸이 없는 경우(후보형 호출 등)에는 벌점이 0이라
+      **전과 똑같이 동작한다.** 새 정보가 있을 때만 쓰는 규율.
+    """
+    fl = {i.get("floor") for i in items if i.get("floor") is not None}
+    zn = {(i.get("floor"), i.get("zone")) for i in items if i.get("floor") is not None}
+    return 10 * len(fl) + len(zn)
+
+
+def _bundle_key(st):
+    """조합의 정렬 키. **필요도가 절대 우선**이고, 동점일 때만 동선을 본다.
+
+    [왜 가중합이 아니라 사전식인가 — 08-28 대조표]
+      "필요도 − 0.3×층수" 같은 가중합은 가중치를 정당화할 수 없다. 필요도 1점이
+      층 이동 몇 번어치인지 아무도 모르고, 가중치가 조금만 틀리면 **필요한
+      물건을 층 하나 아끼려고 버린다** — 손님에게 최악이다.
+      사전식은 그 질문을 없앤다: 필요도는 양보하지 않고, 같을 때만 동선을 본다.
+
+    [이 한 줄이 CP-SAT 을 대신한다] `models/bundle_cpsat.py` 가 같은 문제를
+      CP-SAT 사전식 2단계로 풀어 비교했다(120 인스턴스, 실 시드):
+        DP            방문 층 2.08 · 존 3.53
+        DP+타이브레이크  방문 층 1.91 · 존 3.38   ← 이 키
+        CP-SAT 다목적   방문 층 1.91 · 존 3.38   ← **같다**
+      전역 최적화가 얻는 이득을 **전부** 이 지역 타이브레이크가 얻었다.
+      그래서 서빙에 ortools 를 들이지 않는다 — 대조표에만 남긴다.
+      ⚠ 이 동치는 우리 인스턴스의 성질이지 정리가 아니다. 필요 개수가 크게
+        늘거나 매장 배치가 바뀌면 다시 재라(`python models/bundle_cpsat.py`).
+    """
+    return (st["score"], -_walk_penalty(st["items"]),
+            len(st["items"]), -st["total_krw"])
 
 
 def solve_bundle(candidate_groups, budget_krw: int, max_items: int = 8) -> dict:
@@ -618,6 +720,8 @@ def solve_bundle(candidate_groups, budget_krw: int, max_items: int = 8) -> dict:
                 cand = {"total_krw": cost,
                         "score": state["score"] + int(item["priority"]),
                         "items": state["items"] + [item]}
+                # ⚠ `_better` 는 동선 벌점을 포함한다. 같은 금액·같은 점수면
+                #   **층을 덜 밟는 조합**이 살아남는다.
                 if _better(cand, next_states.get(cost)):
                     next_states[cost] = cand
         states = next_states
@@ -678,6 +782,18 @@ def _optimize_bundle(budget_krw: int, purpose: str | None = None,
                 "item_count": len(items), "items": items,
                 "not_selected_needs": not_selected,      # 예산 때문에 빠진 것
                 "unavailable_needs": unavailable,        # 매장에 후보가 없던 것
+                # ⚠ **빠진 것을 말하라는 규율을 결과에 싣는다** (㉠ 08-31).
+                #   갈래가 있다 — 예산에 다 들어가면 할 말이 없다. 정의에 두면
+                #   세 번 중 두 번은 헛것이고, **여기 있으면 실제로 빠졌을 때만**
+                #   발화 직전에 온다(compare_products 의 행사 안내와 같은 계열).
+                #   ⚠ 그리고 이름을 준다 — "빠진 게 있다"까지만 말하면 LLM 이
+                #   무엇이었는지 되짚어야 한다.
+                **({"read_as": (
+                    "**예산 때문에 빠진 것이 있습니다** — "
+                    + ", ".join(str(x) for x in (not_selected or [])[:4])
+                    + ". 그 사실을 짧게라도 함께 말하세요. 빼놓고 조합만 대면 "
+                      "손님은 그것까지 담긴 줄 압니다.")}
+                   if not_selected else {}),
                 "note": "재고 1개 이상인 실제 상품만으로, 예산 안 필요도 최고 조합을 계산했습니다."}
 
     # ── 갈래 2: 후보형 — 준 상품들로만 조합한다 (상품당 그룹 하나 = 각각 살까 말까) ──
@@ -787,8 +903,22 @@ def _compare_products(sku_ids: list, sort_by: str = "price_asc") -> dict:
     cheapest = min(rows, key=lambda r: r["final_price_krw"]) if rows else None
     for r in rows:
         r["diff_from_cheapest_krw"] = r["final_price_krw"] - cheapest["final_price_krw"]
+    # ── 행사 안내 규율을 **결과로 옮긴다** (㉠ 08-29) ────────────────────────
+    # [왜] 이 규율은 **갈래가 있다** — 행사 중인 상품이 하나도 없으면 할 말이
+    #   없다. 도구 정의에 두면 행사가 없는 판에서도 매번 실려서 세 번 중 두
+    #   번은 헛것이다(tier·basis 와 같은 성질). 결과에 실으면 **행사가 실제로
+    #   있을 때만** 발화 직전에 온다 — 짧아지면서 동시에 가까워진다.
+    # [왜 이름을 세나] "행사 상품이 있다"까지만 말하면 LLM 이 어느 것인지
+    #   되짚어야 한다. 이름을 주면 문장의 주어가 그대로 온다.
+    promo = [r["name"] for r in rows if r.get("on_promo")]
     return {"sort_by": sort_by, "items": rows, "missing_sku_ids": missing,
             "cheapest_sku_id": cheapest["sku_id"] if cheapest else None,
+            **({"read_as": (
+                f"**행사 중인 상품이 있습니다** — {', '.join(promo)}. "
+                "'원래 O원인데 O원 할인된 O원'처럼 **행사 사실을 함께 말하세요.** "
+                "regular_price_krw · discount_krw · final_price_krw 가 그 문장의 "
+                "재료이고, 셋 다 원장에 있으니 아무 수도 만들지 마세요.")}
+               if promo else {}),
             # 최고가−최저가. "둘 중 뭐가 싸냐"는 2개 비교에서 이 값이 곧 답이다.
             "max_diff_krw": (max(r["final_price_krw"] for r in rows)
                              - cheapest["final_price_krw"]) if rows else None}
@@ -931,6 +1061,18 @@ def _compare_unit_price(sku_ids: list) -> dict:
 
     out = {"groups": groups, "ungrouped": ungrouped,
            "unmeasurable": unmeasurable, "missing_sku_ids": missing}
+    # ⚠ 규율을 **결과에 실어 보낸다**(08-28 B 요청 — query._search_products 의
+    #   같은 주석 참조). 지금까지 "축이 안 맞아 보여도 일단 부른다"·"빠진 것을
+    #   조용히 버리지 마라"가 도구 정의에만 있었는데, 정의는 문맥 맨 앞이라
+    #   발화 시점과 멀고 축약 대상이다. read_as 는 결과에 붙어 발화 직전에 온다.
+    if groups and (ungrouped or unmeasurable):
+        # 이 갈래가 제일 위험하다 — **비교가 성립했으므로** LLM 이 "비교했다"고
+        # 말하는데, 빠진 상품이 있다는 사실이 발화에서 사라진다(no silent caps).
+        out["read_as"] = (
+            "일부만 견줬습니다. **빠진 상품을 반드시 함께 말하세요** — "
+            f"축이 안 맞아 못 견준 것 {len(ungrouped)}개"
+            f"{f' · 규격을 몰라 못 견준 것 {len(unmeasurable)}개' if unmeasurable else ''}"
+            "가 있습니다. 그 사실 없이 결과만 대면 손님은 전부 비교된 줄 압니다.")
     if not groups:
         # 비교가 하나도 성립 안 했다. **왜인지와 대안을 값으로 준다** —
         # 그냥 에러만 주면 LLM 이 "비교할 수 없습니다"로 끝내는데,
@@ -981,8 +1123,15 @@ def _find_substitutes(sku_id: int) -> dict:
     ①의 회원 번호는 query.current_member_id()에서 온다 — LLM이 아니라 서버가
     주입한 신원(B안). 비회원이면 ①만 조용히 꺼지고 나머지 축은 그대로 돈다.
 
-    [규격 파서 예약 — 08/27] 지금은 후보 울타리가 가격대뿐이라 1L의 대체로
-    300ml가 올라올 수 있다. 파서가 생기면 후보 필터에 규격 근사가 추가된다.
+    [규격 근사 — 08/28] 후보 울타리가 가격대뿐이면 1L 의 대체로 300ml 이
+    올라온다. 상류 `spec.quantity` 를 그대로 받아(파서 없이) 원본과 크기를
+    견준다. 예약해 뒀던 "파서가 생기면"은 틀린 전제였다 — 상류에 이미 구조가
+    있었고, 창구가 그 칸을 안 실어 주고 있었을 뿐이다.
+
+    ⚠ **거르지 않고 표시한다.** 규격이 안 맞는다고 조용히 빼면 "대체품이
+      없습니다"가 되는데, 실제로 맞는 답은 *"1kg 은 없고 1.5kg 은 있어요"* 다.
+      순위에서 뒤로 밀고 `size_match` 로 사실을 실어 보낸다 — 무엇을 뺐는지
+      LLM 이 알아야 손님에게 그 사실을 말할 수 있다.
     """
     org = sot_client.get_product(sku_id)
     if org is None:
@@ -1022,28 +1171,70 @@ def _find_substitutes(sku_id: int) -> dict:
         except Exception:
             pass
 
+    # ── 규격 근사 ────────────────────────────────────────────────────────
+    # 원본의 수량 축·값. 없으면(축을 모르면) 크기 판정을 통째로 끈다 —
+    # 모르는 것을 "다름"으로 적으면 멀쩡한 후보가 뒤로 밀린다.
+    org_q = sot_client.spec_quantity(org.get("spec"))
+
+    def _size(c):
+        """(등급, 배율) — 등급이 작을수록 좋은 대체다.
+
+        경계 근거: 0.8~1.25 는 **같은 규격의 표기 차이**가 들어가는 폭이고
+        (900g vs 1kg), 0.5~2.0 은 "한 단계 큰/작은 것"이다. 그 밖이면 크기가
+        다른 물건이라 대체라고 부르기 어렵다 — 그래도 빼지는 않는다.
+        """
+        if org_q is None:
+            return 0, None                       # 판정 불가 → 순위에 영향 없음
+        q = sot_client.spec_quantity(c.get("spec"))
+        if q is None or q["axis"] != org_q["axis"] or not org_q["value"]:
+            return 3, None                       # 축이 다르면 견줄 수 없다
+        ratio = q["value"] / org_q["value"]
+        if 0.8 <= ratio <= 1.25:
+            return 0, ratio
+        if 0.5 <= ratio <= 2.0:
+            return 1, ratio
+        return 2, ratio
+
+    _LABEL = {0: "same", 1: "close", 2: "different", 3: "incomparable"}
+
     out = []
     for c in stocked:
         pr = prices.get(c["sku_id"], {})
         m = metrics.get(c["sku_id"], {})
+        tier, ratio = _size(c)
         out.append({
             "sku_id": c["sku_id"], "name": c["name"], "brand": c.get("brand"),
             "final_price_krw": pr.get("final"), "on_promo": pr.get("on_promo", False),
             "discount_krw": pr.get("discount", 0), "stock_qty": c["stock_qty"],
             "repurchase_rate_pct": m.get("repurchase_rate_pct"),
             "personalized": c["sku_id"] in mine,   # 이 회원의 반복구매품이라는 표시
+            "size_match": _LABEL[tier] if org_q else "unknown",
+            "size_ratio": round(ratio, 2) if ratio else None,
+            "_size_tier": tier,                    # 정렬용 — 반환 직전에 뺀다
         })
     # 사전식 정렬(㊽ 아님 — _better와 같은 튜플 비교 응용): "좋을수록 앞"이 되게
     # 참/거짓을 not으로 뒤집고(False < True라 not personalized가 참이면 뒤로 밀림),
     # 가격은 그대로(작을수록 앞), 재구매율은 -로 뒤집는다(클수록 앞).
-    out.sort(key=lambda s: (not s["personalized"], not s["on_promo"],
+    # ⚠ **크기가 행사보다 앞선다**(08-28 개정). 300ml 이 행사 중이어도 1L 의
+    #   대체가 아니다 — 손님이 원한 것은 그 양이지 그 가격이 아니다.
+    #   개인 반복구매는 크기보다 앞에 둔다: 그 손님이 늘 다른 용량을 사 왔다면
+    #   그건 이미 그 사람의 선택이다.
+    out.sort(key=lambda s: (not s["personalized"], s["_size_tier"], not s["on_promo"],
                             s["final_price_krw"] if s["final_price_krw"] is not None else float("inf"),
                             -(s["repurchase_rate_pct"] or 0)))
+    for r in out:
+        r.pop("_size_tier", None)
     return {"ok": True,
             "original": {"sku_id": sku_id, "name": org["name"],
+                         "spec_quantity": org_q,
                          "lifecycle_status": org.get("lifecycle_status")},
             "substitutes": out,
-            "ranking_rule": "개인 반복구매 > 행사 > 실판매가 > 재구매율"}
+            "ranking_rule": "개인 반복구매 > 규격 근사 > 행사 > 실판매가 > 재구매율",
+            "read_as": ("size_match 가 same 이 아니면 **용량이 다르다는 사실을 "
+                        "먼저 말하세요** — '1kg 은 없고 1.5kg 은 있어요'. "
+                        "그 말 없이 값만 대면 손님이 같은 것으로 압니다. "
+                        "unknown 은 규격 정보가 없어 못 견준 것이지 같다는 뜻이 "
+                        "아닙니다.")}
 
 
 # ── 디스패치 테이블 + 입구 (query.py와 같은 구조) ────────────────────────────

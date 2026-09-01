@@ -475,8 +475,22 @@ def get_purchase_history(member_id: int) -> list[dict]:
         #   항상 빈다. 내부판은 member_id 축을 그대로 받는다.
         rows = _http_get(_API["get_purchase_history"],
                          {"memberId": member_id}, headers=_internal_headers())
-        return [{"sku_id": r.get("skuId"), "qty": r.get("qty"),
-                 "purchased_at": r.get("purchasedAt")} for r in (rows or [])]
+        out = [{"sku_id": r.get("skuId"), "qty": r.get("qty"),
+                "purchased_at": r.get("purchasedAt")} for r in (rows or [])]
+        # ⚠ **실물 경로도 여기서 정렬한다** — 08-28 발견. 위 독스트링이
+        #   *"정렬 책임을 여기 고정한다"* 고 약속해 놓고 mock 갈래만 지키고
+        #   있었다. 실물은 백엔드가 준 순서를 그대로 흘려보냈다.
+        #
+        #   [왜 조용히 틀리나] 백엔드 질의가 우연히 시간순이면 아무 일도 안
+        #   난다. 인덱스가 바뀌거나 JOIN 이 끼면 그날부터 순서가 달라지는데,
+        #   **오류가 아니라 「가장 최근에 사신 것」이 엉뚱한 상품으로 바뀔 뿐**
+        #   이다. 08-28 의 chk_cart_owner·VRAM 초과와 같은 계열 —
+        #   멈추지 않는 오류가 제일 오래 안 잡힌다.
+        #
+        #   or "" 는 `purchased_at` 이 없는 행 때문이다. None 이 섞이면
+        #   str 과 None 비교로 TypeError 가 나서 이력 조회 전체가 죽는다.
+        out.sort(key=lambda r: r["purchased_at"] or "")
+        return out
     # 리스트 컴프리헨션: "PURCHASES의 각 행 p 중 member_id가 일치하는 것만 모아
     # 새 리스트로" — for문 3줄을 한 줄로 쓴 것.
     rows = [p for p in mock_data.PURCHASES if p["member_id"] == member_id]
@@ -906,10 +920,21 @@ def get_alternative_candidates(sku_id: int, limit: int = 8) -> list[dict]:
     if not config.USE_MOCK_SOT:
         rows = _http_get(_API["get_alt_candidates"].format(sku_id=sku_id),
                          {"limit": limit})
+        # ⚠ 응답이 `{original, alternatives}` 다 — 목록 칸의 이름이
+        #   **`alternatives`** 이지 `items` 가 아니다. 08-28 까지 `items` 만
+        #   봐서 **항상 빈 목록**이 왔고, 그래서 `find_substitutes` 가
+        #   `ok=True · substitutes=[]` 로 "정상"처럼 보였다.
+        #   404 도 500 도 아니라 200 에 빈 배열이라 제일 안 잡히는 부류다
+        #   (오늘만 세 번째 — get_inventory · search_products 와 같은 병).
+        if isinstance(rows, dict):
+            rows = rows.get("alternatives") or rows.get("items") or []
         return [{"sku_id": r.get("skuId"), "name": r.get("name"), "brand": r.get("brand"),
                  "price_krw": r.get("priceKrw"), "category_l2": r.get("categoryL2"),
+                 # 규격 근사 판정의 재료 — 없으면 find_substitutes 가 크기를
+                 # 못 견주고 1L 의 대체로 300ml 을 올린다.
+                 "spec": r.get("spec"), "spec_raw": r.get("specRaw"),
                  "lifecycle_status": r.get("lifecycleStatus")}
-                for r in (rows if isinstance(rows, list) else rows.get("items", []))]
+                for r in (rows if isinstance(rows, list) else [])]
 
     org = mock_data.PRODUCTS.get(sku_id)
     if org is None:
