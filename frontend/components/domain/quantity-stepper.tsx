@@ -3,7 +3,7 @@
 //   버튼을 하나로 통일. 크기만 다르게 쓰고 싶으면 size prop으로 조절.
 "use client";
 
-import { Minus, Plus } from "lucide-react";
+import { RiSubtractLine, RiAddLine } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 
 const SIZE_MAP = {
@@ -37,7 +37,7 @@ export function QuantityStepper({
         onClick={() => onChange(Math.max(min, quantity - 1))}
         className={cn("flex items-center justify-center rounded-full border border-border", s.button)}
       >
-        <Minus size={s.icon} />
+        <RiSubtractLine size={s.icon} />
       </button>
       <span className={cn("w-5 text-center", s.text)}>{quantity}</span>
       <button
@@ -46,7 +46,7 @@ export function QuantityStepper({
         onClick={() => onChange(quantity + 1)}
         className={cn("flex items-center justify-center rounded-full border border-border", s.button)}
       >
-        <Plus size={s.icon} />
+        <RiAddLine size={s.icon} />
       </button>
     </div>
   );

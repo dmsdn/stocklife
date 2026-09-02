@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { RiAddLine } from "@remixicon/react";
 
 const chips = [
   { href: "/", label: "홈" },
@@ -24,7 +24,7 @@ export function QuickTabChips() {
         aria-label="새 목록 추가"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border"
       >
-        <Plus size={24} />
+        <RiAddLine size={24} />
       </button>
     </div>
   );

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  Camera,
-  FileText,
-  Image as ImageIcon,
-  Receipt,
-} from "lucide-react";
+import { RiCameraLine, RiFileTextLine, RiImageLine, RiBillLine } from "@remixicon/react";
 
 export type AttachmentType =
   | "photo"
@@ -61,25 +56,25 @@ export function AttachmentPicker({
 
         <div className="grid grid-cols-4 gap-2">
           <AttachmentButton
-            icon={<Camera size={24} />}
+            icon={<RiCameraLine size={24} />}
             label="사진 촬영"
             onClick={onCamera}
           />
 
           <AttachmentButton
-            icon={<ImageIcon size={24} />}
+            icon={<RiImageLine size={24} />}
             label="이미지"
             onClick={onImage}
           />
 
           <AttachmentButton
-            icon={<FileText size={24} />}
+            icon={<RiFileTextLine size={24} />}
             label="문서"
             onClick={onDocument}
           />
 
           <AttachmentButton
-            icon={<Receipt size={24} />}
+            icon={<RiBillLine size={24} />}
             label="영수증"
             onClick={onReceipt}
           />

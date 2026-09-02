@@ -3,8 +3,7 @@ import Link from "next/link";
 export function Footer() {
   return (
     <footer className="space-y-4 bg-muted px-4 py-8 text-xs text-muted-foreground md:px-8">
-      {/* TODO: 로고 자리 */}
-      <p className="text-sm text-foreground">로고</p>
+      <img src="/icons/logo-mart.svg" alt="로고" className="h-6" />
 
       <div className="flex items-center gap-2">
         <Link href="/mypage/terms">약관</Link>

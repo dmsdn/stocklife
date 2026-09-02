@@ -1,6 +1,6 @@
 "use client";
 
-import { Award } from "lucide-react";
+import { RiAwardLine } from "@remixicon/react";
 
 import { GRADE_TIERS, type GradeTier } from "@/lib/grade";
 import { SectionTitle } from "./section-title";
@@ -23,7 +23,7 @@ export function ShoppingStatus({
   currentTier,
 }: ShoppingStatusProps) {
   return (
-    <section className="w-full px-4 pt-7 sm:px-6 lg:px-8">
+    <section className="w-full px-4 sm:px-6 lg:px-8">
       <SectionTitle
         title="나의 등급"
         action="더보기"
@@ -46,14 +46,12 @@ export function ShoppingStatus({
             </p>
           </div>
 
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-            <Award size={24} />
-          </div>
+          <RiAwardLine size={24} className="shrink-0 text-foreground" />
         </div>
 
         <div className="my-4 h-px bg-border" />
 
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex flex-wrap gap-2">
           {GRADE_TIERS.map((tier) => (
             <span
               key={tier.key}

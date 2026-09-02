@@ -5,6 +5,7 @@ import { BottomTabBar } from "./bottom-tab-bar";
 import { AiPanelProvider, useAiPanel } from "./ai-panel-context";
 import { AiPanel } from "./ai-panel";
 import { HomeAiHeader } from "./home-ai-header";
+import { AiProactiveBubble } from "./ai-proactive-bubble";
 
 // ✅ AiPanel이 이제 position:fixed로 완전히 분리돼서 더 이상 flex 형제로 main 옆에
 //   나란히 배치되지 않는다(= main이 자동으로 좁아지지 않는다). 그래서 패널이 열려있을 때
@@ -35,6 +36,7 @@ function AppShellBody({ children, active }: { children: React.ReactNode; active:
       </div>
 
       <BottomTabBar />
+      <AiProactiveBubble />
     </div>
   );
 }

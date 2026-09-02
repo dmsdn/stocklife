@@ -17,7 +17,7 @@ export interface NotificationPrefs {
   marketing: boolean;
 }
 
-const DEFAULTS: NotificationPrefs = {
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   all: true,
   stock: true,
   discount: true,
@@ -26,6 +26,8 @@ const DEFAULTS: NotificationPrefs = {
   notice: true,
   marketing: false,
 };
+
+const DEFAULTS = DEFAULT_NOTIFICATION_PREFS;
 
 export function readNotificationPrefs(): NotificationPrefs {
   if (typeof window === "undefined") return DEFAULTS;

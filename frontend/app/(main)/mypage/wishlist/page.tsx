@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Trash2 } from "lucide-react";
+import { RiArrowLeftSLine, RiDeleteBin6Line } from "@remixicon/react";
 import { apiFetch } from "@/lib/api-client";
 
 interface WishlistItem {
@@ -35,7 +35,7 @@ export default function WishlistPage() {
     <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
       <div className="mb-4 flex items-center gap-3">
         <Link href="/mypage">
-          <ChevronLeft size={24} />
+          <RiArrowLeftSLine size={24} />
         </Link>
         <p className="text-base">찜</p>
       </div>
@@ -63,7 +63,7 @@ export default function WishlistPage() {
                 onClick={() => handleRemove(item.skuId)}
                 className="text-muted-foreground"
               >
-                <Trash2 size={24} />
+                <RiDeleteBin6Line size={24} />
               </button>
             </div>
           </div>
