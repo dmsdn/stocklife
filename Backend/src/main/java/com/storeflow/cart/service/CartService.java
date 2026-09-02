@@ -172,6 +172,18 @@ public class CartService {
     }
 
     /**
+     * cart_item.is_checked = true 인 항목만 모은 "실제 결제 대상" 장바구니.
+     * 매장에서 스캔/체크한 상품과 미리 계획만 해둔 상품을 구분해서 보여줄 때 사용한다.
+     */
+    @Transactional(readOnly = true)
+    public SessionCartResponse getScannedCart(Long consumerId) {
+        List<CartItem> checkedItems = cartItemRepository.findByConsumerId(consumerId).stream()
+                .filter(CartItem::isChecked)
+                .toList();
+        return buildSessionCart(checkedItems);
+    }
+
+    /**
      * 같은 그룹에 같은 SKU가 여러 줄로 남아 있는 구 DB 데이터를 한 줄로 복구한다.
      * 정상 스키마에서는 UNIQUE(cart_group_id, sku_id)로 애초에 중복 생성이 막힌다.
      */
