@@ -172,6 +172,19 @@ public class CartService {
     }
 
     /**
+     * 계산대 스캔 화면용 — 이 회원의 장바구니(모든 리스트 통틀어) 중 is_checked=1인
+     * (스캔 완료로 체크된) 항목만 골라서 합계를 낸다. InternalCartController의
+     * GET /internal/cart/scanned 에서 사용.
+     */
+    @Transactional(readOnly = true)
+    public SessionCartResponse getScannedCart(Long consumerId) {
+        List<CartItem> checkedItems = cartItemRepository.findByConsumerId(consumerId).stream()
+                .filter(CartItem::isChecked)
+                .toList();
+        return buildSessionCart(checkedItems);
+    }
+
+    /**
      * 같은 그룹에 같은 SKU가 여러 줄로 남아 있는 구 DB 데이터를 한 줄로 복구한다.
      * 정상 스키마에서는 UNIQUE(cart_group_id, sku_id)로 애초에 중복 생성이 막힌다.
      */
