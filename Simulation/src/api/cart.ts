@@ -119,7 +119,7 @@ interface SessionCartResponseDto {
  * DB에서 막 불러온 항목은 그 기능(찾아가기)은 못 쓰고 수량/합계 표시 용도로만 쓴다.
  */
 export async function fetchCartFromDb(consumerId: number): Promise<
-    { skuId: number; name: string; price: number; qty: number; locationId: string }[]
+    { skuId: number; name: string; price: number; stock: number; qty: number; locationId: string }[]
 > {
     const res = await fetch(`/internal/cart/session?consumerId=${consumerId}`);
 
@@ -134,6 +134,7 @@ export async function fetchCartFromDb(consumerId: number): Promise<
         skuId: item.skuId,
         name: item.productName,
         price: item.priceKrw,
+        stock: item.quantity,
         qty: item.quantity,
         locationId: '',
     }));
