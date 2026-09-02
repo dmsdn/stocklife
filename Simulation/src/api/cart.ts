@@ -138,3 +138,56 @@ export async function fetchCartFromDb(consumerId: number): Promise<
         locationId: '',
     }));
 }
+
+export interface CheckoutCartItem {
+    cartItemId: number;
+    skuId: number;
+    name: string;
+    price: number;
+    qty: number;
+    checked: boolean;
+    subtotal: number;
+}
+
+export interface CheckoutCart {
+    items: CheckoutCartItem[];
+    totalAmount: number;
+}
+
+/**
+ * 실제 DB cart_item 기준 결제 장바구니 조회.
+ *
+ * OrderService.checkout() 역시 cart_item의 checked=true 상품을
+ * 실제 결제 대상으로 사용한다.
+ */
+export async function fetchCheckoutCart(
+    consumerId: number
+): Promise<CheckoutCart> {
+    const res = await fetch(
+        `/internal/cart/session?consumerId=${consumerId}`
+    );
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+
+        throw new Error(
+            `GET /internal/cart/session 실패 (${res.status}) ${text}`
+        );
+    }
+
+    const data: SessionCartResponseDto = await res.json();
+
+    return {
+        totalAmount: data.totalAmount,
+
+        items: data.items.map((item) => ({
+            cartItemId: item.cartItemId,
+            skuId: item.skuId,
+            name: item.productName,
+            price: item.priceKrw,
+            qty: item.quantity,
+            checked: item.checked,
+            subtotal: item.subtotal,
+        })),
+    };
+}

@@ -1,20 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import Modal from './Modal';
-import type {
-    CartGroupOption,
-    CartGroupItem,
-} from '../api/cart';
-
-interface ProductDetail {
-    skuId: number;
-    name: string;
-    price: number;
-}
+import type { CartGroupOption } from '../api/cart';
 
 interface Props {
     groups: CartGroupOption[];
     selectedGroupId: number | null;
-
     onSelectGroup: (groupId: number | null) => void;
     onClose: () => void;
 }
@@ -28,120 +18,7 @@ export default function CartGroupModal({
     const [openedGroup, setOpenedGroup] =
         useState<CartGroupOption | null>(null);
 
-    const [products, setProducts] =
-        useState<Record<number, ProductDetail>>({});
-
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (!openedGroup) {
-            setProducts({});
-            return;
-        }
-
-        const skuIds = [
-            ...new Set(
-                openedGroup.items.map((item) => item.skuId)
-            ),
-        ];
-
-        if (skuIds.length === 0) {
-            setProducts({});
-            return;
-        }
-
-        let cancelled = false;
-
-        const loadProducts = async () => {
-            setLoading(true);
-
-            try {
-                const query = skuIds
-                    .map((id) => `skuIds=${id}`)
-                    .join('&');
-
-                const res = await fetch(
-                    `/api/products/by-skus?${query}`
-                );
-
-                if (!res.ok) {
-                    throw new Error(
-                        `상품 조회 실패 (${res.status})`
-                    );
-                }
-
-                const data: Array<{
-                    skuId: number;
-                    name: string;
-                    priceKrw?: number;
-                    price?: number;
-                }> = await res.json();
-
-                if (cancelled) return;
-
-                const next: Record<
-                    number,
-                    ProductDetail
-                > = {};
-
-                data.forEach((product) => {
-                    next[product.skuId] = {
-                        skuId: product.skuId,
-                        name: product.name,
-                        price:
-                            product.priceKrw ??
-                            product.price ??
-                            0,
-                    };
-                });
-
-                setProducts(next);
-            } catch (err) {
-                console.error(
-                    '[장바구니 팝업] 상품 조회 실패:',
-                    err
-                );
-
-                if (!cancelled) {
-                    setProducts({});
-                }
-            } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
-            }
-        };
-
-        void loadProducts();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [openedGroup]);
-
-    const total = useMemo(() => {
-        if (!openedGroup) return 0;
-
-        return openedGroup.items.reduce(
-            (sum, item) => {
-                const product = products[item.skuId];
-
-                return (
-                    sum +
-                    (product?.price ?? 0) *
-                    item.quantity
-                );
-            },
-            0
-        );
-    }, [openedGroup, products]);
-
-    /*
-     * 리스트 상세 화면
-     *
-     * "이번 주 장보기" 같은 리스트를 누른 뒤
-     * 해당 리스트에 들어있는 실제 상품들을 보여준다.
-     */
+    // 리스트 상세 화면
     if (openedGroup) {
         return (
             <Modal
@@ -151,9 +28,9 @@ export default function CartGroupModal({
                 <div
                     style={{
                         width: 420,
-                        maxWidth: '80vw',
+                        maxWidth: '82vw',
                         maxHeight: '70vh',
-                        color: '#111827',
+                        color: '#f9fafb',
                     }}
                 >
                     {/* 상단 */}
@@ -175,13 +52,13 @@ export default function CartGroupModal({
                                 height: 32,
                                 border: 'none',
                                 borderRadius: '50%',
-                                background: 'transparent',
-                                fontSize: 22,
+                                background: '#252a33',
+                                color: '#f9fafb',
+                                fontSize: 20,
                                 cursor: 'pointer',
-                                color: '#111827',
                             }}
                         >
-                            ‹
+                            ←
                         </button>
 
                         <div
@@ -192,8 +69,9 @@ export default function CartGroupModal({
                         >
                             <div
                                 style={{
-                                    fontSize: 16,
-                                    fontWeight: 600,
+                                    fontSize: 17,
+                                    fontWeight: 700,
+                                    color: '#f9fafb',
                                 }}
                             >
                                 {openedGroup.title}
@@ -201,23 +79,17 @@ export default function CartGroupModal({
 
                             <div
                                 style={{
-                                    marginTop: 3,
+                                    marginTop: 4,
                                     fontSize: 12,
-                                    color: '#6b7280',
+                                    color: '#9ca3af',
                                 }}
                             >
-                                {
-                                    openedGroup
-                                        .items.length
-                                }
-                                개
-                                {total > 0 &&
-                                    ` · ${total.toLocaleString()}원`}
+                                {openedGroup.itemCount}개
                             </div>
                         </div>
                     </div>
 
-                    {/* 이 리스트를 현재 담을 리스트로 지정 */}
+                    {/* 현재 담을 리스트 지정 */}
                     <button
                         type="button"
                         onClick={() =>
@@ -227,26 +99,22 @@ export default function CartGroupModal({
                         }
                         style={{
                             width: '100%',
-                            marginBottom: 12,
                             padding: '11px 12px',
-                            borderRadius: 6,
+                            marginBottom: 14,
+                            borderRadius: 7,
                             border:
                                 selectedGroupId ===
                                 openedGroup.cartGroupId
-                                    ? '1px solid #111827'
-                                    : '1px solid #d1d5db',
+                                    ? '1px solid #3b82f6'
+                                    : '1px solid #3a3f4b',
                             background:
                                 selectedGroupId ===
                                 openedGroup.cartGroupId
-                                    ? '#111827'
-                                    : '#ffffff',
-                            color:
-                                selectedGroupId ===
-                                openedGroup.cartGroupId
-                                    ? '#ffffff'
-                                    : '#111827',
+                                    ? '#1d4ed8'
+                                    : '#252a33',
+                            color: '#ffffff',
+                            fontWeight: 700,
                             cursor: 'pointer',
-                            fontWeight: 600,
                         }}
                     >
                         {selectedGroupId ===
@@ -255,206 +123,155 @@ export default function CartGroupModal({
                             : '이 리스트에 상품 담기'}
                     </button>
 
-                    {/* 상품 */}
+                    {/* 상품 목록 */}
                     <div
                         style={{
                             maxHeight: 420,
                             overflowY: 'auto',
-                            borderTop:
-                                '1px solid #e5e7eb',
+                            borderTop: '1px solid #343a46',
                         }}
                     >
-                        {openedGroup.items.length ===
-                            0 && (
-                                <div
-                                    style={{
-                                        padding: '40px 10px',
-                                        textAlign:
-                                            'center',
-                                        color: '#6b7280',
-                                        fontSize: 13,
-                                    }}
-                                >
-                                    아직 담긴 상품이
-                                    없어요.
-                                </div>
-                            )}
-
-                        {loading && (
+                        {openedGroup.items?.length === 0 && (
                             <div
                                 style={{
-                                    padding: 30,
-                                    textAlign:
-                                        'center',
-                                    color: '#6b7280',
+                                    padding: '42px 10px',
+                                    textAlign: 'center',
+                                    color: '#9ca3af',
+                                    fontSize: 13,
                                 }}
                             >
-                                불러오는 중...
+                                아직 담긴 상품이 없습니다.
                             </div>
                         )}
 
-                        {!loading &&
-                            openedGroup.items.map(
-                                (
-                                    item: CartGroupItem
-                                ) => {
-                                    const product =
-                                        products[
-                                            item.skuId
-                                            ];
+                        {openedGroup.items?.map((item) => (
+                            <div
+                                key={item.cartItemId}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 12,
+                                    padding: '14px 4px',
+                                    borderBottom:
+                                        '1px solid #343a46',
+                                }}
+                            >
+                                {/* 상품 이미지 자리 */}
+                                <div
+                                    style={{
+                                        width: 58,
+                                        height: 58,
+                                        flexShrink: 0,
+                                        borderRadius: 7,
+                                        border:
+                                            '1px solid #3a3f4b',
+                                        background: '#242933',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent:
+                                            'center',
+                                        color: '#6b7280',
+                                        fontSize: 18,
+                                    }}
+                                >
+                                    🛒
+                                </div>
 
-                                    const itemTotal =
-                                        (product?.price ??
-                                            0) *
-                                        item.quantity;
+                                <div
+                                    style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            color: '#f9fafb',
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        상품 #{item.skuId}
+                                    </div>
 
-                                    return (
-                                        <div
-                                            key={
-                                                item.cartItemId
-                                            }
-                                            style={{
-                                                display:
-                                                    'flex',
-                                                gap: 12,
-                                                padding:
-                                                    '14px 0',
-                                                borderBottom:
-                                                    '1px solid #e5e7eb',
-                                            }}
-                                        >
-                                            {/* 상품 이미지 자리 */}
-                                            <div
-                                                style={{
-                                                    width: 64,
-                                                    height: 64,
-                                                    flexShrink: 0,
-                                                    border:
-                                                        '1px solid #e5e7eb',
-                                                    borderRadius: 5,
-                                                    background:
-                                                        '#f3f4f6',
-                                                }}
-                                            />
+                                    <div
+                                        style={{
+                                            marginTop: 5,
+                                            color: '#9ca3af',
+                                            fontSize: 12,
+                                        }}
+                                    >
+                                        수량 {item.quantity}개
+                                    </div>
+                                </div>
 
-                                            <div
-                                                style={{
-                                                    flex: 1,
-                                                    minWidth: 0,
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        fontSize: 13,
-                                                        lineHeight:
-                                                            1.4,
-                                                        fontWeight: 500,
-                                                    }}
-                                                >
-                                                    {product?.name ??
-                                                        `상품 #${item.skuId}`}
-                                                </div>
-
-                                                <div
-                                                    style={{
-                                                        marginTop: 5,
-                                                        fontSize: 15,
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    {product
-                                                        ? `${product.price.toLocaleString()}원`
-                                                        : ''}
-                                                </div>
-
-                                                <div
-                                                    style={{
-                                                        marginTop: 6,
-                                                        display:
-                                                            'flex',
-                                                        justifyContent:
-                                                            'space-between',
-                                                        fontSize: 12,
-                                                        color: '#6b7280',
-                                                    }}
-                                                >
-                                                    <span>
-                                                        수량{' '}
-                                                        {
-                                                            item.quantity
-                                                        }
-                                                        개
-                                                    </span>
-
-                                                    {itemTotal >
-                                                        0 && (
-                                                            <span
-                                                                style={{
-                                                                    color: '#111827',
-                                                                    fontWeight: 600,
-                                                                }}
-                                                            >
-                                                            {itemTotal.toLocaleString()}
-                                                                원
-                                                        </span>
-                                                        )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                            )}
+                                <div
+                                    style={{
+                                        fontSize: 11,
+                                        color: item.checked
+                                            ? '#60a5fa'
+                                            : '#6b7280',
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    {item.checked
+                                        ? '결제 선택'
+                                        : '미선택'}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </Modal>
         );
     }
 
-    /*
-     * 리스트 목록 화면
-     *
-     * 웹 /saved 화면처럼 카드 형태로 보여준다.
-     */
+    // 저장 리스트 목록 화면
     return (
-        <Modal title="" onClose={onClose}>
+        <Modal
+            title=""
+            onClose={onClose}
+        >
             <div
                 style={{
                     width: 470,
                     maxWidth: '82vw',
-                    color: '#111827',
+                    color: '#f9fafb',
                 }}
             >
+                {/* 제목 */}
                 <div
                     style={{
-                        fontSize: 16,
-                        marginBottom: 14,
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: '#f9fafb',
+                        marginBottom: 16,
                     }}
                 >
                     저장
                 </div>
 
+                {/* 탭 */}
                 <div
                     style={{
-                        borderBottom:
-                            '1px solid #e5e7eb',
+                        borderBottom: '1px solid #343a46',
                         marginBottom: 16,
                     }}
                 >
                     <div
                         style={{
                             display: 'inline-block',
-                            borderBottom:
-                                '2px solid #111827',
-                            padding:
-                                '8px 12px',
-                            fontSize: 14,
-                            fontWeight: 500,
+                            padding: '8px 10px',
+                            borderBottom: '2px solid #ffffff',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: '#ffffff',
                         }}
                     >
                         저장한 리스트
                     </div>
                 </div>
 
+                {/* 리스트 카드 */}
                 <div
                     style={{
                         display: 'grid',
@@ -463,74 +280,73 @@ export default function CartGroupModal({
                         gap: 12,
                     }}
                 >
-                    {groups.map((group) => (
-                        <button
-                            key={
-                                group.cartGroupId
-                            }
-                            type="button"
-                            onClick={() =>
-                                setOpenedGroup(group)
-                            }
-                            style={{
-                                minHeight: 125,
-                                display: 'flex',
-                                flexDirection:
-                                    'column',
-                                justifyContent:
-                                    'space-between',
-                                textAlign: 'left',
-                                padding: 14,
-                                borderRadius: 6,
-                                border:
-                                    selectedGroupId ===
-                                    group.cartGroupId
-                                        ? '2px solid #111827'
-                                        : '1px solid #d1d5db',
-                                background:
-                                    '#ffffff',
-                                color: '#111827',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            <div
+                    {groups.map((group) => {
+                        const selected =
+                            selectedGroupId ===
+                            group.cartGroupId;
+
+                        return (
+                            <button
+                                key={group.cartGroupId}
+                                type="button"
+                                onClick={() =>
+                                    setOpenedGroup(group)
+                                }
                                 style={{
-                                    fontSize: 13,
-                                    fontWeight: 600,
+                                    minHeight: 125,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent:
+                                        'space-between',
+                                    textAlign: 'left',
+                                    padding: 14,
+                                    borderRadius: 8,
+                                    border: selected
+                                        ? '2px solid #3b82f6'
+                                        : '1px solid #3a3f4b',
+                                    background: selected
+                                        ? '#252d3d'
+                                        : '#20242d',
+                                    color: '#f9fafb',
+                                    cursor: 'pointer',
                                 }}
                             >
-                                {group.title}
-                            </div>
-
-                            <div>
                                 <div
                                     style={{
-                                        color: '#6b7280',
-                                        fontSize: 11,
+                                        fontSize: 13,
+                                        fontWeight: 700,
+                                        color: '#f9fafb',
                                     }}
                                 >
-                                    {
-                                        group.itemCount
-                                    }
-                                    개
+                                    {group.title}
                                 </div>
 
-                                {selectedGroupId ===
-                                    group.cartGroupId && (
+                                <div>
+                                    <div
+                                        style={{
+                                            color: '#9ca3af',
+                                            fontSize: 11,
+                                        }}
+                                    >
+                                        {group.itemCount}개
+                                    </div>
+
+                                    {selected && (
                                         <div
                                             style={{
-                                                marginTop: 5,
+                                                marginTop: 6,
+                                                color: '#60a5fa',
                                                 fontSize: 11,
-                                                color: '#2563eb',
-                                                fontWeight: 600,
+                                                fontWeight: 700,
                                             }}
                                         >
                                             현재 담을 리스트
                                         </div>
                                     )}
-                            </div>
-                        </button>
-                    ))}
+                                </div>
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {groups.length === 0 && (
@@ -538,7 +354,7 @@ export default function CartGroupModal({
                         style={{
                             padding: 40,
                             textAlign: 'center',
-                            color: '#6b7280',
+                            color: '#9ca3af',
                             fontSize: 13,
                         }}
                     >
