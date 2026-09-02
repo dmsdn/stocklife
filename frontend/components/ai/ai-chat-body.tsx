@@ -6,18 +6,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  X,
-  Plus,
-  Mic,
-  Send,
-  Camera,
-  Image as ImageIcon,
-  FileText,
-  Receipt,
-  ListChecks,
-  Square,
-} from "lucide-react";
+import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine } from "@remixicon/react";
 
 // ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
 //   비슷한 상품을 찾아옵니다.
@@ -47,9 +36,38 @@ import { usePermissionStatus } from "@/lib/use-permission-status";
 import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
 
+// ✅ 실제 POST /api/chat/sessions/{sessionId}/attachments 연동(멀티파트 업로드).
+//   카메라/갤러리는 백엔드 입장에서 구분 없이 둘 다 type=IMAGE로 보냅니다.
+function chatAttachmentHeaders(): Record<string, string> {
+  return getAccessToken() ? {} : { "X-Chat-Client-Id": getClientId() };
+}
+
+async function uploadChatAttachment(
+  kind: "camera" | "image" | "document" | "receipt",
+  file: File
+): Promise<number | null> {
+  try {
+    const sessionId = await getOrCreateSessionId();
+    const type = kind === "document" ? "DOCUMENT" : kind === "receipt" ? "RECEIPT" : "IMAGE";
+    const form = new FormData();
+    form.append("file", file);
+
+    const res = await apiFetch<{ attachmentId: number }>(
+      `/api/chat/sessions/${sessionId}/attachments?type=${type}`,
+      { method: "POST", body: form, headers: chatAttachmentHeaders() }
+    );
+    return res.attachmentId;
+  } catch {
+    return null;
+  }
+}
+
 interface ChatTurn {
   role: "user" | "assistant";
   content: string;
+  /** ✅ 대화 검색(기록 > 리브)에서 특정 메시지로 스크롤 이동하기 위한 식별자.
+   *  백엔드가 안 주는 옛 메시지/스트리밍 중인 임시 turn은 없을 수 있음. */
+  messageId?: number;
 }
 
 interface Attachment {
@@ -61,6 +79,11 @@ interface Attachment {
     | "receipt"
     | "list"
     | "voice";
+  /** ✅ 실제 업로드된 첨부파일 id — 메시지 전송 시 attachmentIds에 실어 보냄.
+   *  camera/image/document/receipt만 실제 업로드 대상(list/voice는 백엔드에 해당 타입이 없음). */
+  attachmentId?: number;
+  uploading?: boolean;
+  uploadFailed?: boolean;
 }
 
 export interface AiChatBodyProps {
@@ -69,6 +92,11 @@ export interface AiChatBodyProps {
   suggestedPrompts?: string[];
   /** ✅ 열릴 때 입력창에 미리 채워둘 텍스트(전송은 안 함, 사용자가 수정/전송) */
   initialMessage?: string;
+  /** ✅ 기록(리브) > 대화 검색에서 넘어온 경우, 이 메시지로 스크롤 이동 + 잠깐 하이라이트.
+   *  이 컴포넌트는 사이드패널 등 Suspense 경계가 보장 안 되는 곳에서도 쓰이므로
+   *  useSearchParams()를 여기서 직접 읽지 않고, 이미 Suspense 안에 있는 /ai 페이지가
+   *  prop으로 내려줍니다. */
+  highlightMessageId?: number;
 }
 
 const DEFAULT_PROMPTS = [
@@ -88,8 +116,12 @@ export function AiChatBody({
   greeting = "안녕하세요, 무엇을 도와드릴까요?",
   suggestedPrompts = DEFAULT_PROMPTS,
   initialMessage,
+  highlightMessageId: highlightMessageIdProp,
 }: AiChatBodyProps) {
   const { groupId } = useAiPanel();
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(
+    highlightMessageIdProp ?? null
+  );
   const [message, setMessage] = useState(initialMessage ?? "");
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [sending, setSending] = useState(false);
@@ -126,7 +158,7 @@ export function AiChatBody({
         const sessionId = await getOrCreateSessionId(groupId);
 
         const messages = await apiFetch<
-          { sender: string; content: string }[]
+          { messageId: number; sender: string; content: string }[]
         >(`/api/chat/sessions/${sessionId}/messages`, {
           headers: chatHeaders(),
         });
@@ -135,6 +167,7 @@ export function AiChatBody({
           messages.map((m) => ({
             role: m.sender === "USER" ? "user" : "assistant",
             content: m.content,
+            messageId: m.messageId,
           }))
         );
       } catch {
@@ -146,6 +179,16 @@ export function AiChatBody({
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionIdOverride]);
+
+  // ✅ 메시지가 다 로드된 뒤 하이라이트 대상으로 스크롤 이동 + 2초 후 하이라이트 해제
+  useEffect(() => {
+    if (loading || highlightedMessageId == null) return;
+    const el = document.getElementById(`chat-msg-${highlightedMessageId}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedMessageId(null), 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, turns]);
 
   useEffect(() => {
     return () => {
@@ -159,6 +202,12 @@ export function AiChatBody({
     const content = (text ?? message).trim();
 
     if (!content || sending) return;
+
+    // ✅ 업로드된 첨부(camera/image/document/receipt)의 attachmentId만 모아서 같이 보냄.
+    //   아직 업로드 중이거나 실패한 건 제외 — list/voice는 애초에 attachmentId가 없음.
+    const attachmentIds = attachments
+      .map((a) => a.attachmentId)
+      .filter((id): id is number => id != null);
 
     setTurns((prev) => [
       ...prev,
@@ -184,6 +233,7 @@ export function AiChatBody({
         body: JSON.stringify({
           sessionId,
           message: content,
+          attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
         }),
       });
 
@@ -219,15 +269,34 @@ export function AiChatBody({
 
       if (!file) return;
 
+      const attachmentIndex = attachments.length;
       setAttachments((prev) => [
         ...prev,
         {
           label: file.name,
           kind,
+          uploading: kind === "camera" || kind === "image" || kind === "document" || kind === "receipt",
         },
       ]);
 
-      // 카메라/이미지는 실제로 서버에 보내서 비슷한 상품을 찾아옵니다.
+      // ✅ 실제 POST /api/chat/sessions/{sessionId}/attachments 업로드 — camera/image/document/
+      //   receipt만 백엔드에 대응 타입(IMAGE/DOCUMENT/RECEIPT)이 있어서 업로드 대상.
+      //   list/voice는 업로드하지 않음(list는 참조일 뿐이고, voice는 이 API가 지원 안 함).
+      if (kind === "camera" || kind === "image" || kind === "document" || kind === "receipt") {
+        uploadChatAttachment(kind, file).then((attachmentId) => {
+          setAttachments((prev) =>
+            prev.map((a, i) =>
+              i === attachmentIndex
+                ? attachmentId != null
+                  ? { ...a, attachmentId, uploading: false }
+                  : { ...a, uploading: false, uploadFailed: true }
+                : a
+            )
+          );
+        });
+      }
+
+      // 카메라/이미지는 첨부와 별개로, 실제로 서버에 보내서 비슷한 상품을 찾아옵니다.
       if (kind === "camera" || kind === "image") {
         sendPhotoSearch(file).then((result) => {
           if (!result) return;
@@ -342,32 +411,32 @@ export function AiChatBody({
   };
 
   const attachOptions: {
-    icon: typeof Camera;
+    icon: typeof RiCameraLine;
     label: string;
     onClick: () => void;
   }[] = [
     {
-      icon: Camera,
+      icon: RiBillLine,
+      label: "전자 영수증",
+      onClick: () => receiptInputRef.current?.click(),
+    },
+    {
+      icon: RiCameraLine,
       label: "카메라",
       onClick: () => cameraInputRef.current?.click(),
     },
     {
-      icon: ImageIcon,
-      label: "이미지",
+      icon: RiImageLine,
+      label: "사진",
       onClick: () => imageInputRef.current?.click(),
     },
     {
-      icon: FileText,
-      label: "문서",
+      icon: RiFileTextLine,
+      label: "파일",
       onClick: () => documentInputRef.current?.click(),
     },
     {
-      icon: Receipt,
-      label: "영수증",
-      onClick: () => receiptInputRef.current?.click(),
-    },
-    {
-      icon: ListChecks,
+      icon: RiListCheck,
       label: "리스트",
       onClick: () => {
         setAttachOpen(false);
@@ -424,17 +493,17 @@ export function AiChatBody({
             </p>
           ) : turns.length === 0 ? (
             <>
-              <p className="whitespace-pre-line text-base">
+              <p className="whitespace-pre-line text-2xl font-bold leading-8">
                 {greeting}
               </p>
 
-              <div className="space-y-2">
+              <div className="mt-7 space-y-2">
                 {suggestedPrompts.map((prompt, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => handleSend(prompt)}
-                    className="block w-full rounded-full border border-border px-4 py-3 text-left text-sm"
+                    className="block w-full rounded-md border border-[#F4F4F4] px-4 py-3 text-left text-sm shadow-[0_0_20px_rgba(0,0,0,0.05)]"
                   >
                     {prompt}
                   </button>
@@ -445,6 +514,7 @@ export function AiChatBody({
             turns.map((turn, i) => (
               <div
                 key={i}
+                id={turn.messageId ? `chat-msg-${turn.messageId}` : undefined}
                 className={
                   turn.role === "user"
                     ? "text-right"
@@ -454,8 +524,12 @@ export function AiChatBody({
                 <p
                   className={
                     turn.role === "user"
-                      ? "inline-block max-w-full rounded-sm bg-muted px-4 py-2 text-sm break-words"
-                      : "text-sm break-words"
+                      ? `inline-block max-w-full rounded-md px-4 py-2.5 text-sm break-words transition-colors duration-500 ${
+                          turn.messageId === highlightedMessageId ? "bg-foreground/20" : "bg-muted"
+                        }`
+                      : `text-sm break-words rounded-md transition-colors duration-500 ${
+                          turn.messageId === highlightedMessageId ? "bg-foreground/10 px-2 py-1 -mx-2" : ""
+                        }`
                   }
                 >
                   {turn.content}
@@ -473,7 +547,7 @@ export function AiChatBody({
       </div>
 
       {/* 입력 영역 — 항상 하단에 고정 */}
-      <div className="shrink-0 min-w-0 space-y-2 border-t border-border p-3">
+      <div className="shrink-0 min-w-0 space-y-2 p-3">
         {micError && (
           <p className="text-xs text-danger">
             {micError}
@@ -485,10 +559,12 @@ export function AiChatBody({
             {attachments.map((a, i) => (
               <div
                 key={i}
-                className="flex min-w-0 max-w-full items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs"
+                className={`flex min-w-0 max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
+                  a.uploadFailed ? "border-danger text-danger" : "border-border"
+                }`}
               >
                 <span className="min-w-0 truncate">
-                  {a.label}
+                  {a.uploading ? `업로드 중... ${a.label}` : a.uploadFailed ? `업로드 실패: ${a.label}` : a.label}
                 </span>
 
                 <button
@@ -497,7 +573,7 @@ export function AiChatBody({
                   aria-label="첨부 제거"
                   className="shrink-0"
                 >
-                  <X size={24} />
+                  <RiCloseLine size={24} />
                 </button>
               </div>
             ))}
@@ -505,34 +581,31 @@ export function AiChatBody({
         )}
 
         {attachOpen && (
-          <div className="grid grid-cols-5 gap-2 rounded-sm border border-border p-2">
+          <div className="mb-2 divide-y divide-border overflow-hidden rounded-lg border border-border bg-card shadow-lg">
             {attachOptions.map(
               ({ icon: Icon, label, onClick }) => (
                 <button
                   key={label}
                   type="button"
                   onClick={onClick}
-                  className="flex min-w-0 flex-col items-center gap-1 rounded-sm border border-border py-3 text-[11px]"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm"
                 >
-                  <Icon size={24} />
-
-                  <span className="truncate max-w-full">
-                    {label}
-                  </span>
+                  <Icon size={20} className="shrink-0 text-muted-foreground" />
+                  {label}
                 </button>
               )
             )}
           </div>
         )}
 
-        <div className="flex min-w-0 items-center gap-2 rounded-sm border border-border p-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-full border border-[#F4F4F4] bg-white p-2 shadow-[0_0_20px_rgba(0,0,0,0.05)]">
           <button
             type="button"
             onClick={() => setAttachOpen((v) => !v)}
             aria-label="첨부"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border"
+            className="flex h-8 w-8 shrink-0 items-center justify-center text-foreground"
           >
-            <Plus size={24} />
+            <RiAddLine size={22} />
           </button>
 
           {recording ? (
@@ -550,38 +623,42 @@ export function AiChatBody({
               onKeyDown={(e) =>
                 e.key === "Enter" && handleSend()
               }
-              placeholder="물어보고 싶은 내용을 질문해보세요"
+              placeholder="오늘은 어떤 장을 볼까요?"
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           )}
 
-          <button
-            type="button"
-            aria-label={
-              recording ? "녹음 종료" : "음성 입력"
-            }
-            onClick={handleMicClick}
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
-              recording
-                ? "border-danger text-danger"
-                : "border-border"
-            }`}
-          >
-            {recording ? (
-              <Square size={24} />
-            ) : (
-              <Mic size={24} />
-            )}
-          </button>
-
-          <button
-            type="button"
-            aria-label="전송"
-            onClick={() => handleSend()}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground"
-          >
-            <Send size={24} />
-          </button>
+          {/* ✅ 참고 이미지(Frame 128) — 입력 전엔 마이크만 보이고, 뭔가 입력하면
+              전송 버튼으로 바뀜(전송 기능 자체는 그대로, Enter로도 항상 보냄) */}
+          {message.trim().length === 0 && !recording ? (
+            <button
+              type="button"
+              aria-label="음성 입력"
+              onClick={handleMicClick}
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-foreground"
+            >
+              <RiMicLine size={22} />
+            </button>
+          ) : recording ? (
+            <button
+              type="button"
+              aria-label="녹음 종료"
+              onClick={handleMicClick}
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-danger"
+            >
+              <RiCheckboxBlankLine size={22} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="전송"
+              disabled={attachments.some((a) => a.uploading)}
+              onClick={() => handleSend()}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground disabled:opacity-40"
+            >
+              <RiSendPlaneLine size={18} />
+            </button>
+          )}
         </div>
       </div>
 

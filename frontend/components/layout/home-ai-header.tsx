@@ -3,6 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  RiSearchLine,
+  RiBookmarkLine,
+  RiQrScanLine,
+  RiUser3Line,
+  RiNotification4Line,
+  RiMenuLine,
+} from "@remixicon/react";
 
 import { useAiPanel } from "./ai-panel-context";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -12,11 +20,13 @@ const MOCK_UNREAD_COUNT = 2;
 interface HomeAiHeaderProps {
   active?: "home" | "ai";
   onAiChat?: () => void;
-
+  /** ✅ 신규 — 지정하면 햄버거를 눌렀을 때 /saved로 이동하는 대신 이 콜백을 호출
+      (AI챗 화면에서 화면 전환 없이 이전 대화 목록 드로어를 여는 용도) */
+  onHamburgerClick?: () => void;
   variant?: "inline" | "fixed-desktop";
 }
 
-export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: HomeAiHeaderProps) {
+export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, variant = "inline" }: HomeAiHeaderProps) {
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const { toggle: toggleAiPanel } = useAiPanel();
@@ -41,8 +51,8 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
           <Image
             src="/icons/logo-shopping.svg"
             alt="쇼핑"
-            width={80}
-            height={40}
+            width={181}
+            height={51}
             priority
             className="h-10 w-auto md:h-8"
           />
@@ -57,8 +67,8 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
           <Image
             src="/icons/logo-ai.svg"
             alt="AI Chat"
-            width={80}
-            height={40}
+            width={68}
+            height={51}
             priority
             className="h-10 w-auto md:h-8"
           />
@@ -70,27 +80,53 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
             (여기 없어서 모바일 폭이 넘쳤던 게 알림·AI챗 입력창이 화면 밖으로 밀리던 원인) */}
         <nav className="hidden items-center gap-1 md:flex" aria-label="주요 메뉴">
           <Link href="/search" aria-label="검색" title="검색" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
-            <SearchIcon />
+            <RiSearchLine size={20} />
           </Link>
           <Link href="/saved" aria-label="저장" title="저장" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
-            <HeartIcon />
+            <RiBookmarkLine size={20} />
           </Link>
           <Link href="/scan" aria-label="스캔" title="스캔" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
-            <BarcodeIcon />
+            <RiQrScanLine size={20} />
           </Link>
           <Link href="/mypage" aria-label="마이페이지" title="마이페이지" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
-            <UserIcon />
+            <RiUser3Line size={20} />
           </Link>
         </nav>
 
-        {/* 알림은 모바일·데스크톱 항상 노출 */}
+        {/* ✅ 참고 디자인(AI챗 화면) — AI챗 화면(모바일)에서는 알림 종 대신 햄버거 메뉴를
+            보여주고, 누르면 지난 대화 목록(기록 > 리브)으로 이동합니다. 그 외 화면은
+            기존대로 알림 종. */}
+        {active === "ai" ? (
+          onHamburgerClick ? (
+            <button
+              type="button"
+              onClick={onHamburgerClick}
+              aria-label="지난 대화 목록"
+              title="지난 대화 목록"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            >
+              <RiMenuLine size={20} />
+            </button>
+          ) : (
+            <Link
+              href="/saved?tab=ai"
+              aria-label="지난 대화 목록"
+              title="지난 대화 목록"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground md:hidden"
+            >
+              <RiMenuLine size={20} />
+            </Link>
+          )
+        ) : null}
+
+        {/* 알림은 모바일·데스크톱 항상 노출(단, 모바일 AI챗 화면은 위 햄버거로 대체) */}
         <Link
           href="/notifications"
           aria-label="알림"
           title="알림"
-          className="relative ml-1 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+          className={`relative ml-1 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${active === "ai" ? "hidden md:flex" : ""}`}
         >
-          <BellIcon />
+          <RiNotification4Line size={20} />
           {MOCK_UNREAD_COUNT > 0 && (
             <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
               {MOCK_UNREAD_COUNT}
@@ -107,41 +143,4 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
   }
 
   return content;
-}
-
-function SearchIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-4-4" />
-    </svg>
-  );
-}
-function HeartIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20.8 8.9c0 5.2-8.8 10.1-8.8 10.1S3.2 14.1 3.2 8.9A4.6 4.6 0 0 1 12 6.2a4.6 4.6 0 0 1 8.8 2.7Z" />
-    </svg>
-  );
-}
-function BarcodeIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 5v14" /><path d="M7 5v14" /><path d="M10 5v14" /><path d="M14 5v14" /><path d="M17 5v14" /><path d="M21 5v14" />
-    </svg>
-  );
-}
-function UserIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.2 3.6-7 8-7s8 2.8 8 7" />
-    </svg>
-  );
-}
-function BellIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" />
-    </svg>
-  );
 }

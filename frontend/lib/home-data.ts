@@ -22,6 +22,7 @@ export type DiscoveredProduct = {
   originalPrice: number;
   discount: string;
   reason: string;
+  image: string;
 };
 
 interface BackendProduct {
@@ -64,6 +65,7 @@ function mockToDiscovered(p: MockProduct): DiscoveredProduct {
     originalPrice: p.price,
     discount: `${p.discountPercent}%`,
     reason: `정가보다 ${(p.price - finalPrice).toLocaleString()}원 저렴해요.`,
+    image: p.imageUrl ?? "",
   };
 }
 
@@ -100,13 +102,50 @@ export async function fetchDiscoveredProducts(): Promise<DiscoveredProduct[]> {
       discount:
         p.priceKrw > 0 ? `${Math.round(((p.priceKrw - p.finalPriceKrw) / p.priceKrw) * 100)}%` : "0%",
       reason: `정가보다 ${(p.priceKrw - p.finalPriceKrw).toLocaleString()}원 저렴해요.`,
+      image: p.imageUrl ?? "",
     }));
   } catch {
     return MOCK_PRODUCTS.filter((p) => p.discountPercent > 0).slice(0, 6).map(mockToDiscovered);
   }
 }
 
-/** 홈 "DISCOVER" — 실제 GET /api/products/search, 없으면 목업 카탈로그 */
+/** "뭐사지 · 자주 사요" — 실제 GET /api/orders/frequent(skuId/구매횟수만 줌)를
+ *  GET /api/products/{skuId}(가격/이미지)와 조합해 완전한 상품 카드로 만듦.
+ *  두 실제 엔드포인트를 합치는 것일 뿐, 가격/이미지를 새로 지어내지 않음. */
+export async function fetchFrequentProducts(): Promise<HomeProduct[]> {
+  if (!isLoggedIn()) return [];
+  try {
+    const frequent = await apiFetch<{ skuId: number; productName: string; purchaseCount: number }[]>(
+      "/api/orders/frequent"
+    );
+    if (frequent.length === 0) throw new Error("empty");
+
+    const top = frequent.slice(0, 8);
+    const details = await Promise.all(
+      top.map((f) =>
+        apiFetch<BackendProduct>(`/api/products/${f.skuId}`, { auth: false }).catch(() => null)
+      )
+    );
+
+    return top
+      .map((f, i) => {
+        const d = details[i];
+        if (!d) return null;
+        return {
+          id: f.skuId,
+          name: d.name,
+          category: d.categoryL1,
+          price: d.finalPriceKrw,
+          image: d.imageUrl ?? "",
+        };
+      })
+      .filter((p): p is HomeProduct => p !== null);
+  } catch {
+    return [];
+  }
+}
+
+
 export async function fetchPopularProducts(): Promise<HomeProduct[]> {
   try {
     const products = await apiFetch<BackendProduct[]>("/api/products/search", { auth: false });

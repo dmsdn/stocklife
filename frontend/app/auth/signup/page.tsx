@@ -15,7 +15,7 @@ import { writeSignupDraft } from "@/lib/signup-draft";
 const PHONE_LENGTH = 11;
 
 const underlineInput =
-  "rounded-none border-0 border-b-2 border-border bg-transparent px-0 focus-visible:border-foreground disabled:opacity-50";
+  "rounded-none border-0 border-b-2 border-border bg-transparent px-0 focus-visible:border-brand disabled:opacity-50";
 
 type Stage = "phone" | "code" | "password";
 
@@ -105,15 +105,15 @@ export default function SignupPage() {
     (stage === "password" && !passwordStepValid);
 
   return (
-    <div className="space-y-8">
-      <p className="text-2xl font-semibold leading-snug">
-        회원가입을 위해
+    <div className="flex min-h-full flex-col pt-[87px]">
+      <h1 className="text-2xl font-bold leading-8">
+        본인인증 및 로그인을 위한
         <br />
-        정보를 입력해주세요
-      </p>
+        전화번호를 입력해주세요
+      </h1>
 
-      <div className="space-y-4">
-        <div className="flex gap-2">
+      <div className="mt-[43px] space-y-[17px]">
+        <div className="flex items-end gap-2">
           <Input
             type="text"
             inputMode="numeric"
@@ -124,29 +124,31 @@ export default function SignupPage() {
             onChange={handlePhoneChange}
             onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
             disabled={codeSent}
-            className={`flex-1 ${underlineInput}`}
+            className={`h-10 flex-1 py-0 text-sm ${underlineInput}`}
           />
           <Button
             type="button"
             variant="outline"
+            className="h-10 rounded-sm border-brand text-brand text-sm hover:bg-brand/5 hover:text-brand disabled:border-border disabled:text-muted-foreground"
             disabled={!phoneValid || codeSent || sendingCode}
             onClick={handleSendCode}
           >
-            {sendingCode ? "발송 중..." : "인증번호"}
+            {sendingCode ? "발송 중..." : stage === "password" ? "인증완료" : "본인인증"}
           </Button>
         </div>
         {sendCodeError && <p className="text-xs text-danger">{sendCodeError}</p>}
 
-        {codeSent && (
+        {/* ✅ 인증 완료 후(비밀번호/이름 입력 단계)에는 인증번호 입력칸을 숨김 */}
+        {codeSent && stage === "code" && (
           <div className="space-y-1">
             <Input
               inputMode="numeric"
-              placeholder="인증번호를 입력해주세요"
+              placeholder="인증번호 6자리를 입력하세요"
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
               readOnly={stage !== "code"}
-              className={underlineInput}
+              className={`h-10 py-0 text-sm ${underlineInput}`}
             />
             {stage === "code" && !verifyError && (
               <p className="text-xs text-muted-foreground">인증번호를 발송했어요</p>
@@ -156,16 +158,16 @@ export default function SignupPage() {
         )}
 
         {stage === "password" && (
-          <div className="space-y-5">
+          <div className="space-y-[17px]">
             <div className="space-y-1">
               <Input
                 type="password"
                 autoComplete="new-password"
-                placeholder="비밀번호를 입력해주세요"
+                placeholder="비밀번호 입력 (영문 + 숫자 + 특수문자, 9자)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
-                className={underlineInput}
+                className={`h-10 py-0 text-sm ${underlineInput}`}
               />
               {password.length > 0 && !passwordValid && (
                 <p className="text-xs text-danger">영문, 숫자, 특수문자를 모두 포함해 8~20자로 입력해주세요</p>
@@ -179,11 +181,11 @@ export default function SignupPage() {
               <Input
                 type="password"
                 autoComplete="new-password"
-                placeholder="비밀번호를 한 번 더 입력해주세요"
+                placeholder="비밀번호 재입력"
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
-                className={underlineInput}
+                className={`h-10 py-0 text-sm ${underlineInput}`}
               />
               {passwordConfirm.length > 0 && !passwordMatches && (
                 <p className="text-xs text-danger">비밀번호가 일치하지 않아요</p>
@@ -198,7 +200,7 @@ export default function SignupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleBottomButton()}
-                className={underlineInput}
+                className={`h-10 py-0 text-sm ${underlineInput}`}
                 maxLength={50}
               />
             </div>
@@ -207,15 +209,17 @@ export default function SignupPage() {
       </div>
 
       {stage !== "phone" && (
-        <Button
-          type="button"
-          variant="secondary"
-          className="w-full"
-          disabled={bottomButtonDisabled}
-          onClick={handleBottomButton}
-        >
-          {verifying ? "확인 중..." : "다음"}
-        </Button>
+        <div className="mt-auto pb-[42px] pt-10">
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-[60px] w-full rounded-full shadow-[0_0_20px_rgba(0,0,0,0.05)]"
+            disabled={bottomButtonDisabled}
+            onClick={handleBottomButton}
+          >
+            {verifying ? "확인 중..." : "다음"}
+          </Button>
+        </div>
       )}
     </div>
   );

@@ -1,10 +1,11 @@
 // components/domain/scan-cart-dialog.tsx
-// ✅ 영수증 느낌으로: 각 줄에 상품 이미지(왼쪽) + 이름/수량/가격, 점선 구분선.
+// ✅ 참고 이미지(Frame 127/138, 스캔 중 담긴 상품 바텀시트)에 맞춰 "영수증" 점선/모노스페이스
+//   느낌을 걷어내고, 다른 화면(리스트 상세/카트)과 같은 상품 행 스타일(정사각 이미지 +
+//   이름/수량×가격, rounded-sm 이미지, rounded-full 결제 버튼)로 통일. 로직은 그대로.
 "use client";
 
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { readCartGroups, updateCartGroups, type CartGroup } from "@/lib/cart-storage";
 
 interface ScanCartDialogProps {
@@ -40,15 +41,19 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>스캔한 상품</DialogTitle>
+          <DialogTitle>{group?.title ?? "스캔한 상품"}</DialogTitle>
         </DialogHeader>
 
         {done ? (
           <div className="py-6 text-center">
             <p className="text-sm">결제가 완료됐어요.</p>
-            <Button className="mt-4 w-full" onClick={onClose}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 flex h-[60px] w-full items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground"
+            >
               닫기
-            </Button>
+            </button>
           </div>
         ) : !group || group.products.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
@@ -56,25 +61,20 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
           </p>
         ) : (
           <>
-            <div className="max-h-[50vh] space-y-3 overflow-y-auto rounded-sm border border-dashed border-border p-3 font-mono text-xs">
-              {group.products.map((p, i) => (
-                <div key={p.id}>
-                  {i > 0 && <div className="mb-3 border-t border-dashed border-border" />}
-                  <div className="flex items-center gap-3">
-                    {/* ✅ 담을 때 저장된 상품 이미지(CartProduct.image) 사용 */}
-                    {p.image ? (
-                      <img src={p.image} alt={p.name} className="h-10 w-10 shrink-0 rounded-sm border border-border object-cover" />
-                    ) : (
-                      <div className="h-10 w-10 shrink-0 rounded-sm border border-border bg-muted" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-sans text-sm">{p.name}</p>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>{p.price.toLocaleString()} × {p.quantity}</span>
-                        <span className="font-semibold text-foreground">
-                          {(p.price * p.quantity).toLocaleString()}원
-                        </span>
-                      </div>
+            <div className="max-h-[50vh] divide-y divide-border overflow-y-auto">
+              {group.products.map((p) => (
+                <div key={p.id} className="flex gap-3 py-3">
+                  {p.image ? (
+                    <img src={p.image} alt="" className="h-16 w-16 shrink-0 rounded-sm border border-border object-cover" />
+                  ) : (
+                    <div className="h-16 w-16 shrink-0 rounded-sm border border-border bg-muted" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{p.name}</p>
+                    {p.category && <p className="mt-0.5 text-xs text-muted-foreground">{p.category}</p>}
+                    <div className="mt-1 flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{p.quantity}개</span>
+                      <span className="font-semibold">{(p.price * p.quantity).toLocaleString()}원</span>
                     </div>
                   </div>
                 </div>
@@ -86,9 +86,14 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
               <span>{total.toLocaleString()}원</span>
             </div>
 
-            <Button className="w-full" disabled={checkingOut} onClick={handleCheckout}>
+            <button
+              type="button"
+              disabled={checkingOut}
+              onClick={handleCheckout}
+              className="flex h-[60px] w-full items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground disabled:opacity-50"
+            >
               {checkingOut ? "처리 중..." : "결제하기"}
-            </Button>
+            </button>
           </>
         )}
       </DialogContent>

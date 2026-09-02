@@ -5,8 +5,9 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { MapPin } from "lucide-react";
+import { RiMapPinLine } from "@remixicon/react";
 import { SaveToListDialog } from "./save-to-list-dialog";
+import { LocationMapDialog } from "./location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { apiFetch } from "@/lib/api-client";
 import { getAlternatives, compareProducts, type AlternativeProduct, type PopularityItem } from "@/lib/ai-proxy";
@@ -42,6 +43,7 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
   const [loading, setLoading] = useState(false);
   const [savePickerOpen, setSavePickerOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [locationMapOpen, setLocationMapOpen] = useState(false);
 
   useEffect(() => {
     if (!productId) return;
@@ -104,18 +106,27 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
 
                 <div>
                   {product.onPromo && (
-                    <p className="text-xs text-muted-foreground line-through">{product.priceKrw.toLocaleString()}원</p>
+                    <p className={`text-xs line-through ${product.discontinued ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+                      {product.priceKrw.toLocaleString()}원
+                    </p>
                   )}
-                  <p className="text-xl font-bold">{product.finalPriceKrw.toLocaleString()}원</p>
+                  <p className={`text-xl font-bold ${product.discontinued ? "text-muted-foreground/50" : ""}`}>
+                    {product.finalPriceKrw.toLocaleString()}원
+                  </p>
                   {product.discontinued && <p className="mt-1 text-xs text-danger">단종된 상품이에요</p>}
                 </div>
 
-                <div className="flex items-center gap-1.5 rounded-sm bg-muted px-3 py-2 text-xs text-muted-foreground">
-                  <MapPin size={24} />
+                <button
+                  type="button"
+                  onClick={() => inventory[0] && setLocationMapOpen(true)}
+                  disabled={!inventory[0]}
+                  className="flex items-center gap-1.5 rounded-sm bg-muted px-3 py-2 text-left text-xs text-muted-foreground disabled:cursor-default"
+                >
+                  <RiMapPinLine size={24} className="shrink-0" />
                   {inventory[0]
-                    ? `${inventory[0].floorNo}층 ${inventory[0].zoneId} 구역 · 재고 ${inventory[0].qty}개`
+                    ? `${inventory[0].floorNo}층 ${inventory[0].zoneId} 구역 · 매대 ${inventory[0].locationId} · 재고 ${inventory[0].qty}개`
                     : "매장 위치 정보 없음"}
-                </div>
+                </button>
 
                 <Button className="w-full" disabled={product.discontinued} onClick={() => setSavePickerOpen(true)}>
                   저장하기
@@ -158,6 +169,18 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
           });
         }}
       />
+
+      {inventory[0] && (
+        <LocationMapDialog
+          open={locationMapOpen}
+          onClose={() => setLocationMapOpen(false)}
+          floorNo={inventory[0].floorNo}
+          x={inventory[0].x}
+          y={inventory[0].y}
+          productName={product?.name ?? ""}
+          price={product?.finalPriceKrw ?? 0}
+        />
+      )}
     </>
   );
 }

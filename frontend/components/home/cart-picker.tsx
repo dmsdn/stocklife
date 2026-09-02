@@ -1,4 +1,4 @@
-import { ChevronRight, X } from "lucide-react";
+import { RiArrowRightSLine, RiCloseLine } from "@remixicon/react";
 
 import type { CartGroup } from "@/lib/cart-storage";
 import type { RecommendedProduct } from "@/lib/home-data";
@@ -47,7 +47,7 @@ export function CartPicker({
             className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
             aria-label="닫기"
           >
-            <X size={24} />
+            <RiCloseLine size={24} />
           </button>
         </div>
 
@@ -67,7 +67,7 @@ export function CartPicker({
                 </p>
               </div>
 
-              <ChevronRight
+              <RiArrowRightSLine
                 size={24}
                 className="text-muted-foreground"
               />

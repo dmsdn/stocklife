@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { ChevronRight, Phone } from "lucide-react";
+import { RiArrowRightSLine, RiPhoneLine } from "@remixicon/react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 
 // TODO: 실제 고객센터 번호로 교체
@@ -16,7 +16,7 @@ export default function SupportPage() {
         className="flex items-center gap-3 rounded-sm border border-border p-4"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-          <Phone size={24} />
+          <RiPhoneLine size={24} />
         </div>
         <div className="flex-1">
           <p className="text-sm text-muted-foreground">전화 문의</p>
@@ -27,7 +27,7 @@ export default function SupportPage() {
       <div className="mt-6 divide-y divide-border">
         <Link href="/mypage/faq" className="flex items-center justify-between py-3 text-sm">
           FAQ
-          <ChevronRight size={24} className="text-muted-foreground" />
+          <RiArrowRightSLine size={24} className="text-muted-foreground" />
         </Link>
       </div>
     </div>

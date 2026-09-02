@@ -4,24 +4,41 @@
 //   이 페이지가 실제 채팅 화면 역할을 합니다.
 "use client";
 
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { HomeAiHeader } from "@/components/layout/home-ai-header";
+import { SessionListDrawer } from "@/components/ai/session-list-drawer";
 import { SwipeNav } from "@/components/layout/swipe-nav";
 import { AiChatBody } from "@/components/ai/ai-chat-body";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { getMyProfile } from "@/lib/consumer-api";
+import { isLoggedIn } from "@/lib/api-client";
 
 function AiPageBody() {
   const searchParams = useSearchParams();
   const requestedSessionId = searchParams.get("session") ?? undefined;
+  const highlightParam = searchParams.get("highlight");
   const { initialMessage } = useAiPanel();
+
+  // ✅ 참고 디자인(AI챗 화면) — "안녕하세요 {실명}님,\n리브와 함께" — 예전엔 이름 자리에
+  //   고정 문자열 "OO"가 그대로 박혀 있었습니다. 홈 인사말(home-greeting.tsx)과 동일하게
+  //   getMyProfile()로 실제 이름을 받아옵니다.
+  const [name, setName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+    getMyProfile()
+      .then((p) => setName(p.name))
+      .catch(() => setName(null));
+  }, []);
 
   return (
     <AiChatBody
       sessionIdOverride={requestedSessionId}
       initialMessage={initialMessage}
-      greeting={"안녕하세요 OO님,\n어떤 주제로 시작해볼까요?"}
+      highlightMessageId={highlightParam ? Number(highlightParam) : undefined}
+      greeting={name ? `안녕하세요 ${name}님,\n리브와 함께` : "안녕하세요,\n리브와 함께"}
     />
   );
 }
@@ -30,6 +47,7 @@ export default function AiPage() {
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const { open, close } = useAiPanel();
+  const [sessionListOpen, setSessionListOpen] = useState(false);
 
   useEffect(() => {
     // ✅ 데스크톱 폭에서 이 라우트로 들어오면(주소 직접 입력, 모바일→웹 리사이즈 등)
@@ -58,7 +76,9 @@ export default function AiPage() {
     //   조상 쪽 padding이 얼마든 절대 뷰포트보다 커질 수 없어서 전체 스크롤이 생기지 않는다.
     //   (메시지 목록만 AiChatBody 내부에서 자체 스크롤됨)
     <div className="fixed inset-x-0 top-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 flex flex-col overflow-hidden bg-background md:hidden">
-      <HomeAiHeader active="ai" />
+      <HomeAiHeader active="ai" onHamburgerClick={() => setSessionListOpen(true)} />
+
+      <SessionListDrawer open={sessionListOpen} onClose={() => setSessionListOpen(false)} />
 
       <SwipeNav current={1} className="flex min-h-0 flex-1 flex-col">
         <Suspense fallback={<div className="flex-1" />}>

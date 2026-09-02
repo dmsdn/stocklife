@@ -1,4 +1,4 @@
-import { Trash2, Bookmark, MapPin } from "lucide-react";
+import { RiDeleteBin6Line, RiBookmarkLine, RiBookmarkFill, RiMapPinLine } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { QuantityStepper } from "./quantity-stepper";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -80,7 +80,7 @@ export function ProductCard({
             onClick={onLocationClick}
             className="mt-1 flex w-fit items-center gap-1 text-xs text-muted-foreground underline underline-offset-2"
           >
-            <MapPin size={24} />
+            <RiMapPinLine size={24} />
             {locationText}
           </button>
         )}
@@ -95,7 +95,7 @@ export function ProductCard({
                 onClick={onRemove}
                 className="ml-auto flex h-7 w-7 items-center justify-center text-muted-foreground"
               >
-                <Trash2 size={24} />
+                <RiDeleteBin6Line size={24} />
               </button>
             )}
           </div>
@@ -119,7 +119,7 @@ export function ProductCard({
                 aria-label={wishlisted ? "찜 해제" : "찜하기"}
                 className="flex h-7 w-7 items-center justify-center text-muted-foreground"
               >
-                <Bookmark size={24} fill={wishlisted ? "currentColor" : "none"} />
+                {wishlisted ? <RiBookmarkFill size={24} /> : <RiBookmarkLine size={24} />}
               </button>
             )}
           </div>

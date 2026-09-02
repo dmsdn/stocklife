@@ -26,16 +26,25 @@ interface MapCell {
   y: number;
   passable: boolean;
 }
+interface MapLocation {
+  locationId: string;
+  zoneId: string;
+  x: number;
+  y: number;
+}
 interface FloorMapApiResponse {
   floorNo: number;
   zones: { zoneId: string; name: string; zoneType: string }[];
   cells: MapCell[];
+  locations: MapLocation[];
 }
 
 const realGridCache = new Map<number, boolean[][]>();
 // ✅ zoneId -> zone 이름(예: "유제품 코너"). 배치 위치 조회에서 받은 zoneId를 사람이 읽을
 //   텍스트로 바꾸려면 필요. fetchRealFloorMap()이 통로 격자를 캐싱할 때 같이 채운다.
 const zoneNameCache = new Map<number, Map<string, string>>();
+// ✅ 매대 좌표 전체 목록(locationId/x/y) — "아무 매대나 눌러서 그 안의 상품 보기" 기능용.
+const locationsCache = new Map<number, MapLocation[]>();
 
 /** 실제 지도 데이터를 미리 불러와서 캐시를 채웁니다 (컴포넌트 마운트 시 호출) */
 export async function fetchRealFloorMap(floorNo: number): Promise<void> {
@@ -54,9 +63,16 @@ export async function fetchRealFloorMap(floorNo: number): Promise<void> {
     const zoneNames = new Map<string, string>();
     for (const zone of res.zones) zoneNames.set(zone.zoneId, zone.name);
     zoneNameCache.set(floorNo, zoneNames);
+
+    locationsCache.set(floorNo, res.locations ?? []);
   } catch {
     // 실패하면 캐시에 안 남기고, 아래 추측 로직으로 계속 동작
   }
+}
+
+/** 그 층의 매대 좌표 전체 목록. fetchRealFloorMap()을 먼저 불러야 채워집니다(못 불러왔으면 빈 배열). */
+export function getFloorLocations(floorNo: number): MapLocation[] {
+  return locationsCache.get(floorNo) ?? [];
 }
 
 /** zoneId로 사람이 읽을 zone 이름을 찾습니다. fetchRealFloorMap()을 먼저 불러야 채워집니다.

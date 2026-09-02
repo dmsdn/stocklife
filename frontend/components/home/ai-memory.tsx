@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  ArrowRight,
-  Sparkles,
-} from "lucide-react";
+import { RiArrowRightLine, RiSparkling2Line } from "@remixicon/react";
 
 import { SectionTitle } from "./section-title";
 
@@ -15,16 +12,14 @@ export function AiMemory({
   onContinue,
 }: AiMemoryProps) {
   return (
-    <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
+    <section className="w-full px-4 sm:px-6 lg:px-8">
       <SectionTitle
         title="AI가 기억하고 있어요"
       />
 
       <div className="rounded-sm bg-muted/70 p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background">
-            <Sparkles size={24} />
-          </div>
+          <RiSparkling2Line size={24} className="mt-0.5 shrink-0 text-foreground" />
 
           <div>
             <p className="text-sm font-medium">
@@ -43,7 +38,7 @@ export function AiMemory({
           className="mt-4 flex w-full items-center justify-center gap-1 rounded-sm bg-background py-2.5 text-sm font-medium"
         >
           지난 계획 이어가기
-          <ArrowRight size={24} />
+          <RiArrowRightLine size={24} />
         </button>
       </div>
     </section>

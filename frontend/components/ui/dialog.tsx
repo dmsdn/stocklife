@@ -5,7 +5,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { XIcon } from "lucide-react";
+import { RiCloseLine } from "@remixicon/react";
 
 // 모달 전체
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
@@ -92,12 +92,11 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-3 right-3"
-                size="icon-sm"
+                className="absolute top-3 right-3 h-8 w-8 p-0"
               />
             }
           >
-            <XIcon />
+            <RiCloseLine />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
