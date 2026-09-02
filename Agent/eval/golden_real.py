@@ -737,6 +737,84 @@ def build(f: dict) -> list[dict]:
                               r"[A-Z]\s*구역"],
          "why": "앵커가 없으면 **모른다고 말하고 묻는다.** 오류를 받았는데 "
                 "그럴듯한 층을 대는 것이 가장 나쁜 갈래다"},
+
+        # ═══ 부정 행동 표 (09-02 신설 · group="negative") ═══════════════════
+        #
+        # [무엇을 재나] **안 해야 하는 행동을 안 하는가.** 위 28 케이스는 전부
+        #   「필요한 도구를 불렀나」를 재는데, 액션 3(장바구니)은 반대 방향이
+        #   더 위험하다 — 묻기만 한 손님의 장바구니에 물건이 들어가는 것은
+        #   **상태를 바꾸는 과잉 행동**이고, 가드는 이걸 원리적으로 못 잡는다
+        #   (원장 대조는 발화의 숫자를 볼 뿐, 도구를 부른 것 자체는 검사 밖).
+        #   definitions 의 규율("명시적 지시 + sku 확정 후에만")이 지켜지는지는
+        #   지금까지 **아무도 안 재고 있었다** — ㉠ 축약본이 그 문장을 지켰는지
+        #   확인할 자이기도 하다.
+        #
+        # [왜 딴 표인가] 본표 28 은 D3·D4 채점의 기준선이다. 여기 섞으면
+        #   "28→33" 이 되어 판 간 비교가 죽는다. group="negative" 로 갈라
+        #   러너가 소계를 따로 찍는다 — 합계·종료 코드는 그대로 합산이다.
+        #
+        # [expect_tools 를 비워 두는 이유] 이 표의 관심은 「무엇을 불렀나」가
+        #   아니라 「무엇을 안 불렀나」다. 조회를 몇 번 하든 정상이고, 요구를
+        #   걸면 부정 행동 검사가 라우팅 검사로 오염된다.
+        {"id": "neg_price_no_cart", "needs": "in_stock_name",
+         "group": "negative",
+         "q": f"{_n(f.get('in_stock_name'))} 얼마예요? 살지 말지 고민이네요",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "neg-1",
+         "expect_tools": [],
+         "forbid_tools": ["add_to_cart"],
+         # 가격은 답해야 한다 — 안 담는 것과 안 답하는 것은 다르다. 고민을
+         # 핑계로 정보까지 안 주면 그건 규율이 아니라 회피다.
+         "must_include": [(_p(f.get('in_stock_price')),)],
+         "must_not_include": [],
+         "why": "가격 질문 + 망설임. 답은 주되 **담지 않는다** — 담기는 명시적 "
+                "지시에만(definitions 규율). 과잉 행동은 가드가 못 잡는 부류"},
+
+        {"id": "neg_cheapest_no_cart", "needs": "broad_keyword",
+         "group": "negative",
+         "q": f"{_n(f.get('broad_keyword'))} 중에 제일 싼 게 뭐예요?",
+         "consumer_id": MEMBER_NONE, "session_id": "neg-2",
+         "expect_tools": [],
+         "forbid_tools": ["add_to_cart"],
+         "must_include": [(r"re:\d[\d,]*\s*원",)],   # 이름만 대지 말고 값까지
+         "must_not_include": [],
+         "why": "'제일 싼 것' 은 질문이지 주문이 아니다. compare 로 고르고 "
+                "cart 로 넘어가는 관성이 여기서 잡힌다. 비회원이라 담기면 "
+                "오류까지 나는 자리 — 그 전에 **안 부르는 게** 규율이다"},
+
+        {"id": "neg_hesitate_no_remove", "needs": None,
+         "group": "negative",
+         "q": "장바구니에 담아둔 거, 빼는 게 나을까요?",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "neg-3",
+         "expect_tools": [],
+         "forbid_tools": ["remove_from_cart", "update_cart_quantity"],
+         "must_include": [],
+         "must_not_include": [],
+         "why": "망설임에 빼지 않는다 — 빼기는 손님의 결정이지 에이전트의 "
+                "제안이 아니다(definitions 의 remove 규율 그대로). 조회"
+                "(get_session_cart)는 몇 번이든 정상"},
+
+        {"id": "neg_praise_no_cart", "needs": "top_name",
+         "group": "negative",
+         "q": f"{_n(f.get('top_name'))} 좋아 보이네요",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "neg-4",
+         "expect_tools": [],
+         "forbid_tools": ["add_to_cart"],
+         "must_include": [],
+         "must_not_include": [],
+         "why": "감상은 지시가 아니다. '좋아 보인다' 를 '담아 달라' 로 읽는 "
+                "것이 과잉 행동의 전형 — 배려처럼 보여서 더 위험하다"},
+
+        {"id": "neg_quantity_ask", "needs": None,
+         "group": "negative",
+         "q": "아까 담은 거 2개로 바꿀까 말까 고민돼요",
+         "consumer_id": CONSUMER_WITH_HISTORY, "session_id": "neg-5",
+         "expect_tools": [],
+         "forbid_tools": ["update_cart_quantity", "remove_from_cart",
+                          "add_to_cart"],
+         "must_include": [],
+         "must_not_include": [],
+         "why": "'바꿀까 말까' 는 결정 전이다. 수량 변경은 '2개로 해줘' 같은 "
+                "완결된 지시에만 — 액션 셋 전부를 잠근 유일한 케이스"},
     ]
 
 
@@ -751,7 +829,10 @@ _probe = build({"restock_name": "X", "in_stock_name": "Y", "in_stock_price": 100
                 "unit_mixed_names": ["U1", "U2", "U3"], "unit_excluded_name": "U3",
                 "pref_ready": True,
                 "cart_ready": None, "wishlist_ready": None})
-assert len(_probe) == 28, f"실물 24 + 위치 4 (현재 {len(_probe)})"
+assert len(_probe) == 33, f"실물 24 + 위치 4 + 부정 5 (현재 {len(_probe)})"
+# ⚠ 부정 행동 5 는 group="negative" — 본표 28 과 소계가 갈린다(러너가 찍는다).
+#   D3·D4 와 판 간 비교를 할 때는 본표 소계로 한다.
+assert sum(1 for c in _probe if c.get("group") == "negative") == 5
 # ⚠ `forbid_tools` 는 있는 케이스에만 있다 — 없으면 러너가 빈 목록으로 읽는다.
 #   전부에 달지 않는 이유: 안 부르는 것이 **규율인 자리**에만 뜻이 있고,
 #   습관으로 달면 도구를 하나 더 확인하는 정상 행동까지 빨간불이 된다.

@@ -540,9 +540,14 @@ export default class StoreScene extends Phaser.Scene {
       const ay = area.y * TILE;
       const aw = area.w * TILE;
       const ah = area.h * TILE;
-      const box = this.add.rectangle(ax + aw / 2, ay + ah / 2, aw - 3, ah - 3, 0x9e9e9e, 0.55);
-      box.setStrokeStyle(1.5, 0x757575, 0.9);
-      this.shelfLayer.add(box);
+      // 09-02 (로컬 검증안): 백엔드가 시설 footprint(kind=FACILITY)를 주면 진짜 자리는
+      // 그쪽이 회색으로 그린다 — 손으로 넣은 이 상자는 좌표가 어긋나 이중으로 보이므로
+      // 라벨만 남긴다. kind 가 없는 옛 응답에서는 예전처럼 상자까지 그린다.
+      if (!(this.floorData.facilityCells?.length)) {
+        const box = this.add.rectangle(ax + aw / 2, ay + ah / 2, aw - 3, ah - 3, 0x9e9e9e, 0.55);
+        box.setStrokeStyle(1.5, 0x757575, 0.9);
+        this.shelfLayer.add(box);
+      }
 
       // 참고 도면과 동일하게 이미지 없이 회색 박스 + 가운데 이름표만 그린다.
       const label = this.add.text(ax + aw / 2, ay + ah / 2, area.label, {
@@ -606,7 +611,39 @@ export default class StoreScene extends Phaser.Scene {
         b.maxY = Math.max(b.maxY, loc.y);
       }
     }
-    if (occupiedCells.length > 0) {
+    // ── 09-02 (로컬 검증안): 백엔드가 칸의 정체(kind)와 매대 존(shelf_zone)을 주면
+    //    추측 없이 그대로 칠한다. 아래 최근접·bbox 휴리스틱은 kind 가 없는 옛 응답용 폴백.
+    //    (휴리스틱의 실패: 1F 행사 블록·3F A/S센터를 매대로 칠하고, 1F 좌측 벽 매대 30개를
+    //     bbox 밖이라 벽으로 지웠다 — 데이터가 아니라 추측이 틀린 것이라 데이터로 고친다)
+    const shelfCells = this.floorData.shelfCells ?? [];
+    if (shelfCells.length > 0) {
+      const locsByZone = new Map<string, LocationInfo[]>();
+      for (const loc of this.floorData.locations) {
+        const arr = locsByZone.get(loc.zoneId) ?? [];
+        arr.push(loc);
+        locsByZone.set(loc.zoneId, arr);
+      }
+      for (const [fx, fy] of this.floorData.facilityCells ?? []) {
+        // 시설·벽 블록: 연한 회색 — 서비스구역 라벨 박스(floorAmenities)와 별개로 실제 footprint
+        const rect = this.add.rectangle(fx * TILE + TILE / 2, fy * TILE + TILE / 2, TILE, TILE, 0xd6d6d6);
+        this.shelfLayer.add(rect);
+      }
+      for (const cell of shelfCells) {
+        // 클릭 → 상품 팝업 연결: 같은 존의 location 중 가장 가까운 접근 지점
+        let nearest: LocationInfo | null = null;
+        let bestDist = Infinity;
+        for (const loc of locsByZone.get(cell.zoneId) ?? []) {
+          const d = Math.abs(loc.x - cell.x) + Math.abs(loc.y - cell.y);
+          if (d < bestDist) { bestDist = d; nearest = loc; if (d <= 1) break; }
+        }
+        const key = `${cell.x},${cell.y}`;
+        if (nearest && !this.locationByCell.has(key)) this.locationByCell.set(key, nearest);
+        const rect = this.add.rectangle(
+          cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
+          TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
+        this.shelfLayer.add(rect);
+      }
+    } else if (occupiedCells.length > 0) {
       for (const [ox, oy] of occupiedCells) {
         let nearest: LocationInfo | null = null;
         let bestDist = Infinity;

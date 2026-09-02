@@ -101,7 +101,7 @@ _API = {
     "get_product":          "/api/products/{sku_id}",
     "get_products_by_skus": "/api/products/by-skus",
     "get_inventory":        "/api/products/{sku_id}/inventory",       # 구: /api/inventory/{sku_id}
-    "get_purchase_history": "/internal/purchases/history",           # 요청 ④ — 08-27 승인, 구현 대기
+    "get_purchase_history": "/internal/purchases/history",           # ✅ 09-01 팀 구현(jmy) — lookbackDays 기본 180 · 상한 365
     # ⚠ 08-27: `/api/sessions/{id}/cart` 는 **존재하지 않는다**(404). 팀계약에
     #   "백엔드 미확정"으로 적어 두고 그대로 둔 자리였다. 실물에 있는 것은
     #   `/internal/cart/session?consumerId=` — **이름은 session 인데 인자는 회원**
@@ -469,12 +469,21 @@ def get_purchase_history(member_id: int) -> list[dict]:
     방향 실수(최신→과거로 빼서 음수 간격)가 생긴다. 정렬 책임을 여기 고정한다.
     """
     if not config.USE_MOCK_SOT:
-        # 요청 ④ — 08-27에 **우리가 직접 구현**했다(InternalPurchaseController /history).
+        # 요청 ④ — 08-27 에 우리가 로컬로 먼저 만들었고, **09-01 에 팀(jmy)이 공식
+        #   구현**해 그쪽으로 갈아탔다(우리 판은 ljk_instant 패치에서 빠졌다).
         # ⚠ consumerId 가 아니라 memberId 다: 공개판은 consumerId→toMemberId 변환을
         #   거치는데, 그 길로 가면 시드 회원 1005 가 10,001,005 로 둔갑해 이력이
         #   항상 빈다. 내부판은 member_id 축을 그대로 받는다.
+        # ⚠ lookbackDays 를 **명시**한다 (09-02). 팀 판의 기준은
+        #   `Instant.now() - days` — 세계 시각(DEMO_NOW)이 아니라 **실제 시각**이다.
+        #   기본 180 이면 시연 이력(05-15~09-01)이 2026-11-11 부터 하루씩 잘린다.
+        #   오류가 아니라 「가장 오래된 구매가 조용히 사라지는」 종류라, 재구매
+        #   간격이 어느 날부터 짧게 계산돼도 아무도 모른다. 상한 365 를 박아
+        #   2027-05 까지 밀어 두고, 근본(무제한 또는 세계 시각 앵커)은 요청서에.
+        #   0 이하는 「무제한」이 아니라 기본 180 으로 떨어진다 — 그래서 최댓값.
         rows = _http_get(_API["get_purchase_history"],
-                         {"memberId": member_id}, headers=_internal_headers())
+                         {"memberId": member_id, "lookbackDays": 365},
+                         headers=_internal_headers())
         out = [{"sku_id": r.get("skuId"), "qty": r.get("qty"),
                 "purchased_at": r.get("purchasedAt")} for r in (rows or [])]
         # ⚠ **실물 경로도 여기서 정렬한다** — 08-28 발견. 위 독스트링이

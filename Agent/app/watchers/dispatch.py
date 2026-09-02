@@ -49,8 +49,71 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+import time
+from collections import deque
 
 from app import config, etiquette, prompts, sot_client
+
+# ── 결정 테이프 (09-02 · 제안 ④) — 개입하지 **않기로 한 결정**까지 남긴다 ─────
+#
+# [왜] `permit()` 은 거절 사유를 값으로 돌려주는데(독스트링: "감시자 로그에서
+#   '왜 조용했는가'를 추적하기 위해서"), 받는 쪽이 그걸 버리고 있었다 —
+#   `unknown` 만 찍고 cooldown·topic_already_done·session_quota_exhausted 는
+#   아무 데도 안 남았다. 악기는 있는데 테이프가 없는 상태.
+#   튜터 감사 연구(T4)의 결론이 정확히 이 자리다: *"시스템이 하지 않기로 한
+#   결정에 대해 무엇을 기록하는지가, 나중에 물을 수 있는 것의 한계를 정한다."*
+#   그 표(어느 게이트가 노출을 지배하나 — 그쪽 실측은 쿨다운 58.1%)를 우리
+#   파이프라인에서 만들려면 이 기록이 분모다.
+#
+# [무엇을 남기나] `_deliver` 의 관문마다 한 줄:
+#   permit_denied / permit_ok / no_brief / guard_block / push_fail /
+#   delivered / crash. 후보 생성(plan)은 규칙이라 결정적이고 재생 가능하므로
+#   여기서는 안 적는다 — 비결정적인 것(LLM·가드·전달)이 시작되는 지점부터다.
+#   ⚠ drain 내부의 우선순위 탈락(pick)은 이 테이프 밖이다 — 그건 「후보 간
+#   경쟁」이지 「게이트 거절」이 아니고, plan 재생으로 언제든 복원된다.
+#
+# [어디에] 메모리 deque(최근 500 — 서빙이 무한히 자라면 안 된다) + 환경변수
+#   `DECISION_TAPE` 에 경로를 주면 JSONL 로도 쌓는다(연구·장기 계측용).
+#   기본은 파일 없음 — 서빙 경로에 말 없는 파일쓰기를 늘리지 않는다.
+TAPE: deque = deque(maxlen=500)
+_TAPE_PATH = os.environ.get("DECISION_TAPE", "")
+
+
+def _tape(stage: str, session_id: str, decision: dict | None, **extra) -> None:
+    rec = {"ts": round(time.time(), 3), "stage": stage, "session": session_id}
+    if decision:
+        rec["topic_type"] = decision.get("topic_type")
+        rec["topic_key"] = decision.get("topic_key")
+        rec["mode"] = decision.get("mode")
+    rec.update(extra)
+    TAPE.append(rec)
+    if _TAPE_PATH:
+        try:
+            with open(_TAPE_PATH, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except OSError as e:
+            # 테이프가 개입을 죽이면 안 된다 — 기록 실패는 경고로 끝낸다.
+            print(f"[tape] 기록 실패({type(e).__name__}) — 개입은 계속한다")
+
+
+# ── 발화기 이음매 (09-02 · 제안 ④) — runner 의 `--chat` 과 같은 계열 ─────────
+#
+# [왜] 자발형 파이프라인에서 LLM 이 하는 일은 ③문장 생성뿐이다. 후보는
+#   규칙(감시자)이, 허가는 규칙(예절)이 정하므로, **발화기만 갈아끼우면
+#   후보 집합이 고정된 통제 실험**이 된다 — Claude 와 우리 모델(T17)을 같은
+#   게이트 뒤에 세우고 가드 탈락률·전달 수만 비교할 수 있다.
+# [계약] `loop.run_chat` 과 같은 서명이어야 한다 — 특히 `allow_actions=False`
+#   키워드를 받아야 한다(자발형은 경로에서 액션을 잠근다). 어댑터가 이 인자를
+#   버리면 **잠금이 조용히 풀린다.**
+_CHAT = None
+
+
+def set_chat(fn) -> None:
+    """발화기를 갈아끼운다(None 이면 기본 loop.run_chat). 평가·실험 전용."""
+    global _CHAT
+    _CHAT = fn
 
 # (57) 유형 → 지시문 조립 함수. 감시자가 자기 것을 register()로 넣는다.
 #   함수의 모양: async def build(cand: dict) -> str | None
@@ -109,9 +172,16 @@ async def _deliver(session_id: str, decision: dict) -> bool:
     verdict = etiquette.permit(session_id, decision["topic_type"],
                                decision["topic_key"])
     if not verdict["allowed"]:
+        # 사유를 **버리지 않는다** — cooldown 인지 총량인지 중복인지가 남아야
+        # "왜 조용했는가"를 나중에 셀 수 있다(테이프 머리말 참조).
+        _tape("permit_denied", session_id, decision, reason=verdict["reason"])
         if verdict["reason"].startswith("unknown"):
             print(f"[dispatch] 예절 거절(이상): {verdict['reason']}")
+        else:
+            print(f"[dispatch] 예절 거절 session={session_id} "
+                  f"유형={decision['topic_type']} 사유={verdict['reason']}")
         return False
+    _tape("permit_ok", session_id, decision)
 
     _BUSY.add(session_id)
     try:
@@ -123,6 +193,7 @@ async def _deliver(session_id: str, decision: dict) -> bool:
             if text:
                 parts.append(text)
         if not parts:
+            _tape("no_brief", session_id, decision)
             return False                   # 하나도 못 만들었으면 개입 자체가 없다
 
         if decision["mode"] == "bundle":
@@ -137,7 +208,7 @@ async def _deliver(session_id: str, decision: dict) -> bool:
         # allow_actions=False: 손님이 시키지 않았으므로 장바구니 조작을 **경로에서**
         # 잠근다(프롬프트 금지는 지침일 뿐 — 08-24 검수).
         result = await asyncio.to_thread(
-            loop.run_chat, message, member_id, session_id, None,
+            _CHAT or loop.run_chat, message, member_id, session_id, None,
             allow_actions=False)
 
         gv = guard.check(result["reply"], result["ledgers"])
@@ -147,12 +218,15 @@ async def _deliver(session_id: str, decision: dict) -> bool:
             # 예절 예산을 안 깎아야 다음 기회가 산다.
             print(f"[dispatch] 가드 차단 — 개입 폐기: "
                   f"{[v['reason'] for v in gv['violations']]}")
+            _tape("guard_block", session_id, decision,
+                  reasons=[v["reason"] for v in gv["violations"]])
             return False
 
         pushed = await asyncio.to_thread(
             sot_client.push_proactive_message, session_id, result["reply"])
         if not pushed.get("ok"):
             print(f"[dispatch] 전달 실패 — 기록 안 함: {pushed}")
+            _tape("push_fail", session_id, decision)
             return False
 
         # 묶음이면 안의 각 항목도 **개별 사안으로** 장부에 적는다. 안 적으면
@@ -166,10 +240,12 @@ async def _deliver(session_id: str, decision: dict) -> bool:
                 done(cand)
         print(f"[dispatch] {decision['mode']} 발화 완료 session={session_id} "
               f"유형={decision['topic_type']} 항목={len(decision['items'])}")
+        _tape("delivered", session_id, decision, chars=len(result["reply"] or ""))
         return True
     except Exception as e:
         print(f"[dispatch] 개입 처리 실패 session={session_id}: "
               f"{type(e).__name__}: {e}")
+        _tape("crash", session_id, decision, error=type(e).__name__)
         return False
     finally:
         _BUSY.discard(session_id)          # 예외 경로에서도 잠금 해제
@@ -210,6 +286,8 @@ def reset() -> None:
     """등록·잠금 초기화 — 테스트 전용. 운영 코드는 부르지 않는다."""
     _BUILDERS.clear()
     _BUSY.clear()
+    TAPE.clear()
+    set_chat(None)
 
 
 # ── 스모크 (LLM·네트워크 없음 — plan까지): python -m app.watchers.dispatch ──
@@ -260,5 +338,41 @@ if __name__ == "__main__":
         assert etiquette.permit(S, "HESITATION_HELP", "hes:9:9")["allowed"]
 
     asyncio.run(_t())
+
+    # ⑦ 테이프 — 거절 사유가 **남는다** (⑥까지의 침묵이 이제 기록이다)
+    async def _t7():
+        etiquette.reset(); reset()
+        etiquette.record(S, "hes:1:2")             # 이미 말한 사안으로 만든다
+        etiquette.stage(S, HES)
+        sid, d = plan([S])[0]
+        assert await _deliver(sid, d) is False
+        assert TAPE[-1]["stage"] == "permit_denied", TAPE[-1]
+        assert TAPE[-1]["reason"] == "topic_already_done", TAPE[-1]
+
+    asyncio.run(_t7())
+
+    # ⑧ 발화기 이음매 — LLM 없이 가짜 발화기로 ①~⑥ 전 관문을 완주한다.
+    #   mock 전달(print)까지 실제 코드가 돌므로, 이 스모크가 통과하면
+    #   「후보 고정 + 발화기 교체」 실험의 배선이 산 것이다.
+    async def _t8():
+        etiquette.reset(); reset()
+
+        async def _b(cand):
+            return "손님께 자리 변경을 알려 드리세요."
+        register("LOCATION_MOVED", _b)
+
+        def _fake_chat(message, consumer_id=None, session_id=None, history=None,
+                       allow_actions=True, position=None):
+            assert allow_actions is False, "자발형 잠금이 이음매에서 풀렸다"
+            return {"reply": "찾으시는 상품의 자리가 바뀌었어요.",
+                    "trace": [], "ledgers": {}}
+        set_chat(_fake_chat)
+        etiquette.stage(S, LOC)
+        sid, d = plan([S])[0]
+        assert await _deliver(sid, d) is True, TAPE[-1]
+        stages = [r["stage"] for r in TAPE]
+        assert stages == ["permit_ok", "delivered"], stages
+
+    asyncio.run(_t8())
     etiquette.reset(); reset()
-    print("dispatch 스모크 6갈래 전부 통과")
+    print("dispatch 스모크 8갈래 전부 통과")
