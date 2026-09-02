@@ -7,7 +7,6 @@ import TransferChoiceModal from './components/TransferChoiceModal';
 import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
 import CartModal from './components/CartModal';
-import AIChatModal from './components/AIChatModal';
 import ShoppingListModal from './components/ShoppingListModal';
 import { fetchFloorData } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
@@ -51,7 +50,6 @@ export default function App() {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [purchased, setPurchased] = useState<CartItem[]>([]);
     const [cartOpen, setCartOpen] = useState(false);
-    const [chatOpen, setChatOpen] = useState(false);
     const [productPopup, setProductPopup] = useState<{ location: LocationInfo; products: ProductInfo[] } | null>(null);
 
     // 쇼핑목록(9~11번): 검색해서 담고, 순서를 바꾸고, 그 순서대로 캐릭터를 안내한다.
@@ -441,24 +439,6 @@ export default function App() {
                     </button>
 
                     <button
-                        onClick={() => setChatOpen(true)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '6px 12px',
-                            borderRadius: 8,
-                            border: '1px solid #3a3f4b',
-                            background: '#1e2128',
-                            color: '#60a5fa',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        🤖💬 AI Chat
-                    </button>
-
-                    <button
                         onClick={() => setShoppingListOpen(true)}
                         style={{
                             display: 'flex',
@@ -601,7 +581,6 @@ export default function App() {
                 />
             )}
 
-            {chatOpen && <AIChatModal onClose={() => setChatOpen(false)} />}
 
             {shoppingListOpen && (
                 <ShoppingListModal
