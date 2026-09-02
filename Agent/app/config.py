@@ -65,11 +65,33 @@ MEMBER_ID_OFFSET = 10_000_000
 def to_member_id(consumer_id: int | None) -> int | None:
     """로그인 사용자 번호 → 우리 세계의 회원 번호. 비회원이면 None 그대로.
 
-    ⚠ 반대 방향(member → consumer)은 만들지 않는다. 시드 회원(1001~11000)은
-      대응하는 로그인 계정이 없어서 **되돌릴 수 없기 때문**이다 — 만들어 두면
-      언젠가 음수 consumer_id 가 생긴다.
+    ⚠ 반대 방향(member → consumer)은 **무조건 역산으로는** 만들지 않는다. 시드
+      회원(1001~11000)은 대응하는 로그인 계정이 없어서 되돌릴 수 없기 때문이다 —
+      뺄셈만 하면 언젠가 음수 consumer_id 가 생긴다. 아래 `to_consumer_id` 는 그
+      경계를 지키는 판(OFFSET 미만이면 None)이다.
     """
     return None if consumer_id is None else MEMBER_ID_OFFSET + int(consumer_id)
+
+
+def to_consumer_id(member_id: int | None) -> int | None:
+    """세계 회원 번호 → 로그인 사용자 번호. **로그인 손님이 아니면 None.**
+
+    [왜 09-02 에 생겼나] 백엔드 창구 중 `consumerId` 를 받는 것이 둘 있다 —
+    `/internal/cart/session`(장바구니) · `/internal/orders/frequent`(반복구매).
+    `sot_client` 가 거기에 member_id(세계 축)를 넣고 있었고, 백엔드는 10,000,005 번
+    손님을 모르니 **200 에 빈 결과**를 줬다. 오류가 아니라 빈 목록이라 도구 23/23 ·
+    골든셋이 초록인 채로 장바구니 조회와 개인 반복구매 가중이 죽어 있었다.
+    부정 행동 기준선(09-02)이 "장바구니가 비어 있어요"를 세 번 연속 내고서야
+    보였다 — 데이터가 아니라 축 착오였다. 09-01(consumer→member 누락)의 정확히
+    반대 방향 사고다. 축 변환은 **여기 한 곳**에만 둔다 — 부르는 쪽마다 빼면 둘 중
+    하나는 언젠가 음수를 만든다.
+
+    [경계] OFFSET 미만은 시드 회원(1001~) 이라 None — 그 회원은 로그인 손님이
+      아니므로 장바구니·주문이 없는 것이 **맞는** 답이다.
+    """
+    if member_id is None or int(member_id) < MEMBER_ID_OFFSET:
+        return None
+    return int(member_id) - MEMBER_ID_OFFSET
 
 
 # ── SoT 연결 ────────────────────────────────────────────────────────────────

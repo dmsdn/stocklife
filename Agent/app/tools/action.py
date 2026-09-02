@@ -102,6 +102,20 @@ def set_consumer_id(consumer_id: int | None) -> None:
     _CURRENT_CONSUMER_ID = consumer_id
 
 
+def current_consumer_id() -> int | None:
+    """지금 요청의 **백엔드 축** 신원(consumer_id). 비회원이면 None.
+
+    [왜 새로 연다 — 09-02] 신원은 축이 둘이다: 백엔드 축(consumer_id, 장바구니·
+    주문·로그인)과 세계 축(member_id = 10,000,000 + consumer_id, 구매 이력·찜·
+    추천). `query.current_member_id()` 만 열려 있어서 `sot_client` 의 장바구니·
+    반복구매 조회가 **세계 축 값을 백엔드 창구의 consumerId 에** 넣고 있었다 —
+    백엔드는 10,000,005 번 손님을 모르니 200 에 빈 장바구니가 온다. 오류가 아니라
+    빈 결과라 부정 행동 기준선(09-02)에서야 드러났다("장바구니가 비어 있어요"가
+    데이터가 아니라 축 착오였다). 09-01 의 반대 방향 사고와 같은 계열이다.
+    """
+    return _CURRENT_CONSUMER_ID
+
+
 def _require_member() -> tuple[int | None, dict | None]:
     """회원인지 확인하고, 아니면 도구 결과로 쓸 오류 dict를 돌려준다.
 
