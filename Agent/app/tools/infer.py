@@ -1094,20 +1094,34 @@ def find_facility(kind: str, floor_no: int | None = None) -> dict:
         others = [{k: c[k] for k in ("kind", "label", "floor_no", "x", "y")} for c in cands if c is not best]
         return {"kind": best["kind"], "label": best["label"], "floor_no": best["floor_no"],
                 "x": best["x"], "y": best["y"], "distance_m": dist, "distance_basis": basis,
+                # 손님 위치도 싣는다 — "지금 2층에 계시니" 의 '2층'이 원장에 있어야 한다.
+                # ⚠ 키 이름이 floor_no 여야 가드의 층 검사(_locations)가 읽는다.
+                "position": {"floor_no": pos[0], "x": pos[1], "y": pos[2]},
                 "position_confidence": tier, "others": others[:6], "read_as": read_as}
 
     # 위치를 모른다 — 층별로 어디에 있는지만
     by_floor = {}
     for c in cands:
-        by_floor.setdefault(c["floor_no"], []).append(
-            {k: c[k] for k in ("kind", "label", "x", "y")})
+        # ⚠ 층 번호를 **값으로도** 넣는다 — 09-03 실측: dict 키로만 두면 원장에서 숫자로
+        #   안 잡혀 "계산대는 1층에 있어요"의 '1층'이 unsupported 로 막혔다(가드는 값만 본다).
+        by_floor.setdefault(str(c["floor_no"]), []).append(
+            {k: c[k] for k in ("kind", "label", "floor_no", "x", "y")})
+    on_floors = sorted({c["floor_no"] for c in cands})
     return {"kind": kinds[0] if len(kinds) == 1 else "RESTROOM",
             "label": "·".join(dict.fromkeys(FACILITY_LABELS[k] for k in kinds)),
-            "floor_no": None, "x": None, "y": None, "distance_m": None, "distance_basis": None,
+            "floor_no": on_floors[0] if len(on_floors) == 1 else None,
+            "floors_with_facility": [{"floor_no": f} for f in on_floors],
+            # 가드의 층 검사는 키 이름 floor_no 만 읽는다(guard._locations) — current_floor
+            # 같은 이름으로 두면 "지금 2층" 이 unsupported 로 막힌다(09-03 실측).
+            "position": {"floor_no": pos[0], "x": pos[1], "y": pos[2]} if pos else None,
+            "x": None, "y": None, "distance_m": None, "distance_basis": None,
             "by_floor": by_floor,
-            "read_as": ("손님 위치를 모릅니다(스캔 기록 없음). 층별 위치만 말하고, 몇 층인지 "
-                        "물어보세요. 좌표는 격자(1칸=1m, 원점 좌상단)라 '오른쪽 벽 쪽' 같은 "
-                        "방향어로 옮겨 말하세요 — 숫자 좌표를 그대로 읽지 않습니다.")}
+            "read_as": (("손님은 지금 " + str(pos[0]) + "층인데 이 시설은 그 층에 없습니다 — "
+                         "있는 층(floors_with_facility)을 말하고 에스컬레이터·엘리베이터로 이동을 권하세요. ")
+                        if pos else
+                        "손님 위치를 모릅니다(스캔 기록 없음). 층별 위치만 말하고, 몇 층인지 물어보세요. ")
+                       + "좌표는 격자(1칸=1m, 원점 좌상단)라 '오른쪽 벽 쪽' 같은 방향어로 옮겨 "
+                         "말하세요 — 숫자 좌표를 그대로 읽지 않습니다."}
 
 
 def get_position() -> dict:
