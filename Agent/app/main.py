@@ -213,6 +213,15 @@ async def lifespan(app: FastAPI):
 # 팀이 이 프로세스를 뭐라 부를지는 config 한 곳에서 바뀌어야 한다(config.SERVICE_NAME 주석).
 app = FastAPI(title=config.SERVICE_NAME, lifespan=lifespan)
 
+# ── 프론트 직행 창구 3종 (09-01) ────────────────────────────────────────────
+# 백엔드 `AiProxyController` 가 릴레이하는 `/api/ai/search`·`/api/products/
+# {id}/alternatives`·`/api/ai/photo-search`. **설계서 §4.3 의 워크플로 경로**라
+# 아래 `/agent/chat`(에이전트 경로)과 통로가 다르다 — 그래서 파일도 다르다.
+# 이 줄이 없으면 세 경로가 전부 404 이고, 백엔드는 500 으로 감싸 프론트에
+# 넘긴다(즉 **화면에서는 "AI 가 고장났다"로 보인다**).
+from app import routes_frontend                                # noqa: E402
+app.include_router(routes_frontend.router)
+
 
 # ── 차단 시 안전 문구 ───────────────────────────────────────────────────────
 # prompts.py의 "지금 안 되는 것" 화법과 같은 결 — 범위 밖("제 담당이 아니라서")으로

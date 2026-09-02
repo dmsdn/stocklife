@@ -1234,8 +1234,13 @@ def match_preferences(top_k: int = 3) -> dict:
         "read_as": (
             "후보와 근거만 말하고, 이유를 지어내지 마세요 — why 에 담긴 것만 "
             "씁니다. 후보 여럿이 같은 소분류일 수 있습니다(다양화는 소분류당 "
-            "최대 3개까지 허용합니다). 이력이 적으면(history_skus 가 한 자리) "
-            "'아직 잘 모르지만'을 붙이세요. "
+            # ⚠ 09-01: 여기에 `history_skus` 라고 칸 이름을 적었더니 모델이 그것을
+            #   **손님 발화에 그대로 옮겼다** — "(history_skus=0) 정확도가 낮지만".
+            #   규율은 모델에게 하는 말인데, 칸 이름을 쓰면 그 말이 새어 나갈
+            #   통로가 열린다. 조건은 **사람 말로** 적는다.
+            "구매한 상품 종류가 열 가지 미만이면 '아직 잘 모르지만'을 붙이세요. "
+            "⚠ 그때도 **숫자나 칸 이름을 발화에 넣지 마세요** — 손님은 우리가 "
+            "무엇을 세는지 알 이유가 없습니다. "
             "⚠ axes_inferred(반려·자녀)는 **구매 이력에서 추정한 것**이지 "
             "손님이 알려준 정보가 아닙니다 — '반려동물 키우시죠?'처럼 단정하지 "
             "말고, 그 소분류를 사셨다는 사실까지만 말하세요. "
@@ -1262,4 +1267,16 @@ def run(tool_name: str, tool_input: dict) -> dict:
     except TypeError as e:
         return {"error": "bad_arguments", "message": str(e)}
     except Exception as e:                                     # noqa: BLE001
-        return {"error": "infer_failed", "message": f"{type(e).__name__}: {e}"}
+        # ⚠ 09-01: 예전에는 `message` 에 예외 문자열만 담았다. 그러면 모델이
+        #   받은 것이 `HTTPStatusError: Client error '404' for url http://…` 이고,
+        #   그걸 손님 말로 옮긴 결과가 **"백엔드 응답에 문제가 있는 것 같아요"**
+        #   였다. 손님은 우리 서버 구조를 알 이유가 없다.
+        #   → 원인은 **로그로**(고치는 사람에게), 발화 규율은 **결과로**(모델에게).
+        #   다른 도구들이 이미 그렇게 한다(`no_member`·`catalog_mismatch`).
+        print(f"[infer] {tool_name} 실패 — {type(e).__name__}: {e}")
+        return {"error": "infer_failed",
+                "detail": f"{type(e).__name__}: {e}",     # 트레이스·디버깅용
+                "message": ("이 기능을 지금 쓸 수 없습니다. **이 기능 없이 답할 수 "
+                            "있는 부분만** 답하고, 손님에게는 '지금 그건 확인이 "
+                            "어렵다'까지만 말하세요. ⚠ 서버·백엔드·오류 같은 "
+                            "내부 사정은 언급하지 마세요.")}

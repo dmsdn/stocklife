@@ -252,7 +252,10 @@ def main() -> int:
 
     totals = {k: [] for k, _ in DIMENSIONS}
     for c in cases:
-        query.set_identity(c.get("consumer_id"), c.get("session_id"))
+        # ⚠ 09-01 제거: 여기서 신원을 직접 박지 않는다. `run_chat` 이
+        #   `config.to_member_id` 로 변환해 등록하므로, 여기서 consumer_id 를
+        #   member_id 자리에 넣으면 **변환 전 값으로 덮어썼다가** run_chat 이
+        #   다시 덮는 무의미한 왕복이었고, 읽는 사람에게는 두 축이 같은 것처럼 보였다.
         out = loop.run_chat(c["q"], consumer_id=c.get("consumer_id"),
                             session_id=c.get("session_id"))
         reply = out["reply"] if isinstance(out, dict) else str(out)
