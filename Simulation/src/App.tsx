@@ -8,7 +8,6 @@ import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
 import CartGroupModal from './components/CartGroupModal';
 import CheckoutTargetModal from './components/CheckoutTargetModal';
-import AIChatModal from './components/AIChatModal';
 import ShoppingListModal from './components/ShoppingListModal';
 import { fetchFloorData } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
@@ -66,7 +65,6 @@ export default function App() {
     // 담을 리스트 선택 — null이면 예전처럼 "기본 장바구니"에 담긴다(하위 호환 기본값).
     const [cartGroups, setCartGroups] = useState<CartGroupOption[]>([]);
     const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
-    const [chatOpen, setChatOpen] = useState(false);
     const [productPopup, setProductPopup] = useState<{
         baseLabel: string;
         groups: { location: LocationInfo; level: number; products: ProductInfo[] }[];
@@ -216,8 +214,14 @@ export default function App() {
     // 반환값: 목적지 층까지 실제로 도착했으면 true. false면(경로 없음/시설 없음/에러 등)
     // 호출부가 "도착한 셈 치고" 다음 단계로 넘어가면 안 된다 — 2번(쇼핑목록이 걷지도 않고
     // 다음 층으로 넘어가버리는) 버그가 바로 이걸 안 지켜서 생겼던 것.
+    // fromFloor는 반드시 "호출 시점의 실제 캐릭터 층"을 명시적으로 받는다 — playerFloor
+    // React state를 클로저로 참조하면, 쇼핑목록 자동 안내처럼 한 번의 비동기 루프 안에서
+    // startTrip을 연달아 호출할 때 그 루프 시작 시점의 오래된(stale) playerFloor 값이
+    // 계속 재사용돼서(리렌더로 startTrip이 새로 안 만들어지므로) 이미 이동한 뒤인데도
+    // "출발 층"이 처음 그 자리로 되돌아가 버린다 — 쇼핑목록 안내 중 캐릭터가 뜬금없이
+    // 이전 층으로 순간이동했다가 다시 엘리베이터를 타는 버그의 원인이었다.
     const startTrip = useCallback(
-        async (toFloor: number, targetCell: GridPoint, method: TransferMethod): Promise<boolean> => {
+        async (fromFloor: number, toFloor: number, targetCell: GridPoint, method: TransferMethod): Promise<boolean> => {
             const canvas = canvasRef.current;
             if (!canvas) return false;
             setBusy(true);
@@ -230,14 +234,20 @@ export default function App() {
             // 매대 클릭/층 전환/쇼핑목록 안내가 전부 조용히 아무 반응도 안 하는 것처럼 보인다 —
             // try/finally로 무슨 일이 있어도 busy는 반드시 풀리게 한다.
             try {
-                const startData = await getFloorData(playerFloor);
-                setViewFloor(playerFloor);
+                const startData = await getFloorData(fromFloor);
+                setViewFloor(fromFloor);
                 setViewFloorData(startData);
-                canvas.loadFloor(startData, { startCell: playerCell ?? undefined, hidePlayer: false });
+                // playerCell(React state)이 아니라 캔버스에서 지금 이 순간의 실제 좌표를 직접 읽는다.
+                // 쇼핑목록 자동 안내처럼 한 번의 루프 안에서 startTrip을 연달아 호출하면, 이전 호출들
+                // 사이에 playerCell state가 갱신돼도 이미 실행 중인 이 함수의 클로저는 루프 시작 시점의
+                // 오래된 playerCell을 계속 들고 있다 — fromFloor에서 고친 것과 같은 종류의 stale 버그라서,
+                // 캐릭터가 엉뚱한(예전 층의) 좌표에서 다시 그려지는 원인이 될 수 있다.
+                const liveCell = canvas.getPlayerGrid() ?? playerCell ?? undefined;
+                canvas.loadFloor(startData, { startCell: liveCell, hidePlayer: false });
 
                 const arrived = await runTrip({
                     canvas,
-                    fromFloor: playerFloor,
+                    fromFloor,
                     toFloor,
                     targetCell,
                     method,
@@ -260,7 +270,7 @@ export default function App() {
                 setBusy(false);
             }
         },
-        [playerFloor, playerCell, getFloorData]
+        [playerCell, getFloorData]
     );
 
     const handleFacilityInteract = useCallback(
@@ -275,7 +285,7 @@ export default function App() {
                     setTimeout(() => setStatusMessage(''), 2000);
                     return;
                 }
-                startTrip(target, { x: facility.x, y: facility.y }, 'escalator');
+                startTrip(playerFloor, target, { x: facility.x, y: facility.y }, 'escalator');
             } else if (facility.type === 'elevator') {
                 setElevatorPrompt(true);
             }
@@ -437,7 +447,7 @@ export default function App() {
                 } else {
                     // startTrip은 자기 자신이 busy를 true→false로 관리하고 끝에 반드시 false로 풀어준다
                     // (try/finally). 목록 전체가 끝날 때까지는 다시 잠가서 중간에 다른 조작이 끼어들지 않게 한다.
-                    const arrived = await startTrip(it.floorNo, { x: it.x, y: it.y }, 'elevator');
+                    const arrived = await startTrip(currentFloor, it.floorNo, { x: it.x, y: it.y }, 'elevator');
                     if (!arrived) {
                         setStatusMessage(`${it.floorNo}층으로 이동하지 못했습니다. (엘리베이터 경로를 찾지 못했어요)`);
                         setTimeout(() => setStatusMessage(''), 3500);
@@ -554,24 +564,6 @@ export default function App() {
                     </button>
 
                     <button
-                        onClick={() => setChatOpen(true)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '6px 12px',
-                            borderRadius: 8,
-                            border: '1px solid #3a3f4b',
-                            background: '#1e2128',
-                            color: '#60a5fa',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        🤖💬 AI Chat
-                    </button>
-
-                    <button
                         onClick={() => setShoppingListOpen(true)}
                         style={{
                             display: 'flex',
@@ -685,7 +677,7 @@ export default function App() {
                     fromFloor={playerFloor}
                     toFloor={transferPrompt.targetFloor}
                     escalatorAvailable={escalatorAvailable}
-                    onChoose={(method) => startTrip(transferPrompt.targetFloor, transferPrompt.targetCell, method)}
+                    onChoose={(method) => startTrip(playerFloor, transferPrompt.targetFloor, transferPrompt.targetCell, method)}
                     onCancel={() => setTransferPrompt(null)}
                 />
             )}
@@ -697,7 +689,7 @@ export default function App() {
                         const data = await getFloorData(floor);
                         const facility = data.facilities.find((f) => f.type === 'elevator');
                         const target = facility ? { x: facility.x, y: facility.y } : { x: 2, y: 2 };
-                        startTrip(floor, target, 'elevator');
+                        startTrip(playerFloor, floor, target, 'elevator');
                     }}
                     onCancel={() => setElevatorPrompt(false)}
                 />
@@ -732,7 +724,6 @@ export default function App() {
                 />
             )}
 
-            {chatOpen && <AIChatModal onClose={() => setChatOpen(false)} />}
 
             {shoppingListOpen && (
                 <ShoppingListModal

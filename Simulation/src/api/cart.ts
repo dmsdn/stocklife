@@ -136,13 +136,7 @@ interface SessionCartResponseDto {
  * 이 함수는 checked 여부와 상관없이 /internal/cart/session의 모든 item을 반환한다.
  */
 export async function fetchCartFromDb(consumerId: number): Promise<
-    {
-        skuId: number;
-        name: string;
-        price: number;
-        qty: number;
-        locationId: string;
-    }[]
+    { skuId: number; name: string; price: number; stock: number; qty: number; locationId: string }[]
 > {
     const res = await fetch(
         `/internal/cart/session?consumerId=${consumerId}`
@@ -161,6 +155,7 @@ export async function fetchCartFromDb(consumerId: number): Promise<
         skuId: item.skuId,
         name: item.productName,
         price: item.priceKrw,
+        stock: item.quantity,
         qty: item.quantity,
         // DB cart_item에는 시뮬레이션의 매대 locationId가 없으므로 빈 문자열.
         locationId: '',
