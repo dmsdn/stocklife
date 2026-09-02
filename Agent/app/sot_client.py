@@ -524,11 +524,21 @@ def get_session_cart(session_id: str) -> dict:
     이벤트가 진실이고 장바구니는 그 파생이다 — append-only 세계의 읽기 방식.
     """
     if not config.USE_MOCK_SOT:
-        # 실물은 **회원**으로 조회한다(위 _API 주석). 세션 id 는 안 쓰이지만
+        # 실물은 **손님(consumer)** 으로 조회한다(위 _API 주석). 세션 id 는 안 쓰이지만
         # 서명에는 남긴다 — mock 경로가 그것으로 이벤트를 재생하고, 세션 단위
         # 창구가 열리는 날 부르는 쪽을 안 고치고 갈아탈 수 있다.
-        from app.tools import query as _q
-        cid = _q.current_member_id()
+        #
+        # ⚠ 09-02 정정 — 축이 틀려 있었다. 전에는 `query.current_member_id()`(세계 축,
+        #   10,000,005)를 `consumerId` 에 넣었다. 백엔드 `/internal/cart/session` 은
+        #   `@RequestParam Long consumerId`(백엔드 축, 5)다. 없는 손님이라 **200 에 빈
+        #   장바구니**가 왔고, 오류가 아니라서 부정 행동 기준선(09-02)에서야 드러났다.
+        #   백엔드 축은 `action` 이 들고 있다. 골든 러너·검사기처럼 member 만 세팅한
+        #   경로를 위해 역변환(member − OFFSET)을 한 번 시도한다 — 세계 회원(1001~)은
+        #   OFFSET 아래라 None 으로 남고, 그건 맞는 판정이다(그 회원은 로그인 손님이 아니다).
+        from app.tools import query as _q, action as _act
+        cid = _act.current_consumer_id()
+        if cid is None:
+            cid = config.to_consumer_id(_q.current_member_id())   # 경계는 config 가 지킨다
         if cid is None:
             # 비회원이면 조회할 장바구니가 없다. 오류가 아니라 **상태**다 —
             # 액션 3종의 _require_member 와 같은 판정을 조회에서도 한다.
@@ -732,8 +742,15 @@ def get_frequent_purchases(member_id: int, keyword: str | None = None,
     실물 전환이 스위치 한 번이 된다.
     """
     if not config.USE_MOCK_SOT:
+        # ⚠ 09-02 정정 — `/internal/orders/frequent` 도 `consumerId`(백엔드 축)를 받는다.
+        #   member_id(세계 축)를 그대로 넣으면 10,000,005 번 손님의 주문 = 0 건이라
+        #   **항상 빈 목록**이었다(오류 없음). 서명은 member_id 로 두고(부르는 쪽 무변경)
+        #   여기서 축을 바꾼다 — 세계 회원(1001~)은 로그인 손님이 아니라 빈 결과가 맞다.
+        _cid = config.to_consumer_id(member_id)      # 축 변환은 config 한 곳에서
+        if _cid is None:
+            return {"items": [], "note": "로그인 손님이 아니라 주문 기반 반복구매가 없습니다."}
         rows = _http_get(_API["get_frequent"],
-                         {"consumerId": member_id, "keyword": keyword, "minCount": min_count},
+                         {"consumerId": _cid, "keyword": keyword, "minCount": min_count},
                          headers=_internal_headers())
         items = [{"sku_id": r.get("skuId"), "name": r.get("productName") or r.get("name"),
                   "purchase_count": r.get("purchaseCount"), "avg_qty": r.get("avgQty"),
@@ -1185,6 +1202,23 @@ def push_proactive_message(session_id: str, content: str) -> dict:
     if config.USE_MOCK_SOT:
         print(f"[proactive:mock] session={session_id} :: {content}")
         return {"ok": True, "mock": True}
-    return _http_post(_API["push_proactive"],
-                      {"sessionId": session_id, "content": content},
-                      headers=_internal_headers())
+    # ⚠ 09-02 시연 점검에서 잡힘 — 백엔드는 200 에 저장된 메시지 자체
+    # ({"messageId": 78, "sender": "AI_PROACTIVE", ...})를 돌려준다. "ok" 키가
+    # 없으므로 그대로 넘기면 dispatch 가 **전달된 발화를 "전달 실패"로** 적고
+    # 예절 장부(etiquette.record)와 감시자 상태 비우기(on_delivered)를 건너뛴다
+    # — 사안당 1회·총량 상한이 안 깎여 같은 브리핑이 다음 스캔에 또 나갈 수 있다.
+    # 여기서 모양을 통일한다: 성공이면 ok=True 와 message_id, 실패(4xx·5xx·통신)면
+    # ok=False 와 사유. dispatch 는 ok 만 본다.
+    import httpx                       # 이 파일의 관례 — 의존성은 쓰는 자리에서 (158행)
+    try:
+        body = _http_post(_API["push_proactive"],
+                          {"sessionId": session_id, "content": content},
+                          headers=_internal_headers())
+    except httpx.HTTPStatusError as e:
+        # 404 = 그 sessionId 의 chat_session 이 없다(프론트가 세션을 안 만들었다).
+        return {"ok": False, "status": e.response.status_code,
+                "reason": e.response.text[:200]}
+    except httpx.HTTPError as e:
+        return {"ok": False, "status": None, "reason": f"{type(e).__name__}: {e}"}
+    message_id = body.get("messageId") if isinstance(body, dict) else None
+    return {"ok": True, "message_id": message_id, "raw": body}

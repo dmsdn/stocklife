@@ -142,10 +142,21 @@ def _product_name(sku_id: int) -> str:
 # [08-27 갱신] `infer.get_position`이 규칙판(스캔 앵커 + 보행 격자 스냅)으로 섰다.
 #   주입 창구는 예고대로 그대로다 — 달라진 것은 `_resolve_start`가 실물 모드에서
 #   출발 좌표를 **통행 칸으로 스냅**해 넘긴다는 것뿐(매대 칸은 A*가 못 밟는다).
-_CURRENT_POSITION: tuple[int, int, int] | None = None
+# ⚠ 09-03 — 요청 상태는 **ContextVar** 다, 모듈 전역이 아니다.
+#   전에는 `_CURRENT_… = None` 전역이었고 요청마다 덮어썼다. 그런데 요청은 동시에
+#   온다: 손님의 채팅(스레드풀)과 그 손님의 진입 브리핑(dispatch 의 to_thread)이
+#   **같은 초에** 돌면 브리핑의 set_position(None) 이 채팅의 앵커를 지운다 — 09-03
+#   시연 점검에서 스캔 직후 첫 질문("가장 가까운 화장실")만 번번이 "위치 모름"이
+#   나온 원인. 손님 둘이 겹치면 **신원까지** 섞인다(남의 member_id 로 이력을 읽는다).
+#   contextvars.ContextVar 는 스레드·태스크마다 값이 따로 산다. asyncio.to_thread 와
+#   FastAPI 의 스레드풀은 컨텍스트를 **복사해서** 넘기므로 set() 이 새 스레드 안에
+#   갇힌다. 읽기는 .get(), 쓰기는 .set() — 함수 껍데기(set_/current_)는 그대로라
+#   호출부는 안 바뀐다.
+from contextvars import ContextVar
+_CURRENT_POSITION: ContextVar = ContextVar("position", default=None)
 
 
-_POSITION_AGE: float | None = None    # 앵커의 나이(초). set_position 이 채운다
+_POSITION_AGE: ContextVar = ContextVar("position_age", default=None)    # 앵커의 나이(초). set_position 이 채운다
 
 
 def set_position(floor: int | None, x: int | None = None, y: int | None = None,
@@ -168,18 +179,17 @@ def set_position(floor: int | None, x: int | None = None, y: int | None = None,
       그 사실은 위치를 **옮겨서** 쓰는 게 아니라, **얼마나 믿을지**를 바꿔서
       쓴다. 그러려면 나이가 필요하다.
     """
-    global _CURRENT_POSITION, _POSITION_AGE
     if floor is None or x is None or y is None:
-        _CURRENT_POSITION = None
-        _POSITION_AGE = None
+        _CURRENT_POSITION.set(None)
+        _POSITION_AGE.set(None)
     else:
-        _CURRENT_POSITION = (int(floor), int(x), int(y))
-        _POSITION_AGE = None if age_sec is None else float(age_sec)
+        _CURRENT_POSITION.set((int(floor), int(x), int(y)))
+        _POSITION_AGE.set(None if age_sec is None else float(age_sec))
 
 
 def position_age() -> float | None:
     """마지막 스캔으로부터 경과 초. 모르면 None."""
-    return _POSITION_AGE
+    return _POSITION_AGE.get()
 
 
 def current_position() -> tuple[int, int, int] | None:
@@ -188,7 +198,7 @@ def current_position() -> tuple[int, int, int] | None:
     query.current_member_id()와 같은 이유로 함수 한 겹을 둔다: 밑줄 변수를 다른
     모듈이 집어 쓰면 '내부용'이라는 신호가 죽는다.
     """
-    return _CURRENT_POSITION
+    return _CURRENT_POSITION.get()
 
 
 def _resolve_start(start_location_id, start_floor, start_x, start_y):
@@ -209,7 +219,7 @@ def _resolve_start(start_location_id, start_floor, start_x, start_y):
         if loc:
             start = (int(loc["floor_no"]), int(loc["x"]), int(loc["y"]))
     if start is None:
-        start = _CURRENT_POSITION       # ③ 없으면 None — 호출부가 에러로 돌린다
+        start = _CURRENT_POSITION.get()  # ③ 없으면 None — 호출부가 에러로 돌린다
     # 실물 모드에서는 출발점을 통행 칸으로 스냅한다(08-27). 주입값은 스캔한
     # **매대의** 좌표인데 매대 칸은 장애물이라, 그대로 넘기면 백엔드 A*가
     # "출발점이 통행 불가"로 경로를 못 만든다. 스냅 로직은 위치추정 자산의

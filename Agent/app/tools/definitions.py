@@ -6,7 +6,7 @@
 #   LLM은 **description만 읽고** 어느 도구를 부를지 정한다. 즉 이 파일의
 #   description은 주석이 아니라 실행에 영향을 주는 프롬프트다.
 #
-# [구성] 조회 10 + 계산 5 + 추론 5 + **액션 3** = 23종.
+# [구성] 조회 10 + 계산 5 + 추론 6 + **액션 3** = 24종. (09-03: 추론 +1 find_facility)
 #   · 조회 7 + 계산 4 + 추론 5가 설계서의 "도구 16", 액션 3종은 B안 채택
 #     (2026-08-14)으로 추가된 쓰기 도구다. 쓰기라고 해서 우리가 DB를 만지는 게
 #     아니라, 백엔드의 /internal/cart API를 부르는 것 — 상태 변경은 백엔드 단일 경로.
@@ -517,6 +517,36 @@ TOOLS = [
         },
     },
     {
+        "name": "find_facility",
+        "description": (
+            "시설의 위치 — 화장실·엘리베이터·에스컬레이터·계산대·입구·고객센터·ATM·베이커리·"
+            "푸드코트·약국·안경 센터·시식 코너·휴게 라운지·A/S 센터·가전 체험존·행사 매대·휴지통. "
+            "손님 위치를 알면 **가장 가까운 것**과 걷는 거리(m)를, 모르면 층별 위치를 돌려준다. "
+            "쓸 때: '화장실 어디예요?', '계산대 어디로 가요?', '엘리베이터 있어요?', "
+            "'2층에 약국 있어요?'. 쓰지 말 때: 상품 위치(그건 get_inventory), 상품 사이 순서"
+            "(optimize_route). ⚠ 도면에 없는 것(카트 보관대·주차장·흡연구역)은 unknown_kind 가 "
+            "온다 — 없다고 말한다. 좌표 숫자는 읽지 말고 층·방향·거리로 말한다(read_as)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["RESTROOM", "RESTROOM_M", "RESTROOM_F", "ELEVATOR", "ESCALATOR",
+                             "CHECKOUT", "ENTRANCE", "CUSTOMER_SERVICE", "ATM", "BAKERY",
+                             "FOODCOURT", "PHARMACY", "OPTICAL", "TASTING", "LOUNGE",
+                             "AS_CENTER", "EXPERIENCE", "EVENT", "TRASH"],
+                    "description": "시설 종류. 화장실은 RESTROOM(남녀 중 가까운 쪽)."
+                },
+                "floor_no": {
+                    "type": "integer",
+                    "description": "층을 지정할 때만(1~3). 비우면 현재 층, 위치를 모르면 전 층."
+                },
+            },
+            "required": ["kind"],
+        },
+    },
+    {
         "name": "match_preferences",
         "description": (
             "현재 로그인한 회원이 **아직 안 산 상품 중** 취향에 맞을 후보를 근거와 함께 "
@@ -699,7 +729,7 @@ SERVER_TOOL_NAMES = frozenset(t["name"] for t in SERVER_TOOLS)
 # len(리스트) = 원소 개수. 23이 아니면 도구를 빠뜨렸거나 중복해 붙인 것.
 # f-문자열(⑯)로 실제 개수를 함께 보여줘야 몇 개가 됐는지 바로 안다.
 # (19→23은 08-21 ai-server 인수: 조회 +3, 계산 +1 — 머리 주석 [구성] 참조)
-assert len(TOOLS) == 23, f"도구는 23개여야 한다(조회10+계산5+추론5+액션3): {len(TOOLS)}"
+assert len(TOOLS) == 24, f"도구는 24개여야 한다(조회10+계산5+추론6+액션3): {len(TOOLS)}"
 
 # 리스트 컴프리헨션(⑬): TOOLS를 돌며 각 도구 dict에서 "name" 값만 뽑아 리스트로.
 #   _names = ["search_products", "get_product", …]
@@ -710,7 +740,7 @@ _names = [t["name"] for t in TOOLS]
 # 같은 이름을 두 번 적었다는 뜻이다.
 # 왜 치명적인가: 이름이 겹치면 실행부(REGISTRY)에서 하나가 다른 하나를 덮어써서,
 # LLM이 A를 부르려는데 B가 실행되는 사고가 조용히 난다.
-assert len(set(_names)) == 23, f"도구 이름 중복: {_names}"
+assert len(set(_names)) == 24, f"도구 이름 중복: {_names}"
 
 for _t in TOOLS:
     # set(dict)는 키만 모은다(⑭). 즉 이 도구 dict가 정확히 이 세 키만 갖고
@@ -735,4 +765,4 @@ for _s in SERVER_TOOLS:
 # 우리 도구와 서버 도구의 이름이 겹치면, 루프가 서버 도구를 우리 것으로 오인해
 # REGISTRY에서 실행하려 든다. 지금은 안 겹치지만 나중에 도구가 늘 때를 대비.
 assert not (set(_names) & SERVER_TOOL_NAMES), "우리 도구와 서버 도구의 이름 충돌"
-assert len(ALL_TOOLS) == 23 + len(SERVER_TOOLS)
+assert len(ALL_TOOLS) == 24 + len(SERVER_TOOLS)

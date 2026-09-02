@@ -220,6 +220,37 @@ app = FastAPI(title=config.SERVICE_NAME, lifespan=lifespan)
 # 이 줄이 없으면 세 경로가 전부 404 이고, 백엔드는 500 으로 감싸 프론트에
 # 넘긴다(즉 **화면에서는 "AI 가 고장났다"로 보인다**).
 from app import routes_frontend                                # noqa: E402
+
+
+def _anchor_from_last_scan(session_id: str):
+    """요청에 좌표가 안 실려 왔을 때 — 세션의 마지막 SCAN_ADD 로 앵커를 복원한다.
+
+    [왜 있나 — 09-02 시연 점검] 팀 판 백엔드 `AgentChatRequest` 에는 posFloor·
+    posX·posY 칸이 없다. 그러면 위 `pos` 가 항상 None 이고, get_position 은
+    실서비스에서 **한 번도** 좌표를 못 낸다(골든셋·검사기는 좌표를 직접 넣어
+    주므로 초록이었다 — 검사기가 고른 이음매의 바깥은 검사되지 않는다).
+    SCAN_ADD 는 SSE 로 이미 감시자에 닿고(locationId 포함), 그 매대의 좌표는
+    get_inventory 가 준다. 그래서 여기서 (층, x, y, 나이) 를 조립한다.
+    [순서] 릴레이가 좌표를 실어 보내면 그쪽이 우선 — 이 함수는 pos 가 None 일
+    때만 불린다. 어느 단계든 실패하면 None (= 예전과 같은 "위치 모름").
+    [비용] 채팅 한 번에 HTTP 한 번(get_inventory). 앵커가 없는 세션은 0.
+    """
+    try:
+        from app.watchers import behavior
+        from app import sot_client
+        import time as _time
+        last = behavior.last_scan(session_id)
+        if not last:
+            return None
+        inv = sot_client.get_inventory(last["sku_id"])
+        for loc in (inv or {}).get("locations", []):
+            if loc.get("location_id") == last["location_id"] \
+                    and None not in (loc.get("floor_no"), loc.get("x"), loc.get("y")):
+                age = max(0.0, _time.time() - float(last["ts"]))
+                return (int(loc["floor_no"]), int(loc["x"]), int(loc["y"]), age)
+    except Exception as e:                       # 폴백은 본 요청을 죽이면 안 된다
+        print(f"[chat] 앵커 복원 실패 session={session_id}: {type(e).__name__}: {e}")
+    return None
 app.include_router(routes_frontend.router)
 
 
@@ -257,6 +288,8 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
     # 없으면 compute._confidence가 medium(안전한 쪽)으로 둔다.
     pos = ((body.posFloor, body.posX, body.posY, body.posAgeSec)
            if None not in (body.posFloor, body.posX, body.posY) else None)
+    if pos is None:
+        pos = _anchor_from_last_scan(body.sessionId)
 
     result = loop.run_chat(body.message, consumer_id=body.consumerId,
                            session_id=body.sessionId, history=history,
@@ -296,6 +329,12 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     # 안전 문구로 대체하되 actions는 그대로 — 이미 일어난 상태 변경(담기 성공)을
     # 프론트에 숨기면 화면과 장바구니가 어긋난다. 발화만 바꾸고 사실은 전한다.
+    # 09-03: 여기로 떨어지면 **반드시 로그를 남긴다.** 09-02 시연 점검에서 기능 14 의
+    #   폴백 원인을 로그로 확인할 수 없었다 — 자발형은 테이프가 있는데 반응형만 침묵이었다.
+    #   막힌 사유(unsupported·web_only…)와 발화 앞부분이 있어야 프롬프트를 고칠 수 있다.
+    print(f"[chat] 가드 폴백 session={body.sessionId} reasons={sorted(reasons)} "
+          f"violations={[(v.get('reason'), str(v.get('value'))[:40]) for v in verdict['violations']][:6]} "
+          f"reply={(result['reply'] or '')[:160]!r}")
     return ChatResponse(reply=SAFE_REPLY, actions=result["actions"])
 
 
