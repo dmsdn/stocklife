@@ -12,6 +12,9 @@ public class InternalCartRequest {
     // add 용
     private Integer skuId;
 
+    // add 용(선택) — 지정하면 그 리스트(cart_group)에 담고, 없으면 기존처럼 "기본 장바구니"에 담긴다.
+    private Long groupId;
+
     @Min(value = 1, message = "수량은 1개 이상이어야 합니다.")
     private Integer quantity;
 
@@ -22,6 +25,8 @@ public class InternalCartRequest {
     public void setConsumerId(Long consumerId) { this.consumerId = consumerId; }
     public Integer getSkuId() { return skuId; }
     public void setSkuId(Integer skuId) { this.skuId = skuId; }
+    public Long getGroupId() { return groupId; }
+    public void setGroupId(Long groupId) { this.groupId = groupId; }
     public Integer getQuantity() { return quantity; }
     public void setQuantity(Integer quantity) { this.quantity = quantity; }
     public Boolean getChecked() { return checked; }
