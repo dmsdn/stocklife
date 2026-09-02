@@ -112,6 +112,10 @@ CREATE TABLE map_cells (
                                             -- location 의 존" 으로 추측해 시설 블록을 매대로,
                                             -- 벽가 매대를 벽으로 칠했다. 생성기가 아는 것을 싣는다
   shelf_zone VARCHAR(8) NULL,               -- kind=SHELF 일 때 그 매대 몸체의 zone_id ('F1-A')
+  facility_kind VARCHAR(24) NULL,           -- 09-03: kind=FACILITY/TRANSIT 일 때 시설 종류
+                                            -- (RESTROOM_M·ELEVATOR·ESCALATOR·CHECKOUT·FOODCOURT…
+                                            --  sim/map_layout.FACILITY_LABELS 의 키). 이름 있는
+                                            -- 시설은 passable=TRUE — 들어가거나 가로지를 수 있다
                                             -- 같은 transit_id를 가진 셀들이 층간 간선으로 연결된다.
                                             -- 간선 비용(2~3분)은 DB가 아니라 그래프 생성기의 파라미터 —
                                             -- 튜닝 값이라 스키마에 굳히지 않는다
