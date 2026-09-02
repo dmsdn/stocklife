@@ -83,6 +83,10 @@ export interface FloorData {
   locations: LocationInfo[];
   productPositions?: ProductPosition[]; // Agent PICK 상품 1개당 1행(정확한 x/y)
   occupied: [number, number][]; // 매대가 차지하는 그리드 셀 (통행 불가 = map_cells.passable=0에 대응)
+  // 09-02 (로컬 검증안): 백엔드 map_cells.kind/shelf_zone 을 그대로 실은 것.
+  // 있으면 StoreScene 이 "최근접 location 존" 추측 대신 이 값으로 칠한다.
+  shelfCells?: { x: number; y: number; zoneId: string }[];   // kind=SHELF
+  facilityCells?: [number, number][];                         // kind=FACILITY
   facilities: FacilityInfo[];
   serviceAreas?: ServiceArea[]; // 행사 상품·계산대·ATM 등 매대가 아닌 표시용 구역(선택적)
 }

@@ -107,6 +107,11 @@ CREATE TABLE map_cells (
   y          SMALLINT NOT NULL,
   passable   BOOLEAN  NOT NULL DEFAULT TRUE,
   transit_id VARCHAR(8) NULL,               -- 'MW-UP'/'MW-DN' 등 무빙워크 식별자.
+  kind       ENUM('AISLE','SHELF','FACILITY','TRANSIT') NOT NULL DEFAULT 'AISLE',
+                                            -- 09-02: 칸의 정체. 없으면 프론트가 "가장 가까운
+                                            -- location 의 존" 으로 추측해 시설 블록을 매대로,
+                                            -- 벽가 매대를 벽으로 칠했다. 생성기가 아는 것을 싣는다
+  shelf_zone VARCHAR(8) NULL,               -- kind=SHELF 일 때 그 매대 몸체의 zone_id ('F1-A')
                                             -- 같은 transit_id를 가진 셀들이 층간 간선으로 연결된다.
                                             -- 간선 비용(2~3분)은 DB가 아니라 그래프 생성기의 파라미터 —
                                             -- 튜닝 값이라 스키마에 굳히지 않는다

@@ -52,6 +52,17 @@ env.load_env()
 
 from app import config, etiquette                    # noqa: E402  ← load_env() 뒤여야 한다
 from app.watchers import behavior, dispatch, runner, schedule, world  # noqa: E402
+
+# ⚠ 출하물 적재 (09-02 정정) — **runner.py 와 같은 이유, 같은 자리.**
+#   진입 브리핑의 재구매 판정은 `schedule._due_items → infer.predict_repurchase`
+#   를 타는데, 출하물이 안 실린 프로세스에서는 `model_not_loaded` 로 조용히
+#   빈 목록이 된다 — 오류가 아니라 **침묵**이라, 진입 시나리오 셋이 "재구매
+#   후보 0" 으로 깨지면서 원인이 예절·감시자처럼 보인다. 서빙(main.py 는
+#   lifespan)과 골든셋(runner.py 는 import 시점)은 둘 다 싣는데 이 입구만
+#   빠져 있었다 — 같은 준비를 입구마다 적으면 하나는 낡는다는 그 사례가
+#   하나 더 늘었다.
+from app.tools import infer as _infer                                  # noqa: E402
+_loaded = _infer.load_all()
 from eval import scenarios as S                      # noqa: E402
 
 
@@ -70,14 +81,21 @@ def _reset_all() -> None:
 def _pick_member() -> int:
     """구매 이력이 있는 회원을 **지금 세계에서** 뽑는다.
 
-    [왜 각본에 안 박나] mock 회원은 9001·9002 이고 실물 시드는 1001~ 이다.
+    [왜 각본에 안 박나] mock 회원은 10,009,001·9002 이고 실물 시드는 1001~ 이다.
     한쪽을 박으면 다른 쪽에서 진입 브리핑이 **재구매 후보 0개**로 조용해지는데,
     그건 정책이 틀린 게 아니라 그 세계에 그 사람이 없는 것이다. 그 둘을 못
     가르면 시나리오가 "침묵 시험"으로 보이면서 통과한다 — 제일 나쁜 실패다.
     (`tool_check`·`infer_check` 과 같은 규율. 이 함정을 오늘 세 번째 밟았다.)
+
+    ⚠ 09-02 정정 — 후보에 9001 이 박혀 있었다. 09-01 에 mock 회원이
+    10,009,001 로 옮겨질 때(신원 축 통일) 이 목록만 안 따라갔고, 9001 은
+    빈 회원이 되어 **다음 후보 9002(이력 1건)** 로 떨어졌다. 그래서 진입
+    브리핑 세 시나리오가 재구매 후보 0 으로 침묵 — 13/16. 위 독스트링이
+    경고한 바로 그 실패("그 세계에 그 사람이 없는 것")를 **이 함수 자신이**
+    냈다. 목록에 이름을 두 번 적으면(골든셋·여기) 한 번은 낡는다.
     """
     from app import sot_client
-    cands = ([9001, 9002] if config.USE_MOCK_SOT else []) + list(range(1001, 1031))
+    cands = ([10009001, 9002] if config.USE_MOCK_SOT else []) + list(range(1001, 1031))
     for mid in cands:
         try:
             if sot_client.get_purchase_history(mid):
@@ -210,8 +228,11 @@ async def _utterance(decision: dict) -> str | None:
         message = parts[0]
 
     member_id = decision["items"][0].get("member_id")
+    # 발화기 이음매 (09-02 ④) — `--chat` 이 dispatch.set_chat 으로 끼운 것을
+    # 여기서도 쓴다. 서빙(_deliver)과 평가(--judge)가 **같은 발화기**를 보게 —
+    # 한쪽만 갈아끼우면 평가가 실제로 나갈 발화가 아닌 것을 채점한다.
     result = await asyncio.to_thread(
-        loop.run_chat, message, member_id, "scen-judge", None,
+        D._CHAT or loop.run_chat, message, member_id, "scen-judge", None,
         allow_actions=False)                 # 손님이 시키지 않았다 — 경로에서 잠근다
     gv = guard.check(result["reply"], result["ledgers"])
     if not gv["ok"]:
@@ -287,6 +308,14 @@ def main() -> int:
         only = args[args.index("--only") + 1]
     want_brief = "--brief" in args
     want_judge = "--judge" in args
+
+    # --chat 모듈:함수 (09-02 ④) — 발화기 교체. 자를 복제하지 않으려고
+    # runner 의 로더를 그대로 빌린다(같은 꼴·같은 오류 문구).
+    # 후보·게이트는 규칙이라 고정이므로, 이것 하나로 「같은 후보 · 같은 예절 ·
+    # 발화기만 교체」 대조가 된다 — Claude vs 로컬 모델(T17)의 자발형 비교 축.
+    if "--chat" in args:
+        from eval.runner import _load_chat
+        dispatch.set_chat(_load_chat(args[args.index("--chat") + 1]))
 
     todo = S.SCENARIOS if only is None else [s for s in S.SCENARIOS if s["id"] == only]
     if not todo:

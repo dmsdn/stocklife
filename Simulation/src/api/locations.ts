@@ -15,6 +15,8 @@ interface MapCellDto {
   y: number;
   passable: boolean;
   transitId: string | null;
+  kind?: 'AISLE' | 'SHELF' | 'FACILITY' | 'TRANSIT' | null;   // 09-02: 백엔드 map_cells.kind
+  shelfZone?: string | null;                                    // 09-02: kind=SHELF 의 zone_id
 }
 
 interface ZoneMapDto {
@@ -84,7 +86,18 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
 
   const amenities = FLOOR_AMENITIES[floor] ?? { pitchPx: 20, facilities: [], serviceAreas: [] };
 
+  // 09-02 (로컬 검증안): 칸의 정체를 백엔드가 주면 그대로 넘긴다 — StoreScene 이
+  // 최근접 존 추측 대신 이것으로 칠한다. 옛 백엔드(kind 없음)면 둘 다 비어 폴백.
+  const shelfCells = dto.cells
+    .filter((c) => c.kind === 'SHELF' && c.shelfZone && !overrides?.has(`${c.x},${c.y}`))
+    .map((c) => ({ x: c.x, y: c.y, zoneId: c.shelfZone as string }));
+  const facilityCells: [number, number][] = dto.cells
+    .filter((c) => c.kind === 'FACILITY')
+    .map((c) => [c.x, c.y]);
+
   return {
+    shelfCells,
+    facilityCells,
     floor,
     floorLabel: FLOOR_LABELS[floor] ?? `${floor}F`,
     gridWidth: maxX + 1,

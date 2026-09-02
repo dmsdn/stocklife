@@ -28,6 +28,14 @@ public class MapCell {
     @Column(name = "transit_id", length = 8)
     private String transitId;
 
+    // 09-02: 칸의 정체(AISLE/SHELF/FACILITY/TRANSIT)와, 매대 몸체일 때의 존.
+    // 프론트가 "최근접 location 의 존" 으로 추측하던 것을 데이터로 대체한다.
+    @Column(name = "kind", length = 12)
+    private String kind;
+
+    @Column(name = "shelf_zone", length = 8)
+    private String shelfZone;
+
     protected MapCell() {}
 
     public Byte getFloorNo() { return floorNo; }
@@ -35,6 +43,8 @@ public class MapCell {
     public Short getY() { return y; }
     public boolean isPassable() { return passable; }
     public String getTransitId() { return transitId; }
+    public String getKind() { return kind; }
+    public String getShelfZone() { return shelfZone; }
 
     public static class MapCellId implements Serializable {
         private Byte floorNo;
