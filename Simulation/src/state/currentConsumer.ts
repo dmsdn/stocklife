@@ -8,8 +8,9 @@ const DEFAULT_CONSUMER_ID = 1; // phone 01099998888, 회원000001
 
 let currentConsumerId: number = DEFAULT_CONSUMER_ID;
 let currentConsumerName: string | null = null;
+let currentConsumerPhone: string | null = null;
 
-type Listener = (consumerId: number, name: string | null) => void;
+type Listener = (consumerId: number, name: string | null, phoneNumber: string | null) => void;
 const listeners = new Set<Listener>();
 
 export function getCurrentConsumerId(): number {
@@ -20,15 +21,20 @@ export function getCurrentConsumerName(): string | null {
     return currentConsumerName;
 }
 
-export function setCurrentConsumer(consumerId: number, name: string | null): void {
-    currentConsumerId = consumerId;
-    currentConsumerName = name;
-    listeners.forEach((listener) => listener(currentConsumerId, currentConsumerName));
+export function getCurrentConsumerPhone(): string | null {
+    return currentConsumerPhone;
 }
 
-/** frontend에서 로그아웃했을 때 — 기본 캐릭터(고정 계정)로 되돌린다. */
+export function setCurrentConsumer(consumerId: number, name: string | null, phoneNumber: string | null = null): void {
+    currentConsumerId = consumerId;
+    currentConsumerName = name;
+    currentConsumerPhone = phoneNumber;
+    listeners.forEach((listener) => listener(currentConsumerId, currentConsumerName, currentConsumerPhone));
+}
+
+/** frontend에서 로그아웃했을 때 — 기본 캐릭터(고정 계정, 01099998888)로 되돌린다. */
 export function resetCurrentConsumerToDefault(): void {
-    setCurrentConsumer(DEFAULT_CONSUMER_ID, null);
+    setCurrentConsumer(DEFAULT_CONSUMER_ID, null, null);
 }
 
 /** UI(App.tsx 등)에서 현재 로그인 캐릭터가 바뀔 때마다 화면을 갱신하고 싶을 때 구독. */

@@ -6,16 +6,17 @@ import FrontendPanel from './components/FrontendPanel';
 import TransferChoiceModal from './components/TransferChoiceModal';
 import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
-import CartModal from './components/CartModal';
+import CartGroupModal from './components/CartGroupModal';
 import AIChatModal from './components/AIChatModal';
 import ShoppingListModal from './components/ShoppingListModal';
 import { fetchFloorData } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
-import { addItemToDbCart, fetchCartFromDb } from './api/cart';
+import { addItemToDbCart, fetchCartFromDb, fetchCartGroups, type CartGroupOption } from './api/cart';
 import {
     setCurrentConsumer,
     resetCurrentConsumerToDefault,
     getCurrentConsumerName,
+    getCurrentConsumerPhone,
     getCurrentConsumerId,
     subscribeCurrentConsumer,
 } from './state/currentConsumer';
@@ -51,6 +52,7 @@ export default function App() {
     const [showFrontend, setShowFrontend] = useState(true);
     const [frontendWidth, setFrontendWidth] = useState(640);
     const [loggedInName, setLoggedInName] = useState<string | null>(getCurrentConsumerName());
+    const [loggedInPhone, setLoggedInPhone] = useState<string | null>(getCurrentConsumerPhone());
     const draggingRef = useRef(false);
 
     // 상단바 — 지금은 실제 결제 API 연동 전이라 잔액/구매내역은 프론트 로컬 상태(placeholder)다.
@@ -58,9 +60,15 @@ export default function App() {
     const [cash, setCash] = useState(99999999);
     const [cart, setCart] = useState<CartItem[]>([]);
     const [purchased, setPurchased] = useState<CartItem[]>([]);
-    const [cartOpen, setCartOpen] = useState(false);
+    const [cartGroupOpen, setCartGroupOpen] = useState(false);
+    // 담을 리스트 선택 — null이면 예전처럼 "기본 장바구니"에 담긴다(하위 호환 기본값).
+    const [cartGroups, setCartGroups] = useState<CartGroupOption[]>([]);
+    const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
     const [chatOpen, setChatOpen] = useState(false);
-    const [productPopup, setProductPopup] = useState<{ location: LocationInfo; products: ProductInfo[] } | null>(null);
+    const [productPopup, setProductPopup] = useState<{
+        baseLabel: string;
+        groups: { location: LocationInfo; level: number; products: ProductInfo[] }[];
+    } | null>(null);
 
     // 상단 장바구니 배지가 새로고침하면 0개로 보이던 문제 — cart state를 로컬에만 두지 않고
     // (1) 처음 켜질 때, (2) 로그인/로그아웃으로 계정이 바뀔 때마다 DB(cart_group/cart_item)에서
@@ -72,10 +80,21 @@ export default function App() {
                 .catch((err) => console.error('[DB장바구니] 조회 실패:', err));
         };
 
+        // 리스트 드롭다운도 계정이 바뀔 때마다 그 계정의 리스트 목록으로 다시 채우고,
+        // 이전 계정에서 고르던 groupId는 의미가 없어지므로 기본 장바구니로 되돌린다.
+        const loadCartGroupsFor = (consumerId: number) => {
+            fetchCartGroups(consumerId)
+                .then((groups) => setCartGroups(groups))
+                .catch((err) => console.error('[DB장바구니] 리스트 목록 조회 실패:', err));
+            setSelectedGroupId(null);
+        };
+
         loadCartFromDb(getCurrentConsumerId());
+        loadCartGroupsFor(getCurrentConsumerId());
 
         const unsubscribe = subscribeCurrentConsumer((consumerId) => {
             loadCartFromDb(consumerId);
+            loadCartGroupsFor(consumerId);
         });
         return unsubscribe;
     }, []);
@@ -120,11 +139,13 @@ export default function App() {
             console.log('[시뮬레이션] frontend로부터 메시지 수신:', data);
 
             if (data.type === 'LOGIN' && typeof data.consumerId === 'number') {
-                setCurrentConsumer(data.consumerId, data.name ?? null);
+                setCurrentConsumer(data.consumerId, data.name ?? null, data.phoneNumber ?? null);
                 setLoggedInName(data.name ?? `회원#${data.consumerId}`);
+                setLoggedInPhone(data.phoneNumber ?? null);
             } else if (data.type === 'LOGOUT') {
                 resetCurrentConsumerToDefault();
                 setLoggedInName(null);
+                setLoggedInPhone(null);
             }
         };
         window.addEventListener('message', onMessage);
@@ -260,12 +281,32 @@ export default function App() {
         [busy, viewFloor, playerFloor, startTrip]
     );
 
+    // locationId 끝의 "-L숫자"가 진열 단(레벨)을 나타낸다 — 없으면(구조상 있을 수 없지만 방어적으로) 0.
+    const parseShelfLevel = (locationId: string): number => {
+        const m = locationId.match(/-L(\d+)$/);
+        return m ? Number(m[1]) : 0;
+    };
+
+    // 매대 옆에서 스페이스바를 누르면 그 rack/bay의 모든 단(L1/L2/L3...)을 한 번에 받아서,
+    // 각 단의 상품을 병렬로 조회한 뒤 단 번호 순으로 정렬해 팝업에 그룹으로 넘긴다.
+    // (예전엔 단이 여러 개여도 마지막 단 하나만 팝업에 떴다 — locationByCell이 좌표 하나에
+    // location 하나만 담아서 덮어썼기 때문. StoreScene의 locationsByCell로 배열을 받게 고쳤다.)
     const handleLocationInteract = useCallback(
-        async (loc: LocationInfo) => {
-            if (busy) return;
-            const zone = viewFloorData?.zones.find((z) => z.zoneId === loc.zoneId);
-            const products = await fetchProductsAtLocation(loc, zone?.label ?? loc.zoneId);
-            setProductPopup({ location: loc, products });
+        async (locs: LocationInfo[]) => {
+            if (busy || locs.length === 0) return;
+            const zone = viewFloorData?.zones.find((z) => z.zoneId === locs[0].zoneId);
+            const results = await Promise.all(
+                locs.map(async (loc) => ({
+                    location: loc,
+                    level: parseShelfLevel(loc.locationId),
+                    products: await fetchProductsAtLocation(loc, zone?.label ?? loc.zoneId),
+                }))
+            );
+            const groups = results
+                .filter((g) => g.products.length > 0)
+                .sort((a, b) => a.level - b.level);
+            const baseLabel = locs[0].locationId.replace(/-L\d+$/, '');
+            setProductPopup({ baseLabel, groups });
         },
         [busy, viewFloorData]
     );
@@ -291,12 +332,13 @@ export default function App() {
             return [...prev, { ...product, locationId: location.locationId, qty: 1 }];
         });
 
-        // 화면(로컬 상태) 반영과 별개로, consumer_id=1(회원000001) 캐릭터의 실제 DB 장바구니
-        // (cart_group/cart_item)에도 담는다. 실패해도 게임 진행엔 영향 없도록 콘솔에만 남긴다.
-        addItemToDbCart(product.skuId, 1).catch((err) => {
+        // 화면(로컬 상태) 반영과 별개로, 현재 로그인된 계정의 실제 DB 장바구니(cart_group/cart_item)
+        // 에도 담는다. selectedGroupId가 골라져 있으면 그 리스트에, 아니면 "기본 장바구니"에 담긴다.
+        // 실패해도 게임 진행엔 영향 없도록 콘솔에만 남긴다.
+        addItemToDbCart(product.skuId, 1, selectedGroupId).catch((err) => {
             console.error('DB 장바구니 반영 실패:', err);
         });
-    }, []);
+    }, [selectedGroupId]);
 
     const handleCheckout = useCallback(() => {
         const total = cart.reduce((sum, it) => sum + it.price * it.qty, 0);
@@ -473,7 +515,7 @@ export default function App() {
                     </div>
 
                     <button
-                        onClick={() => setCartOpen(true)}
+                        onClick={() => setCartGroupOpen(true)}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -555,7 +597,7 @@ export default function App() {
                         }}
                         title="frontend에서 로그인한 계정을 따라갑니다"
                     >
-                        👤 {loggedInName ? `${loggedInName}님` : '기본 캐릭터(비로그인)'}
+                        👤 {loggedInPhone ? `${loggedInPhone}` : '기본 캐릭터(비로그인)'}
                     </span>
 
                     {viewFloor !== playerFloor && (
@@ -596,7 +638,6 @@ export default function App() {
                         </div>
                     )}
                 </div>
-                <SidePanel selectedLocation={selectedLocation} />
                 {showFrontend && (
                     <>
                         <div
@@ -615,6 +656,8 @@ export default function App() {
                     </>
                 )}
             </div>
+
+            <SidePanel selectedLocation={selectedLocation} />
 
             {transferPrompt && (
                 <TransferChoiceModal
@@ -641,27 +684,24 @@ export default function App() {
 
             {productPopup && (
                 <ProductPopup
-                    location={productPopup.location}
-                    products={productPopup.products}
-                    cartQtyBySku={Object.fromEntries(
-                        cart
-                            .filter((it) => it.locationId === productPopup.location.locationId)
-                            .map((it) => [it.skuId, it.qty])
+                    baseLabel={productPopup.baseLabel}
+                    groups={productPopup.groups}
+                    cartQtyByKey={Object.fromEntries(
+                        cart.map((it) => [`${it.locationId}::${it.skuId}`, it.qty])
                     )}
-                    onAddToCart={(p) => handleAddToCart(productPopup.location, p)}
+                    onAddToCart={(location, p) => handleAddToCart(location, p)}
                     onClose={() => setProductPopup(null)}
                 />
             )}
 
-            {cartOpen && (
-                <CartModal
-                    items={cart}
-                    purchased={purchased}
-                    cash={cash}
-                    onRemove={(i) => setCart((prev) => prev.filter((_, idx) => idx !== i))}
-                    onCheckout={handleCheckout}
-                    onRefund={handleRefund}
-                    onClose={() => setCartOpen(false)}
+            {cartGroupOpen && (
+                <CartGroupModal
+                    groups={cartGroups}
+                    selectedGroupId={selectedGroupId}
+                    onSelectGroup={(groupId) => {
+                        setSelectedGroupId(groupId);
+                    }}
+                    onClose={() => setCartGroupOpen(false)}
                 />
             )}
 

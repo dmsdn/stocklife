@@ -14,17 +14,22 @@ interface InternalCartAddPayload {
     consumerId: number;
     skuId: number;
     quantity: number;
+    groupId?: number;
 }
 
-/** 캐릭터가 상품을 집어서 장바구니에 담을 때 호출 — 실제 cart_item 테이블에 행이 생긴다. */
-export async function addItemToDbCart(skuId: number, quantity: number = 1): Promise<void> {
+/**
+ * 캐릭터가 상품을 집어서 장바구니에 담을 때 호출 — 실제 cart_item 테이블에 행이 생긴다.
+ * groupId를 넘기면 그 리스트(cart_group)에 담기고, 생략하면 예전처럼 "기본 장바구니"에 담긴다.
+ */
+export async function addItemToDbCart(skuId: number, quantity: number = 1, groupId?: number | null): Promise<void> {
     const consumerId = getCurrentConsumerId();
-    console.log('[DB장바구니] 요청 시도:', skuId, quantity, 'consumerId=', consumerId); // 호출 자체가 되는지 확인용 로그
+    console.log('[DB장바구니] 요청 시도:', skuId, quantity, 'consumerId=', consumerId, 'groupId=', groupId); // 호출 자체가 되는지 확인용 로그
 
     const payload: InternalCartAddPayload = {
         consumerId,
         skuId,
         quantity,
+        ...(groupId ? { groupId } : {}),
     };
 
     const res = await fetch('/internal/cart', {
@@ -39,6 +44,54 @@ export async function addItemToDbCart(skuId: number, quantity: number = 1): Prom
     }
 
     console.log('[DB장바구니] 성공:', skuId);
+}
+
+// 백엔드 GET /internal/cart/groups 응답 형태 (CartGroupResponse 그대로, items는 생략).
+export interface CartGroupItem {
+    cartItemId: number;
+    skuId: number;
+    quantity: number;
+    checked: boolean;
+}
+
+export interface CartGroupOption {
+    cartGroupId: number;
+    title: string;
+    itemCount: number;
+    items: CartGroupItem[];
+}
+
+interface CartGroupDto {
+    cartGroupId: number;
+    title: string;
+    itemCount: number;
+    items?: CartGroupItem[];
+}
+
+
+/** 상단 헤더의 "담을 리스트 선택" 드롭다운을 채우기 위해 이 계정의 리스트 목록을 가져온다. */
+export async function fetchCartGroups(
+    consumerId: number
+): Promise<CartGroupOption[]> {
+    const res = await fetch(
+        `/internal/cart/groups?consumerId=${consumerId}`
+    );
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(
+            `GET /internal/cart/groups 실패 (${res.status}) ${text}`
+        );
+    }
+
+    const data: CartGroupDto[] = await res.json();
+
+    return data.map((g) => ({
+        cartGroupId: g.cartGroupId,
+        title: g.title,
+        itemCount: g.itemCount,
+        items: g.items ?? [],
+    }));
 }
 
 // 백엔드 GET /internal/cart/session 응답 형태 (SessionCartResponse/SessionCartItemResponse 그대로).

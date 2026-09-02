@@ -13,7 +13,7 @@ import { getMyProfile } from "./consumer-api";
 import { isLoggedIn } from "./api-client";
 
 export type SimulationAuthMessage =
-    | { source: "storeflow-frontend"; type: "LOGIN"; consumerId: number; name: string }
+    | { source: "storeflow-frontend"; type: "LOGIN"; consumerId: number; name: string; phoneNumber: string }
     | { source: "storeflow-frontend"; type: "LOGOUT" };
 
 function isEmbeddedInIframe(): boolean {
@@ -46,6 +46,7 @@ export async function notifySimulationLogin(): Promise<void> {
             type: "LOGIN",
             consumerId: me.consumerId,
             name: me.name,
+            phoneNumber: me.phoneNumber,
         });
     } catch (error) {
         // 프로필 조회 실패는 로그인 자체를 막을 이유가 안 됨 — 조용히 무시.
