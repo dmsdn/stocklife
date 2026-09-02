@@ -50,7 +50,7 @@ export default function ReceiptsPage() {
             onClick={() => setSelectedOrder(order)}
             className="flex w-full items-center gap-3 py-4 text-left md:rounded-sm md:border md:border-border md:p-4"
           >
-            <Receipt size={20} className="text-muted-foreground" />
+            <Receipt size={24} className="text-muted-foreground" />
             <div className="flex-1">
               <p className="text-sm">주문 #{order.orderId}</p>
               <p className="text-xs text-muted-foreground">{order.items.length}개 품목</p>

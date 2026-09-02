@@ -94,7 +94,7 @@ export default function SignupPetPage() {
           className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition hover:bg-muted"
           aria-label="이전"
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={24} />
         </button>
 
         <button

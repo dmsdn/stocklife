@@ -34,7 +34,7 @@ export function AiGuide({
       <div className="w-full overflow-x-auto scrollbar-hide">
         <div className="flex w-max gap-3 px-4 pb-1 sm:px-6 lg:px-8">
           <AiGuideCard
-            icon={<Sparkles size={18} />}
+            icon={<Sparkles size={24} />}
             title={"이번주 장보기를\nAI에게 맡겨보세요"}
             description="필요한 상품부터 예산까지 한 번에 정리해드려요."
             button="장보기 계획 세우기"
@@ -43,7 +43,7 @@ export function AiGuide({
           />
 
           <AiGuideCard
-            icon={<ShoppingCart size={18} />}
+            icon={<ShoppingCart size={24} />}
             title={"장보기 동선을\nAI가 만들어드려요"}
             description="매장 안에서 가장 효율적인 순서로 안내해요."
             button="동선 만들어보기"
@@ -52,7 +52,7 @@ export function AiGuide({
           />
 
           <AiGuideCard
-            icon={<Wallet size={18} />}
+            icon={<Wallet size={24} />}
             title={"이번달 소비를\nAI에게 분석받아보세요"}
             description="내 쇼핑 패턴을 분석하고 절약 방법을 찾아드려요."
             button="소비 분석하기"
@@ -75,7 +75,7 @@ function AiGuideCard({
 }: AiGuideCardProps) {
   return (
     <div className="w-[78vw] max-w-[280px] shrink-0 rounded-sm border border-border p-4">
-      <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-muted">
+      <div className="flex h-9 w-9 items-center justify-center rounded-sm bg-brand/10 text-brand">
         {icon}
       </div>
 
@@ -93,7 +93,7 @@ function AiGuideCard({
         className="mt-4 flex items-center gap-1 text-sm font-medium"
       >
         {button}
-        <ArrowRight size={11} />
+        <ArrowRight size={24} />
       </button>
     </div>
   );

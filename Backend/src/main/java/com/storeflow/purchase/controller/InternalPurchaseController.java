@@ -3,6 +3,7 @@ package com.storeflow.purchase.controller;
 import com.storeflow.global.internal.InternalServiceAuth;
 import com.storeflow.purchase.dto.CategoryPreferenceResponse;
 import com.storeflow.purchase.dto.ProductPopularityResponse;
+import com.storeflow.purchase.dto.PurchaseHistoryResponse;
 import com.storeflow.purchase.service.PurchaseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -86,6 +87,28 @@ public class InternalPurchaseController {
 
         List<ProductPopularityResponse> result =
                 purchaseService.getPopularProducts(categoryL2, lookbackDays, limit);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 회원 구매 원장(전체 이력, 시각 오름차순). 소비주기 예측·취향 매칭·재구매 추천이
+     * 공통으로 참고하는 원시 데이터라 여기 하나로 모아둔다.
+     * memberId를 그대로 받는다(consumerId 아님) — wishlist·top-categories에서 이미 겪은 함정과
+     * 동일: consumerId로 받고 Member.toMemberId를 태우면 시드 회원(예: 1005)이
+     * 10,001,005로 바뀌어 항상 빈 결과가 나간다.
+     */
+    @GetMapping("/history")
+    public ResponseEntity<?> getPurchaseHistory(
+            @RequestHeader("X-Internal-Service-Key") String key,
+            @RequestParam Integer memberId,
+            @RequestParam(defaultValue = "180") int lookbackDays) {
+        try {
+            internalServiceAuth.verify(key);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(401).body(e.getMessage());
+        }
+
+        List<PurchaseHistoryResponse> result = purchaseService.getHistoryByMemberId(memberId, lookbackDays);
         return ResponseEntity.ok(result);
     }
 

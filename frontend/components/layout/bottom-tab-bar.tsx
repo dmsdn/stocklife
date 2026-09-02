@@ -6,7 +6,7 @@ import {
   Home,
   BotMessageSquare,
   Barcode,
-  Heart,
+  Bookmark,
   User,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 export const navigationItems = [
   { href: "/", label: "홈", icon: Home },
   { href: "/ai", label: "AI챗", icon: BotMessageSquare },
-  { href: "/saved", label: "저장", icon: Heart },
+  { href: "/saved", label: "저장", icon: Bookmark },
   { href: "/scan", label: "스캔", icon: Barcode },
   { href: "/mypage", label: "마이", icon: User },
 ];
@@ -44,7 +44,7 @@ export function BottomTabBar() {
               active ? "text-primary" : "text-muted-foreground"
             )}
           >
-            <Icon size={20} aria-hidden="true" />
+            <Icon size={24} aria-hidden="true" />
             {label}
           </Link>
         );

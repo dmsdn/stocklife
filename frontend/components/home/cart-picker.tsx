@@ -47,7 +47,7 @@ export function CartPicker({
             className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
             aria-label="닫기"
           >
-            <X size={18} />
+            <X size={24} />
           </button>
         </div>
 
@@ -68,7 +68,7 @@ export function CartPicker({
               </div>
 
               <ChevronRight
-                size={16}
+                size={24}
                 className="text-muted-foreground"
               />
             </button>

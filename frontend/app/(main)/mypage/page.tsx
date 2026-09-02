@@ -6,10 +6,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
-  Heart,
+  Bookmark,
   Clock,
   Receipt,
   LogOut,
+  Megaphone,
 } from "lucide-react";
 
 import { HomeAiHeader } from "@/components/layout/home-ai-header";
@@ -33,7 +34,7 @@ const quickLinks = [
   {
     href: "/saved",
     label: "저장",
-    icon: Heart,
+    icon: Bookmark,
   },
   {
     href: "/mypage/recent",
@@ -168,7 +169,7 @@ export default function MyPage() {
       <HomeAiHeader />
 
       <main className="mx-auto w-full flex-1 pb-[calc(4rem+env(safe-area-inset-bottom)+1rem)] md:max-w-4xl md:p-8 md:pb-8">
-        <div className="px-0">
+        <div className="px-5">
 
           {/* =========================
               사용자 이름 + 멤버십 등급
@@ -181,7 +182,6 @@ export default function MyPage() {
                 flex
                 items-center
                 justify-between
-                px-5
                 py-4
                 text-sm
                 font-medium
@@ -196,12 +196,12 @@ export default function MyPage() {
               </div>
 
               <ChevronRight
-                size={18}
+                size={24}
                 className="shrink-0 text-muted-foreground"
               />
             </Link>
           ) : (
-            <div className="px-5 py-4">
+            <div className="py-4">
               <p className="text-base font-medium">
                 회원가입 하고 이용해보세요
               </p>
@@ -227,7 +227,7 @@ export default function MyPage() {
              ========================= */}
 
           {/* ✅ 정적 "멤버십" 링크 박스 대신, 내 정보 화면과 같은 실제 등급 박스(GradeBox)를 씁니다. */}
-          <div className="mt-1">
+          <div className="mt-4">
             <GradeBox profile={profile} />
           </div>
 
@@ -236,7 +236,7 @@ export default function MyPage() {
               기존 코드의 quickLinks 유지
              ========================= */}
 
-          <div className="mt-2.5 grid grid-cols-3 gap-1 rounded-[20px] bg-muted">
+          <div className="mt-4 grid grid-cols-3 gap-1 rounded-[20px] bg-muted">
             {quickLinks.map((q) => (
               <Link
                 key={q.href}
@@ -256,7 +256,7 @@ export default function MyPage() {
                   hover:text-foreground
                 "
               >
-                <q.icon size={18} />
+                <q.icon size={40} />
                 {q.label}
               </Link>
             ))}
@@ -271,11 +271,12 @@ export default function MyPage() {
             <Link
               href={`/mypage/notices/${latestNotice.id}`}
               className="
-                mt-2.5
+                mt-4
                 flex
                 h-[34px]
                 items-center
-                justify-center
+                justify-start
+                gap-2
                 overflow-hidden
                 rounded-[17px]
                 bg-muted
@@ -284,8 +285,9 @@ export default function MyPage() {
                 text-sm
               "
             >
+              <Megaphone size={16} className="shrink-0 text-muted-foreground" />
               <span className="truncate">
-                📢 {latestNotice.title}
+                {latestNotice.title}
               </span>
             </Link>
           )}
@@ -320,7 +322,7 @@ export default function MyPage() {
                       <span>{item.label}</span>
 
                       <ChevronRight
-                        size={18}
+                        size={24}
                         className="shrink-0 text-muted-foreground"
                       />
                     </Link>
@@ -348,7 +350,7 @@ export default function MyPage() {
                 text-muted-foreground
               "
             >
-              <LogOut size={16} />
+              <LogOut size={24} />
               로그아웃
             </LogoutButton>
           )}

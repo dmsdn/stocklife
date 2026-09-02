@@ -17,7 +17,7 @@ export function HomeSearch({
         className="flex h-11 w-full items-center gap-3 rounded-sm bg-muted/70 px-3.5 text-left sm:h-12"
       >
         <Search
-          size={18}
+          size={24}
           className="shrink-0 text-muted-foreground"
         />
 

@@ -49,7 +49,7 @@ export default function AccountAgePage() {
         <div className="py-10 text-center">
           <p className="text-sm text-muted-foreground">생년월일은 한 번 입력하면 수정할 수 없어요.</p>
           <button type="button" onClick={() => router.back()} className="mt-4 flex items-center justify-center gap-1 text-sm mx-auto">
-            <ChevronLeft size={16} />
+            <ChevronLeft size={24} />
             돌아가기
           </button>
         </div>

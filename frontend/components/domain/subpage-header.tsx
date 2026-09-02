@@ -8,7 +8,7 @@ export function SubpageHeader({ title }: { title: string }) {
   return (
     <div className="mb-6 flex items-center gap-3">
       <button type="button" onClick={() => router.back()} aria-label="뒤로가기">
-        <ChevronLeft size={20} />
+        <ChevronLeft size={24} />
       </button>
       <p className="text-base">{title}</p>
     </div>

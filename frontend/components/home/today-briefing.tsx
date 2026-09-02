@@ -20,7 +20,7 @@ export function TodayBriefing({
       <div className="rounded-sm bg-muted/70 p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-background">
-            <Lightbulb size={17} />
+            <Lightbulb size={24} />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -51,7 +51,7 @@ export function TodayBriefing({
 
           <span className="flex items-center gap-1 text-sm font-medium">
             장보기 보기
-            <ArrowRight size={12} />
+            <ArrowRight size={24} />
           </span>
         </button>
       </div>

@@ -111,7 +111,7 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
                 </div>
 
                 <div className="flex items-center gap-1.5 rounded-sm bg-muted px-3 py-2 text-xs text-muted-foreground">
-                  <MapPin size={14} />
+                  <MapPin size={24} />
                   {inventory[0]
                     ? `${inventory[0].floorNo}층 ${inventory[0].zoneId} 구역 · 재고 ${inventory[0].qty}개`
                     : "매장 위치 정보 없음"}
