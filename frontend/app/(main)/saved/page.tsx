@@ -112,7 +112,7 @@ export default function SavedPage() {
               className="flex w-full items-center gap-1.5"
               onClick={() => setShowNewGroupInput(true)}
             >
-              <Plus size={16} />
+              <Plus size={24} />
               새 리스트 만들기
             </Button>
           )}
@@ -128,7 +128,7 @@ export default function SavedPage() {
                   <p className="text-sm font-medium">{group.title}</p>
                   {/* ✅ 이 리스트에 연결된 AI 대화가 있으면 작은 아이콘으로 표시 */}
                   {sessions.some((s) => s.groupId === group.id) && (
-                    <Bot size={14} className="shrink-0 text-muted-foreground" />
+                    <Bot size={24} className="shrink-0 text-muted-foreground" />
                   )}
                 </div>
                 <div>
@@ -155,12 +155,12 @@ export default function SavedPage() {
           <div className="divide-y divide-border">
             {sessions.map((s) => (
               <Link key={s.sessionId} href={`/ai?session=${s.sessionId}`} className="flex items-center gap-3 py-3">
-                <MessageSquare size={18} className="shrink-0 text-muted-foreground" />
+                <MessageSquare size={24} className="shrink-0 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm">{s.title ?? "새 대화"}</p>
                   <p className="text-xs text-muted-foreground">{new Date(s.updatedAt).toLocaleString("ko-KR")}</p>
                 </div>
-                <ChevronRight size={16} className="text-muted-foreground" />
+                <ChevronRight size={24} className="text-muted-foreground" />
               </Link>
             ))}
           </div>

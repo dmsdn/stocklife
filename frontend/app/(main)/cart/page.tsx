@@ -171,7 +171,7 @@ export default function CartPage() {
   return (
       <div className="mx-auto max-w-md p-4 pb-40 md:max-w-5xl md:p-8 md:pb-8">
         <div className="mb-4 flex items-center gap-3">
-          <Link href="/"><ChevronLeft size={20} /></Link>
+          <Link href="/"><ChevronLeft size={24} /></Link>
           <p className="text-base">장바구니</p>
         </div>
 
@@ -191,7 +191,7 @@ export default function CartPage() {
                       <p className="text-sm font-medium">{product ? `${product.priceKrw.toLocaleString()}원` : "가격 확인 중..."}</p>
                       <div className="mt-2 flex items-center gap-2">
                         <QuantityStepper quantity={item.quantity} onChange={(q) => handleQuantityChange(item, q)} size="md" />
-                        <button type="button" aria-label="삭제" onClick={() => handleRemove(item)} className="ml-auto flex h-7 w-7 items-center justify-center text-muted-foreground"><Trash2 size={16} /></button>
+                        <button type="button" aria-label="삭제" onClick={() => handleRemove(item)} className="ml-auto flex h-7 w-7 items-center justify-center text-muted-foreground"><Trash2 size={24} /></button>
                       </div>
                     </div>
                   </div>

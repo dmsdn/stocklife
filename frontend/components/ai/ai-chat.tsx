@@ -18,7 +18,7 @@ export function AiChat({ onBack, ...bodyProps }: AiChatProps) {
       <div className="flex shrink-0 items-center gap-3 p-4">
         {onBack && (
           <button type="button" onClick={onBack} aria-label="뒤로가기">
-            <ChevronLeft size={20} />
+            <ChevronLeft size={24} />
           </button>
         )}
         <span className="text-base">AI에게 물어보기</span>

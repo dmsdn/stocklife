@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Sparkles } from "lucide-react";
+import { Bookmark, Sparkles } from "lucide-react";
 
 import {
   formatPrice,
@@ -91,7 +91,7 @@ function RecommendedProductCard({
           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/90"
           aria-label={`${product.name} 장바구니 저장`}
         >
-          <Heart size={13} />
+          <Bookmark size={24} />
         </button>
       </div>
 
@@ -112,7 +112,7 @@ function RecommendedProductCard({
       <div className="mt-2 rounded-sm bg-muted/60 p-2">
         <div className="flex items-center gap-1">
           <Sparkles
-            size={11}
+            size={24}
             className="shrink-0"
           />
 

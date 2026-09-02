@@ -43,7 +43,7 @@ export function AiChatPanel({
             onClick={onClose}
             aria-label="닫기"
           >
-            <X size={18} />
+            <X size={24} />
           </button>
         </div>
 
@@ -86,7 +86,7 @@ export function AiChatPanel({
             onClick={onClose}
             aria-label="닫기"
           >
-            <X size={18} />
+            <X size={24} />
           </button>
         </div>
 

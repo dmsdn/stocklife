@@ -94,12 +94,12 @@ export default function NotificationsPage() {
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => router.back()} aria-label="뒤로가기">
-            <ChevronLeft size={20} />
+            <ChevronLeft size={24} />
           </button>
           <p className="text-base">알림</p>
         </div>
         <Link href="/mypage/notifications" aria-label="알림 설정" className="text-muted-foreground">
-          <Settings size={20} />
+          <Settings size={24} />
         </Link>
       </div>
 
@@ -132,7 +132,7 @@ export default function NotificationsPage() {
                 onClick={() => handleClick(item)}
                 className="flex w-full items-start gap-3 py-4 text-left"
               >
-                <Icon size={20} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <Icon size={24} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="mb-0.5 flex items-center gap-1.5">
                     {!item.read && <span className="h-1.5 w-1.5 shrink-0 rounded-sm bg-primary" />}

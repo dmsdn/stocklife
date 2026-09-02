@@ -18,9 +18,9 @@ const STATE_LABEL: Record<PermissionState, string> = {
 };
 
 function StateIcon({ state }: { state: PermissionState }) {
-  if (state === "granted") return <CheckCircle2 size={18} className="text-success" />;
-  if (state === "denied") return <XCircle size={18} className="text-danger" />;
-  return <HelpCircle size={18} className="text-muted-foreground" />;
+  if (state === "granted") return <CheckCircle2 size={24} className="text-success" />;
+  if (state === "denied") return <XCircle size={24} className="text-danger" />;
+  return <HelpCircle size={24} className="text-muted-foreground" />;
 }
 
 export default function PermissionsPage() {
@@ -49,7 +49,7 @@ export default function PermissionsPage() {
       <div className="space-y-3">
         {rows.map((row) => (
           <div key={row.kind} className="flex items-center gap-3 rounded-sm border border-border p-4">
-            <row.icon size={20} className="shrink-0 text-muted-foreground" />
+            <row.icon size={24} className="shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{row.label}</p>
               <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">

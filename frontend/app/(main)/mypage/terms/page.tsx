@@ -8,7 +8,7 @@ export default function TermsFullPage() {
     <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <div className="mb-6 flex items-center gap-3">
         <Link href="/mypage">
-          <ChevronLeft size={20} />
+          <ChevronLeft size={24} />
         </Link>
         <p className="text-base">이용약관</p>
       </div>

@@ -497,7 +497,7 @@ export function AiChatBody({
                   aria-label="첨부 제거"
                   className="shrink-0"
                 >
-                  <X size={12} />
+                  <X size={24} />
                 </button>
               </div>
             ))}
@@ -514,7 +514,7 @@ export function AiChatBody({
                   onClick={onClick}
                   className="flex min-w-0 flex-col items-center gap-1 rounded-sm border border-border py-3 text-[11px]"
                 >
-                  <Icon size={18} />
+                  <Icon size={24} />
 
                   <span className="truncate max-w-full">
                     {label}
@@ -532,7 +532,7 @@ export function AiChatBody({
             aria-label="첨부"
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border"
           >
-            <Plus size={16} />
+            <Plus size={24} />
           </button>
 
           {recording ? (
@@ -568,9 +568,9 @@ export function AiChatBody({
             }`}
           >
             {recording ? (
-              <Square size={14} />
+              <Square size={24} />
             ) : (
-              <Mic size={16} />
+              <Mic size={24} />
             )}
           </button>
 
@@ -578,9 +578,9 @@ export function AiChatBody({
             type="button"
             aria-label="전송"
             onClick={() => handleSend()}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground"
           >
-            <Send size={14} />
+            <Send size={24} />
           </button>
         </div>
       </div>

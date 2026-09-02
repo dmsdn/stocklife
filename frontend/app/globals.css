@@ -63,6 +63,10 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
 
+  /* ✅ 신규 — "중요 버튼" 전용 색 (자세한 이유는 :root 쪽 주석 참고) */
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand: var(--brand);
+
   /* 팝오버/드롭다운 배경 */
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -161,6 +165,13 @@
   /* 브랜드 강조색 자리 — 지금은 흑, 나중에 포인트 컬러 정해지면 이 두 줄만 교체 */
   --primary: var(--gray-950);
   --primary-foreground: var(--gray-0);
+
+  /* ✅ 신규 — "중요 버튼"(꽉 찬 배경의 default/secondary 버튼) 전용 색.
+     --primary는 체크박스/선택된 탭/필터칩/진행바 등 14곳에서 같이 쓰고 있어서, 그대로
+     바꾸면 그것들까지 다 같이 빨개짐. 그래서 버튼 전용으로 분리함 — 이 두 줄만 바꾸면
+     "중요 버튼"만 바뀌고 나머지(체크박스, 탭, 칩 등)는 계속 흑백 그대로 유지됨. */
+  --brand: #ee4908;
+  --brand-foreground: var(--gray-0);
 
   /* 보조 버튼/배경 */
   --secondary: var(--gray-400);

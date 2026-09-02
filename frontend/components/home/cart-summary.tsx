@@ -38,7 +38,7 @@ export function CartSummary({
       >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
-            <ShoppingCart size={18} />
+            <ShoppingCart size={24} />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -52,7 +52,7 @@ export function CartSummary({
           </div>
 
           <ChevronRight
-            size={16}
+            size={24}
             className="shrink-0 text-muted-foreground"
           />
         </div>

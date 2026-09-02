@@ -76,7 +76,7 @@ export function AttachListPickerDialog({ open, onClose, onSelect }: AttachListPi
                     </p>
                   </div>
                   <ChevronDown
-                    size={16}
+                    size={24}
                     className={`shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
                   />
                 </button>

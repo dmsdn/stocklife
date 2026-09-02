@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(true);
   const [loginError, setLoginError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,14 +57,11 @@ export default function LoginPage() {
 
       <div className="flex min-h-full items-center justify-center px-6 py-12 md:px-12">
         <div className="w-full max-w-sm">
-          <div className="flex items-center gap-1 text-xl">
-            {/* TODO: 로고 아이콘 자리 */}
-            <span>AI 마트에</span>
+          <div className="flex flex-col items-center mt-20">
+            {/* ✅ 로고 파일을 /public/icons/logo-shopping.svg 자리에 넣어주세요. 헤더가 쓰는
+                logo-shopping.svg/logo-ai.svg랑 같은 폴더 규칙입니다. */}
+            <img src="/icons/logo-shopping.svg" alt="로고" className="w-60" />
           </div>
-          <p className="mt-1 text-[28px] font-bold leading-tight">어서오세요</p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            전화번호와 비밀번호를 입력하여 로그인 해 주세요
-          </p>
 
           <form id="login-form" onSubmit={handleLogin} className="mt-10 space-y-3">
             <Input
@@ -93,7 +90,7 @@ export default function LoginPage() {
                 aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
               >
-                {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                {showPassword ? <Eye size={24} /> : <EyeOff size={24} />}
               </button>
             </div>
 
@@ -105,7 +102,7 @@ export default function LoginPage() {
           <div className="mt-4 flex items-center justify-between text-sm">
             <label className="flex items-center gap-2 text-foreground">
               <Checkbox checked={keepLoggedIn} onChange={() => setKeepLoggedIn((v) => !v)} />
-              로그인 상태 유지
+              자동 로그인
             </label>
             {/* ⚠ 비밀번호 재설정 API가 백엔드에 없어서 이 링크는 현재 갈 곳이 없습니다.
                 아래쪽 "연결 안 된 것" 정리 문서 참고 */}
@@ -122,10 +119,10 @@ export default function LoginPage() {
             {submitting ? "로그인 중..." : "로그인하기"}
           </Button>
 
-          <div className="mt-10 text-center">
-            <Link href="/auth/signup/terms" className="mt-3 block">
-              <Button variant="ghost" className="h-12 w-full rounded-sm">
-                <span className="text-sm font-normal"> AI 마트 회원이 아니신가요?</span>
+          <div className="mt-4 text-center">
+            <Link href="/auth/signup/terms" className="block">
+              <Button variant="outline" className="h-12 w-full rounded-sm border-none text-brand">
+                <span className="text-sm font-normal text-foreground"> AI 마트 회원이 아니신가요?</span>
                 <span className="text-base font-semibold">회원가입</span>
               </Button>
             </Link>

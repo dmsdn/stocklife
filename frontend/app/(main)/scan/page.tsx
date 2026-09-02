@@ -291,7 +291,7 @@ function ScanPageInner() {
                 : "리스트 선택"}
             </span>
             <ChevronDown
-              size={16}
+              size={24}
               className="shrink-0 text-muted-foreground"
             />
           </button>
@@ -351,7 +351,7 @@ function ScanPageInner() {
 
           {justAdded && (
             <p className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 items-center justify-center gap-1 text-sm text-success">
-              <Check size={16} /> 담았어요
+              <Check size={24} /> 담았어요
             </p>
           )}
         </div>
@@ -367,7 +367,7 @@ function ScanPageInner() {
                   {product.price.toLocaleString()}원
                 </p>
                 <p className="flex items-center gap-1 text-xs text-success">
-                  <Check size={12} />
+                  <Check size={24} />
                   담았어요
                 </p>
               </div>
@@ -378,7 +378,7 @@ function ScanPageInner() {
                 onClick={closeAddedPanel}
                 className="flex h-6 w-6 shrink-0 items-center justify-center self-start text-muted-foreground"
               >
-                <X size={16} />
+                <X size={24} />
               </button>
             </div>
 
@@ -389,7 +389,7 @@ function ScanPageInner() {
                 className="flex items-center gap-1.5"
                 onClick={handleRemoveEntirely}
               >
-                <X size={16} />
+                <X size={24} />
                 카트에서 빼기
               </Button>
 
@@ -408,7 +408,7 @@ function ScanPageInner() {
             className="flex w-full items-center gap-1.5"
             onClick={() => setCartOpen(true)}
           >
-            <ShoppingCart size={16} />
+            <ShoppingCart size={24} />
             카트 내역 보기
             {selectedGroup && ` (${selectedGroup.products.length}개)`}
           </Button>
@@ -418,7 +418,7 @@ function ScanPageInner() {
             className="flex w-full items-center gap-1.5"
             onClick={() => setRouteOpen(true)}
           >
-            <MapIcon size={16} />
+            <MapIcon size={24} />
             동선 보기
           </Button>
         </div>
