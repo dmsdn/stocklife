@@ -232,8 +232,8 @@ async def _utterance(decision: dict) -> str | None:
     # 여기서도 쓴다. 서빙(_deliver)과 평가(--judge)가 **같은 발화기**를 보게 —
     # 한쪽만 갈아끼우면 평가가 실제로 나갈 발화가 아닌 것을 채점한다.
     result = await asyncio.to_thread(
-        D._CHAT or loop.run_chat, message, member_id, "scen-judge", None,
-        allow_actions=False)                 # 손님이 시키지 않았다 — 경로에서 잠근다
+        D._CHAT or loop.run_chat, message, None, "scen-judge", None,
+        allow_actions=False, member_id=member_id)   # 09-03: 세계 축은 member_id= 로                 # 손님이 시키지 않았다 — 경로에서 잠근다
     gv = guard.check(result["reply"], result["ledgers"])
     if not gv["ok"]:
         # 가드에 막힌 발화는 **실제로는 안 나간다.** 그것을 심판에게 보내면
