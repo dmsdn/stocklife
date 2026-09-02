@@ -93,18 +93,18 @@ public class CartService {
     public CartItemResponse addItemToGroup(Long consumerId, Long groupId, AddCartItemRequest request) {
         requireOwnedGroup(consumerId, groupId);
         LocalDateTime now = LocalDateTime.now();
-        CartItem item = cartItemRepository.findByCartGroupIdAndSkuId(groupId, request.getSkuId())
-                .map(existing -> {
-                    existing.increaseQuantity(request.getQuantity());
-                    existing.markScanned(now);
-                    return existing;
-                })
-                .orElseGet(() -> {
-                    CartItem created = cartItemRepository.save(
-                            new CartItem(groupId, request.getSkuId(), request.getQuantity()));
-                    created.markScanned(now);
-                    return created;
-                });
+        CartItem existing = findAndMergeDuplicateItems(groupId, request.getSkuId());
+        CartItem item;
+        if (existing != null) {
+            existing.increaseQuantity(request.getQuantity());
+            existing.markScanned(now);
+            item = existing;
+        } else {
+            CartItem created = cartItemRepository.save(
+                    new CartItem(groupId, request.getSkuId(), request.getQuantity()));
+            created.markScanned(now);
+            item = created;
+        }
         return new CartItemResponse(item);
     }
 
@@ -153,8 +153,7 @@ public class CartService {
                 int qty = guestItem.getQuantity() == null ? 1 : Math.max(1, guestItem.getQuantity());
                 boolean checked = guestItem.getChecked() == null || guestItem.getChecked();
 
-                CartItem item = cartItemRepository.findByCartGroupIdAndSkuId(group.getCartGroupId(), guestItem.getId())
-                        .orElse(null);
+                CartItem item = findAndMergeDuplicateItems(group.getCartGroupId(), guestItem.getId());
                 if (item == null) {
                     cartItemRepository.save(new CartItem(group.getCartGroupId(), guestItem.getId(), qty, checked));
                 } else {
@@ -170,6 +169,40 @@ public class CartService {
     @Transactional(readOnly = true)
     public SessionCartResponse getSessionCart(Long consumerId) {
         return buildSessionCart(cartItemRepository.findByConsumerId(consumerId));
+    }
+
+    /**
+     * 같은 그룹에 같은 SKU가 여러 줄로 남아 있는 구 DB 데이터를 한 줄로 복구한다.
+     * 정상 스키마에서는 UNIQUE(cart_group_id, sku_id)로 애초에 중복 생성이 막힌다.
+     */
+    private CartItem findAndMergeDuplicateItems(Long groupId, Integer skuId) {
+        List<CartItem> matches = cartItemRepository
+                .findAllByCartGroupIdAndSkuIdOrderByCartItemIdAsc(groupId, skuId);
+
+        if (matches.isEmpty()) return null;
+
+        CartItem keeper = matches.get(0);
+        if (matches.size() == 1) return keeper;
+
+        int mergedQuantity = 0;
+        boolean mergedChecked = false;
+        LocalDateTime latestScannedAt = null;
+
+        for (CartItem item : matches) {
+            mergedQuantity += item.getQuantity();
+            mergedChecked = mergedChecked || item.isChecked();
+            if (item.getScannedAt() != null &&
+                    (latestScannedAt == null || item.getScannedAt().isAfter(latestScannedAt))) {
+                latestScannedAt = item.getScannedAt();
+            }
+        }
+
+        keeper.changeQuantity(mergedQuantity);
+        keeper.toggleChecked(mergedChecked);
+        if (latestScannedAt != null) keeper.markScanned(latestScannedAt);
+
+        cartItemRepository.deleteAll(matches.subList(1, matches.size()));
+        return keeper;
     }
 
     private CartGroup getOrCreateDefaultGroup(Long consumerId) {

@@ -7,6 +7,7 @@ import TransferChoiceModal from './components/TransferChoiceModal';
 import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
 import CartGroupModal from './components/CartGroupModal';
+import CheckoutTargetModal from './components/CheckoutTargetModal';
 import ShoppingListModal from './components/ShoppingListModal';
 import { fetchFloorData } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
@@ -60,6 +61,7 @@ export default function App() {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [purchased, setPurchased] = useState<CartItem[]>([]);
     const [cartGroupOpen, setCartGroupOpen] = useState(false);
+    const [checkoutTargetOpen, setCheckoutTargetOpen] = useState(false);
     // 담을 리스트 선택 — null이면 예전처럼 "기본 장바구니"에 담긴다(하위 호환 기본값).
     const [cartGroups, setCartGroups] = useState<CartGroupOption[]>([]);
     const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
@@ -543,6 +545,25 @@ export default function App() {
                     </button>
 
                     <button
+                        onClick={() => setCheckoutTargetOpen(true)}
+                        title="cart_item.is_checked = true 인 실제 결제 대상 상품"
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            border: '1px solid #3a3f4b',
+                            background: '#1e2128',
+                            color: '#fbbf24',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        🧾 결제 대상
+                    </button>
+
+                    <button
                         onClick={() => setShoppingListOpen(true)}
                         style={{
                             display: 'flex',
@@ -694,6 +715,12 @@ export default function App() {
                         setSelectedGroupId(groupId);
                     }}
                     onClose={() => setCartGroupOpen(false)}
+                />
+            )}
+
+            {checkoutTargetOpen && (
+                <CheckoutTargetModal
+                    onClose={() => setCheckoutTargetOpen(false)}
                 />
             )}
 

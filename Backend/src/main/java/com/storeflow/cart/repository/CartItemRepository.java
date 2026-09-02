@@ -17,6 +17,15 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
             Integer skuId
     );
 
+    /**
+     * 과거 DB에 중복 행이 남아 있어도 서비스에서 병합할 수 있도록 전체 행을 조회한다.
+     * 정상 DB에서는 UNIQUE(cart_group_id, sku_id) 때문에 결과가 0~1건이다.
+     */
+    List<CartItem> findAllByCartGroupIdAndSkuIdOrderByCartItemIdAsc(
+            Long cartGroupId,
+            Integer skuId
+    );
+
     Optional<CartItem> findByCartItemIdAndCartGroupId(
             Long cartItemId,
             Long cartGroupId
