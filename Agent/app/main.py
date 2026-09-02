@@ -329,6 +329,12 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     # 안전 문구로 대체하되 actions는 그대로 — 이미 일어난 상태 변경(담기 성공)을
     # 프론트에 숨기면 화면과 장바구니가 어긋난다. 발화만 바꾸고 사실은 전한다.
+    # 09-03: 여기로 떨어지면 **반드시 로그를 남긴다.** 09-02 시연 점검에서 기능 14 의
+    #   폴백 원인을 로그로 확인할 수 없었다 — 자발형은 테이프가 있는데 반응형만 침묵이었다.
+    #   막힌 사유(unsupported·web_only…)와 발화 앞부분이 있어야 프롬프트를 고칠 수 있다.
+    print(f"[chat] 가드 폴백 session={body.sessionId} reasons={sorted(reasons)} "
+          f"violations={[(v.get('reason'), str(v.get('value'))[:40]) for v in verdict['violations']][:6]} "
+          f"reply={(result['reply'] or '')[:160]!r}")
     return ChatResponse(reply=SAFE_REPLY, actions=result["actions"])
 
 
