@@ -1,23 +1,25 @@
 // app/(main)/scan/page.tsx
 // ✅ 전면 재설계
 //   - 담는 곳(리스트)을 화면에서 직접 선택 가능 (드롭다운)
-//   - "카트 내역 보기"는 저장(saved) 화면이 아니라, 지금 스캔해서 담긴 상품만 보여주는
-//     결제용 화면(ScanCartDialog)
+//   - ✅ 담은 상품 목록 — 예전엔 "카트 내역 보기" 버튼을 눌러야 모달이 뜨는 방식이었는데,
+//     네이버맵/카카오맵 바텀시트처럼 화면 하단에 항상 걸쳐 있다가(평소엔 가장 최근 담은
+//     상품 1개만 보이는 "peek" 높이) 탭하면 화면 대부분까지 펼쳐져서 스크롤로 전체 목록을
+//     보는 방식으로 바꿈. 펼쳐지면 카메라는 자동으로 꺼지고(뒤에 계속 켜둘 이유가 없음),
+//     전역 하단탭바도 가려서(BottomBarVisibilityContext) 그 자리에 결제 버튼만 남게 함.
 //   - 수량/삭제는 바코드로만: 이미 담긴 상품을 다시 스캔하면 "+1개 더 담을까요?" 상태가 되고,
 //     "담기"(커밋) 또는 "카트에서 빼기"(그 상품 전체 삭제) 중 선택
 //   - "동선 보기"는 실제 지도 이미지 위에 핀+경로선(StoreMapDialog)
-//   - h-dvh 대신 공용 하단탭바 높이(4rem)를 뺀 높이로 고쳐서 버튼이 화면 밖으로 안 밀려남
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { RiArrowLeftSLine, RiArrowDownSLine, RiShoppingCartLine, RiMapLine, RiCheckLine, RiCloseLine, RiCameraLine, RiCameraOffLine } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowDownSLine, RiMapLine, RiCheckLine, RiCloseLine, RiCameraLine, RiCameraOffLine, RiBankCardLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScanCartDialog } from "@/components/domain/scan-cart-dialog";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { apiFetch, isLoggedIn } from "@/lib/api-client";
 import {
   addProductToCartGroup,
@@ -31,6 +33,7 @@ import {
 import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
 import { readShoppingSession, writeShoppingSession } from "@/lib/shopping-session";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
+import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 
 const DEFAULT_GROUP_ID = 1;
 
@@ -64,26 +67,54 @@ function ScanPageInner() {
   const [groupId, setGroupId] = useState<number | null>(requestedGroupId);
   const selectedGroup = groups.find((g) => g.id === groupId);
 
+  // ✅ 신규 — 담은 상품 목록에도 매대 번호("444 >") 같이 보여주기(리스트 상세/카트랑 동일 패턴)
+  const [locationBySkuId, setLocationBySkuId] = useState<Map<number, string>>(new Map());
+  useEffect(() => {
+    const ids = selectedGroup?.products.map((p) => p.id) ?? [];
+    if (ids.length === 0) return;
+    fetchInventoryBatch(ids)
+      .then((map) => {
+        const next = new Map<number, string>();
+        map.forEach((items, skuId) => {
+          const loc = pickLocation(items);
+          if (loc) next.set(skuId, loc.locationId);
+        });
+        setLocationBySkuId(next);
+      })
+      .catch(() => setLocationBySkuId(new Map()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroup?.products.map((p) => p.id).join(",")]);
+
   useEffect(() => {
     setGroups(readCartGroups());
   }, []);
 
   useEffect(() => {
-    loadCartGroups().then(async (loaded) => {
-      let finalGroups = loaded;
+    loadCartGroups()
+      .then(async (loaded) => {
+        let finalGroups = loaded;
 
-      if (finalGroups.length === 0) {
-        const created = await createCartGroup("장보기 리스트");
-        finalGroups = [created];
-      }
+        if (finalGroups.length === 0) {
+          const created = await createCartGroup("장보기 리스트");
+          finalGroups = [created];
+        }
 
-      setGroups(finalGroups);
+        setGroups(finalGroups);
 
-      setGroupId((current) => {
-        if (current && finalGroups.some((g) => g.id === current)) return current;
-        return finalGroups[0].id;
+        setGroupId((current) => {
+          if (current && finalGroups.some((g) => g.id === current)) return current;
+          return finalGroups[0].id;
+        });
+      })
+      // ✅ 서버 요청이 실패해도(백엔드 500 등) 화면이 "리스트 선택"에 멈춰있지 않게,
+      //   다른 화면들과 동일하게 로컬 캐시로 폴백합니다.
+      .catch(() => {
+        const cached = readCartGroups();
+        setGroups(cached);
+        if (cached.length > 0) {
+          setGroupId((current) => (current && cached.some((g) => g.id === current) ? current : cached[0].id));
+        }
       });
-    });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -91,7 +122,6 @@ function ScanPageInner() {
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<ScannedProduct | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [justAdded, setJustAdded] = useState<number | null>(null);
 
   const [sessionScans, setSessionScans] = useState<Set<number>>(new Set());
 
@@ -106,8 +136,15 @@ function ScanPageInner() {
   }, [groupId]);
   const autoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [cartOpen, setCartOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
+
+  // ✅ 상품 목록이 이제 화면 대부분을 항상 차지하는 기본 레이아웃이라, 이 페이지에서는
+  //   전역 하단탭바를 계속 숨기고 그 자리에 이 페이지 자체의 결제 버튼을 둡니다.
+  const { setHidden: setBottomBarHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setBottomBarHidden(true);
+    return () => setBottomBarHidden(false);
+  }, [setBottomBarHidden]);
 
   useEffect(() => {
     if (autoOpenRoute && groupId != null) setRouteOpen(true);
@@ -132,7 +169,6 @@ function ScanPageInner() {
     }
 
     setProduct(null);
-    setJustAdded(null);
   };
 
   // ✅ 실제 GET /api/products/barcode/{barcode} 연동.
@@ -147,7 +183,6 @@ function ScanPageInner() {
     }
 
     setError(null);
-    setJustAdded(null);
 
     if (autoCloseTimer.current) {
       clearTimeout(autoCloseTimer.current);
@@ -198,7 +233,6 @@ function ScanPageInner() {
         return next;
       });
       refreshGroups();
-      setJustAdded(scanned.skuId);
 
       // ✅ 담긴 직후 패널은 5초 뒤 자동으로 닫힘
       autoCloseTimer.current = setTimeout(() => {
@@ -238,8 +272,7 @@ function ScanPageInner() {
 
   // ✅ 신규 — 카메라를 앱 안에서 사용자가 직접 켜고 끌 수 있게. 권한은 있어도
   //   "지금은 카메라 화면 안 보고 싶다"는 경우를 위한 수동 토글입니다.
-  const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
 
   const toggleCamera = () => {
     if (cameraEnabled) {
@@ -247,17 +280,21 @@ function ScanPageInner() {
       setCameraEnabled(false);
     } else {
       setCameraEnabled(true);
-      start();
     }
   };
 
+  // ✅ 버그 수정 — 예전엔 setCameraEnabled(true) 바로 다음 줄에서 start()를 불렀는데,
+  //   <video>가 {cameraEnabled && ...} 조건부라 그 시점엔 아직 리렌더 전이라 videoRef.current가
+  //   null이었습니다(useBarcodeScanner.start()는 그러면 그냥 조용히 return). 그래서 카메라를
+  //   켜도 permission이 "idle"에 멈춰서 "카메라를 여는 중..."만 계속 떴던 것 — cameraEnabled가
+  //   true가 된 "뒤"(비디오 엘리먼트가 실제로 DOM에 붙은 뒤)에 start()가 실행되도록 useEffect로.
   useEffect(() => {
-    start();
-
-    // Scan 페이지를 벗어나면 useBarcodeScanner 내부의 cleanup에서
-    // 카메라 스트림이 종료됩니다.
+    if (cameraEnabled) start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cameraEnabled]);
+
+  // ✅ 카메라는 이제 기본값이 꺼짐 — 사용자가 카메라 버튼을 눌러야(toggleCamera) 켜짐.
+  //   페이지를 벗어나면 useBarcodeScanner 내부 cleanup에서 스트림이 정리됩니다.
 
   const handleRemoveEntirely = () => {
     if (!product) return;
@@ -326,11 +363,25 @@ function ScanPageInner() {
     }, 5000);
   };
 
+  // ✅ ScanCartDialog가 하던 "결제하기"를 이 화면 안으로 그대로 옮김 — 담긴 상품 전부
+  //   비우고 세션 스캔 기록도 초기화.
+  const handleCheckout = () => {
+    if (!groupId) return;
+    updateCartGroups((gs) => gs.map((g) => (g.id === groupId ? { ...g, products: [] } : g)));
+    refreshGroups();
+    setSessionScans(new Set());
+    writeShoppingSession(null);
+  };
+
+  const cartTotalCount = selectedGroup?.products.reduce((n, p) => n + p.quantity, 0) ?? 0;
+  const cartTotalPrice = selectedGroup?.products.reduce((s, p) => s + p.price * p.quantity, 0) ?? 0;
+
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col overflow-hidden">
-      <div className="mx-auto flex h-full w-full flex-col overflow-hidden md:max-w-4xl">
+    <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-background md:static md:h-[calc(100dvh-4rem)]">
+      <div className="relative mx-auto flex h-full w-full flex-col overflow-hidden md:max-w-4xl">
         {/* ✅ 참고 이미지(Frame 127) 헤더 — 뒤로가기 + 가운데 "{리스트 이름} ⌄" 드롭다운.
-            리스트 선택은 그대로 GroupPickerDialog를 열되, 트리거 버튼만 이 자리로 합침. */}
+            리스트 선택은 그대로 GroupPickerDialog를 열되, 트리거 버튼만 이 자리로 합침.
+            "동선 보기"는 항상 우측 상단에 고정. */}
         <div className="relative flex shrink-0 items-center justify-center px-4 py-3">
           <Link
             href="/"
@@ -342,124 +393,109 @@ function ScanPageInner() {
           <button
             type="button"
             onClick={() => setGroupPickerOpen(true)}
-            className="flex min-w-0 max-w-[70%] items-center gap-1 text-sm font-medium"
+            className="flex min-w-0 max-w-[55%] items-center gap-1 text-sm font-medium"
           >
             <span className="truncate">{selectedGroup ? selectedGroup.title : "리스트 선택"}</span>
             <RiArrowDownSLine size={18} className="shrink-0 text-muted-foreground" />
           </button>
+          <button
+            type="button"
+            onClick={() => setRouteOpen(true)}
+            className="absolute right-4 flex h-8 items-center gap-1 rounded-full border border-[#F4F4F4] px-3 text-xs font-medium"
+          >
+            <RiMapLine size={16} />
+            동선 보기
+          </button>
         </div>
 
-        {/* ✅ 카메라 영역 — Figma처럼 화면 끝까지 안 붙이고 좌우 여백을 두고 rounded-lg
-            카드로. 바코드 숫자 직접 입력(제품 번호 입력)은 카메라 위에 뜨는 알약 버튼으로
-            토글 — 눌러야 입력창이 나오게 해서 평소엔 카메라 화면이 이미지처럼 깔끔함. */}
-        {cameraStreamState !== "denied" && cameraEnabled && (
-        <div className="relative mx-4 min-h-0 flex-1 shrink overflow-hidden rounded-lg bg-[#666666]">
-          {cameraStreamState !== "granted" && (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        {/* ✅ 카메라 — 화면 좌우 끝까지 꽉 채우고(마진 없음), 켜짐/꺼짐 상관없이 항상
+            "화면 윗부분 전체"(flex-1, 남는 공간 다 차지)를 씀. 켜져 있으면 실시간 영상,
+            꺼져 있으면 그냥 꺼짐 안내만 같은 자리에 표시 — 자리 자체는 그대로 유지되니까
+            아래 입력창/목록/결제 버튼이 화면 중간에 붕 뜨지 않고 항상 하단에 붙어있음. */}
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-[#666666]">
+          {cameraEnabled && cameraStreamState !== "denied" ? (
+            <>
+              {cameraStreamState !== "granted" && (
+                <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                  <p className="text-sm text-white">카메라를 여는 중...</p>
+                </div>
+              )}
+
+              <video
+                ref={videoRef}
+                className="absolute inset-0 h-full w-full object-cover"
+                muted
+                playsInline
+              />
+
+              {/* ✅ 표시선(가로 80% · 세로 30%, 중앙) 안쪽은 그대로 선명하게 보이고,
+                  바깥쪽만 4개의 흐림 밴드(위/아래/좌/우)로 덮어서 흐리게 처리합니다. */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[35%] backdrop-blur-sm" />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[35%] backdrop-blur-sm" />
+              <div className="pointer-events-none absolute left-0 top-[35%] h-[30%] w-[10%] backdrop-blur-sm" />
+              <div className="pointer-events-none absolute right-0 top-[35%] h-[30%] w-[10%] backdrop-blur-sm" />
+
+              <span className="absolute left-[10%] top-[35%] h-8 w-8 border-l-2 border-t-2 border-white" />
+              <span className="absolute right-[10%] top-[35%] h-8 w-8 border-r-2 border-t-2 border-white" />
+              <span className="absolute bottom-[35%] left-[10%] h-8 w-8 border-b-2 border-l-2 border-white" />
+              <span className="absolute bottom-[35%] right-[10%] h-8 w-8 border-b-2 border-r-2 border-white" />
+
+              {error && (
+                <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-danger">
+                  {error}
+                </p>
+              )}
+
+              {cameraStreamState === "granted" && !supported && (
+                <p className="absolute inset-x-4 bottom-2 text-center text-xs text-white/80">
+                  이 브라우저는 자동 바코드 인식을 지원하지 않아요. 숫자를 직접 입력해주세요.
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-1 p-6 text-center">
               <p className="text-sm text-white">
-                카메라를 여는 중...
+                {cameraStreamState === "denied" ? "카메라 권한이 꺼져 있어요." : "카메라가 꺼져 있어요."}
               </p>
+              <p className="text-xs text-white/60">아래 바코드 숫자로도 담을 수 있어요.</p>
             </div>
           )}
-
-          <video
-            ref={videoRef}
-            className="absolute inset-0 h-full w-full object-cover"
-            muted
-            playsInline
-          />
-
-          {/* ✅ 표시선(가로 80% · 세로 30%, 중앙) 안쪽은 그대로 선명하게 보이고,
-              바깥쪽만 4개의 흐림 밴드(위/아래/좌/우)로 덮어서 흐리게 처리합니다.
-              이렇게 나누는 이유: CSS만으로 "가운데만 뚫린 흐림"을 표현하려면 마스크가
-              필요한데, 브라우저 호환성 걱정 없이 4개 사각형으로 감싸는 게 제일 안전합니다. */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[35%] backdrop-blur-sm" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[35%] backdrop-blur-sm" />
-          <div className="pointer-events-none absolute left-0 top-[35%] h-[30%] w-[10%] backdrop-blur-sm" />
-          <div className="pointer-events-none absolute right-0 top-[35%] h-[30%] w-[10%] backdrop-blur-sm" />
-
-          <span className="absolute left-[10%] top-[35%] h-10 w-10 border-l-2 border-t-2 border-white" />
-          <span className="absolute right-[10%] top-[35%] h-10 w-10 border-r-2 border-t-2 border-white" />
-          <span className="absolute bottom-[35%] left-[10%] h-10 w-10 border-b-2 border-l-2 border-white" />
-          <span className="absolute bottom-[35%] right-[10%] h-10 w-10 border-b-2 border-r-2 border-white" />
-
-          {error && (
-            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-danger">
-              {error}
-            </p>
-          )}
-
-          {justAdded && (
-            <p className="absolute inset-x-4 top-1/2 flex -translate-y-1/2 items-center justify-center gap-1 text-sm text-success">
-              <RiCheckLine size={24} /> 담았어요
-            </p>
-          )}
-
-          {cameraStreamState === "granted" && !supported && (
-            <p className="absolute inset-x-4 bottom-24 text-center text-xs text-white/80">
-              이 브라우저는 자동 바코드 인식을 지원하지 않아요. 숫자를 직접 입력해주세요.
-            </p>
-          )}
-
-          {/* ✅ "제품 번호 입력" 알약 버튼 — 안 눌려있으면 이걸로 토글, 눌리면 바로 아래
-              입력창+조회 버튼이 뜸(카메라 토글도 이 옆에 같이). */}
-          <div className="absolute inset-x-0 bottom-4 flex flex-col items-center gap-2 px-6">
-            {manualEntryOpen ? (
-              <form onSubmit={handleLookup} className="flex w-full max-w-xs gap-2">
-                <Input
-                  autoFocus
-                  placeholder="바코드 숫자를 입력해주세요"
-                  value={barcode}
-                  onChange={(e) => setBarcode(e.target.value.replace(/\D/g, ""))}
-                  inputMode="numeric"
-                  className="h-10 bg-white/95 text-sm"
-                />
-                <Button type="submit" variant="outline" className="h-10 shrink-0 rounded-full bg-white/95">
-                  조회
-                </Button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setManualEntryOpen(true)}
-                className="flex h-10 items-center gap-1.5 rounded-full border border-white/70 px-5 text-sm text-white"
-              >
-                제품 번호 입력
-              </button>
-            )}
-
-            <button
-              type="button"
-              aria-label={cameraEnabled ? "카메라 끄기" : "카메라 켜기"}
-              onClick={toggleCamera}
-              className="flex h-8 items-center gap-1 rounded-full border border-white/50 px-3 text-xs text-white/90"
-            >
-              {cameraEnabled ? <RiCameraOffLine size={14} /> : <RiCameraLine size={14} />}
-              {cameraEnabled ? "카메라 끄기" : "카메라 켜기"}
-            </button>
-          </div>
         </div>
-        )}
 
-        {!(cameraStreamState !== "denied" && cameraEnabled) && (
-          <form onSubmit={handleLookup} className="flex shrink-0 gap-2 px-4 py-2">
+        {/* ✅ 바코드 입력 — 카메라 바로 아래, 담은 상품 목록 바로 위. */}
+        <div className="shrink-0 px-4 py-2">
+          <form onSubmit={handleLookup} className="flex gap-2">
             <Input
               placeholder="바코드 숫자를 입력해주세요"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value.replace(/\D/g, ""))}
               inputMode="numeric"
             />
-            <Button type="submit" variant="outline">
+            <Button type="submit" variant="outline" className="shrink-0">
               조회
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              aria-label={cameraEnabled ? "카메라 끄기" : "카메라 켜기"}
+              onClick={toggleCamera}
+              className="shrink-0"
+            >
+              {cameraEnabled ? <RiCameraOffLine size={18} /> : <RiCameraLine size={18} />}
+            </Button>
           </form>
-        )}
+        </div>
 
-
+        {/* 스캔 직후 담김 확인 + 수량 조절 패널 */}
         {product && (
-          <div className="shrink-0 space-y-3 border-t border-border p-4">
+          <div className="mx-4 mb-2 shrink-0 space-y-3 rounded-lg border border-[#F4F4F4] p-4">
             <div className="flex gap-3">
-              <div className="h-16 w-16 shrink-0 rounded-sm border border-border bg-muted" />
+              {product.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={product.image} alt="" className="h-16 w-16 shrink-0 rounded-sm border border-border object-cover" />
+              ) : (
+                <div className="h-16 w-16 shrink-0 rounded-sm border border-border bg-muted" />
+              )}
 
               <div className="flex-1">
                 <p className="text-sm">{product.name}</p>
@@ -482,7 +518,6 @@ function ScanPageInner() {
               </button>
             </div>
 
-            {/* 스캔 시점에 이미 1개 담긴 상태 */}
             <div className="flex items-center justify-between gap-2">
               <Button
                 variant="outline"
@@ -502,38 +537,55 @@ function ScanPageInner() {
           </div>
         )}
 
-        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-[#F4F4F4] p-4">
-          <Button
-            variant="outline"
-            className="flex h-[60px] w-full items-center justify-center gap-1.5 rounded-full border-[#F4F4F4] shadow-[0_0_20px_rgba(0,0,0,0.05)]"
-            onClick={() => setCartOpen(true)}
-          >
-            <RiShoppingCartLine size={20} />
-            카트 내역 보기
-            {selectedGroup && ` (${selectedGroup.products.length}개)`}
-          </Button>
+        {/* ✅ 담은 상품 — 바코드 입력 바로 아래에 붙어서(margin 없이), "하나 정도 보이는"
+            작은 높이로. 화면에 남는 공간은 이 블록이 아니라 바로 아래 spacer가 떠맡아서
+            결제 버튼을 화면 하단에 붙여줌. */}
+        <div className="max-h-28 shrink-0 overflow-y-auto border-t border-[#F4F4F4] px-4">
+          {!selectedGroup || selectedGroup.products.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">아직 담은 상품이 없어요.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {selectedGroup.products.map((p) => (
+                <div key={p.id} className="flex gap-3 py-2">
+                  {p.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image} alt="" className="h-12 w-12 shrink-0 rounded-sm border border-border object-cover" />
+                  ) : (
+                    <div className="h-12 w-12 shrink-0 rounded-sm border border-border bg-muted" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{p.name}</p>
+                    {locationBySkuId.get(p.id) && (
+                      <p className="text-xs text-muted-foreground">{locationBySkuId.get(p.id)}</p>
+                    )}
+                    <div className="mt-0.5 flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{p.quantity}개</span>
+                      <span className="font-semibold">{(p.price * p.quantity).toLocaleString()}원</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-          <Button
-            variant="outline"
-            className="flex h-[60px] w-full items-center justify-center gap-1.5 rounded-full border-[#F4F4F4] shadow-[0_0_20px_rgba(0,0,0,0.05)]"
-            onClick={() => setRouteOpen(true)}
+        {/* ✅ 결제 — 전역 하단탭바 대신 이 화면 내내 여기 고정 */}
+        <div className="shrink-0 space-y-3 border-t border-[#F4F4F4] p-4">
+          <div className="flex items-center justify-between text-base font-semibold">
+            <span>총 {cartTotalCount}개</span>
+            <span>{cartTotalPrice.toLocaleString()}원</span>
+          </div>
+          <button
+            type="button"
+            disabled={cartTotalCount === 0}
+            onClick={handleCheckout}
+            className="flex h-[60px] w-full items-center justify-center gap-1.5 rounded-full bg-brand text-base font-medium text-brand-foreground disabled:opacity-50"
           >
-            <RiMapLine size={20} />
-            동선 보기
-          </Button>
+            <RiBankCardLine size={20} />
+            결제하기
+          </button>
         </div>
       </div>
-
-      <ScanCartDialog
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-        groupId={groupId ?? DEFAULT_GROUP_ID}
-        onCheckedOut={() => {
-          refreshGroups();
-          setSessionScans(new Set());
-          writeShoppingSession(null);
-        }}
-      />
 
       <StoreMapDialog
         open={routeOpen}

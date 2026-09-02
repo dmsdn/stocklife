@@ -78,7 +78,7 @@ export default function CouponsPage() {
                       <div className="min-w-0">
                         <h3 className="text-sm font-semibold">{coupon.title}</h3>
                         <p className="mt-1 text-xs text-muted-foreground">{coupon.description}</p>
-                        <p className="mt-3 text-[11px] text-muted-foreground">
+                        <p className="mt-3 text-md text-muted-foreground">
                           {expiry}까지 · {statusText}
                         </p>
                       </div>

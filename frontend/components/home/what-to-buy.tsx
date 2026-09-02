@@ -29,7 +29,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "popular", label: "인기" },
 ];
 
-type WhatToBuyProduct = HomeProduct & { badge?: string };
+type WhatToBuyProduct = HomeProduct & { badge?: string; reason?: string };
 
 interface WhatToBuyProps {
   onProductClick: (productId: number) => void;
@@ -57,6 +57,7 @@ export function WhatToBuy({ onProductClick, onSave }: WhatToBuyProps) {
           price: p.price,
           image: p.image,
           badge: `${p.discount} OFF`,
+          reason: p.reason,
         }))
       )
     );
@@ -171,7 +172,9 @@ function WhatToBuyCard({
       <button type="button" onClick={onProductClick} className="mt-2 block w-full text-left">
         <span className="flex items-center gap-1 text-xs text-brand">
           <img src="/icons/liv-full.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" />
-          인기상품
+          {/* ✅ 리브가 추천하는 짧은 이유(product.reason, 실제 데이터 기반 — lib/home-data.ts
+              참고) — 없는 탭(자주사요 등)은 기존처럼 "인기상품"으로 대체 */}
+          {product.reason || "인기상품"}
         </span>
         <p className="mt-0.5 truncate text-sm">{product.name}</p>
         <p className="mt-0.5 text-sm font-semibold">{formatPrice(product.price)}</p>

@@ -17,6 +17,7 @@ import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/
 import { apiFetch } from "@/lib/api-client";
 import { fetchInventoryBatch, pickLocation, formatLocationText, type InventoryItem } from "@/lib/product-location";
 import { fetchRealFloorMap } from "@/lib/map-config";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 const STATUSES = ["일반", "단종"] as const;
 const PRICE_MIN = 0;
@@ -65,6 +66,12 @@ function SearchPageInner() {
   const [locationMapSku, setLocationMapSku] = useState<number | null>(null);
 
   const [filterOpen, setFilterOpen] = useState(false);
+  const { setHidden: setBottomBarHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setBottomBarHidden(filterOpen);
+    return () => setBottomBarHidden(false);
+  }, [filterOpen, setBottomBarHidden]);
+
   const [filterTab, setFilterTab] = useState<FilterTab>("카테고리");
   const [filters, setFilters] = useState<{
     categories: string[];
@@ -201,22 +208,32 @@ function SearchPageInner() {
   //   체크 아이콘이 잠깐 떴다가 사라지는 방식으로 바꿨습니다).
   const handleSaveSelect = (groupIds: number[]) => {
     if (!savePickerProduct) return;
-    groupIds.forEach((groupId) => {
-      addProductToCartGroup(groupId, {
-        id: savePickerProduct.skuId,
-        name: savePickerProduct.name,
-        category: savePickerProduct.categoryL1,
-        price: savePickerProduct.finalPriceKrw,
+    Promise.all(
+      groupIds.map((groupId) =>
+        addProductToCartGroup(groupId, {
+          id: savePickerProduct.skuId,
+          name: savePickerProduct.name,
+          category: savePickerProduct.categoryL1,
+          price: savePickerProduct.finalPriceKrw,
+        })
+      )
+    )
+      .then(() => {
+        setSavedIds((prev) => new Set(prev).add(savePickerProduct.skuId));
+        setTimeout(() => {
+          setSavedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(savePickerProduct.skuId);
+            return next;
+          });
+        }, 1500);
+      })
+      .catch(() => {
+        // ✅ 실패해도 조용히 묻히지 않게 — 최소한 콘솔에는 남기고, 저장 확인 표시(체크
+        //   아이콘)는 실패했으면 안 뜨게(성공 처리 블록을 안 타므로 자동으로 안 뜸).
+        console.error("리스트에 담기 실패");
+        alert("리스트에 담지 못했어요. 다시 시도해주세요.");
       });
-    });
-    setSavedIds((prev) => new Set(prev).add(savePickerProduct.skuId));
-    setTimeout(() => {
-      setSavedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(savePickerProduct.skuId);
-        return next;
-      });
-    }, 1500);
   };
 
   const priceActive = filters.priceRange[0] !== PRICE_MIN || filters.priceRange[1] !== PRICE_MAX;

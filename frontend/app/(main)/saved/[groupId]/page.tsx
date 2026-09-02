@@ -18,11 +18,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { ProductLocationDialog } from "@/components/domain/product-location-dialog";
-import {readCartGroups, loadCartGroups,updateCartGroups, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup,} from "@/lib/cart-storage";
+import { BirthDatePicker } from "@/components/domain/birth-date-picker";
+import {readCartGroups, loadCartGroups,updateCartGroups, updateCartGroupInfo, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup,} from "@/lib/cart-storage";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
-import { formatShoppingDate } from "@/lib/format-time";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 import { apiFetch } from "@/lib/api-client";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 export default function SavedGroupDetailPage() {
   const router = useRouter();
@@ -32,6 +33,14 @@ export default function SavedGroupDetailPage() {
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
   const openAiChat = useOpenAiChat();
+
+  // ✅ 리스트 상세(담은 목록)는 자체 하단 액션바(동선/리브)가 이미 있어서, 전역
+  //   하단탭바는 숨김 — 스캔 화면과 같은 패턴.
+  const { setHidden: setBottomBarHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setBottomBarHidden(true);
+    return () => setBottomBarHidden(false);
+  }, [setBottomBarHidden]);
   // ✅ 이 리스트에 이미 연결된 AI 대화가 있는지 확인 — 있으면 "이어서 물어보기"로 표시.
   //   백엔드 group_id 컬럼은 추가돼있는데, 세션 목록 응답에 groupId를 내려주는지는
   //   아직 확인 전이라 실패하면 그냥 "새로 물어보기"로 폴백합니다.
@@ -150,14 +159,25 @@ export default function SavedGroupDetailPage() {
   const locationDialogProduct = group.products.find((p) => p.id === locationDialogSkuId) ?? null;
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 pb-40 pt-5 sm:max-w-xl md:max-w-2xl md:px-8 md:pt-8 lg:max-w-3xl">
+    <div className="mx-auto w-full max-w-lg px-4 pb-28 pt-5 sm:max-w-xl md:max-w-2xl md:px-8 md:pt-8 lg:max-w-3xl">
       {/* 상단 헤더 — 타이틀+날짜(좌) / 스캔 아이콘+"장보러 가기"(우, "장보기 시작" 겸용) */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-bold">{group.title}</h1>
-          {group.shoppingDate && (
-            <p className="mt-1 text-sm text-muted-foreground">{formatShoppingDate(group.shoppingDate)}</p>
-          )}
+          <div className="mt-1">
+            <BirthDatePicker
+              value={group.shoppingDate ?? ""}
+              onChange={(value) => {
+                updateCartGroupInfo(groupId, { shoppingDate: value || null }).then((next) =>
+                  setGroup(next.find((g) => g.id === groupId) ?? null)
+                );
+              }}
+              minYear={new Date().getFullYear()}
+              maxYear={new Date().getFullYear() + 1}
+              placeholder="장 볼 날짜 추가하기"
+              title="장 볼 날짜"
+            />
+          </div>
         </div>
 
         <button
@@ -260,11 +280,11 @@ export default function SavedGroupDetailPage() {
 
       {/* 하단 액션 — 홈 하단탭바의 리브(원형) 버튼과 동일한 스타일(h-16, rounded-full,
           backdrop-blur) 재사용. 전역 하단탭바 위에 살짝 띄워서 겹치지 않게 함. */}
-      <div className="fixed inset-x-0 bottom-[5.75rem] z-40 mx-auto flex w-full max-w-lg items-center gap-2 px-4 sm:max-w-xl md:max-w-2xl md:px-8 lg:max-w-3xl">
+      <div className="fixed inset-x-0 bottom-4 z-40 mx-auto flex w-full max-w-lg items-center gap-2 px-4 sm:max-w-xl md:max-w-2xl md:px-8 lg:max-w-3xl">
         <button
           type="button"
           onClick={() => setRouteOpen(true)}
-          className="flex h-16 flex-1 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-background/90 text-sm font-medium shadow-lg backdrop-blur-md"
+          className="flex h-16 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-white/20 text-sm font-medium backdrop-blur-2xl"
         >
           <RiMapLine size={20} />
           동선
@@ -273,7 +293,7 @@ export default function SavedGroupDetailPage() {
         <button
           type="button"
           onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
-          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border/60 bg-background/90 text-xs shadow-lg backdrop-blur-md"
+          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
         >
           <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px]" />
           {linkedSessionId ? "이어서" : "리브"}

@@ -111,7 +111,7 @@ export default function SignupTermsPage() {
       </div>
 
       <div className="mt-auto pb-[42px] pt-10">
-        <Button className="h-[60px] w-full rounded-full shadow-[0_0_20px_rgba(0,0,0,0.05)]" disabled={!requiredMet} onClick={handleNext}>
+        <Button className="h-[60px] w-full rounded-full" disabled={!requiredMet} onClick={handleNext}>
           동의하고 가입하기
         </Button>
       </div>

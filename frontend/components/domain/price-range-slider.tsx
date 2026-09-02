@@ -19,6 +19,10 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
   const toPercent = (v: number) => ((v - min) / (max - min)) * 100;
   const clampedLeft = (percent: number) =>
     `clamp(${BUBBLE_HALF_WIDTH}, ${percent}%, calc(100% - ${BUBBLE_HALF_WIDTH}))`;
+  // ✅ 재고에 500,000원보다 비싼 상품이 있는지 알 수 없어서 이 값을 상한으로 잡아뒀는데,
+  //   "500,000원"이라고 딱 끊어서 보여주면 진짜 상한처럼 보여서 오해할 수 있음 — 최대
+  //   위치에 있을 땐 "이상"을 붙여서 그 이상도 다 포함해서 검색된다는 걸 표시함.
+  const formatHigh = (v: number) => `${v.toLocaleString()}원${v >= max ? " 이상" : ""}`;
 
   const handleLowChange = (next: number) => {
     const clamped = Math.min(Math.max(next, min), high - step);
@@ -48,7 +52,7 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
           className="absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-full bg-foreground px-2 py-1 text-xs text-background"
           style={{ left: clampedLeft(toPercent(high)) }}
         >
-          {high.toLocaleString()}원
+          {formatHigh(high)}
         </span>
 
         <input
@@ -73,7 +77,7 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
 
       <div className="mt-3 flex justify-between text-xs text-muted-foreground">
         <span>{min.toLocaleString()}원</span>
-        <span>{max.toLocaleString()}원</span>
+        <span>{formatHigh(max)}</span>
       </div>
 
       {/* ✅ 직접 입력 */}
@@ -99,7 +103,7 @@ export function PriceRangeSlider({ min, max, step = 1000, value, onChange }: Pri
           onChange={(e) => handleHighChange(Number(e.target.value) || max)}
           className="w-full min-w-0 rounded-sm border border-border px-3 py-2 text-sm"
         />
-        <span className="shrink-0 text-sm text-muted-foreground">원</span>
+        <span className="shrink-0 text-sm text-muted-foreground">{high >= max ? "원 이상" : "원"}</span>
       </div>
 
       <style jsx>{`

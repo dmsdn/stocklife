@@ -11,10 +11,18 @@ export interface FloorMapConfig {
   image: string;
   gridWidth: number;
   gridHeight: number;
+  /** ✅ 신규 — 지도 이미지를 해상도 개선하면서 상단 회색 여백(층 표시 텍스트 있던 부분)을
+   *  잘라냈는데, 기존 좌표(핀·통로·매대)는 전부 "잘리기 전 이미지" 기준 퍼센트로 계산돼
+   *  있어서, 새 이미지에 그대로 쓰면 위로 밀려 보입니다. 이 값(잘리기 전 이미지에서 회색
+   *  여백이 차지하던 비율, %)만큼 보정해서 새 이미지에서도 기존 좌표가 그대로 맞게 함 —
+   *  나중에 좌표를 새 이미지 기준으로 다시 찍으면 이 값을 0으로 돌리면 됩니다. */
+  legacyTopOffsetPercent?: number;
 }
 
 export const FLOOR_MAPS: FloorMapConfig[] = [
-  { floorNo: 1, image: "/maps/floor-1.png", gridWidth: 24, gridHeight: 16 },
+  { floorNo: 1, image: "/maps/floor-1.png", gridWidth: 24, gridHeight: 16, legacyTopOffsetPercent: 11.11 },
+  { floorNo: 2, image: "/maps/floor-2.png", gridWidth: 24, gridHeight: 16, legacyTopOffsetPercent: 11.7 },
+  { floorNo: 3, image: "/maps/floor-3.png", gridWidth: 24, gridHeight: 16, legacyTopOffsetPercent: 11.7 },
 ];
 
 export function getFloorMap(floorNo: number): FloorMapConfig | undefined {

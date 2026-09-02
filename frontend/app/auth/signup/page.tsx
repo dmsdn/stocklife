@@ -213,7 +213,7 @@ export default function SignupPage() {
           <Button
             type="button"
             variant="secondary"
-            className="h-[60px] w-full rounded-full shadow-[0_0_20px_rgba(0,0,0,0.05)]"
+            className="h-[60px] w-full rounded-full"
             disabled={bottomButtonDisabled}
             onClick={handleBottomButton}
           >

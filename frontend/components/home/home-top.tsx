@@ -64,7 +64,7 @@ export function HomeTop({ recentOrder, onOrdersClick }: HomeTopProps) {
             <p className="truncate text-base font-semibold">{profile.name ?? "이름 미입력"}님, 안녕하세요</p>
             <p className="text-xs text-muted-foreground">오늘도 필요한 걸 빠르게 챙겨보세요</p>
           </div>
-          <span className="shrink-0 rounded-full border border-foreground px-2.5 py-1 text-[11px] font-semibold">
+          <span className="shrink-0 rounded-full border border-foreground px-2.5 py-1 text-md font-semibold">
             {currentTier.label}
           </span>
         </Link>

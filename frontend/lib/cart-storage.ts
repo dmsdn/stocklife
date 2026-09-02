@@ -280,6 +280,33 @@ export async function createCartGroup(title: string, shoppingDate?: string | nul
   };
 }
 
+// ✅ 신규 — PATCH /api/cart/groups/{groupId}(백엔드에 이미 있던 API, 제목/설명/장 볼 날짜
+//   수정 지원)로 리스트 생성 후에도 날짜를 나중에 추가·수정할 수 있게 함.
+export async function updateCartGroupInfo(
+  groupId: number,
+  patch: { title?: string; shoppingDate?: string | null }
+): Promise<CartGroup[]> {
+  if (!isLoggedIn()) {
+    return updateCartGroups((groups) =>
+      groups.map((g) =>
+        g.id !== groupId
+          ? g
+          : {
+              ...g,
+              ...(patch.title !== undefined ? { title: patch.title } : {}),
+              ...(patch.shoppingDate !== undefined ? { shoppingDate: patch.shoppingDate } : {}),
+            }
+      )
+    );
+  }
+
+  await apiFetch(`/api/cart/groups/${groupId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return loadCartGroups();
+}
+
 export async function deleteCartGroup(groupId: number): Promise<CartGroup[]> {
   if (!isLoggedIn()) {
     const next = readGuestGroups().filter((g) => g.id !== groupId);

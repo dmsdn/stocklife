@@ -47,7 +47,9 @@ export function SessionListDrawer({ open, onClose, currentSessionId }: SessionLi
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex md:hidden">
+    // ✅ AiMobileSheet(z-[150]) 안에서도 열릴 수 있어서, 그 시트 콘텐츠 위에 확실히
+    //   뜨도록 z를 그보다 높였습니다(기존 z-50이면 시트 콘텐츠에 가려질 수 있었음).
+    <div className="fixed inset-0 z-[160] flex md:hidden">
       <button
         type="button"
         aria-label="닫기"

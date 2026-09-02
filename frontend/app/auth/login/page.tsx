@@ -119,7 +119,7 @@ function LoginPageInner() {
             type="submit"
             form="login-form"
             variant="secondary"
-            className="mt-[31px] h-[60px] w-full rounded-full text-base shadow-[0_0_20px_rgba(0,0,0,0.05)]"
+            className="mt-[31px] h-[60px] w-full rounded-full text-base"
             disabled={submitting}
           >
             {submitting ? "로그인 중..." : "로그인하기"}

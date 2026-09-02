@@ -21,6 +21,8 @@ import {
 } from "@remixicon/react";
 
 import { cn } from "@/lib/utils";
+import { useBottomBarVisibility } from "./bottom-bar-visibility-context";
+import { useAiPanel } from "./ai-panel-context";
 
 export const navigationItems = [
   { href: "/", label: "홈", LineIcon: RiHome5Line, FillIcon: RiHome5Fill },
@@ -29,23 +31,28 @@ export const navigationItems = [
   { href: "/mypage", label: "마이", LineIcon: RiUser3Line, FillIcon: RiUser3Fill },
 ];
 
-const AI_ITEM = { href: "/ai", label: "리브" };
+const AI_ITEM = { label: "리브" };
 
 export function BottomTabBar() {
   const pathname = usePathname();
+  const { hidden } = useBottomBarVisibility();
+  // ✅ 리브는 더 이상 /ai로 이동하지 않고, 아래에서 올라오는 바텀시트(AiMobileSheet)를 엶.
+  const { isOpen: aiOpen, open: openAiPanel } = useAiPanel();
 
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 
+  if (hidden) return null;
+
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-[100] flex items-center justify-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-[100] flex items-center justify-center gap-2 px-4 pb-[calc(1.75rem+env(safe-area-inset-bottom))] md:hidden"
       aria-label="하단 메뉴"
     >
-      {/* 메인 캡슐 — 홈/스캔/저장/마이. 높이는 h-16 고정, 아이템은 그 안에서 세로 중앙정렬만
-          해서 리브 원형 버튼과 정확히 같은 높이를 갖게 함 (패딩으로 높이를 만들면 둘이 미묘하게
-          어긋나기 쉬움) */}
-      <div className="flex h-16 items-center gap-1 rounded-full border border-border/60 bg-background/10 px-2 shadow-lg backdrop-blur-md">
+      {/* 메인 캡슐 — 홈/스캔/저장/마이. 흰색 20% 투명 배경 + 보더는 100% 불투명, 흐림은
+          진하게(backdrop-blur-2xl) — 그림자는 없앰(보더만). 높이는 h-16 고정, 아이템은 그 안에서
+          세로 중앙정렬만 해서 리브 원형 버튼과 정확히 같은 높이를 갖게 함 */}
+      <div className="flex h-16 items-center gap-1 rounded-full border border-border bg-white/20 px-2 backdrop-blur-2xl">
         {navigationItems.map(({ href, label, LineIcon, FillIcon }) => {
           const active = isActive(href);
           return (
@@ -71,20 +78,21 @@ export function BottomTabBar() {
       {/* 분리된 원형 캡슐 — AI(리브) 전용, liv 로고 사용. w-16 h-16로 정사각형을 고정해야
           rounded-full이 진짜 "원"이 됨 (패딩 기반 크기는 텍스트 길이에 따라 타원이 될 수 있음),
           h-16는 왼쪽 메인 캡슐과 동일한 값이라 높이도 항상 같이 감 */}
-      <Link
-        href={AI_ITEM.href}
-        className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border/60 bg-background/10 text-xs shadow-lg backdrop-blur-md"
+      <button
+        type="button"
+        onClick={() => openAiPanel()}
+        className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
       >
         <img
-          src={isActive(AI_ITEM.href) ? "/icons/liv-full.svg" : "/icons/liv-line.svg"}
+          src={aiOpen ? "/icons/liv-full.svg" : "/icons/liv-line.svg"}
           alt=""
           aria-hidden="true"
           className="h-[22px] w-[22px]"
         />
-        <span className={isActive(AI_ITEM.href) ? "text-foreground" : "text-muted-foreground"}>
+        <span className={aiOpen ? "text-foreground" : "text-muted-foreground"}>
           {AI_ITEM.label}
         </span>
-      </Link>
+      </button>
     </nav>
   );
 }
