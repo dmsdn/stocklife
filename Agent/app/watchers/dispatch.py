@@ -175,17 +175,20 @@ async def _deliver(session_id: str, decision: dict) -> bool:
         _BUSY.discard(session_id)          # 예외 경로에서도 잠금 해제
 
 
-def plan(session_ids) -> list[tuple]:
+def plan(session_ids, now: float | None = None) -> list[tuple]:
     """스테이지를 비우고 세션별 결정을 만든다 — **발화는 하지 않는다.**
 
     [왜 pump와 나누나] 여기까지는 동기이고 LLM·네트워크가 없다. 평가 하네스가
       이 함수까지만 부르면 **자발형 판정의 회귀 테스트**가 된다
       (behavior.tick을 감지/발화로 나눈 것과 같은 이유).
     [반환] [(세션ID, 결정dict), ...] — 결정의 모양은 etiquette.drain 참조.
+    [now] 가짜 시계 구멍(behavior.tick·etiquette.permit 과 같은 계열). 안 주면
+      실시간이다. 시나리오 재생이 쿨다운 90초를 **실제로 기다리지 않으려면**
+      여기까지 시계가 이어져야 한다 — 한 곳만 실시간이면 그 지점에서 각본이 샌다.
     """
     out = []
     for sid in list(session_ids):
-        d = etiquette.drain(sid)
+        d = etiquette.drain(sid, now=now)
         if d is not None:
             out.append((sid, d))
     return out

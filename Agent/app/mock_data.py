@@ -11,7 +11,11 @@
 # 킬링 장면 3개가 그대로 들어 있다:
 #   장면 1  물티슈A(101042) 매대 0 + 위 BULK 40 + 보충 사이클 832초
 #   장면 2  세제 2종(102301/102302) 재스캔·취소 망설임 시퀀스
-#   장면 3  회원 9001의 물티슈 반복 구매(마지막 6/28, 46일 경과) + 커피 자리 이동
+# ⚠ 09-01: 회원 번호를 9001 → 10,009,001 로 옮겼다. `loop.run_chat` 이
+#   `config.to_member_id`(+10,000,000)로 변환하게 고쳤으므로, 골든셋의
+#   `consumer_id: 9001` 이 이제 이 번호를 가리킨다. **숫자만 옮긴 것이고
+#   데이터는 그대로다** — mock 을 늘리지 않는다는 동결 규칙과 무관하다.
+#   장면 3  회원 10009001의 물티슈 반복 구매(마지막 6/28, 46일 경과) + 커피 자리 이동
 # ============================================================================
 
 # ── 상품 (sample §4) ────────────────────────────────────────────────────────
@@ -143,37 +147,37 @@ PROMOTIONS = [
 # v2.5: persona_type을 없애고 축 컬럼 4개로 바꿨다(스키마와 같은 모양을 유지해야
 # mock에서 통과한 코드가 실연동에서도 통과한다 — mock의 존재 이유가 그것이다).
 # 두 회원이 서로 다른 분기를 담당한다:
-#   9001 4인·자녀·차량  → 대용량 추천이 켜지는 쪽
+#   10009001 4인·자녀·차량  → 대용량 추천이 켜지는 쪽
 #   9002 1인·반려·도보  → by_car=False라 대용량 추천이 게이트에 걸리는 쪽.
 #                          구 7종 라벨로는 "1인인데 반려동물"이 표현되지 않았다.
 # 값이 None인 것과 False인 것은 다르다 — None은 "안 물어봄"이라 그 기능만 끄고,
 # False는 "없다고 답함"이라 적극적으로 제외해도 된다.
 MEMBERS = {
-    9001: {"household_size": 4, "has_pet": False, "has_child": True,  "by_car": True},
+    10009001: {"household_size": 4, "has_pet": False, "has_child": True,  "by_car": True},
     9002: {"household_size": 1, "has_pet": True,  "has_child": False, "by_car": False},
 }
 
-# 회원 9001이 물티슈A를 3/8 → 4/19 → 5/31 → 6/28 네 번 = 평균 주기 약 37일.
+# 회원 10009001이 물티슈A를 3/8 → 4/19 → 5/31 → 6/28 네 번 = 평균 주기 약 37일.
 # DEMO_NOW(8/13)는 마지막 구매로부터 46일 → "살 때 되셨어요"가 성립하는 수치다.
 PURCHASES = [
-    {"basket_id": "bskt-0001", "member_id": 9001, "sku_id": 101042, "qty": 1,
+    {"basket_id": "bskt-0001", "member_id": 10009001, "sku_id": 101042, "qty": 1,
      "unit_price_krw": 13900, "purchased_at": "2026-03-08 15:22:41.000"},
-    {"basket_id": "bskt-0001", "member_id": 9001, "sku_id": 102301, "qty": 1,
+    {"basket_id": "bskt-0001", "member_id": 10009001, "sku_id": 102301, "qty": 1,
      "unit_price_krw": 18900, "purchased_at": "2026-03-08 15:22:41.000"},
-    {"basket_id": "bskt-0002", "member_id": 9001, "sku_id": 101042, "qty": 1,
+    {"basket_id": "bskt-0002", "member_id": 10009001, "sku_id": 101042, "qty": 1,
      "unit_price_krw": 13900, "purchased_at": "2026-04-19 14:05:12.000"},
-    {"basket_id": "bskt-0003", "member_id": 9001, "sku_id": 101042, "qty": 1,
+    {"basket_id": "bskt-0003", "member_id": 10009001, "sku_id": 101042, "qty": 1,
      "unit_price_krw": 12900, "purchased_at": "2026-05-31 16:40:03.000"},
-    {"basket_id": "bskt-0003", "member_id": 9001, "sku_id": 103877, "qty": 1,
+    {"basket_id": "bskt-0003", "member_id": 10009001, "sku_id": 103877, "qty": 1,
      "unit_price_krw": 24900, "purchased_at": "2026-05-31 16:40:03.000"},  # 지금은 단종
-    {"basket_id": "bskt-0004", "member_id": 9001, "sku_id": 101042, "qty": 1,
+    {"basket_id": "bskt-0004", "member_id": 10009001, "sku_id": 101042, "qty": 1,
      "unit_price_krw": 12900, "purchased_at": "2026-06-28 11:12:55.000"},
     {"basket_id": "bskt-0005", "member_id": 9002, "sku_id": 101043, "qty": 2,
      "unit_price_krw": 7900, "purchased_at": "2026-07-05 20:31:09.000"},
 ]
 
 WISHLISTS = [
-    {"member_id": 9001, "sku_id": 101042, "added_at": "2026-08-12 21:03:00.000"},
+    {"member_id": 10009001, "sku_id": 101042, "added_at": "2026-08-12 21:03:00.000"},
 ]
 
 # ── 매대 이벤트 (sample §9) — 장면 1 보충 사이클 ────────────────────────────
@@ -205,28 +209,28 @@ SHELF_EVENTS = [
 
 # ── 소비자 행동 이벤트 (sample §10) — 장면 2 망설임 ─────────────────────────
 CONSUMER_EVENTS = [
-    {"event_type": "SEARCH",      "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "SEARCH",      "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": None,   "location_id": None,              "occurred_at": "2026-08-13 13:58:02.000",
      "payload": {"q": "물티슈 어디 있어요?"}},
-    {"event_type": "SCAN_ADD",    "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "SCAN_ADD",    "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102301, "location_id": "F2-A-R01-B03-L1", "occurred_at": "2026-08-13 14:01:33.200",
      "payload": None},
-    {"event_type": "SCAN_REMOVE", "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "SCAN_REMOVE", "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102301, "location_id": None,              "occurred_at": "2026-08-13 14:01:52.700",
      "payload": None},
-    {"event_type": "SCAN_ADD",    "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "SCAN_ADD",    "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102302, "location_id": "F2-A-R01-B04-L1", "occurred_at": "2026-08-13 14:02:11.050",
      "payload": None},
-    {"event_type": "SCAN_REMOVE", "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "SCAN_REMOVE", "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102302, "location_id": None,              "occurred_at": "2026-08-13 14:02:29.400",
      "payload": None},
-    {"event_type": "VIEW",        "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "VIEW",        "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102301, "location_id": None,              "occurred_at": "2026-08-13 14:02:40.000",
      "payload": None},
-    {"event_type": "SCAN_ADD",    "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "SCAN_ADD",    "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102301, "location_id": "F2-A-R01-B03-L1", "occurred_at": "2026-08-13 14:03:58.900",
      "payload": None},
-    {"event_type": "PURCHASE",    "session_id": "sess-7f3a9c", "member_id": 9001,
+    {"event_type": "PURCHASE",    "session_id": "sess-7f3a9c", "member_id": 10009001,
      "sku_id": 102301, "location_id": None,              "occurred_at": "2026-08-13 14:31:00.000",
      "payload": {"basket_id": "bskt-0006", "total_krw": 18900}},
     {"event_type": "SEARCH",      "session_id": "sess-anon-01", "member_id": None,

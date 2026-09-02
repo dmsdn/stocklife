@@ -120,6 +120,34 @@ SHIFT_END_CENSORS = True
 # ③ 이벤트 누락: RESTOCK_IN 로그만 유실(재고는 실제로 채워짐) → 완료를 못 본 절단.
 RESTOCK_LOG_DROP_PROB = 0.015   # 현실 로그의 결측. 1~2% 수준
 
+# ── 세계 버전 축 (DES설계 §10 · 08-28 신설) ─────────────────────────────────
+# **기본값은 전부 「지금과 똑같음」이다.** 이 셋은 `rebuild_world.py` 가 버전마다
+# 갈아끼우는 손잡이일 뿐, 켜기 전에는 v1 의 행동을 한 톨도 바꾸지 않는다.
+#
+# ⚠ **난수를 더 뽑지 않는 것이 조건이다.** 잡음 항을 sd=0 으로 두고 매번
+#   `rng.normal(0, 0)` 을 부르면 값은 안 변해도 **난수 소비 순서가 바뀌어**
+#   그 뒤 전원이 딴사람이 된다(이론노트 「append vs rebuild」). 그래서 호출부는
+#   전부 `if` 로 감싼다 — "0 을 곱한다"가 아니라 "아예 안 부른다".
+#   이 규칙이 지켜졌는지는 `rebuild_world.py --verify-v1` 이 해시로 확인한다.
+#
+# 축마다 어느 자산이 직격인지는 DES설계 §10.1 표.
+
+PROMO_CYCLE_MULT = 1.0      # v2 행사 반응. 행사 중인 SKU의 유효 주기 배율.
+#   1.0 = 행사가 수요와 무관(지금). 0.8 이면 행사 때 20% 빨리 산다.
+#   ⚠ 켜면 mode1 이 promotions 를 새로 만든다 — v1 은 아예 안 만든다.
+#   직격: 소비주기(재구매 간격 분포가 흔들린다)
+
+TRAVEL_NOISE_SD = 0.0       # v3 이동 잡음. 이동시간에 곱할 로그정규 잡음의 sd.
+#   0.0 = 완전 상수(지금 — (sku,path) 조합 내 sd 가 실측 0.00초).
+#   0.15 면 ±15% 산포. 직격: 가용예측의 log_travel 특징이 상수→변수
+
+NIGHT_RESTOCK = False       # v4 야간 보충. True 면 영업시간 밖에도 보충한다.
+#   ⚠ **현실적이지만 데모와 상충한다** — 아침에 큐가 비어 킬링 장면 1의
+#     서사가 약해진다(§10.1). 그래서 기본값은 False 이고, 이 축은
+#     "결론이 흔들리나"를 재는 용도이지 채택 후보가 아니다.
+
+# v5 하역 CV 는 새 상수가 필요 없다 — 위의 `HANDLING_GAMMA_K` 를 그대로 흔든다.
+
 # ── 행동 이벤트 (consumer_events) ────────────────────────────────────────────
 VIEW_PER_BASKET_ITEM = 0.6  # 담기 전 훑어보는 VIEW 기대수(품목당)
 SEARCH_PROB = 0.25          # 방문당 SEARCH 한 번 낼 확률
@@ -140,3 +168,22 @@ def cycle_days_for_l2(l2: str) -> float:
         if kw in l2:
             return float(days)
     return CYCLE_DEFAULT_DAYS
+
+
+# ── 세계 버전 덮어쓰기 (rebuild_world.py 전용) ───────────────────────────────
+# `sim/params_override.py` 가 있으면 그 안의 상수가 **위의 값을 덮는다.**
+#
+# [왜 파일로 덮나] `rebuild_world.py` 가 이 파일을 직접 고치면 실행할 때마다
+#   git diff 가 더러워지고, 중간에 죽으면 **변종 상수가 소스에 남는다.**
+#   내일의 내가 그걸 모르고 v1 이라 믿는 세계를 만든다. 덮어쓰기 파일은
+#   git 이 무시하고(.gitignore), 지우기만 하면 원상복귀다.
+#
+# [왜 맨 끝인가] 위의 정의가 다 끝난 뒤여야 덮을 것이 있다. 중간에 두면
+#   그 아래에서 다시 정의되는 상수는 안 덮인다 — 조용히 절반만 적용된다.
+try:
+    from params_override import *      # noqa: F401,F403  (있을 때만)
+    import params_override as _ov
+    print("[params] 덮어쓰기 적용:",
+          {k: getattr(_ov, k) for k in dir(_ov) if k.isupper()})
+except ImportError:
+    pass                                # 없는 것이 정상 — v1 이다

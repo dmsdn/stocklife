@@ -193,12 +193,73 @@ GOLDEN = [
      "must_not_include": [r"21,?800|22,?800"],   # 정가 합(오답) — 직접 더한 흔적
      "why": "예산 조합의 총액은 LLM이 더한 값이 아니라 솔버의 total_krw여야 한다. "
             "정가 합계가 나오면 행사가 반영 없이 눈대중으로 더한 것"},
+
+    # ── 위치 신뢰 등급 넷 (2026-08-28 신설) ────────────────────────────────
+    #
+    # [왜 이 넷이 필요한가] 08-28 에 가드가 위치 발화를 **막고 있었는데**
+    #   골든셋 45/45 가 통과했다. 위치 케이스가 하나도 없어서다.
+    #   그리고 같은 날 `posAgeSec` 가 요청 스키마에 없어 등급이 늘 medium
+    #   이었던 것도 드러났다 — 둘 다 **재는 자가 없어서 산 결함**이다.
+    #
+    # [무엇을 재나] `get_position` 이 나이로 등급을 가르고 등급마다
+    #   `read_as` 가 다른 말하기를 시킨다. 그 지시를 따르는지를 잰다.
+    #   ⚠ 이 규율은 **정의가 아니라 결과에** 있으므로(㉠ 축약에도 안 깎인다),
+    #     모델이 결과를 읽는지를 직접 재는 유일한 자리다.
+    #
+    # ⚠ **넷 다 구역을 금지어로 건다.** 이 도구는 층과 좌표만 알고
+    #   존은 모른다(08-28 read_as 정정). 존을 말하면 지어낸 것이고,
+    #   가드도 그것을 막는다.
+    {"id": "position_high_assert",
+     "q": "나 지금 어디쯤이에요?",
+     "consumer_id": 9001, "session_id": "sess-pos-h",
+     "position": (3, 12, 40, 5),          # 방금 스캔 → high
+     "expect_tools": ["get_position"],
+     "must_include": [("3층", "3 층")],
+     "must_not_include": [r"[A-H]\s*구역", r"혹시.*계신가요", r"기준으로는"],
+     "why": "high 는 단정해도 되는 유일한 등급이다. 되묻거나 기준을 밝히면 "
+            "read_as 를 안 읽은 것 — 있는 근거를 안 쓰는 것도 결함이다"},
+
+    {"id": "position_medium_hedge",
+     "q": "나 지금 어디쯤이에요?",
+     "consumer_id": 9001, "session_id": "sess-pos-m",
+     "position": (3, 12, 40, 60),         # 1분 지남 → medium
+     "expect_tools": ["get_position"],
+     "must_include": [("3층", "3 층"), ("스캔", "아까", "기준")],
+     "must_not_include": [r"[A-H]\s*구역"],
+     "why": "medium 은 **기준을 밝히고** 말한다. 층은 말하되 '아까 스캔하신 "
+            "자리 기준으로는' 이 붙어야 한다 — 단정과 되묻기 사이의 자리"},
+
+    {"id": "position_low_ask_back",
+     "q": "나 지금 어디쯤이에요?",
+     "consumer_id": 9001, "session_id": "sess-pos-l",
+     "position": (3, 12, 40, 900),        # 15분 지남 → low
+     "expect_tools": ["get_position"],
+     "must_include": [("?", "까요", "신가요")],
+     "must_not_include": [r"[A-H]\s*구역", r"지금 계신 3층"],
+     "why": "low 는 **되묻는 등급**이다. 오래된 앵커로 단정하면 손님이 엉뚱한 "
+            "데로 걸어간다 — 틀린 위치 안내는 위치를 모르는 것보다 나쁘다"},
+
+    {"id": "position_no_anchor",
+     "q": "나 지금 어디쯤이에요?",
+     "consumer_id": 9001, "session_id": "sess-pos-n",
+     "position": None,                    # 앵커 없음
+     "expect_tools": ["get_position"],
+     "must_include": [("몇 층", "어느 층", "층을", "층이신")],
+     "must_not_include": [r"\d\s*층에 계", r"[A-H]\s*구역"],
+     "why": "앵커가 없으면 **손님에게 층을 묻는다.** 입구를 추측해 답하면 "
+            "그것이 지어낸 위치다 — 스캔 기록이 없는 상태가 곧 모르는 상태다"},
 ]
 
 # ── 자체 검산 — 골든셋 자신도 조용히 망가질 수 있다 ──────────────────────────
 _ids = [c["id"] for c in GOLDEN]
 assert len(set(_ids)) == len(_ids), "케이스 id 중복"
-assert 12 <= len(GOLDEN) <= 15, f"v0는 12~15개 계획(현재 {len(GOLDEN)}) — 실행계획 08/17 칸"
+assert 12 <= len(GOLDEN) <= 24, f"v0 12~15 + 위치 4 (현재 {len(GOLDEN)})"
+# ⚠ `position` 은 **선택 칸**이다 — 없으면 러너가 앵커 없이 돌린다.
+#   있는 케이스는 (층, x, y, 나이초) 넷이고, 나이가 등급을 가른다.
+for _c in GOLDEN:
+    _p = _c.get("position")
+    assert _p is None or (isinstance(_p, tuple) and len(_p) == 4), (
+        f"{_c['id']}: position 은 (층,x,y,나이초) 네 칸이어야 한다")
 for _c in GOLDEN:
     for _k in ("id", "q", "expect_tools", "must_include", "must_not_include", "why"):
         assert _k in _c, f"{_c.get('id', '?')}: {_k} 칸 누락"
