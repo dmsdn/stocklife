@@ -36,7 +36,7 @@ export function AiPanel() {
       <div className="flex items-center justify-between border-b border-border px-4 py-4">
         <span className="text-lg font-semibold">AI에게 물어보기</span>
         <button type="button" onClick={close} aria-label="AI 패널 닫기">
-          <X size={18} />
+          <X size={24} />
         </button>
       </div>
       <AiChatBody initialMessage={initialMessage} />

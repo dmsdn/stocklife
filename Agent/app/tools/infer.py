@@ -450,13 +450,76 @@ def predict_availability(sku_id: int) -> dict:
         "path_type": path,
         "queue_len": qlen,
         "curve": _curve_to_points(F, list(b["bin_edges"]), "초"),
+        # ⚠ 단위 함정을 **여기로 옮겼다**(㉠ 축약 08-29). 설명문에 있었는데,
+        #   그건 곡선을 실제로 읽는 순간과 멀다. 값의 단위는 **값에 붙는 사실**
+        #   이라 결과가 제자리다 — 그리고 여기 있으면 곡선을 보는 바로 그때 온다.
         "read_as": ("곡선은 '그 시점까지 보충이 끝날 확률'입니다. 한 점을 골라 "
                     "'약 N분'으로 단정하지 말고 확률과 함께 말하세요. "
+                    "⚠ prob_pct 는 **이미 퍼센트**입니다(0.4 는 0.4% 이지 40% 가 "
+                    "아닙니다). 100 을 곱하지 마세요. within 도 이미 사람 단위라 "
+                    "초로 되돌리거나 다른 단위로 바꾸지 마세요. "
                     "⚠ 큐의 예상 작업량은 근사값입니다(이동시간을 상수로 봅니다)."),
     }
 
 
 # ── ② 소비주기 ──────────────────────────────────────────────────────────────
+def _repurchase_typical(b, sku_id, prod, l2, l2_names) -> dict:
+    """**전형 주기** — 개인 이력이 없을 때. 조건부 확률이 아니다.
+
+    [무엇이 다른가] 이력이 있는 곡선은 「그 사람이 다시 살 확률」이고, 이것은
+      「이 상품군을 사는 사람들의 전형적인 주기」다. 수식은 같은 모델을 쓰지만
+      **말할 수 있는 문장이 다르다** — 주어가 "손님"이 아니라 "보통".
+
+    [왜 그래도 값어치가 있나] 처음 사는 상품에 대해 "모릅니다"밖에 못 하면
+      진열대 앞에서 아무 도움이 안 된다. "이건 보통 3주쯤 쓰십니다"는
+      개인화가 아니어도 재고·묶음 판단에 쓰인다.
+
+    [무엇을 안 하나] 개인 축(가구·반려·자녀·차량)은 조회 창구가 없어 못 쓴다.
+      그래서 이 값은 **소분류 수준**이고, 그 사실을 `basis` 와 `read_as` 에
+      싣는다. 창구가 열리면 여기에 축을 넣어 "비슷한 가구의 분들은"까지 간다.
+    """
+    from app.tools import query as _q
+    model_key = "conditional" if _q.current_session_id() else "unconditional"
+
+    if l2 in l2_names:
+        eb = float(b["mu_l2"][l2_names.index(l2)])
+        basis = "l2_typical"
+    else:
+        eb = float(b["gm"])
+        basis = "global_typical"          # 소분류를 모르면 전체 평균까지 내려간다
+
+    F = _repurchase_curve(b, model_key, l2=l2, past_n=0, eb=eb, qty=1.0)
+    if F is None:
+        return {"error": "feature_mismatch",
+                "message": "출하본의 특징 구성이 지금 카탈로그와 안 맞습니다."}
+
+    edges = list(b["bin_edges"])
+    pts = _curve_to_points(F, edges, "일")
+    # 90일 넘는 구간은 개인화 여부와 무관하게 널과 구분되지 않는다(A-5).
+    for p, hi in zip(pts, edges[1:]):
+        if np.isfinite(hi) and hi >= 90.0:
+            p["note"] = ((p.get("note") + " · " if p.get("note") else "")
+                         + "전체 평균 수준")
+
+    return {
+        "sku_id": int(sku_id),
+        "basis": basis,                    # ← 이력 기반과 가르는 칸
+        "days_since_last": None,           # 산 적이 없다
+        "past_intervals": 0,
+        "typical_cycle_days": round(float(np.exp(eb)), 1),
+        "l2": l2,
+        "curve": pts,
+        "model": model_key,
+        "read_as": (
+            "⚠ 이 손님은 이 상품을 **산 적이 없습니다.** 곡선과 주기는 "
+            "'이 상품군을 사는 사람들의 전형'이지 이 손님의 예측이 아닙니다. "
+            "'손님은 ~쯤 다시 사실 거예요'처럼 **주어를 손님으로 두지 마세요.** "
+            "'이건 보통 N일쯤 쓰십니다' 정도가 말할 수 있는 전부입니다. "
+            "먼저 사시는 상품이라는 사실을 숨기지 마세요. "
+            "⚠ 개인 축(가구·반려·자녀)은 조회 창구가 없어 반영되지 않았습니다."),
+    }
+
+
 def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
     """이 손님이 이 상품을 다시 살 때가 됐나 — 시점별 확률 곡선. **품목 하나.**
 
@@ -483,10 +546,25 @@ def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
         hist = sot_client.get_purchase_history(member_id) or []
     days = sorted(_to_day(h["purchased_at"]) for h in hist
                   if int(h.get("sku_id", -1)) == int(sku_id))
+
+    prod = sot_client.get_product(sku_id) or {}
+    l2 = prod.get("category_l2") or prod.get("l2")
+    l2_names = [str(x) for x in b.get("l2_names", [])]
+
     if not days:
-        return {"error": "no_history",
-                "message": f"이 손님이 sku {sku_id}를 산 기록이 없습니다. "
-                           "재구매 시점을 말하지 말고, 처음 사는 상품으로 다루세요."}
+        # ── 콜드스타트 — 개인 이력이 없다 ────────────────────────────────
+        # 08-28 까지 여기서 `no_history` 로 끊었다. 그런데 **모델은 이미
+        # 된다**: 특징 구성이 `past_n == 0` 이면 소분류 사전평균으로 대체하게
+        # 돼 있고(아래 eb), 출하물에 그 사전평균(`mu_l2`)이 들어 있다.
+        # 끊고 있던 것은 모델의 한계가 아니라 분기 하나였다.
+        #
+        # ⚠ **그렇다고 같은 문장을 말하면 안 된다.** 이력이 있을 때의 곡선은
+        #   "당신이 다시 살 확률"이고, 여기서 나오는 곡선은 "이 상품군의
+        #   전형적인 주기"다. 주어가 다르다. 같은 모양으로 돌려주면 LLM 이
+        #   "손님은 3주쯤 뒤에 다시 사실 거예요"라고 말한다 — **없는 개인화를
+        #   지어내는 것**이고, 손님은 그걸 자기 얘기로 듣는다.
+        #   그래서 `basis` 로 종류를 표시하고 `read_as` 로 주어를 못 박는다.
+        return _repurchase_typical(b, sku_id, prod, l2, l2_names)
 
     # 마지막 구매로부터 며칠 지났나 — 이것이 곡선을 읽는 x축의 원점이다.
     now = _to_day(config.DEMO_NOW.isoformat())
@@ -498,9 +576,6 @@ def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
     gaps = [days[i + 1] - days[i] for i in range(len(days) - 1) if days[i + 1] > days[i]]
     past_n = len(gaps)
     past_log_mean = float(np.mean(np.log(gaps))) if gaps else 0.0
-
-    prod = sot_client.get_product(sku_id) or {}
-    l2 = prod.get("category_l2") or prod.get("l2")
 
     # ── 두 모델 중 무엇을 쓰나 — 접점이 다르면 질문이 다르다 ──────────────
     # B가 둘을 낸 이유가 이것이다(2-07):
@@ -514,7 +589,6 @@ def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
 
     # eb = 과거 로그평균(원시 a). 이력이 없으면 그 소분류의 사전평균으로 대체한다
     # — 콜드스타트에서 0을 넣으면 "주기 1일"이 되어 매번 알리게 된다.
-    l2_names = [str(x) for x in b.get("l2_names", [])]
     if past_n > 0:
         eb = past_log_mean
     elif l2 in l2_names:
@@ -626,9 +700,30 @@ def predict_repurchase(sku_ids: list | None = None) -> dict:
             {"sku_id": sku, "error": r["error"]} if r.get("error") else r)
 
     # 살 때가 된 순서로. 주기를 못 구한 것(past_intervals=0)은 뒤로 민다.
+    #
+    # ⚠ **08-29 결함**: 가드가 `cyc` 만 봤는데, 08-28 에 콜드스타트 갈래를 열면서
+    #   **`typical_cycle_days` 는 있고 `days_since_last` 는 None** 인 항목이
+    #   생겼다(`_repurchase_typical` — 소분류 전형 주기는 아는데 이 손님이 산
+    #   적은 없다). 그래서 `None / float` 로 터졌고, `loop._dispatch` 가 그것을
+    #   `bad_arguments` 로 감싸 **인자는 멀쩡한데 인자 탓처럼 보였다.**
+    #
+    #   ⚠ 그리고 **한 항목이 터지면 그 호출 전체가 죽는다** — 정렬은 목록
+    #   단위라 나머지 멀쩡한 항목까지 같이 사라진다.
+    #
+    #   [왜 아무도 못 봤나] 인자를 안 주는 갈래(`sku_ids=None`)는 대상을
+    #   **두 번 이상 산 품목**에서 뽑으므로 전부 이력이 있다. 골든셋의
+    #   `real_repurchase` 가 그 갈래라 늘 초록이었다. 터지는 것은 LLM 이
+    #   `sku_ids` 를 **직접 지목**할 때뿐인데, 그건 도구 설명문이 권하는
+    #   바로 그 용법이다("이거 또 살 때 됐나?").
+    #
+    #   [왜 뒤로 미나] 이 손님의 경과일이 없으니 "살 때가 됐다"의 순위를
+    #   매길 근거가 없다. -1.0 은 "순위 밖"이라는 뜻이고, 콜드스타트 항목은
+    #   목록에 남되 뒤에 선다 — **빼지 않는다**(빼면 손님이 물은 상품이
+    #   답에서 조용히 사라진다).
     def _due(r):
         cyc = r.get("typical_cycle_days")
-        return (r["days_since_last"] / cyc) if cyc else -1.0
+        since = r.get("days_since_last")
+        return (since / cyc) if (cyc and since is not None) else -1.0
     results.sort(key=_due, reverse=True)
     shown = results[:REPURCHASE_MAX_ITEMS]
 
@@ -824,10 +919,34 @@ def _photo_search(b, q: np.ndarray) -> dict:
         "category_confidence": round(float(purity), 3),
         "item_confidence": round(float(item_purity), 3),
         "candidates": cands,
-        "read_as": ("tier가 어투를 정합니다. unsure에서 '매장에 없습니다'라고 "
-                    "말하면 안 됩니다 — 못 찾은 것은 사진 판정이지 재고가 아닙니다. "
-                    "후보의 가격·재고는 조회 도구로 다시 확인하세요."),
+        "read_as": _PHOTO_SAY[tier] + _PHOTO_COMMON,
     }
+
+
+# ── 사진 tier 별 말하는 법 (㉠ 축약으로 definitions 에서 옮겨 왔다 · 08-29) ──
+#   [왜 옮겼나] 이 셋은 **발화 규율**이지 라우팅이 아니다. 설명문에 두면
+#     ① 문맥 맨 앞이라 발화 시점과 멀고 ② 세 tier 중 **둘은 늘 헛것**이다
+#     (한 번에 한 tier 만 온다) ③ ㉠ 축약의 첫 삭제 후보가 된다.
+#     결과에 실으면 **해당 tier 것만** 발화 직전에 온다 — 짧아지면서 가까워진다.
+#   ⚠ 문구를 줄이지 않았다. 옮긴 것이지 압축한 것이 아니다.
+_PHOTO_SAY = {
+    "confident": (
+        "tier=confident — '○○인 것 같아요. 저희 매장엔 이런 것들이 있습니다' "
+        "처럼 품목을 말하고 후보를 보이세요."),
+    "category": (
+        "tier=category — '○○류로 보입니다. 이 중에 필요하신 게 있나요?' 처럼 "
+        "**소분류까지만** 말하세요. 품목명을 단정하면 안 됩니다."),
+    "unsure": (
+        "tier=unsure — '죄송합니다, 사진으로는 온전히 구별하기 어렵습니다. "
+        "물품을 말씀해 주시면 정확히 답변드리겠습니다' 로 답하세요. "
+        "⚠ **'저희 매장에 없습니다'라고 말하면 안 됩니다** — 못 찾은 것은 사진 "
+        "판정이지 재고가 아닙니다. 있는 물건을 없다고 하는 것은 없는 물건을 "
+        "있다고 하는 것만큼 나쁩니다."),
+}
+_PHOTO_COMMON = (
+    " **어느 tier든 후보 목록을 함께 보이세요** — 손님이 정정할 길이 항상 "
+    "열려 있어야 합니다. 확정은 손님이 고른 뒤에만이고, 그 뒤 가격·재고는 "
+    "조회 도구로 다시 확인합니다.")
 
 
 def _fetch_image(image_ref: str):
@@ -853,8 +972,21 @@ def get_position() -> dict:
     read_as로 그 한계를 LLM에게 전달한다 — "정확한 현재 위치"로 단정해 말하면
     손님이 자기 위치와 다른 안내를 받는다(가드가 아니라 표현 규율의 몫).
 
-    [이론 확장(야간)] 베이지안 필터(칼만/파티클) — 스캔 사이의 이동을 확률로
-    메운다. 규칙판은 그 필터의 관측 모델 자리에 그대로 들어간다.
+    [베이지안 필터 — 08-28 판정: **채택하지 않는다**]
+    `models/position_filter.py` 가 파티클 필터를 규칙판과 겨뤘다. 필터가
+    이기기도 하고 지기도 했는데, **무엇이 이기는지가 「손님이 매대 앞에서
+    얼마나 머무는가」라는 가정에 달려 있었다**:
+
+      머무름 0초·이탈 0    필터 13.1m  vs 규칙 19.6m   → 필터 승
+      머무름 45초·이탈 0.7 필터 16.5m  vs 규칙 11.8m   → 규칙 승
+
+    우리는 센서가 없어 어느 쪽이 맞는지 **알 방법이 없다.** 검증할 수 없는
+    가정 위에서만 이기는 후보는 채택하지 않는다(가짜 세계의 판정이 "된다"면
+    배포된다 — CLAUDE.md §2-5b).
+
+    대신 **모든 설정에서 흔들리지 않은 것**을 가져왔다: *스캔 직후엔 앵커가
+    거의 정확하고(≈2m) 시간이 지날수록 급격히 나빠진다.* 그래서 위치를 옮기지
+    않고 **얼마나 믿을지**를 나이에 따라 바꾼다(아래 `_BANDS`).
 
     ⚠ 경로 도구는 이 도구를 안 기다린다 — 루프가 같은 앵커를 직접 주입하므로
       `optimize_route`는 여기 없이도 돈다. 이 도구의 소비자는 "지금 나 어디쯤
@@ -862,6 +994,7 @@ def get_position() -> dict:
     """
     from app.tools import compute
     pos = compute.current_position()
+    age = compute.position_age()
     if pos is None:
         return {"error": "no_scan_anchor",
                 "message": ("아직 스캔 기록이 없어 위치를 추정할 수 없습니다. "
@@ -869,12 +1002,53 @@ def get_position() -> dict:
                             "있는 부분만 답하세요.")}
     f, x, y = pos
     sx, sy, snapped = snap_to_walkable(f, x, y)
+    tier, say = _confidence(age)
     return {"floor_no": int(f), "x": sx, "y": sy,
             "source": "scan_anchor+graph_snap",
             "snapped": snapped,
-            "read_as": ("마지막 스캔 매대 앞 통로 기준의 추정 위치입니다. "
-                        "스캔 후 이동했을 수 있으니 단정하지 말고 "
-                        "'~쯤에 계시죠?' 정도로 말하세요.")}
+            "anchor_age_sec": None if age is None else round(age),
+            "confidence": tier,
+            "read_as": say}
+
+
+# 나이 구간과 말하는 법. **미터를 싣지 않는다** — 대조표의 절대 수치는 가정한
+# 운동 아래서의 값이라 손님에게 말할 자격이 없다. 실은 이렇다: 우리가 아는 것은
+# 「방금 스캔했으면 거기 있다」와 「오래됐으면 모른다」 둘뿐이고, 그 둘은
+# 어떤 가정에서도 참이었다.
+_BANDS = [
+    # ⚠ 예시에 **구역을 넣지 않는다**(08-28 정정). 이 도구는 `floor_no·x·y` 만
+    #   돌려주고 **존은 안 준다** — 스냅한 통행 좌표라 매대 id 가 없다.
+    #   그런데 예시가 "3층 A구역"이었다. 그대로 따라 하면 **에이전트가 존을
+    #   지어내고**, 가드가 그것을 막는다(막는 것이 옳다).
+    #   B 의 위치 칸 넷이 가드에 걸린 원인의 절반이 이것이었다.
+    (30, "high",
+     "방금 스캔한 자리입니다. 여기 계신다고 말해도 됩니다 "
+     "— '지금 계신 3층에서…'. **구역은 말하지 마세요** — 이 도구는 층과 "
+     "좌표만 알고 어느 구역인지는 모릅니다."),
+    (120, "medium",
+     "스캔한 지 좀 됐습니다. 그 근처이되 한두 통로쯤 움직였을 수 있으니 "
+     "'아까 스캔하신 자리 기준으로는…' 처럼 **기준을 밝히고** 말하세요."),
+    (float("inf"), "low",
+     "스캔한 지 오래됐습니다. **위치를 근거로 단정하지 마세요** — "
+     "'혹시 아직 3층에 계신가요?' 처럼 되묻거나, 위치 없이 답할 수 있는 "
+     "부분만 답하세요. 틀린 위치로 안내하면 손님이 엉뚱한 데로 걸어갑니다."),
+]
+
+
+def _confidence(age):
+    """앵커 나이 → (등급, 말하는 법).
+
+    나이를 모르면(`None`) **중간 등급**으로 둔다. 모르는 것을 'high' 로 두면
+    오래된 앵커를 단정해 말하게 되고, 'low' 로 두면 방금 스캔한 손님에게도
+    되묻게 된다 — 둘 다 나쁘지만 **앞엣것이 더 나쁘다**(틀린 안내 vs 군더더기).
+    그래서 모를 때는 가운데가 아니라 **안전한 쪽**이 기본이다.
+    """
+    if age is None:
+        return "unknown", _BANDS[1][2] + " (스캔 시각을 몰라 보수적으로 잡았습니다.)"
+    for limit, tier, say in _BANDS:
+        if age < limit:
+            return tier, say
+    return _BANDS[-1][1], _BANDS[-1][2]
 
 
 # ── ⑤ 취향 매칭 ─────────────────────────────────────────────────────────────
@@ -1060,8 +1234,13 @@ def match_preferences(top_k: int = 3) -> dict:
         "read_as": (
             "후보와 근거만 말하고, 이유를 지어내지 마세요 — why 에 담긴 것만 "
             "씁니다. 후보 여럿이 같은 소분류일 수 있습니다(다양화는 소분류당 "
-            "최대 3개까지 허용합니다). 이력이 적으면(history_skus 가 한 자리) "
-            "'아직 잘 모르지만'을 붙이세요. "
+            # ⚠ 09-01: 여기에 `history_skus` 라고 칸 이름을 적었더니 모델이 그것을
+            #   **손님 발화에 그대로 옮겼다** — "(history_skus=0) 정확도가 낮지만".
+            #   규율은 모델에게 하는 말인데, 칸 이름을 쓰면 그 말이 새어 나갈
+            #   통로가 열린다. 조건은 **사람 말로** 적는다.
+            "구매한 상품 종류가 열 가지 미만이면 '아직 잘 모르지만'을 붙이세요. "
+            "⚠ 그때도 **숫자나 칸 이름을 발화에 넣지 마세요** — 손님은 우리가 "
+            "무엇을 세는지 알 이유가 없습니다. "
             "⚠ axes_inferred(반려·자녀)는 **구매 이력에서 추정한 것**이지 "
             "손님이 알려준 정보가 아닙니다 — '반려동물 키우시죠?'처럼 단정하지 "
             "말고, 그 소분류를 사셨다는 사실까지만 말하세요. "
@@ -1088,4 +1267,16 @@ def run(tool_name: str, tool_input: dict) -> dict:
     except TypeError as e:
         return {"error": "bad_arguments", "message": str(e)}
     except Exception as e:                                     # noqa: BLE001
-        return {"error": "infer_failed", "message": f"{type(e).__name__}: {e}"}
+        # ⚠ 09-01: 예전에는 `message` 에 예외 문자열만 담았다. 그러면 모델이
+        #   받은 것이 `HTTPStatusError: Client error '404' for url http://…` 이고,
+        #   그걸 손님 말로 옮긴 결과가 **"백엔드 응답에 문제가 있는 것 같아요"**
+        #   였다. 손님은 우리 서버 구조를 알 이유가 없다.
+        #   → 원인은 **로그로**(고치는 사람에게), 발화 규율은 **결과로**(모델에게).
+        #   다른 도구들이 이미 그렇게 한다(`no_member`·`catalog_mismatch`).
+        print(f"[infer] {tool_name} 실패 — {type(e).__name__}: {e}")
+        return {"error": "infer_failed",
+                "detail": f"{type(e).__name__}: {e}",     # 트레이스·디버깅용
+                "message": ("이 기능을 지금 쓸 수 없습니다. **이 기능 없이 답할 수 "
+                            "있는 부분만** 답하고, 손님에게는 '지금 그건 확인이 "
+                            "어렵다'까지만 말하세요. ⚠ 서버·백엔드·오류 같은 "
+                            "내부 사정은 언급하지 마세요.")}

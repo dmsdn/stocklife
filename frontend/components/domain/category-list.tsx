@@ -15,7 +15,7 @@ export function CategoryList({ title, items }: { title: string; items: CategoryL
         {items.map((item) => (
           <Link key={item.href} href={item.href} className="flex items-center justify-between py-3 text-sm">
             {item.label}
-            <ChevronRight size={16} className="text-muted-foreground" />
+            <ChevronRight size={24} className="text-muted-foreground" />
           </Link>
         ))}
       </div>

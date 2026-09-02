@@ -185,8 +185,11 @@ export interface StoreSceneEvents {
   onTileClick?: (cell: GridPoint, loc: LocationInfo | null) => void;
   onPlayerArrive?: (point: GridPoint) => void;
   onFacilityInteract?: (facility: FacilityInfo) => void;
-  // 매대 바로 옆에서 스페이스바 — 그 매대에 진열된 상품 팝업을 띄우라는 신호.
-  onLocationInteract?: (loc: LocationInfo) => void;
+  // 매대 바로 옆에서 스페이스바 — 그 매대(같은 아일 좌표를 공유하는 모든 진열 단(L1/L2/L3...))에
+  // 진열된 상품 팝업을 띄우라는 신호. 배열인 이유: locations.x/y는 "매대 몸체"가 아니라 그 매대의
+  // 통로 접근 지점(rack/bay)이고, 같은 rack/bay 안의 여러 단(level)이 이 좌표를 공유하기 때문에
+  // 한 번의 상호작용으로 그 매대의 모든 단을 다 받아야 한다.
+  onLocationInteract?: (locs: LocationInfo[]) => void;
 }
 
 export default class StoreScene extends Phaser.Scene {
@@ -204,7 +207,11 @@ export default class StoreScene extends Phaser.Scene {
   private moving = false;
   private controlsEnabled = true; // 프로그램 트립 진행 중에는 키보드 조작을 잠근다
   private events2: StoreSceneEvents = {};
+  // 디버그 라벨(O키) 등 "이 칸에 매대가 하나 있다"는 것만 알면 되는 곳에서 쓰는 단일 값 버전 —
+  // 같은 x,y를 공유하는 여러 단(level) 중 마지막으로 세팅된 것 하나만 남는다.
   private locationByCell = new Map<string, LocationInfo>();
+  // 실제 상품 팝업(onLocationInteract)에서 쓰는 버전 — 같은 x,y를 공유하는 모든 단을 배열로 보관한다.
+  private locationsByCell = new Map<string, LocationInfo[]>();
   private facilityByCell = new Map<string, FacilityInfo>();
   private lastHoldMoveAt = 0;
   // 이번 층에서 "화면을 꽉 채우는" 줌 값 — fitCameraToWorld()가 매번 다시 계산해서 넣어두고,
@@ -355,8 +362,8 @@ export default class StoreScene extends Phaser.Scene {
     // 화면 가장자리에 딱 붙지 않고 아주 약간의 숨 쉴 여백을 남긴다.
     const FILL_RATIO = 0.96;
     const containZoom = Math.min(
-      (canvasW * FILL_RATIO) / worldW,
-      (canvasH * FILL_RATIO) / worldH,
+        (canvasW * FILL_RATIO) / worldW,
+        (canvasH * FILL_RATIO) / worldH,
     );
     this.minZoom = Phaser.Math.Clamp(containZoom, 0.1, 3);
     this.cameras.main.setZoom(this.minZoom);
@@ -415,8 +422,8 @@ export default class StoreScene extends Phaser.Scene {
     const canvasH = this.scale.height || worldH;
     const FILL_RATIO = 0.96;
     const containZoom = Math.min(
-      (canvasW * FILL_RATIO) / worldW,
-      (canvasH * FILL_RATIO) / worldH,
+        (canvasW * FILL_RATIO) / worldW,
+        (canvasH * FILL_RATIO) / worldH,
     );
     this.minZoom = Phaser.Math.Clamp(containZoom, 0.1, 3);
     const cam = this.cameras.main;
@@ -442,6 +449,7 @@ export default class StoreScene extends Phaser.Scene {
     this.labelLayer.destroy();
     this.facilityLayer.destroy();
     this.locationByCell.clear();
+    this.locationsByCell.clear();
     this.facilityByCell.clear();
     this.buildFloor();
     this.placePlayerAt(opts?.startCell ?? this.findEntranceCell());
@@ -550,7 +558,13 @@ export default class StoreScene extends Phaser.Scene {
     const zoneById = new Map(this.floorData.zones.map((z) => [z.zoneId, z]));
 
     this.floorData.locations.forEach((loc) => {
-      this.locationByCell.set(`${loc.x},${loc.y}`, loc);
+      const key = `${loc.x},${loc.y}`;
+      this.locationByCell.set(key, loc);
+      // 같은 rack/bay의 여러 단(level)이 이 좌표를 공유하므로 덮어쓰지 않고 배열에 모은다 —
+      // 안 그러면 마지막 단(예: L3)만 남고 나머지 단(L1/L2)은 클릭해도 안 보이는 버그가 생긴다.
+      const existing = this.locationsByCell.get(key);
+      if (existing) existing.push(loc);
+      else this.locationsByCell.set(key, [loc]);
     });
 
     // 매대 칸은 locations(매대 "옆" 접근 지점 좌표 — rack_no/bay_no 기준 통로 위치)가 아니라
@@ -607,7 +621,7 @@ export default class StoreScene extends Phaser.Scene {
         if (!nearest || bestDist > OCCUPIED_ZONE_MAX_DIST) continue;
         const bbox = shelfZoneBBox.get(nearest.zoneId);
         const insideOwnZone =
-          !!bbox && ox >= bbox.minX && ox <= bbox.maxX && oy >= bbox.minY && oy <= bbox.maxY;
+            !!bbox && ox >= bbox.minX && ox <= bbox.maxX && oy >= bbox.minY && oy <= bbox.maxY;
         if (!insideOwnZone) continue; // 이 zone 매대 범위 밖 = 벽/구조물로 보고 색칠하지 않는다.
         // 화면에 색칠되는 칸(occupied)과 클릭했을 때 찾는 칸(locationByCell)이 서로 다른
         // 좌표를 쓰고 있어서(위 주석 참고) "매대를 클릭해도 반응이 없다"는 버그가 있었다 —
@@ -620,6 +634,19 @@ export default class StoreScene extends Phaser.Scene {
         const occKey = `${ox},${oy}`;
         if (!this.locationByCell.has(occKey)) {
           this.locationByCell.set(occKey, nearest);
+        }
+        if (!this.locationsByCell.has(occKey)) {
+          const sameShelfLocations = this.floorData.locations.filter(
+              (loc) =>
+                  loc.zoneId === nearest!.zoneId &&
+                  loc.rack === nearest!.rack &&
+                  loc.bay === nearest!.bay
+          );
+
+          this.locationsByCell.set(
+              occKey,
+              sameShelfLocations.length > 0 ? sameShelfLocations : [nearest]
+          );
         }
         const cx = ox * TILE + TILE / 2;
         const cy = oy * TILE + TILE / 2;
@@ -794,14 +821,14 @@ export default class StoreScene extends Phaser.Scene {
   private randomWalkableCellNear(center: GridPoint, radius: number): GridPoint {
     for (let i = 0; i < 50; i++) {
       const x = Phaser.Math.Clamp(
-        center.x + Phaser.Math.Between(-radius, radius),
-        0,
-        this.floorData.gridWidth - 1
+          center.x + Phaser.Math.Between(-radius, radius),
+          0,
+          this.floorData.gridWidth - 1
       );
       const y = Phaser.Math.Clamp(
-        center.y + Phaser.Math.Between(-radius, radius),
-        0,
-        this.floorData.gridHeight - 1
+          center.y + Phaser.Math.Between(-radius, radius),
+          0,
+          this.floorData.gridHeight - 1
       );
       if (this.grid.isWalkable(x, y)) return { x, y };
     }
@@ -826,14 +853,14 @@ export default class StoreScene extends Phaser.Scene {
 
     this.npcHomeMarker?.destroy();
     this.npcHomeMarker = this.add
-      .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
-        fontSize: '20px',
-        color: '#78350f',
-        backgroundColor: '#fef3c7cc',
-        padding: { x: 2, y: 0 },
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(DEPTH_NPC);
+        .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
+          fontSize: '20px',
+          color: '#78350f',
+          backgroundColor: '#fef3c7cc',
+          padding: { x: 2, y: 0 },
+        })
+        .setOrigin(0.5, 1)
+        .setDepth(DEPTH_NPC);
 
     for (let i = 0; i < count; i++) {
       const cell = this.npcHomeCell;
@@ -931,14 +958,14 @@ export default class StoreScene extends Phaser.Scene {
 
   private showRestockBubble(npc: NpcAgent, text: string) {
     const t = this.add
-      .text(npc.container.x, npc.container.y - 16, text, {
-        fontSize: '20px',
-        color: '#16a34a',
-        backgroundColor: '#ffffffcc',
-        padding: { x: 3, y: 1 },
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTH_NPC + 1);
+        .text(npc.container.x, npc.container.y - 16, text, {
+          fontSize: '20px',
+          color: '#16a34a',
+          backgroundColor: '#ffffffcc',
+          padding: { x: 3, y: 1 },
+        })
+        .setOrigin(0.5)
+        .setDepth(DEPTH_NPC + 1);
     this.tweens.add({ targets: t, y: t.y - 14, alpha: 0, duration: 900, onComplete: () => t.destroy() });
   }
 
@@ -1077,9 +1104,9 @@ export default class StoreScene extends Phaser.Scene {
       [0, -1], [0, 1], [-1, 0], [1, 0],
     ];
     for (const [dx, dy] of deltas) {
-      const loc = this.locationByCell.get(`${this.playerGrid.x + dx},${this.playerGrid.y + dy}`);
-      if (loc) {
-        this.events2.onLocationInteract?.(loc);
+      const locs = this.locationsByCell.get(`${this.playerGrid.x + dx},${this.playerGrid.y + dy}`);
+      if (locs && locs.length > 0) {
+        this.events2.onLocationInteract?.(locs);
         return;
       }
     }

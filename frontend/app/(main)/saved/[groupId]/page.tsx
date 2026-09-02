@@ -140,7 +140,7 @@ export default function SavedGroupDetailPage() {
           href="/saved"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-muted"
         >
-          <ChevronLeft size={20} />
+          <ChevronLeft size={24} />
         </Link>
 
         <div className="min-w-0 flex-1">
@@ -168,7 +168,7 @@ export default function SavedGroupDetailPage() {
           }}
           className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
         >
-          <Trash2 size={18} />
+          <Trash2 size={24} />
         </button>
       </div>
 
@@ -226,7 +226,7 @@ export default function SavedGroupDetailPage() {
                     }
                     className="shrink-0 text-muted-foreground hover:text-foreground"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={24} />
                   </button>
                 </div>
 
@@ -320,7 +320,7 @@ export default function SavedGroupDetailPage() {
           className="flex items-center gap-1.5"
           onClick={() => setRouteOpen(true)}
         >
-          <MapIcon size={16} />
+          <MapIcon size={24} />
           동선 보기
         </Button>
 
@@ -330,7 +330,7 @@ export default function SavedGroupDetailPage() {
             router.push(`/scan?group=${groupId}`)
           }
         >
-          <PlayCircle size={16} />
+          <PlayCircle size={24} />
           장보기 시작
         </Button>
       </div>
@@ -338,10 +338,10 @@ export default function SavedGroupDetailPage() {
       {/* ✅ 리스트별 AI — 이미 대화가 있으면 "이어서", 없으면 "물어보기" */}
       <Button
         variant="outline"
-        className="mt-2 flex w-full items-center justify-center gap-1.5"
+        className="mt-2 flex w-full items-center justify-center gap-1.5 border-brand text-brand"
         onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
       >
-        <Bot size={16} />
+        <Bot size={24} />
         {linkedSessionId ? "AI와 이어서 물어보기" : "이 리스트로 AI에게 물어보기"}
       </Button>
 

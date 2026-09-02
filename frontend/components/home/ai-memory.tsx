@@ -23,7 +23,7 @@ export function AiMemory({
       <div className="rounded-sm bg-muted/70 p-4">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background">
-            <Sparkles size={16} />
+            <Sparkles size={24} />
           </div>
 
           <div>
@@ -43,7 +43,7 @@ export function AiMemory({
           className="mt-4 flex w-full items-center justify-center gap-1 rounded-sm bg-background py-2.5 text-sm font-medium"
         >
           지난 계획 이어가기
-          <ArrowRight size={12} />
+          <ArrowRight size={24} />
         </button>
       </div>
     </section>

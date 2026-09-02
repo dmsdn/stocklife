@@ -6,7 +6,7 @@ import {
   Award,
   ShoppingCart,
   MessageSquare,
-  Heart,
+  Bookmark,
   Receipt,
   ChevronRight,
 } from "lucide-react";
@@ -124,7 +124,7 @@ export function HomeDashboard({
           className="flex items-center gap-3 rounded-sm border border-border p-4 text-left"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
-            <ShoppingCart size={18} />
+            <ShoppingCart size={24} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">담은 리스트</p>
@@ -143,7 +143,7 @@ export function HomeDashboard({
           className="flex items-center gap-3 rounded-sm border border-border p-4 text-left"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
-            <Receipt size={18} />
+            <Receipt size={24} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">최근 주문</p>
@@ -162,7 +162,7 @@ export function HomeDashboard({
           className="flex items-center gap-3 rounded-sm border border-border p-4 text-left"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
-            <Heart size={18} />
+            <Bookmark size={24} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">찜한 상품</p>
@@ -183,7 +183,7 @@ export function HomeDashboard({
           className="flex items-center gap-3 rounded-sm border border-border p-4 text-left"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
-            <MessageSquare size={18} />
+            <MessageSquare size={24} />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">
@@ -203,7 +203,7 @@ export function HomeDashboard({
         className="mt-3 flex w-full items-center gap-3 rounded-sm border border-border p-4 text-left"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-          <Award size={18} />
+          <Award size={24} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">등급 안내</p>
@@ -218,7 +218,7 @@ export function HomeDashboard({
             ))}
           </div>
         </div>
-        <ChevronRight size={16} className="shrink-0 text-muted-foreground" />
+        <ChevronRight size={24} className="shrink-0 text-muted-foreground" />
       </button>
 
       {/* ✅ 실제 구매이력 기반 자주 사는 카테고리 (GET /api/purchases/top-categories) */}

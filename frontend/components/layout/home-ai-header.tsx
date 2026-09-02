@@ -36,12 +36,12 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
 
   const content = (
     <header className="flex h-16 w-full items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2 md:gap-3">
+      <div className="flex min-w-0 items-center gap-2 md:gap-3 mx-4">
         <Link href="/" aria-label="홈 화면으로 이동" className="shrink-0 transition-opacity hover:opacity-70">
           <Image
             src="/icons/logo-shopping.svg"
             alt="쇼핑"
-            width={120}
+            width={80}
             height={40}
             priority
             className="h-10 w-auto md:h-8"
@@ -57,7 +57,7 @@ export function HomeAiHeader({ active = "home", onAiChat, variant = "inline" }: 
           <Image
             src="/icons/logo-ai.svg"
             alt="AI Chat"
-            width={120}
+            width={80}
             height={40}
             priority
             className="h-10 w-auto md:h-8"

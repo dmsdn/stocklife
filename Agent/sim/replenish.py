@@ -37,6 +37,11 @@ def shift_to_open(epoch: float) -> float:
     데모로도 "저녁에 품절이면 내일 아침 들어와요"가 성립한다.
     """
     dt = datetime.fromtimestamp(epoch)
+    # v4 축 — 야간 보충을 켜면 영업시간이라는 벽 자체가 없다(DES설계 §10.1).
+    # ⚠ 앞의 `dt` 계산은 그대로 두고 여기서 되돌린다 — 위쪽에 두면 dt 가 없어
+    #   다른 분기가 깨진다. 난수는 어느 쪽 경로에서도 안 뽑으므로 안전하다.
+    if getattr(P, "NIGHT_RESTOCK", False):
+        return float(t)
     if dt.hour >= P.HOUR_CLOSE:
         nxt = (dt + timedelta(days=1)).replace(hour=P.HOUR_OPEN, minute=0, second=0, microsecond=0)
         return nxt.timestamp()

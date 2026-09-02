@@ -98,10 +98,12 @@ public class PurchaseService {
      * 회원 구매 원장(/internal/purchases/history) — memberId로 직접 조회하며 시각순(오름차순)
      * 나열이다. /internal/orders/frequent는 orders(백엔드 고유)를 읽고 응답이 집계라 시각이
      * 없어 이 용도로 대체될 수 없다.
+     * lookbackDays 기본값 180 — 소비주기 예측·취향 매칭·재구매 추천이 참고하는 기간과 통일.
      */
     @Transactional(readOnly = true)
-    public List<PurchaseHistoryResponse> getHistoryByMemberId(Integer memberId) {
-        return purchaseRepository.findHistoryByMemberIdOrderByPurchasedAtAsc(memberId);
+    public List<PurchaseHistoryResponse> getHistoryByMemberId(Integer memberId, Integer lookbackDays) {
+        Instant since = sinceFrom180(lookbackDays);
+        return purchaseRepository.findHistoryByMemberIdSince(memberId, since);
     }
 
     /**

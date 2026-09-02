@@ -7,7 +7,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, Search as SearchIcon, X, Heart, Check } from "lucide-react";
+import { ChevronLeft, Search as SearchIcon, X, Bookmark, Check } from "lucide-react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { ProductDetailDialog } from "@/components/domain/product-detail-dialog";
@@ -195,10 +195,10 @@ function SearchPageInner() {
 
       <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
         <Link href="/">
-          <ChevronLeft size={20} />
+          <ChevronLeft size={24} />
         </Link>
         <div className="flex flex-1 items-center gap-2 rounded-sm border border-border px-3 py-2 text-sm">
-          <SearchIcon size={16} className="text-muted-foreground" />
+          <SearchIcon size={24} className="text-muted-foreground" />
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -222,7 +222,7 @@ function SearchPageInner() {
                   className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs"
                 >
                   {word}
-                  <X size={12} onMouseDown={(e) => handleRemoveRecent(word, e)} />
+                  <X size={24} onMouseDown={(e) => handleRemoveRecent(word, e)} />
                 </button>
               ))}
             </div>
@@ -285,9 +285,9 @@ function SearchPageInner() {
               className="flex h-8 w-8 shrink-0 items-center justify-center self-start text-muted-foreground disabled:opacity-30"
             >
               {savedIds.has(product.skuId) ? (
-                <Check size={20} className="text-success" />
+                <Check size={24} className="text-success" />
               ) : (
-                <Heart size={20} />
+                <Bookmark size={24} />
               )}
             </button>
           </div>

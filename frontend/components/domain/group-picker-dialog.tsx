@@ -71,7 +71,7 @@ export function GroupPickerDialog({
                   <p className="font-medium">{group.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{group.products.length}개 상품</p>
                 </div>
-                {selected && <Check size={16} className="shrink-0" />}
+                {selected && <Check size={24} className="shrink-0" />}
               </button>
             );
           })}

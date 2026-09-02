@@ -261,22 +261,34 @@ public class ChatService {
         // 방금 만든 사용자 메시지에 연결한다. 업로드 API에서 세션 소유권은 이미 확인했지만,
         // 여기서도 chatSessionId 일치 여부를 한 번 더 걸러(linkToMessage 내부) 다른 세션의
         // 첨부가 섞여 들어오지 않게 한다.
+        List<String> attachmentUrls = List.of();
         if (request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty()) {
             List<ChatAttachment> pending = chatAttachmentRepository
                     .findByChatAttachmentIdInAndChatMessageIdIsNull(request.getAttachmentIds());
+
+            List<ChatAttachment> linkedToThisSession = new ArrayList<>();
             for (ChatAttachment attachment : pending) {
                 if (attachment.getChatSessionId().equals(session.getChatSessionId())) {
                     attachment.attachTo(userMessage.getChatMessageId());
+                    linkedToThisSession.add(attachment);
                 }
             }
             chatAttachmentRepository.saveAll(pending);
+
+            // Agent는 DB를 직접 안 보므로, 방금 이 메시지에 연결한 첨부의 URL을 요청에 실어 보내야
+            // "사진이 첨부됐다"는 사실 자체를 알 수 있다 (연결만 하고 URL을 안 넘기면 Agent 입장에선
+            // 첨부가 없었던 것과 똑같다).
+            attachmentUrls = linkedToThisSession.stream()
+                    .map(ChatAttachment::getUrl)
+                    .toList();
         }
 
         AgentChatRequest agentRequest = new AgentChatRequest(
                 request.getSessionId(),
                 consumerIdOrNull,
                 request.getMessage(),
-                history
+                history,
+                attachmentUrls
         );
 
         AgentChatResponse agentResponse;
