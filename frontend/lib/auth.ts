@@ -6,6 +6,7 @@
 
 import { apiFetch, setTokens, clearTokens } from "./api-client";
 import { migrateGuestCartToAccount, resetCartMigrationAttempt } from "./cart-storage";
+import { notifySimulationLogin, notifySimulationLogout } from "./simulation-bridge";
 
 export interface SignupPayload {
   phoneNumber: string;
@@ -44,6 +45,9 @@ export async function login(phoneNumber: string, password: string, keepLoggedIn:
   setTokens(res.accessToken, res.refreshToken, keepLoggedIn);
   resetCartMigrationAttempt();
 
+  // 시뮬레이션(iframe 부모)이 켜져있으면, 왼쪽 캐릭터를 이 계정으로 바꿔달라고 알려준다.
+  void notifySimulationLogin();
+
   // 로그인 성공 직후 비회원 localStorage 장바구니를 회원 DB로 승계한다.
   // 승계 실패 시 localStorage는 남겨두고 로그인 자체는 유지한다.
   try {
@@ -59,6 +63,7 @@ export async function logout(): Promise<void> {
     await apiFetch("/api/consumers/logout", { method: "POST" });
   } finally {
     clearTokens();
+    notifySimulationLogout(); // 시뮬레이션 캐릭터를 기본 계정으로 되돌림
   }
 }
 

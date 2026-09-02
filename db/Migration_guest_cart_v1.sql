@@ -86,3 +86,7 @@ ALTER TABLE consumer
 ALTER TABLE orders
     ADD COLUMN points_used INT NOT NULL DEFAULT 0 AFTER total_amount,
   ADD COLUMN points_earned INT NOT NULL DEFAULT 0 AFTER points_used;
+
+ALTER TABLE members
+    ADD COLUMN by_car TINYINT(1) NULL
+    COMMENT '차 있음 여부 (0/1/NULL=미입력)';
