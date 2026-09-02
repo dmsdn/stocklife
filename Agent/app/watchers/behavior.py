@@ -63,6 +63,14 @@ from app.watchers import dispatch
 _VIEWS: dict = {}
 _LAST_EVENT: dict = {}
 _MEMBER: dict = {}
+# 세션별 **마지막 스캔 앵커** — {session_id: {"sku_id", "location_id", "ts"}}.
+# (09-02 시연 점검) 위치 앵커는 원래 백엔드 릴레이가 /agent/chat 에 posFloor·posX·
+# posY 로 실어 보내는 설계였는데, 팀 판 `AgentChatRequest` 에 그 칸이 없다 —
+# 그래서 실서비스에서 get_position 이 **영원히 "스캔 기록 없음"** 이었다.
+# SCAN_ADD 는 SSE 로 이미 여기까지 온다(locationId 포함). 그 마지막 것을 기억해
+# 두면 요청에 좌표가 안 실려 와도 세션의 앵커를 복원할 수 있다(main.py 의
+# 폴백). 릴레이가 좌표를 싣기 시작하면 그쪽이 우선이고 이건 안 쓰인다.
+_ANCHOR: dict = {}
 _BUSY: set = set()
 _STOP = asyncio.Event()                                     # (54)
 
@@ -110,6 +118,18 @@ def on_event(event_type: str, data: dict, now: float | None = None) -> None:
     elif event_type in ("SCAN_ADD", "PURCHASE"):
         # 담았거나 샀다 = 결정을 내렸다. 지금까지의 관찰은 망설임이 아니었다.
         _VIEWS[session_id] = []
+
+    if event_type == "SCAN_ADD" and data.get("skuId") is not None \
+            and data.get("locationId"):
+        # 좌표는 여기서 풀지 않는다 — SSE 수신 루프 안에서 HTTP 를 돌리면 이벤트
+        # 처리가 그 왕복에 묶인다. 요청이 올 때 main.py 가 한 번 푼다.
+        _ANCHOR[session_id] = {"sku_id": int(data["skuId"]),
+                               "location_id": str(data["locationId"]), "ts": ts}
+
+
+def last_scan(session_id: str) -> dict | None:
+    """세션의 마지막 SCAN_ADD (sku_id · location_id · ts). 없으면 None."""
+    return _ANCHOR.get(session_id)
 
 
 def _candidate(session_id: str, now: float) -> dict | None:
@@ -243,6 +263,7 @@ def stop() -> None:
 def reset() -> None:
     """관찰 상태 초기화 — 테스트·시나리오 재생 전용."""
     _VIEWS.clear(); _LAST_EVENT.clear(); _MEMBER.clear(); _BUSY.clear()
+    _ANCHOR.clear()
 
 
 # ── 스모크 (LLM·네트워크 없음 — 감지+예절까지): python -m app.watchers.behavior ──

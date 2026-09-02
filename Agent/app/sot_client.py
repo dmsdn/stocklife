@@ -1202,6 +1202,23 @@ def push_proactive_message(session_id: str, content: str) -> dict:
     if config.USE_MOCK_SOT:
         print(f"[proactive:mock] session={session_id} :: {content}")
         return {"ok": True, "mock": True}
-    return _http_post(_API["push_proactive"],
-                      {"sessionId": session_id, "content": content},
-                      headers=_internal_headers())
+    # ⚠ 09-02 시연 점검에서 잡힘 — 백엔드는 200 에 저장된 메시지 자체
+    # ({"messageId": 78, "sender": "AI_PROACTIVE", ...})를 돌려준다. "ok" 키가
+    # 없으므로 그대로 넘기면 dispatch 가 **전달된 발화를 "전달 실패"로** 적고
+    # 예절 장부(etiquette.record)와 감시자 상태 비우기(on_delivered)를 건너뛴다
+    # — 사안당 1회·총량 상한이 안 깎여 같은 브리핑이 다음 스캔에 또 나갈 수 있다.
+    # 여기서 모양을 통일한다: 성공이면 ok=True 와 message_id, 실패(4xx·5xx·통신)면
+    # ok=False 와 사유. dispatch 는 ok 만 본다.
+    import httpx                       # 이 파일의 관례 — 의존성은 쓰는 자리에서 (158행)
+    try:
+        body = _http_post(_API["push_proactive"],
+                          {"sessionId": session_id, "content": content},
+                          headers=_internal_headers())
+    except httpx.HTTPStatusError as e:
+        # 404 = 그 sessionId 의 chat_session 이 없다(프론트가 세션을 안 만들었다).
+        return {"ok": False, "status": e.response.status_code,
+                "reason": e.response.text[:200]}
+    except httpx.HTTPError as e:
+        return {"ok": False, "status": None, "reason": f"{type(e).__name__}: {e}"}
+    message_id = body.get("messageId") if isinstance(body, dict) else None
+    return {"ok": True, "message_id": message_id, "raw": body}
