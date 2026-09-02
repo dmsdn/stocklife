@@ -67,6 +67,9 @@ DB="-h127.0.0.1 -P3307 -uroot -p storeflow_db"
 "$MYSQL" $OPTS $DB < db/Chat_attachment.sql
 "$MYSQL" $OPTS $DB < db/seed/04_demo_accounts.sql
 "$MYSQL" $OPTS $DB < db/seed/06_demo_orders.sql
+# ⑯ 09-02 — map_cells 에 kind·shelf_zone (Simulation 색칠 추측 제거). **기존 DB 에만** 필요.
+#   새 DB 는 schema_v2 + world_seed 가 이미 담고 있다. 상세: db/맵셀종류_09-02.md
+"$MYSQL" $OPTS $DB < db/migration_map_cells_kind_0902.sql
 ```
 
 **다 돌린 뒤 컬럼이 실제로 섰는지 본다** — `--force` 는 오류를 넘기므로

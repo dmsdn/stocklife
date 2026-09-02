@@ -126,11 +126,23 @@ def gen_map_cells():
     왜 격자를 통째로 저장하는가: 동선 솔버(optimize_route)와 위치 스냅(get_position)이
     같은 격자를 봐야 한다. 프론트가 그린 그림에서 매번 다시 계산하면 두 소스가 갈린다.
     """
+    # ── 셀 종류(kind)와 매대 존(shelf_zone) — 09-02 신설 ─────────────────────
+    # [왜] 지금까지 map_cells 는 「통행 불가」만 알려줬다. 그 칸이 매대 몸체인지
+    #   행사 블록인지 벽인지 화장실인지 **구분이 없어서**, 프론트(Simulation)가
+    #   "가장 가까운 location 의 존 색 + 그 존 bbox 안" 이라는 추측으로 색을
+    #   칠했다. 그 추측이 양쪽으로 틀렸다 — 1F 행사 블록·3F A/S센터가 매대로
+    #   칠해지고(41+34칸), 1F 좌측 벽 매대 30개는 bbox 밖이라 벽으로 지워졌다.
+    #   생성기는 어느 칸이 어느 매대의 몸체인지 **정확히 안다.** 아는 것을 실어
+    #   주면 추측이 필요 없다(§2-5b 「규칙을 구조로」와 같은 계열).
+    # [종류] TRANSIT(수직동선) > SHELF(매대 몸체·존 포함) > FACILITY(시설·벽 블록)
+    #   > AISLE(통로). 우선순위는 겹칠 때의 판정 — 수직동선 칸은 시설과 겹친다.
     blocked = defaultdict(set)
+    shelf_zone = {}                       # (f, x, y) → 'F1-A' — 매대 몸체 칸의 존
     for f, zl, x, y, _ in BAYS:
         for dx in range(BAY_CELLS):
             for dy in range(BAY_CELLS):
                 blocked[f].add((x + dx, y + dy))
+                shelf_zone[(f, x + dx, y + dy)] = f"F{f}-{zl}"
     for f, x, y, w, h in FACILITIES:
         for dx in range(w):
             for dy in range(h):
@@ -148,7 +160,16 @@ def gen_map_cells():
                 tid = transit.get((f, x, y))
                 # 수직동선 칸은 시설과 겹쳐도 통행 가능해야 층 이동이 성립한다
                 passable = 1 if (tid or (x, y) not in blocked[f]) else 0
-                rows.append((f, x, y, passable, tid))
+                zone = shelf_zone.get((f, x, y))
+                if tid:
+                    kind = "TRANSIT"
+                elif zone:
+                    kind = "SHELF"
+                elif (x, y) in blocked[f]:
+                    kind = "FACILITY"
+                else:
+                    kind = "AISLE"
+                rows.append((f, x, y, passable, tid, kind, zone if kind == "SHELF" else None))
     return rows
 
 
@@ -239,8 +260,9 @@ def write_sql(zones, locations, cells, stocks, configs):
               locations,
               lambda r: f"({q(r[0])},{q(r[1])},{r[2]},{r[3]},{r[4]},{q(r[5])},{r[6]},{r[7]},{r[8]})")
         f.write("\n")
-        batch(f, "map_cells", "floor_no, x, y, passable, transit_id", cells,
-              lambda r: f"({r[0]},{r[1]},{r[2]},{r[3]},{q(r[4]) if r[4] else 'NULL'})", 1000)
+        batch(f, "map_cells", "floor_no, x, y, passable, transit_id, kind, shelf_zone", cells,
+              lambda r: f"({r[0]},{r[1]},{r[2]},{r[3]},{q(r[4]) if r[4] else 'NULL'},"
+                        f"{q(r[5])},{q(r[6]) if r[6] else 'NULL'})", 1000)
         f.write("\n")
         batch(f, "stocks", "sku_id, location_id, qty", stocks,
               lambda r: f"({r[0]},{q(r[1])},{r[2]})", 1000)
@@ -270,7 +292,7 @@ if __name__ == "__main__":
     # 격자 위 너비 우선 탐색(BFS)으로 최대 연결 덩어리를 구해 전부 포함되는지 본다.
     from collections import deque
     passable = {f: set() for f in (1, 2, 3)}
-    for f, x, y, ok, _t in cells:
+    for f, x, y, ok, *_rest in cells:       # 뒤에 kind·shelf_zone 이 붙었다 (09-02)
         if ok:
             passable[f].add((x, y))
     for f in (1, 2, 3):
