@@ -36,7 +36,17 @@ export function getOrCreateGuestSessionId(): string {
   return id;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://192.168.0.80:8080";
+// ✅ IP를 하드코딩하지 않고, "지금 이 페이지를 연 주소"를 그대로 따라가되 포트만
+//   8080으로 바꿔서 백엔드를 찾습니다. localhost로 열면 localhost:8080을, IP로 열면
+//   그 IP의 8080을 자동으로 찾아가서 — 와이파이 바뀔 때마다 IP를 다시 안 고쳐도 됩니다.
+//   .env.local에 NEXT_PUBLIC_API_BASE_URL을 명시적으로 넣어두면 그 값이 항상 우선합니다.
+function resolveApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) return process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (typeof window !== "undefined") return `http://${window.location.hostname}:8080`;
+  return "http://localhost:8080"; // 서버사이드 렌더링 시점 폴백
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const ACCESS_TOKEN_KEY = "storeflow_access_token";
 const REFRESH_TOKEN_KEY = "storeflow_refresh_token";
@@ -93,8 +103,13 @@ export class ApiError extends Error {
 export async function apiFetch<T = unknown>(path: string, options: ApiOptions = {}): Promise<T> {
   const { auth = true, headers, ...rest } = options;
 
+  // ✅ FormData(파일 업로드) 바디일 땐 Content-Type을 직접 정하면 안 됨 — 브라우저가
+  //   멀티파트 경계(boundary)까지 포함해서 자동으로 설정해줘야 서버가 파싱할 수 있음.
+  //   기존엔 무조건 application/json을 강제해서, 이 함수로는 파일 업로드가 불가능했음.
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
+
   const finalHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(headers as Record<string, string>),
   };
 

@@ -57,7 +57,8 @@ public class CartService {
         CartGroup group = cartGroupRepository.save(new CartGroup(
                 consumerId,
                 request.getTitle().trim(),
-                request.getDescription() == null ? "새 장보기 목록" : request.getDescription().trim()));
+                request.getDescription() == null ? "새 장보기 목록" : request.getDescription().trim(),
+                request.getShoppingDate())); // 선택값 — 없으면 null 그대로 저장됨
         return new CartGroupResponse(group, List.of());
     }
 
@@ -73,6 +74,9 @@ public class CartService {
     public CartGroupResponse updateGroup(Long consumerId, Long groupId, UpdateCartGroupRequest request) {
         CartGroup group = requireOwnedGroup(consumerId, groupId);
         group.updateInfo(request.getTitle(), request.getDescription());
+        if (request.getShoppingDate() != null) {
+            group.updateShoppingDate(request.getShoppingDate());
+        }
         List<CartItemResponse> items = cartItemRepository.findByCartGroupId(groupId).stream()
                 .map(CartItemResponse::new).toList();
         return new CartGroupResponse(group, items);
@@ -89,18 +93,18 @@ public class CartService {
     public CartItemResponse addItemToGroup(Long consumerId, Long groupId, AddCartItemRequest request) {
         requireOwnedGroup(consumerId, groupId);
         LocalDateTime now = LocalDateTime.now();
-        CartItem item = cartItemRepository.findByCartGroupIdAndSkuId(groupId, request.getSkuId())
-                .map(existing -> {
-                    existing.increaseQuantity(request.getQuantity());
-                    existing.markScanned(now);
-                    return existing;
-                })
-                .orElseGet(() -> {
-                    CartItem created = cartItemRepository.save(
-                            new CartItem(groupId, request.getSkuId(), request.getQuantity()));
-                    created.markScanned(now);
-                    return created;
-                });
+        CartItem existing = findAndMergeDuplicateItems(groupId, request.getSkuId());
+        CartItem item;
+        if (existing != null) {
+            existing.increaseQuantity(request.getQuantity());
+            existing.markScanned(now);
+            item = existing;
+        } else {
+            CartItem created = cartItemRepository.save(
+                    new CartItem(groupId, request.getSkuId(), request.getQuantity()));
+            created.markScanned(now);
+            item = created;
+        }
         return new CartItemResponse(item);
     }
 
@@ -149,8 +153,7 @@ public class CartService {
                 int qty = guestItem.getQuantity() == null ? 1 : Math.max(1, guestItem.getQuantity());
                 boolean checked = guestItem.getChecked() == null || guestItem.getChecked();
 
-                CartItem item = cartItemRepository.findByCartGroupIdAndSkuId(group.getCartGroupId(), guestItem.getId())
-                        .orElse(null);
+                CartItem item = findAndMergeDuplicateItems(group.getCartGroupId(), guestItem.getId());
                 if (item == null) {
                     cartItemRepository.save(new CartItem(group.getCartGroupId(), guestItem.getId(), qty, checked));
                 } else {
@@ -166,6 +169,53 @@ public class CartService {
     @Transactional(readOnly = true)
     public SessionCartResponse getSessionCart(Long consumerId) {
         return buildSessionCart(cartItemRepository.findByConsumerId(consumerId));
+    }
+
+    /**
+     * 계산대 스캔 화면용 — 이 회원의 장바구니(모든 리스트 통틀어) 중 is_checked=1인
+     * (스캔 완료로 체크된) 항목만 골라서 합계를 낸다. InternalCartController의
+     * GET /internal/cart/scanned 에서 사용.
+     */
+    @Transactional(readOnly = true)
+    public SessionCartResponse getScannedCart(Long consumerId) {
+        List<CartItem> checkedItems = cartItemRepository.findByConsumerId(consumerId).stream()
+                .filter(CartItem::isChecked)
+                .toList();
+        return buildSessionCart(checkedItems);
+    }
+
+    /**
+     * 같은 그룹에 같은 SKU가 여러 줄로 남아 있는 구 DB 데이터를 한 줄로 복구한다.
+     * 정상 스키마에서는 UNIQUE(cart_group_id, sku_id)로 애초에 중복 생성이 막힌다.
+     */
+    private CartItem findAndMergeDuplicateItems(Long groupId, Integer skuId) {
+        List<CartItem> matches = cartItemRepository
+                .findAllByCartGroupIdAndSkuIdOrderByCartItemIdAsc(groupId, skuId);
+
+        if (matches.isEmpty()) return null;
+
+        CartItem keeper = matches.get(0);
+        if (matches.size() == 1) return keeper;
+
+        int mergedQuantity = 0;
+        boolean mergedChecked = false;
+        LocalDateTime latestScannedAt = null;
+
+        for (CartItem item : matches) {
+            mergedQuantity += item.getQuantity();
+            mergedChecked = mergedChecked || item.isChecked();
+            if (item.getScannedAt() != null &&
+                    (latestScannedAt == null || item.getScannedAt().isAfter(latestScannedAt))) {
+                latestScannedAt = item.getScannedAt();
+            }
+        }
+
+        keeper.changeQuantity(mergedQuantity);
+        keeper.toggleChecked(mergedChecked);
+        if (latestScannedAt != null) keeper.markScanned(latestScannedAt);
+
+        cartItemRepository.deleteAll(matches.subList(1, matches.size()));
+        return keeper;
     }
 
     private CartGroup getOrCreateDefaultGroup(Long consumerId) {

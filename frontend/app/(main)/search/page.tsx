@@ -7,13 +7,17 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, Search as SearchIcon, X, Heart } from "lucide-react";
+import { RiArrowLeftSLine, RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine } from "@remixicon/react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { ProductDetailDialog } from "@/components/domain/product-detail-dialog";
+import { LocationMapDialog } from "@/components/domain/location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
 import { apiFetch } from "@/lib/api-client";
+import { fetchInventoryBatch, pickLocation, formatLocationText, type InventoryItem } from "@/lib/product-location";
+import { fetchRealFloorMap } from "@/lib/map-config";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 const STATUSES = ["일반", "단종"] as const;
 const PRICE_MIN = 0;
@@ -42,7 +46,10 @@ function SearchPageInner() {
 
   const [keyword, setKeyword] = useState("");
   const [aiMode, setAiMode] = useState(false);
-  const [recent, setRecent] = useState<string[]>(() => readSearchHistory());
+  // ⚠ localStorage는 서버에 없는 값이라, useState(() => readSearchHistory())처럼 렌더 중
+  //   바로 읽으면 서버(빈 배열)와 클라이언트 첫 렌더(실제 캐시)가 달라 hydration mismatch가
+  //   납니다. 항상 []로 시작하고, 마운트 후 useEffect에서만 채웁니다.
+  const [recent, setRecent] = useState<string[]>([]);
   const [inputFocused, setInputFocused] = useState(false);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -54,13 +61,27 @@ function SearchPageInner() {
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [detailProductId, setDetailProductId] = useState<number | null>(null);
 
+  // ✅ 상품 목록 카드에 매대 위치 표시 + 클릭 시 지도로 보기
+  const [productLocations, setProductLocations] = useState<Map<number, InventoryItem>>(new Map());
+  const [locationMapSku, setLocationMapSku] = useState<number | null>(null);
+
   const [filterOpen, setFilterOpen] = useState(false);
+  const { setHidden: setBottomBarHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setBottomBarHidden(filterOpen);
+    return () => setBottomBarHidden(false);
+  }, [filterOpen, setBottomBarHidden]);
+
   const [filterTab, setFilterTab] = useState<FilterTab>("카테고리");
   const [filters, setFilters] = useState<{
     categories: string[];
     statuses: string[];
     priceRange: [number, number];
   }>({ categories: [], statuses: [], priceRange: [PRICE_MIN, PRICE_MAX] });
+
+  useEffect(() => {
+    setRecent(readSearchHistory());
+  }, []);
 
   useEffect(() => {
     const fromQuery = searchParams.get("productId");
@@ -122,6 +143,31 @@ function SearchPageInner() {
     });
   }, [products, filters]);
 
+  // ✅ 화면에 보이는 상품들의 매대 위치를 한 번에 조회 (배치 API 재사용)
+  useEffect(() => {
+    if (results.length === 0) return;
+    let cancelled = false;
+    const skuIds = results.map((p) => p.skuId);
+
+    fetchInventoryBatch(skuIds).then(async (invMap) => {
+      const picked = new Map<number, InventoryItem>();
+      const floors = new Set<number>();
+      invMap.forEach((items, skuId) => {
+        const loc = pickLocation(items);
+        if (loc) {
+          picked.set(skuId, loc);
+          floors.add(loc.floorNo);
+        }
+      });
+      await Promise.all(Array.from(floors).map((f) => fetchRealFloorMap(f)));
+      if (!cancelled) setProductLocations(picked);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [results]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = keyword.trim();
@@ -156,15 +202,38 @@ function SearchPageInner() {
     setInputFocused(true);
   };
 
-  const handleSaveSelect = (groupId: number) => {
+  // ✅ 여러 리스트에 동시에 담을 수 있게 됨(SaveToListDialog가 groupId 배열을 넘겨줌).
+  //   "저장됐다"는 상태를 리스트별로 안 나누고, 그냥 "방금 눌렀다"는 잠깐의 확인 표시로만 씁니다
+  //   (여러 리스트 중 어디에 담겼는지를 하트 하나로 표현하는 게 애매해서, 꽉 찬 하트 대신
+  //   체크 아이콘이 잠깐 떴다가 사라지는 방식으로 바꿨습니다).
+  const handleSaveSelect = (groupIds: number[]) => {
     if (!savePickerProduct) return;
-    addProductToCartGroup(groupId, {
-      id: savePickerProduct.skuId,
-      name: savePickerProduct.name,
-      category: savePickerProduct.categoryL1,
-      price: savePickerProduct.finalPriceKrw,
-    });
-    setSavedIds((prev) => new Set(prev).add(savePickerProduct.skuId));
+    Promise.all(
+      groupIds.map((groupId) =>
+        addProductToCartGroup(groupId, {
+          id: savePickerProduct.skuId,
+          name: savePickerProduct.name,
+          category: savePickerProduct.categoryL1,
+          price: savePickerProduct.finalPriceKrw,
+        })
+      )
+    )
+      .then(() => {
+        setSavedIds((prev) => new Set(prev).add(savePickerProduct.skuId));
+        setTimeout(() => {
+          setSavedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(savePickerProduct.skuId);
+            return next;
+          });
+        }, 1500);
+      })
+      .catch(() => {
+        // ✅ 실패해도 조용히 묻히지 않게 — 최소한 콘솔에는 남기고, 저장 확인 표시(체크
+        //   아이콘)는 실패했으면 안 뜨게(성공 처리 블록을 안 타므로 자동으로 안 뜸).
+        console.error("리스트에 담기 실패");
+        alert("리스트에 담지 못했어요. 다시 시도해주세요.");
+      });
   };
 
   const priceActive = filters.priceRange[0] !== PRICE_MIN || filters.priceRange[1] !== PRICE_MAX;
@@ -182,10 +251,10 @@ function SearchPageInner() {
 
       <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
         <Link href="/">
-          <ChevronLeft size={20} />
+          <RiArrowLeftSLine size={24} />
         </Link>
         <div className="flex flex-1 items-center gap-2 rounded-sm border border-border px-3 py-2 text-sm">
-          <SearchIcon size={16} className="text-muted-foreground" />
+          <RiSearchLine size={24} className="text-muted-foreground" />
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
@@ -209,7 +278,7 @@ function SearchPageInner() {
                   className="flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs"
                 >
                   {word}
-                  <X size={12} onMouseDown={(e) => handleRemoveRecent(word, e)} />
+                  <RiCloseLine size={24} onMouseDown={(e) => handleRemoveRecent(word, e)} />
                 </button>
               ))}
             </div>
@@ -245,10 +314,16 @@ function SearchPageInner() {
         <span>{loading ? "불러오는 중..." : `${results.length}개 결과`}</span>
       </div>
 
-      <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0">
+      <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0 lg:grid-cols-4">
         {results.map((product) => (
           <div key={product.skuId} className="flex gap-3 py-3">
-            <button type="button" onClick={() => setDetailProductId(product.skuId)} className="flex flex-1 gap-3 text-left">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setDetailProductId(product.skuId)}
+              onKeyDown={(e) => e.key === "Enter" && setDetailProductId(product.skuId)}
+              className="flex flex-1 cursor-pointer gap-3 text-left"
+            >
               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
                 IMG
               </div>
@@ -258,12 +333,29 @@ function SearchPageInner() {
                   <p className="truncate text-xs text-muted-foreground">{product.categoryL1} · {product.unit}</p>
                   {product.discontinued && <p className="text-xs text-danger">단종</p>}
                 </div>
-                <p className="truncate text-base font-semibold">
-                  {product.onPromo && <span className="mr-1 text-danger">할인</span>}
-                  {product.finalPriceKrw.toLocaleString()}원
-                </p>
+
+                <div>
+                  <p className={`truncate text-base font-semibold ${product.discontinued ? "text-muted-foreground/50" : ""}`}>
+                    {product.onPromo && <span className="mr-1 text-danger">할인</span>}
+                    {product.finalPriceKrw.toLocaleString()}원
+                  </p>
+
+                  {productLocations.has(product.skuId) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocationMapSku(product.skuId);
+                      }}
+                      className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                      <RiMapPinLine size={14} className="shrink-0" />
+                      {formatLocationText(productLocations.get(product.skuId)!)}
+                    </button>
+                  )}
+                </div>
               </div>
-            </button>
+            </div>
             <button
               type="button"
               disabled={product.discontinued}
@@ -271,7 +363,11 @@ function SearchPageInner() {
               aria-label="저장하기"
               className="flex h-8 w-8 shrink-0 items-center justify-center self-start text-muted-foreground disabled:opacity-30"
             >
-              <Heart size={20} fill={savedIds.has(product.skuId) ? "currentColor" : "none"} />
+              {savedIds.has(product.skuId) ? (
+                <RiCheckLine size={24} className="text-success" />
+              ) : (
+                <RiBookmarkLine size={24} />
+              )}
             </button>
           </div>
         ))}
@@ -296,6 +392,18 @@ function SearchPageInner() {
 
       <SaveToListDialog open={!!savePickerProduct} onClose={() => setSavePickerProduct(null)} onSelect={handleSaveSelect} />
       <ProductDetailDialog productId={detailProductId} onClose={() => setDetailProductId(null)} />
+
+      {locationMapSku !== null && productLocations.has(locationMapSku) && (
+        <LocationMapDialog
+          open
+          onClose={() => setLocationMapSku(null)}
+          floorNo={productLocations.get(locationMapSku)!.floorNo}
+          x={productLocations.get(locationMapSku)!.x}
+          y={productLocations.get(locationMapSku)!.y}
+          productName={results.find((p) => p.skuId === locationMapSku)?.name ?? ""}
+          price={results.find((p) => p.skuId === locationMapSku)?.finalPriceKrw ?? 0}
+        />
+      )}
     </div>
   );
 }

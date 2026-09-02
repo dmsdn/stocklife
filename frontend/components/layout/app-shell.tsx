@@ -3,8 +3,11 @@
 import { usePathname } from "next/navigation";
 import { BottomTabBar } from "./bottom-tab-bar";
 import { AiPanelProvider, useAiPanel } from "./ai-panel-context";
+import { BottomBarVisibilityProvider, useBottomBarVisibility } from "./bottom-bar-visibility-context";
 import { AiPanel } from "./ai-panel";
+import { AiMobileSheet } from "./ai-mobile-sheet";
 import { HomeAiHeader } from "./home-ai-header";
+import { AiProactiveBubble } from "./ai-proactive-bubble";
 
 // ✅ AiPanel이 이제 position:fixed로 완전히 분리돼서 더 이상 flex 형제로 main 옆에
 //   나란히 배치되지 않는다(= main이 자동으로 좁아지지 않는다). 그래서 패널이 열려있을 때
@@ -12,6 +15,9 @@ import { HomeAiHeader } from "./home-ai-header";
 //   AiPanelProvider 내부라서 useAiPanel을 쓸 수 있게 별도 컴포넌트로 분리.
 function AppShellBody({ children, active }: { children: React.ReactNode; active: "home" | "ai" }) {
   const { isOpen } = useAiPanel();
+  // ✅ 하단탭바를 동적으로 숨기는 화면(스캔, 리스트 상세, 매장지도 등)에서 main의 고정
+  //   여백(pb-16)까지 같이 없애야 그 밑에 빈 공간이 안 남는다.
+  const { hidden: bottomBarHidden } = useBottomBarVisibility();
 
   return (
     <div className="mx-auto flex min-h-full w-full flex-col md:max-w-[1440px]">
@@ -25,9 +31,9 @@ function AppShellBody({ children, active }: { children: React.ReactNode; active:
 
       <div className="flex flex-1 md:pt-16">
         <main
-          className={`min-w-0 flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] transition-[margin] md:pb-0 ${
-            isOpen ? "md:mr-[420px]" : ""
-          }`}
+          className={`min-w-0 flex-1 transition-[margin] md:pb-0 ${
+            bottomBarHidden ? "" : "pb-[calc(4rem+env(safe-area-inset-bottom))]"
+          } ${isOpen ? "md:mr-[420px]" : ""}`}
         >
           {children}
         </main>
@@ -35,6 +41,8 @@ function AppShellBody({ children, active }: { children: React.ReactNode; active:
       </div>
 
       <BottomTabBar />
+      <AiProactiveBubble />
+      <AiMobileSheet />
     </div>
   );
 }
@@ -45,7 +53,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AiPanelProvider>
-      <AppShellBody active={active}>{children}</AppShellBody>
+      <BottomBarVisibilityProvider>
+        <AppShellBody active={active}>{children}</AppShellBody>
+      </BottomBarVisibilityProvider>
     </AiPanelProvider>
   );
 }

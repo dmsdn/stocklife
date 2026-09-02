@@ -8,6 +8,7 @@ import com.storeflow.global.jwt.ConsumerJwtUtil;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestClientException;
 
 import java.util.NoSuchElementException;
 
@@ -45,6 +46,11 @@ public class ChatController {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (RestClientException e) {
+            // Agent(FastAPI, agent.base-url) 서버가 안 떠 있거나 응답을 못 줄 때 여기로 온다.
+            // 예전엔 이 예외를 아무 데서도 안 잡아서 500이 그냥 나갔는데, 502로 명확히
+            // 구분해두면 "Agent 서버가 꺼져있다"는 걸 프론트/로그에서 바로 알아볼 수 있다.
+            return ResponseEntity.status(502).body("AI Agent 서버에 연결할 수 없습니다. Agent(FastAPI) 서버가 켜져 있는지 확인하세요.");
         }
     }
 
@@ -146,6 +152,31 @@ public class ChatController {
             );
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(404).body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
+     * 3번: 대화 내용 검색.
+     *
+     * GET /api/chat/search?keyword=우유
+     * 매칭된 세션들을, 세션별 최근 매칭 메시지 5개와 함께 최신순으로 반환한다.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<?> search(
+            @RequestParam String keyword,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
+    ) {
+        try {
+            Long consumerId = resolveConsumerIdOrNull(authorization);
+
+            return ResponseEntity.ok(
+                    chatService.searchMessages(consumerId, anonymousId, keyword)
+            );
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (IllegalArgumentException e) {

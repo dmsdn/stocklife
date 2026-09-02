@@ -115,16 +115,23 @@ from app.tools import action, compute, definitions, infer, query
 # 여기서 빼고 해당 REGISTRY로 옮긴다(아래 검산이 겹침·누락을 잡는다).
 #
 # 08-21 ai-server 인수로 계산 4종 중 3종(route·bundle·substitutes)이 compute.py
-# 실물로 옮겨 갔다. compare_unit_price만 남은 이유: 규격 파서(08/27 예정)가
-# 없이는 "100ml당"의 분모를 만들 수 없다 — 파서 없는 단위가격은 지어낸 숫자다.
+# 실물로 옮겨 갔고, **08-27 에 compare_unit_price 까지 서면서 계산이 5/5 가 됐다.**
+# 그래서 이 집합은 지금 **비어 있다.**
+#
+# ⚠ 남은 하나가 왜 오래 걸렸는지, 그리고 왜 결국 하루가 아니었는지 적어 둔다 —
+#   여기 있던 주석은 *"규격 파서 없이는 100ml당의 분모를 만들 수 없다"* 였다.
+#   실데이터를 열어 보니 **분모가 이미 있었다**(`spec.quantity`, 4,970개 100%).
+#   막고 있던 것은 파서가 아니라 `sot_client` 가 그 칸을 **버리고 있던 것**이다.
+#   *"없어서 못 한다"고 적어 둔 것을 한 번은 열어 봐야 한다* — 그 문장이
+#   두 달 전 전제 위에 서 있을 수 있다.
 #
 # frozenset = 수정 불가능한 집합(개념 ⑥의 set 중 못 바꾸는 판). 왜 set인가:
 # `name in _COMPUTE_STUB` 검사가 즉시 끝나기 때문이다(리스트면 처음부터 훑는다).
 # 왜 frozen인가: 이건 **고정된 명단**이지 실행 중에 늘었다 줄었다 할 것이 아니라서,
 # 실수로 .add()를 부르면 그 자리에서 에러가 나는 편이 낫다.
-_COMPUTE_STUB = frozenset({
-    "compare_unit_price",
-})
+# **비었어도 지우지 않는다** — 다음 도구가 스키마만 먼저 서는 날 이 자리가 필요하고,
+# 아래 두 검산(_EXECUTABLE 일치·스텁과 실물 겹침)이 그때 그물이 된다.
+_COMPUTE_STUB: frozenset = frozenset()
 # 추론 5종은 08-25에 `tools/infer.py`가 생기며 **스텁을 벗었다.**
 # 다만 "실물이다"와 "답할 수 있다"는 다르다 — infer가 자산 유무·입력 가용성을
 # 스스로 보고 error를 돌려준다(가용예측은 큐 창구가 없어 아직 못 답한다).
@@ -185,6 +192,48 @@ def _get_client():
 
 
 # ── 도구 실행 + 출처 판정 ───────────────────────────────────────────────────
+
+# 두 번 불러도 잘릴 때 내보내는 말. **반쪽 문장 대신** 이것을 준다.
+# 사과만 하고 끝내지 않고 **손님이 할 수 있는 다음 행동**을 준다 — "다시
+# 물어봐 주세요"는 같은 결과를 부르고, 좁혀 물으면 실제로 짧아진다.
+_TRUNCATED_REPLY = ("답변이 길어져서 중간에 끊겼어요. 조금만 좁혀서 "
+                    "다시 물어봐 주시겠어요?")
+
+
+def _land(client, messages: list, system_blocks: list, response,
+          note: str) -> tuple[str, str]:
+    """도구를 잠그고 **한 번만 더** 불러 마무리를 강제한다. (발화, stop_reason)
+
+    [왜 도구를 잠그나] 도구를 열어 두면 모델이 또 부를 수 있고, 그러면
+      「마무리하라」는 지시가 무한 왕복으로 돌아온다. `tool_choice: none` 이
+      그 문을 닫는다. ⚠ 단 `tools` 목록 자체는 **줘야 한다** — 대화에 tool
+      블록이 이미 쌓여 있어서 목록 없이 부르면 API 가 거부한다.
+    [왜 직전 응답을 대화에 넣나] 모델은 자기가 뭘 쓰다 말았는지 알아야
+      같은 내용을 짧게 다시 쓸 수 있다. 안 넣으면 처음부터 다시 생각한다.
+    [왜 messages 를 복사하나] 부르는 쪽의 대화를 늘리지 않기 위해서다 —
+      이 호출은 **곁가지**라 본 흐름의 이력에 남으면 다음 턴이 오염된다.
+
+    ⚠ **텍스트 블록만 넣는다.** `max_tokens` 로 끊긴 응답에는 **미완성
+      `tool_use` 블록**이 섞여 있을 수 있는데, 그것을 그대로 assistant 턴으로
+      넣으면 API 가 «tool_use 뒤에는 tool_result 가 와야 한다»며 400 을 낸다.
+      우리는 도구를 잠그고 부르는 참이라 결과를 만들 수도 없다.
+      텍스트가 하나도 없으면 assistant 턴 자체를 넣지 않는다(빈 턴도 400).
+    """
+    said = "".join(b.text for b in response.content if b.type == "text").strip()
+    convo = list(messages)
+    if said:
+        convo.append({"role": "assistant", "content": said})
+    convo.append({"role": "user", "content": note})
+    r = client.messages.create(
+        model=config.LLM_MODEL,
+        max_tokens=config.LLM_MAX_TOKENS,
+        system=system_blocks,
+        messages=convo,
+        tools=_CACHED_TOOLS,
+        tool_choice={"type": "none"},
+    )
+    return "".join(b.text for b in r.content if b.type == "text"), r.stop_reason
+
 
 def _dispatch(name: str, tool_input: dict) -> tuple[dict, str]:
     """도구 하나를 실행하고 (결과, 출처)를 돌려준다.
@@ -268,8 +317,20 @@ def run_chat(message: str,
              session_id: str | None = None,
              history: list[dict] | None = None,
              allow_actions: bool = True,
-             position: tuple[int, int, int] | None = None) -> dict:
+             position: tuple[int, int, int] | None = None,
+             member_id: int | None = None) -> dict:
     """자연어 입력 하나를 대화 한 번으로 완주시킨다. main.py가 부르는 유일한 입구.
+
+    ⚠ 09-03 신원 축 정정 — `member_id` 인자. 반응형(main.py)은 로그인 손님의
+      `consumer_id` 를 주고 여기서 `to_member_id` 로 세계 축을 만든다. 그런데
+      **자발형(dispatch·scenario_runner)은 SSE 가 준 `memberId`(이미 세계 축)를
+      가지고 있다.** 그것을 `consumer_id` 자리에 넣으면 `to_member_id` 가 한 번 더
+      더해져 10,000,016 이 **20,000,016** 이 되고 — 그런 회원은 없으니 브리핑 안에서
+      부른 도구가 전부 "이력 없음"을 낸다. 실측: 구매 115건인 손님 16 의 진입 브리핑이
+      *"아직 취향 파악은 초반이지만 … 블루베리잼"* 으로 나갔다(재구매 후보 3개를
+      지시문에 실어 줬는데도 — 모델이 도구로 확인하니 빈손이라 "조용히 뺀" 것).
+      자발형은 `member_id=` 로 넘긴다. 그 경우 백엔드 축은 `to_consumer_id` 로
+      역산하되 시드 회원(OFFSET 미만)은 None — 장바구니 액션은 어차피 잠겨 있다.
 
     [입력]
       message     : 사용자 발화 (프론트 → 백엔드 → 우리)
@@ -298,14 +359,30 @@ def run_chat(message: str,
     # ① 이 요청의 주인을 등록한다. 액션의 consumer_id도, 조회·추론의
     #    member_id·session_id도 LLM이 아니라 여기서 주입된다 — definitions의
     #    해당 스키마에 그 칸들이 없는 이유의 완성(B안 확장, 08-20).
-    action.set_consumer_id(consumer_id)
-    query.set_identity(consumer_id, session_id)
+    #    ⚠ **두 축이 다르다** — 액션(장바구니)은 백엔드의 `consumer_id` 를 그대로
+    #    쓰고, 조회·추론은 우리 세계의 `member_id` 를 쓴다. 09-01 이전에는 여기서
+    #    둘 다 `consumer_id` 를 넣어 **개인화가 통째로 빈 결과**였다(config.to_member_id
+    #    의 주석 참조). 같은 줄에 나란히 두는 이유는, 다음에 고치는 사람이 두 축이
+    #    다르다는 것을 **눈으로 보게** 하기 위해서다.
+    if member_id is not None and consumer_id is None:   # 자발형 — 세계 축이 먼저 온다
+        world_member = int(member_id)
+        consumer_id = config.to_consumer_id(member_id)   # 시드 회원이면 None
+    else:                                                # 반응형 — 백엔드 축이 먼저 온다
+        world_member = config.to_member_id(consumer_id)
+    action.set_consumer_id(consumer_id)                  # 백엔드 축 (장바구니)
+    query.set_identity(world_member, session_id)         # 세계 축
     # 위치도 같은 부류다(08-25). LLM이 좌표를 옮겨 적게 두지 않는다 —
     # optimize_route의 start_* 칸은 남아 있지만 **비우는 것이 기본**이고
     # compute._resolve_start가 이 값을 채운다. 자세히는 compute.py의 주입 블록.
     # position이 None이면 등록도 None — 그 경우 경로 도구가 "위치를 모른다"고
     # 답하고, 손님에게 되묻는다(입구를 추측하지 않는다).
-    compute.set_position(*(position or (None, None, None)))
+    # ⚠ 네 칸이다 — (층, x, y, 나이초). 나이를 빠뜨리면 신뢰 등급이 늘
+    #   medium 이 되어 high·low 가 실서비스에서 안 나온다(08-28 정정).
+    #   position 이 3칸으로 와도 받는다 — 옛 호출부(검사기·시험)를 안 깬다.
+    _p = tuple(position) if position else (None, None, None, None)
+    if len(_p) == 3:
+        _p = _p + (None,)
+    compute.set_position(*_p)
 
     # ② 대화 목록 조립 (개념 ㉚). history는 프론트가 보낸 그대로 받되
     #    뒤에서 20건만 — 오래된 대화보다 최근 대화가 판단에 중요하다(query.py의
@@ -392,8 +469,36 @@ def run_chat(message: str,
                       "tools": [b.name for b in tool_calls],
                       "web_results": len(ledgers["web"])})   # len() = 개수
 
-        # ── 종료 판정. stop_reason이 "tool_use"면 LLM이 도구 결과를 기다리는
-        # 중이고, 그 외("end_turn" 등)면 발화로 끝냈다는 뜻이다.
+        # ── 종료 판정 ────────────────────────────────────────────────────
+        # `stop_reason`은 "tool_use"와 "그 외" 둘이 아니다. **셋이다.**
+        #   tool_use   — 도구 결과를 기다리는 중 (계속)
+        #   end_turn   — 말을 마쳤다 (발화 확정)
+        #   max_tokens — **토큰이 떨어져 문장 중간에 끊겼다**
+        #
+        # ⚠ 09-01 이전에는 `!= "tool_use"` 하나로 갈라서 **max_tokens 를
+        #   「마쳤다」로 취급**했다. 그래서 반쪽 문장이 그대로 손님에게 갔다 —
+        #   실측: *"…다시 정확히 확인한 결과를 말씀"* 에서 끝난 77자 응답.
+        #   가드는 문장이 완성됐는지 검사하지 않으므로 초록불로 통과한다.
+        #
+        # [왜 간헐적인가] 한 응답 안에서 **텍스트와 도구 호출이 예산을 나눠 쓴다.**
+        #   개인화가 붙어 문맥이 길어진 뒤로 아슬아슬해졌고, 그래서 어떤 요청은
+        #   넘고 어떤 요청은 걸린다. 드물다는 것은 안전하다는 뜻이 아니라
+        #   **발표 당일에 처음 볼 확률**이라는 뜻이다.
+        if response.stop_reason == "max_tokens":
+            print(f"[loop] ⚠ 응답이 잘렸다(max_tokens={config.LLM_MAX_TOKENS}) — "
+                  f"짧게 다시 부른다. 잘린 길이={len(last_text or '')}자")
+            reply, landed_stop = _land(
+                client, messages, system_blocks, response,
+                "(직전 답변이 길이 제한으로 중간에 끊겼습니다. 같은 내용을 "
+                "3~4문장으로 **짧게** 다시 말해 주세요. 끊겼다는 사실은 언급하지 마세요.)")
+            # 두 번째도 잘렸으면 반쪽을 내보내지 않는다 — 못 하는 것을 못 한다고
+            # 말하는 쪽이, 문장 중간에서 끝나는 것보다 언제나 낫다.
+            if landed_stop == "max_tokens" or not reply.strip():
+                reply = _TRUNCATED_REPLY
+            trace.append({"turn": turn, "stop_reason": "truncated_relanded",
+                          "tools": [], "web_results": len(ledgers["web"])})
+            break
+
         if response.stop_reason != "tool_use":
             reply = last_text
             break
@@ -455,6 +560,25 @@ def run_chat(message: str,
             reply = "".join(landing_parts)
         trace.append({"turn": config.MAX_TURNS, "stop_reason": "forced_landing",
                       "tools": [], "web_results": len(ledgers["web"])})
+
+    # ── 이번 턴의 원장을 세계 감시자에게 넘긴다 (08-27) ─────────────────────
+    # [왜 루프가 이걸 하나] 매대 이벤트에는 **세션이 없다**(물티슈가 채워진 것은
+    #   매장의 사건이지 누구의 사건이 아니다). 그런데 개입은 세션 단위다. 그래서
+    #   "이 사건이 누구의 관심사인가"를 이어 줄 자리가 필요하고, 그것을 아는 것은
+    #   **손님과 대화한 이 루프**뿐이다.
+    # [무엇이 관심인지는 여기서 안 정한다] 원장을 **통째로** 넘긴다. 조건을
+    #   여기 박으면 관심의 정의가 바뀔 때마다 하네스의 중심 파일을 열게 된다 —
+    #   해석은 world.note_from_ledgers 가 한다(그 파일의 사정이므로).
+    # [지연 import] world → dispatch → (호출 시점에) loop 이라 모듈 최상단에서
+    #   import 하면 순환이 된다.
+    if session_id:
+        try:
+            from app.watchers import world as _world
+            _world.note_from_ledgers(session_id, consumer_id, ledgers)
+        except Exception as e:                                 # noqa: BLE001
+            # 관심 등록 실패가 **손님의 답변을 죽이면 안 된다.** 자발형은
+            # 부가 기능이고 반응형이 본체다 — 조용히 삼키되 흔적은 남긴다.
+            print(f"[loop] 관심 등록 실패: {type(e).__name__}: {e}")
 
     return {
         "reply": reply or "죄송합니다, 지금은 답변을 만들지 못했습니다.",

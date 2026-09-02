@@ -1,4 +1,4 @@
-import { ChevronRight, X } from "lucide-react";
+import { RiArrowRightSLine, RiCloseLine } from "@remixicon/react";
 
 import type { CartGroup } from "@/lib/cart-storage";
 import type { RecommendedProduct } from "@/lib/home-data";
@@ -10,6 +10,8 @@ type CartPickerProps = {
   onClose: () => void;
   onAddToCart: (groupId: number) => void;
   onCreateCart: () => void;
+  /** ✅ 신규 — 담기 실패 시 보여줄 메시지(없으면 표시 안 함) */
+  error?: string | null;
 };
 
 export function CartPicker({
@@ -19,6 +21,7 @@ export function CartPicker({
   onClose,
   onAddToCart,
   onCreateCart,
+  error,
 }: CartPickerProps) {
   if (!open || !selectedProduct) return null;
 
@@ -47,11 +50,14 @@ export function CartPicker({
             className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
             aria-label="닫기"
           >
-            <X size={18} />
+            <RiCloseLine size={24} />
           </button>
         </div>
 
         <div className="space-y-2">
+          {error && (
+            <p className="rounded-sm bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
+          )}
           {cartGroups.map((group) => (
             <button
               key={group.id}
@@ -67,8 +73,8 @@ export function CartPicker({
                 </p>
               </div>
 
-              <ChevronRight
-                size={16}
+              <RiArrowRightSLine
+                size={24}
                 className="text-muted-foreground"
               />
             </button>

@@ -1,24 +1,27 @@
 # ============================================================================
-# Agent 관제 생성기 — 모드 0: 정적 세계
+# StoreFlow 세계 생성기 — 모드 0: 정적 세계 (실행계획 B단계 08/19~20)
 # ============================================================================
-
-# [역할] 확정된 배치표(map_layout.py)와 상품 시드(catalog)로부터 **매장이라는 물리적 사실**을 만들어 SQL로 내보낸다:
-# zones · locations · map_cells · stocks · shelf_configs
-
+# [역할] 확정된 배치표(map_layout.py)와 상품 시드(catalog)로부터
+#   **매장이라는 물리적 사실**을 만들어 SQL로 내보낸다:
+#     zones · locations · map_cells · stocks · shelf_configs
+#
 # [헌법 3 — 이 파일은 ML을 모른다] 규칙 기반이며 모델 출력을 참조하지 않는다.
-# `app/tools/infer.py`를 import하면 그 순간 "모델이 만든 세계로 모델을 학습"하는 자기충족이 되어 모든 성능 수치가 무의미해진다.
+#   `app/tools/infer.py`를 import하면 그 순간 "모델이 만든 세계로 모델을 학습"하는
+#   자기충족이 되어 모든 성능 수치가 무의미해진다.
 #
 # [결정적 생성] 난수를 쓰되 seed를 상수로 고정한다. 같은 입력 → 같은 세계.
-# catalog.py가 md5로 결정적 값을 뽑는 것과 같은 목적 — 재적재해도 어제와 같은 매장이어야 골든셋·데모가 재현된다.
+#   catalog.py가 md5로 결정적 값을 뽑는 것과 같은 목적 — 재적재해도 어제와 같은
+#   매장이어야 골든셋·데모가 재현된다.
 #
 # [층 구조] 1~3F 판매층(맵) + B1 중앙창고(zone_type=BACKROOM, 맵에 없음).
-# B1이 필요한 이유: 보충 경로가 두 가지다 — 수직(바로 위 L4~L6에서 내리기, 분 단위) / 수평(B1에서 지게차로 올리기, 시간 단위).
-# 리드타임 분포가 갈리는 근거이자 "약 15분 후 보충"이라는 예측이 성립하는 물리적 이유다.
-
+#   B1이 필요한 이유: 보충 경로가 두 가지다 — 수직(바로 위 L4~L6에서 내리기, 분 단위)
+#   / 수평(B1에서 지게차로 올리기, 시간 단위). 리드타임 분포가 갈리는 근거이자
+#   "약 15분 후 보충"이라는 예측이 성립하는 물리적 이유다.
+#
 # [베이 = SKU 3개] 계약 테스트가 요구하는 구조:
-# L1·L2·L3 = PICK, 각 단에 **서로 다른 상품** 하나 → 베이당 3 SKU
-# L4·L5·L6 = BULK, L(n)의 예비가 L(n+3) — 테스트 17이 이 페어링을 검사한다
-# 같은 베이의 6개 로케이션은 x,y가 동일 — 테스트 16(좌표 일치)
+#   L1·L2·L3 = PICK, 각 단에 **서로 다른 상품** 하나 → 베이당 3 SKU
+#   L4·L5·L6 = BULK, L(n)의 예비가 L(n+3) — 테스트 17이 이 페어링을 검사한다
+#   같은 베이의 6개 로케이션은 x,y가 동일 — 테스트 16(좌표 일치)
 # ============================================================================
 
 import io
@@ -38,11 +41,14 @@ _HERE = os.path.dirname(os.path.abspath(__file__))          # .../sim
 sys.path.insert(0, os.path.join(_HERE, "..", "catalog"))    # 형제 catalog/
 sys.path.insert(0, _HERE)                                   # sim/ 자신 (map_layout)
 
-# ⚠ 이름 충돌 방어 (08-20 추가, members_gen.py와 동일)
-# 폴더 `catalog/`와 그 안의`catalog.py`가 같은 이름이라, 부모 폴더가 경로에 있으면 파이썬이 `catalog`를 **네임스페이스 패키지**(__init__.py 없는 빈 폴더 모듈)로 잡을 수 있다.
-# 그러면 `import catalog as cat`은 조용히 성공하고 나중에 `cat.generate()`에서 AttributeError로 죽는다 — 원인에서 먼 자리라 더 찾기 어렵다.
-# 이미 캐시된 것을 걷어내야 방금 끼운 경로(맨 앞)로 다시 찾는다.
+# 이름 충돌 방어 (08-20 추가, members_gen.py와 같은 한 줄 — 상세 설명은 그쪽에)
+# 폴더 `catalog/`와 파일 `catalog.py`가 동명이라 후자를 원한다. 파이썬이 정규
+# 모듈을 네임스페이스 패키지보다 우선하므로 평소엔 저절로 맞고, **위 insert가
+# 돌기 전에 누가 catalog를 이미 import한 경우**에만 캐시가 남아 어긋난다.
+# 그때 이 파일은 조용히 넘어갔다가 한참 뒤 `cat.generate()`에서 AttributeError로
+# 죽는다 — 원인에서 먼 자리라 더 찾기 어렵다. 그래서 미리 걷어낸다.
 sys.modules.pop("catalog", None)
+
 from map_layout import (BAYS, FACILITIES, FLOOR_W, FLOOR_H, BAY_CELLS,   # noqa: E402
                         ZONE_LABELS)
 from taxonomy import TAXONOMY                                          # noqa: E402
@@ -120,11 +126,23 @@ def gen_map_cells():
     왜 격자를 통째로 저장하는가: 동선 솔버(optimize_route)와 위치 스냅(get_position)이
     같은 격자를 봐야 한다. 프론트가 그린 그림에서 매번 다시 계산하면 두 소스가 갈린다.
     """
+    # ── 셀 종류(kind)와 매대 존(shelf_zone) — 09-02 신설 ─────────────────────
+    # [왜] 지금까지 map_cells 는 「통행 불가」만 알려줬다. 그 칸이 매대 몸체인지
+    #   행사 블록인지 벽인지 화장실인지 **구분이 없어서**, 프론트(Simulation)가
+    #   "가장 가까운 location 의 존 색 + 그 존 bbox 안" 이라는 추측으로 색을
+    #   칠했다. 그 추측이 양쪽으로 틀렸다 — 1F 행사 블록·3F A/S센터가 매대로
+    #   칠해지고(41+34칸), 1F 좌측 벽 매대 30개는 bbox 밖이라 벽으로 지워졌다.
+    #   생성기는 어느 칸이 어느 매대의 몸체인지 **정확히 안다.** 아는 것을 실어
+    #   주면 추측이 필요 없다(§2-5b 「규칙을 구조로」와 같은 계열).
+    # [종류] TRANSIT(수직동선) > SHELF(매대 몸체·존 포함) > FACILITY(시설·벽 블록)
+    #   > AISLE(통로). 우선순위는 겹칠 때의 판정 — 수직동선 칸은 시설과 겹친다.
     blocked = defaultdict(set)
+    shelf_zone = {}                       # (f, x, y) → 'F1-A' — 매대 몸체 칸의 존
     for f, zl, x, y, _ in BAYS:
         for dx in range(BAY_CELLS):
             for dy in range(BAY_CELLS):
                 blocked[f].add((x + dx, y + dy))
+                shelf_zone[(f, x + dx, y + dy)] = f"F{f}-{zl}"
     for f, x, y, w, h in FACILITIES:
         for dx in range(w):
             for dy in range(h):
@@ -142,7 +160,16 @@ def gen_map_cells():
                 tid = transit.get((f, x, y))
                 # 수직동선 칸은 시설과 겹쳐도 통행 가능해야 층 이동이 성립한다
                 passable = 1 if (tid or (x, y) not in blocked[f]) else 0
-                rows.append((f, x, y, passable, tid))
+                zone = shelf_zone.get((f, x, y))
+                if tid:
+                    kind = "TRANSIT"
+                elif zone:
+                    kind = "SHELF"
+                elif (x, y) in blocked[f]:
+                    kind = "FACILITY"
+                else:
+                    kind = "AISLE"
+                rows.append((f, x, y, passable, tid, kind, zone if kind == "SHELF" else None))
     return rows
 
 
@@ -233,8 +260,9 @@ def write_sql(zones, locations, cells, stocks, configs):
               locations,
               lambda r: f"({q(r[0])},{q(r[1])},{r[2]},{r[3]},{r[4]},{q(r[5])},{r[6]},{r[7]},{r[8]})")
         f.write("\n")
-        batch(f, "map_cells", "floor_no, x, y, passable, transit_id", cells,
-              lambda r: f"({r[0]},{r[1]},{r[2]},{r[3]},{q(r[4]) if r[4] else 'NULL'})", 1000)
+        batch(f, "map_cells", "floor_no, x, y, passable, transit_id, kind, shelf_zone", cells,
+              lambda r: f"({r[0]},{r[1]},{r[2]},{r[3]},{q(r[4]) if r[4] else 'NULL'},"
+                        f"{q(r[5])},{q(r[6]) if r[6] else 'NULL'})", 1000)
         f.write("\n")
         batch(f, "stocks", "sku_id, location_id, qty", stocks,
               lambda r: f"({r[0]},{q(r[1])},{r[2]})", 1000)
@@ -264,7 +292,7 @@ if __name__ == "__main__":
     # 격자 위 너비 우선 탐색(BFS)으로 최대 연결 덩어리를 구해 전부 포함되는지 본다.
     from collections import deque
     passable = {f: set() for f in (1, 2, 3)}
-    for f, x, y, ok, _t in cells:
+    for f, x, y, ok, *_rest in cells:       # 뒤에 kind·shelf_zone 이 붙었다 (09-02)
         if ok:
             passable[f].add((x, y))
     for f in (1, 2, 3):

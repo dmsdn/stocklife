@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, Sparkles } from "lucide-react";
+import { RiBookmarkLine, RiSparkling2Line } from "@remixicon/react";
 
 import {
   formatPrice,
@@ -22,7 +22,7 @@ export function RecommendedProducts({
   onMore,
 }: RecommendedProductsProps) {
   return (
-    <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
+    <section className="w-full px-4 sm:px-6 lg:px-8">
       <SectionTitle
         title="브리핑에 맞춰 추천해요"
       />
@@ -72,14 +72,14 @@ function RecommendedProductCard({
           onClick={onProductClick}
           className="block w-full text-left"
         >
-          <div className="relative aspect-square overflow-hidden rounded-sm bg-muted">
+          <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
             <img
-              src={product.image}
+              src={product.image || undefined}
               alt={product.name}
               className="h-full w-full object-cover"
             />
 
-            <div className="absolute left-2 top-2 max-w-[calc(100%-40px)] truncate rounded-sm bg-background/90 px-1.5 py-1 text-xs font-medium">
+            <div className="absolute left-2 top-2 max-w-[calc(100%-40px)] truncate rounded-full bg-background/90 px-2 py-1 text-xs font-medium">
               {product.badge}
             </div>
           </div>
@@ -91,7 +91,7 @@ function RecommendedProductCard({
           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-background/90"
           aria-label={`${product.name} 장바구니 저장`}
         >
-          <Heart size={13} />
+          <RiBookmarkLine size={24} />
         </button>
       </div>
 
@@ -109,19 +109,13 @@ function RecommendedProductCard({
         </p>
       </button>
 
-      <div className="mt-2 rounded-sm bg-muted/60 p-2">
-        <div className="flex items-center gap-1">
-          <Sparkles
-            size={11}
-            className="shrink-0"
-          />
+      <div className="mt-1.5 flex items-start gap-1">
+        <RiSparkling2Line
+          size={14}
+          className="mt-0.5 shrink-0 text-muted-foreground"
+        />
 
-          <span className="truncate text-xs font-medium">
-            왜 추천했을까요?
-          </span>
-        </div>
-
-        <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">
+        <p className="line-clamp-1 text-xs text-muted-foreground">
           {product.reason}
         </p>
       </div>

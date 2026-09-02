@@ -91,7 +91,7 @@ export function ReceiptDialog({
 
             <div className="my-3 border-t border-dashed border-border" />
 
-            <p className="text-center text-[11px] text-muted-foreground">이용해 주셔서 감사합니다</p>
+            <p className="text-center text-md text-muted-foreground">이용해 주셔서 감사합니다</p>
 
             <div className="mt-3 flex h-8 items-end justify-center gap-[2px]">
               {Array.from({ length: 28 }).map((_, i) => (

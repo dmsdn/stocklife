@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { RiArrowRightSLine } from "@remixicon/react";
 import { SimpleMarkdown } from "./simple-markdown";
 import { legalDocs } from "@/lib/legal-content";
 
@@ -16,8 +17,8 @@ export function TermsModal({ docId }: { docId: string }) {
 
   return (
     <Dialog>
-      <DialogTrigger className="text-xs text-muted-foreground underline">
-        더보기
+      <DialogTrigger className="flex shrink-0 items-center text-muted-foreground" aria-label="자세히 보기">
+        <RiArrowRightSLine size={18} />
       </DialogTrigger>
 
       <DialogContent className="max-h-[80vh] overflow-y-auto">

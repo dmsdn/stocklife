@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import type { ChangeEvent } from 'react';
 import Phaser from 'phaser';
 import StoreScene, { type StoreSceneEvents } from './scenes/StoreScene';
 import type { FloorData, GridPoint } from './types';
@@ -10,17 +11,119 @@ interface Props {
 
 export interface GameCanvasHandle {
   loadFloor: (floorData: FloorData, opts?: { startCell?: GridPoint; hidePlayer?: boolean }) => void;
-  walkTo: (goal: GridPoint, onArrive?: () => void) => void;
+  walkTo: (goal: GridPoint, onArrive?: (success: boolean) => void) => void;
   teleportTo: (cell: GridPoint) => void;
   setControlsEnabled: (enabled: boolean) => void;
   setPlayerVisible: (visible: boolean) => void;
   getPlayerGrid: () => GridPoint | null;
+  // 하단/우측 드래그바(가로·세로 스크롤) 지원용 — StoreScene.getScrollInfo()/setScrollX()
+  // /setScrollY() 그대로 위임.
+  getScrollInfo: () => {
+    scrollX: number; minX: number; maxX: number; worldWidth: number; viewWidth: number;
+    scrollY: number; minY: number; maxY: number; worldHeight: number; viewHeight: number;
+  } | null;
+  setScrollX: (x: number) => void;
+  setScrollY: (y: number) => void;
 }
 
 const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ floorData, events }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneReadyRef = useRef(false);
+
+  // ── 하단 가로 드래그바(줌인했을 때 좌우 이동용) ──
+  // Phaser 캔버스 위에 얹는 얇은 HTML <input type="range"> 오버레이다. 매 프레임
+  // requestAnimationFrame으로 카메라 스크롤 위치를 읽어 슬라이더 값에 반영하고(우클릭
+  // 드래그·휠 줌으로 카메라가 움직여도 항상 동기화), 슬라이더를 직접 끌면 반대로
+  // StoreScene.setScrollX()를 불러 카메라를 옮긴다. React state로 매 프레임 리렌더하면
+  // 느려지므로 DOM에 직접 값을 꽂아 넣는다.
+  const scrollBarWrapRef = useRef<HTMLDivElement>(null);
+  const sliderRef = useRef<HTMLInputElement>(null);
+  const draggingScrollRef = useRef(false);
+  // 우측 세로 드래그바(위아래 이동)도 같은 원리 — 별도 ref/상태로 관리한다.
+  const vScrollBarWrapRef = useRef<HTMLDivElement>(null);
+  const vSliderRef = useRef<HTMLInputElement>(null);
+  const draggingVScrollRef = useRef(false);
+  const SLIDER_MAX = 1000;
+  // 세로 슬라이더는 writingMode:'vertical-lr' + direction:'rtl'로 눕혀 쓰는데, 이 조합에서는
+  // "값이 클수록 막대 위쪽"이 된다. 우리는 "막대 위쪽 = 지도 맨 위(scrollY 최솟값)"가 되길
+  // 원하므로 값을 뒤집어서 매핑한다 — 만약 실제로 켜보니 방향이 반대로 느껴지면 이 한 줄만
+  // false로 바꾸면 된다.
+  const INVERT_VERTICAL = true;
+
+  const getSceneScrollInfo = () => {
+    const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+    return scene?.getScrollInfo() ?? null;
+  };
+  const setSceneScrollX = (x: number) => {
+    const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+    scene?.setScrollX(x);
+  };
+  const setSceneScrollY = (y: number) => {
+    const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+    scene?.setScrollY(y);
+  };
+
+  const handleScrollBarInput = (e: ChangeEvent<HTMLInputElement>) => {
+    const info = getSceneScrollInfo();
+    if (!info) return;
+    const frac = Number(e.target.value) / SLIDER_MAX;
+    setSceneScrollX(info.minX + frac * (info.maxX - info.minX));
+  };
+
+  const handleVScrollBarInput = (e: ChangeEvent<HTMLInputElement>) => {
+    const info = getSceneScrollInfo();
+    if (!info) return;
+    let frac = Number(e.target.value) / SLIDER_MAX;
+    if (INVERT_VERTICAL) frac = 1 - frac;
+    setSceneScrollY(info.minY + frac * (info.maxY - info.minY));
+  };
+
+  useEffect(() => {
+    const onUp = () => {
+      draggingScrollRef.current = false;
+      draggingVScrollRef.current = false;
+    };
+    window.addEventListener('pointerup', onUp);
+
+    let raf = 0;
+    const tick = () => {
+      const info = getSceneScrollInfo();
+      const wrap = scrollBarWrapRef.current;
+      const slider = sliderRef.current;
+      if (wrap) {
+        // 확대하지 않아 화면에 매장 전체가 다 보이면(움직일 여백이 1px도 없으면) 드래그바를 숨긴다.
+        const scrollable = !!info && info.maxX - info.minX > 1;
+        wrap.style.opacity = scrollable ? '1' : '0';
+        wrap.style.pointerEvents = scrollable ? 'auto' : 'none';
+        if (scrollable && slider && !draggingScrollRef.current && info) {
+          const frac = (info.scrollX - info.minX) / (info.maxX - info.minX);
+          slider.value = String(Math.round(Math.min(1, Math.max(0, frac)) * SLIDER_MAX));
+        }
+      }
+      const vWrap = vScrollBarWrapRef.current;
+      const vSlider = vSliderRef.current;
+      if (vWrap) {
+        const scrollableV = !!info && info.maxY - info.minY > 1;
+        vWrap.style.opacity = scrollableV ? '1' : '0';
+        vWrap.style.pointerEvents = scrollableV ? 'auto' : 'none';
+        if (scrollableV && vSlider && !draggingVScrollRef.current && info) {
+          let frac = (info.scrollY - info.minY) / (info.maxY - info.minY);
+          frac = Math.min(1, Math.max(0, frac));
+          if (INVERT_VERTICAL) frac = 1 - frac;
+          vSlider.value = String(Math.round(frac * SLIDER_MAX));
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('pointerup', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useImperativeHandle(ref, () => ({
     loadFloor: (fd, opts) => {
@@ -46,6 +149,18 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     getPlayerGrid: () => {
       const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
       return scene?.getPlayerGrid() ?? null;
+    },
+    getScrollInfo: () => {
+      const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+      return scene?.getScrollInfo() ?? null;
+    },
+    setScrollX: (x) => {
+      const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+      scene?.setScrollX(x);
+    },
+    setScrollY: (y) => {
+      const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+      scene?.setScrollY(y);
     },
   }));
 
@@ -80,6 +195,19 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     });
     gameRef.current.scene.start('StoreScene', { floorData, events });
     sceneReadyRef.current = true;
+    // Phaser.Scale.RESIZE 모드는 <canvas>에 CSS width/height를 직접 입혀주지 않는다 —
+    // 캔버스는 자기 width/height "속성"(비트맵 해상도) 값을 그대로 CSS 픽셀 크기로도 쓴다.
+    // 그런데 이 속성 값과 컨테이너의 실제 clientWidth/Height가 아주 살짝(반올림 오차 몇 px)
+    // 어긋나면 — 특히 성원님 컴퓨터처럼 윈도우 배율이 100%가 아닐 때(예: 175%) 자주 생김 —
+    // 캔버스가 부모보다 미세하게 커져서 부모(및 그 위 flex 조상들)를 다시 밀어 키우고, 그게
+    // ResizeObserver를 또 건드려서 Phaser가 또 리사이즈하고... 하는 식으로 서로 되먹임이
+    // 걸린다. 이게 "확대/축소가 계속 반복되는 것처럼 보이고 화면이 까맣게 된다"는 증상의
+    // 진짜 원인이었다(캔버스가 리사이즈되는 그 찰나엔 WebGL이 아직 다시 그리기 전이라 검게
+    // 보임). 고치는 법은 간단하다 — 캔버스의 CSS 크기를 Phaser의 내부 계산에 맡기지 않고
+    // "항상 부모 100%"로 못박아버리면, 되먹임 루프 자체가 생길 수가 없다.
+    gameRef.current.canvas.style.display = 'block';
+    gameRef.current.canvas.style.width = '100%';
+    gameRef.current.canvas.style.height = '100%';
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorData]);
 
@@ -104,7 +232,84 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     };
   }, []);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
+      <div
+        ref={scrollBarWrapRef}
+        style={{
+          position: 'absolute',
+          left: 12,
+          right: 34,
+          bottom: 10,
+          height: 16,
+          display: 'flex',
+          alignItems: 'center',
+          background: '#1e2128cc',
+          border: '1px solid #3a3f4b',
+          borderRadius: 8,
+          padding: '0 6px',
+          opacity: 0,
+          transition: 'opacity 0.15s ease',
+        }}
+      >
+        <input
+          ref={sliderRef}
+          type="range"
+          min={0}
+          max={SLIDER_MAX}
+          defaultValue={0}
+          onPointerDown={() => {
+            draggingScrollRef.current = true;
+          }}
+          onInput={handleScrollBarInput}
+          onChange={handleScrollBarInput}
+          style={{ width: '100%', accentColor: '#60a5fa', cursor: 'pointer' }}
+          aria-label="맵 좌우 이동"
+        />
+      </div>
+      <div
+        ref={vScrollBarWrapRef}
+        style={{
+          position: 'absolute',
+          top: 12,
+          bottom: 34,
+          right: 10,
+          width: 16,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          background: '#1e2128cc',
+          border: '1px solid #3a3f4b',
+          borderRadius: 8,
+          padding: '6px 0',
+          opacity: 0,
+          transition: 'opacity 0.15s ease',
+        }}
+      >
+        <input
+          ref={vSliderRef}
+          type="range"
+          min={0}
+          max={SLIDER_MAX}
+          defaultValue={0}
+          onPointerDown={() => {
+            draggingVScrollRef.current = true;
+          }}
+          onInput={handleVScrollBarInput}
+          onChange={handleVScrollBarInput}
+          style={{
+            writingMode: 'vertical-lr',
+            direction: 'rtl',
+            height: '100%',
+            accentColor: '#60a5fa',
+            cursor: 'pointer',
+          }}
+          aria-label="맵 상하 이동"
+        />
+      </div>
+    </div>
+  );
 });
 
 export default GameCanvas;

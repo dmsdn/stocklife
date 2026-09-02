@@ -107,6 +107,7 @@ from fastapi import FastAPI                    # noqa: E402
 from pydantic import BaseModel, Field          # noqa: E402
 
 from app import guard, loop                    # noqa: E402
+from app import searchterm                     # noqa: E402
 from app.tools import definitions, infer       # noqa: E402
 
 
@@ -133,6 +134,16 @@ class ChatRequest(BaseModel):
     posFloor: int | None = None
     posX: int | None = None
     posY: int | None = None
+    # ⚠ **앵커의 나이**(초). 08-28에 신뢰 등급을 넣으면서 빠뜨렸다.
+    #   `get_position`이 나이로 등급을 가르는데(high/medium/low) 이 칸이 없어
+    #   `age_sec`가 늘 None이었고, 그러면 등급이 **영원히 medium 하나**다.
+    #   `high`(방금 스캔 — 단정 가능)와 `low`(오래됨 — 되묻기)가 **실서비스에서
+    #   도달 불가능**했다. 등급을 만들어 놓고 그 등급이 안 나오는 상태였다.
+    #
+    #   [왜 시각이 아니라 나이인가] 시각으로 받으면 프론트와 서버의 시계가
+    #   어긋날 때 나이가 틀어진다. **경과 시간은 한 기계 안에서 재므로**
+    #   시계 동기화가 필요 없다 — 프론트가 자기 스캔 이후 흐른 초를 센다.
+    posAgeSec: float | None = None
 
 
 class ChatResponse(BaseModel):
@@ -160,25 +171,35 @@ async def lifespan(app: FastAPI):
         print("[agent] ⚠ 출하물이 하나도 없습니다 — 추론 도구가 전부 "
               "'준비 안 됨'으로 답합니다. models/*_ship.py 를 돌리세요.")
 
+    # 검색어 후보정 색인(08-28). 자모 색인 29KB짜리 표라 추론 자산과 성격이
+    # 달라 load_all 에 안 넣었다 — 저것은 모델이고 이것은 사전이다.
+    # 없어도 서버는 뜬다. 그때는 오타가 그냥 0건으로 돌아갈 뿐이다.
+    print(f"[agent] 검색어 색인   {searchterm.load()}")
+
     print(f"[agent] 기동 — mock={config.USE_MOCK_SOT} · port={config.AGENT_PORT} · "
           f"도구 {len(definitions.TOOLS)}+서버 {len(definitions.SERVER_TOOLS)} · "
           f"LLM키={'있음' if os.environ.get('ANTHROPIC_API_KEY') else '**없음**'} · "
           f"내부키={'있음' if os.environ.get('INTERNAL_SERVICE_KEY') else '없음(액션 불가)'}")
 
-    # 자발형 감시자 기동 (08-21 ai-server 인수). asyncio.create_task = 이 코루틴을
-    # "배경에서 돌려라"로 등록만 하고 지나간다 — await로 기다리면 감시자가 무한
-    # 루프라 서버가 영영 안 뜬다. behavior.run()은 mock 모드면 스스로 즉시 끝나므로
-    # (SSE 줄 백엔드가 없다) 여기서 모드 분기를 중복하지 않는다.
+    # 자발형 감시자 기동. asyncio.create_task = 이 코루틴을 "배경에서 돌려라"로
+    # 등록만 하고 지나간다 — await로 기다리면 감시자가 무한 루프라 서버가 영영
+    # 안 뜬다. 모드 분기는 runner.run() 안에 있다(mock 이면 SSE 없이 틱만).
+    #
+    # ⚠ 08-27 전에는 여기가 `behavior.run()` 이었다. 감시자가 셋이 되면서
+    #   **구동부**(SSE 분배 + 주기 틱 + 스테이지 배출)를 `watchers/runner.py` 로
+    #   올렸다. 그때 드러난 것: 옛 `behavior.run()` 은 없는 함수를 부르고 있었고
+    #   `dispatch.pump()` 를 부르는 곳이 아무 데도 없어 **자발형이 통째로 죽어
+    #   있었다.** 08-26 스테이징 개편이 구동 루프를 데려간 자리다.
     import asyncio
-    from app.watchers import behavior
-    watcher_task = asyncio.create_task(behavior.run(), name="behavior-watcher")
+    from app.watchers import runner
+    watcher_task = asyncio.create_task(runner.run(), name="watchers")
 
     yield
 
     # 내려가는 길: 감시자에게 종료 신호를 주고, 일감이 정리될 때까지 기다린다.
     # cancel까지 부르는 이유: stop 신호만으로는 SSE 수신 대기(await) 한가운데를
     # 못 깨울 수 있다 — 신호(협조 종료)와 취소(강제 종료)를 순서대로 쓴다.
-    behavior.stop()
+    runner.stop()
     watcher_task.cancel()
     try:
         await watcher_task
@@ -191,6 +212,46 @@ async def lifespan(app: FastAPI):
 # 받아오는 이유는 값이 길어서가 아니라, **이름이 결정 사항**이기 때문이다 —
 # 팀이 이 프로세스를 뭐라 부를지는 config 한 곳에서 바뀌어야 한다(config.SERVICE_NAME 주석).
 app = FastAPI(title=config.SERVICE_NAME, lifespan=lifespan)
+
+# ── 프론트 직행 창구 3종 (09-01) ────────────────────────────────────────────
+# 백엔드 `AiProxyController` 가 릴레이하는 `/api/ai/search`·`/api/products/
+# {id}/alternatives`·`/api/ai/photo-search`. **설계서 §4.3 의 워크플로 경로**라
+# 아래 `/agent/chat`(에이전트 경로)과 통로가 다르다 — 그래서 파일도 다르다.
+# 이 줄이 없으면 세 경로가 전부 404 이고, 백엔드는 500 으로 감싸 프론트에
+# 넘긴다(즉 **화면에서는 "AI 가 고장났다"로 보인다**).
+from app import routes_frontend                                # noqa: E402
+
+
+def _anchor_from_last_scan(session_id: str):
+    """요청에 좌표가 안 실려 왔을 때 — 세션의 마지막 SCAN_ADD 로 앵커를 복원한다.
+
+    [왜 있나 — 09-02 시연 점검] 팀 판 백엔드 `AgentChatRequest` 에는 posFloor·
+    posX·posY 칸이 없다. 그러면 위 `pos` 가 항상 None 이고, get_position 은
+    실서비스에서 **한 번도** 좌표를 못 낸다(골든셋·검사기는 좌표를 직접 넣어
+    주므로 초록이었다 — 검사기가 고른 이음매의 바깥은 검사되지 않는다).
+    SCAN_ADD 는 SSE 로 이미 감시자에 닿고(locationId 포함), 그 매대의 좌표는
+    get_inventory 가 준다. 그래서 여기서 (층, x, y, 나이) 를 조립한다.
+    [순서] 릴레이가 좌표를 실어 보내면 그쪽이 우선 — 이 함수는 pos 가 None 일
+    때만 불린다. 어느 단계든 실패하면 None (= 예전과 같은 "위치 모름").
+    [비용] 채팅 한 번에 HTTP 한 번(get_inventory). 앵커가 없는 세션은 0.
+    """
+    try:
+        from app.watchers import behavior
+        from app import sot_client
+        import time as _time
+        last = behavior.last_scan(session_id)
+        if not last:
+            return None
+        inv = sot_client.get_inventory(last["sku_id"])
+        for loc in (inv or {}).get("locations", []):
+            if loc.get("location_id") == last["location_id"] \
+                    and None not in (loc.get("floor_no"), loc.get("x"), loc.get("y")):
+                age = max(0.0, _time.time() - float(last["ts"]))
+                return (int(loc["floor_no"]), int(loc["x"]), int(loc["y"]), age)
+    except Exception as e:                       # 폴백은 본 요청을 죽이면 안 된다
+        print(f"[chat] 앵커 복원 실패 session={session_id}: {type(e).__name__}: {e}")
+    return None
+app.include_router(routes_frontend.router)
 
 
 # ── 차단 시 안전 문구 ───────────────────────────────────────────────────────
@@ -223,8 +284,12 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     # 위치 셋이 다 있을 때만 튜플로 넘긴다. 하나라도 없으면 None —
     # 판정을 여기서 한 번에 하고 아래로는 "있다/없다"만 내려보낸다.
-    pos = ((body.posFloor, body.posX, body.posY)
+    # 좌표 셋이 다 있을 때만 튜플로 넘긴다. 나이는 **없어도 된다** —
+    # 없으면 compute._confidence가 medium(안전한 쪽)으로 둔다.
+    pos = ((body.posFloor, body.posX, body.posY, body.posAgeSec)
            if None not in (body.posFloor, body.posX, body.posY) else None)
+    if pos is None:
+        pos = _anchor_from_last_scan(body.sessionId)
 
     result = loop.run_chat(body.message, consumer_id=body.consumerId,
                            session_id=body.sessionId, history=history,
@@ -264,6 +329,12 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     # 안전 문구로 대체하되 actions는 그대로 — 이미 일어난 상태 변경(담기 성공)을
     # 프론트에 숨기면 화면과 장바구니가 어긋난다. 발화만 바꾸고 사실은 전한다.
+    # 09-03: 여기로 떨어지면 **반드시 로그를 남긴다.** 09-02 시연 점검에서 기능 14 의
+    #   폴백 원인을 로그로 확인할 수 없었다 — 자발형은 테이프가 있는데 반응형만 침묵이었다.
+    #   막힌 사유(unsupported·web_only…)와 발화 앞부분이 있어야 프롬프트를 고칠 수 있다.
+    print(f"[chat] 가드 폴백 session={body.sessionId} reasons={sorted(reasons)} "
+          f"violations={[(v.get('reason'), str(v.get('value'))[:40]) for v in verdict['violations']][:6]} "
+          f"reply={(result['reply'] or '')[:160]!r}")
     return ChatResponse(reply=SAFE_REPLY, actions=result["actions"])
 
 
@@ -276,7 +347,8 @@ def health() -> dict:
     from app.tools import infer
     return {"ok": True, "mock_sot": config.USE_MOCK_SOT,
             "tools": len(definitions.TOOLS), "model": config.LLM_MODEL,
-            "assets": infer.loaded()}
+            "assets": infer.loaded(),
+            "search_index": searchterm.count()}
 
 
 # ── 직접 실행 (개발용) ──────────────────────────────────────────────────────

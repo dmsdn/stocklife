@@ -2,8 +2,9 @@ package com.storeflow.realtime.controller;
 
 import com.storeflow.global.internal.InternalServiceAuth;
 import com.storeflow.realtime.service.EventBroadcastService;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -13,6 +14,13 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *
  * SseEmitter를 쓰는 HTTP 클라이언트는 커스텀 헤더를 보낼 수 있으므로(Agent는 브라우저가 아니라 서버),
  * 다른 /internal/** 과 동일하게 X-Internal-Service-Key 헤더로 인증한다.
+ *
+ * ⚠ 반환 타입은 반드시 SseEmitter 그대로여야 한다 — ResponseEntity<?>로 감싸면 Spring MVC의
+ * ResponseBodyEmitterReturnValueHandler가 선언된 반환 타입(제네릭 와일드카드)만 보고 SseEmitter로
+ * 인식하지 못해 이 메서드를 처리하지 않는다. 그러면 일반 메시지 컨버터로 떨어지는데 SseEmitter를
+ * text/event-stream으로 직렬화할 컨버터가 없어 500이 난다(RealtimeController.stream과 동일 이유로
+ * 그쪽은 이미 SseEmitter를 그대로 반환한다). 인증 실패도 본문을 담은 ResponseEntity로 못 돌려주므로
+ * 상태 코드만 던지는 ResponseStatusException을 쓴다.
  */
 @RestController
 @RequestMapping("/internal/events")
@@ -28,14 +36,13 @@ public class AgentEventStreamController {
     }
 
     @GetMapping(value = "/stream", produces = "text/event-stream")
-    public ResponseEntity<?> stream(@RequestHeader("X-Internal-Service-Key") String key) {
+    public SseEmitter stream(@RequestHeader("X-Internal-Service-Key") String key) {
         try {
             internalServiceAuth.verify(key);
         } catch (SecurityException e) {
-            return ResponseEntity.status(401).body(e.getMessage());
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, e.getMessage());
         }
 
-        SseEmitter emitter = eventBroadcastService.subscribeAgent();
-        return ResponseEntity.ok(emitter);
+        return eventBroadcastService.subscribeAgent();
     }
 }

@@ -4,7 +4,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check } from "lucide-react";
+import { RiCheckLine } from "@remixicon/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -71,7 +71,7 @@ export function GroupPickerDialog({
                   <p className="font-medium">{group.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{group.products.length}개 상품</p>
                 </div>
-                {selected && <Check size={16} className="shrink-0" />}
+                {selected && <RiCheckLine size={24} className="shrink-0" />}
               </button>
             );
           })}

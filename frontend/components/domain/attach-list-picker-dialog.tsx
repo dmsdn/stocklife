@@ -5,7 +5,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { RiArrowDownSLine } from "@remixicon/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -75,8 +75,8 @@ export function AttachListPickerDialog({ open, onClose, onSelect }: AttachListPi
                       {group.products.length}개 · 선택 {checkedCount}개 · {groupTotal(group).toLocaleString()}원
                     </p>
                   </div>
-                  <ChevronDown
-                    size={16}
+                  <RiArrowDownSLine
+                    size={24}
                     className={`shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
                   />
                 </button>
@@ -104,7 +104,6 @@ export function AttachListPickerDialog({ open, onClose, onSelect }: AttachListPi
 
                     <Button
                       className="mt-1 w-full"
-                      size="sm"
                       onClick={() => {
                         onSelect(group.id, group.title);
                         onClose();

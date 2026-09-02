@@ -4,7 +4,7 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Mic, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
+import { RiCameraLine, RiMicLine, RiCheckboxCircleLine, RiCloseCircleLine, RiQuestionLine } from "@remixicon/react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { Button } from "@/components/ui/button";
 import { usePermissionStatus, type PermissionState } from "@/lib/use-permission-status";
@@ -18,9 +18,9 @@ const STATE_LABEL: Record<PermissionState, string> = {
 };
 
 function StateIcon({ state }: { state: PermissionState }) {
-  if (state === "granted") return <CheckCircle2 size={18} className="text-success" />;
-  if (state === "denied") return <XCircle size={18} className="text-danger" />;
-  return <HelpCircle size={18} className="text-muted-foreground" />;
+  if (state === "granted") return <RiCheckboxCircleLine size={24} className="text-success" />;
+  if (state === "denied") return <RiCloseCircleLine size={24} className="text-danger" />;
+  return <RiQuestionLine size={24} className="text-muted-foreground" />;
 }
 
 export default function PermissionsPage() {
@@ -37,9 +37,9 @@ export default function PermissionsPage() {
     setModalKind(null);
   };
 
-  const rows: { kind: "camera" | "microphone"; label: string; icon: typeof Camera; state: PermissionState }[] = [
-    { kind: "camera", label: "카메라", icon: Camera, state: cameraPermission },
-    { kind: "microphone", label: "마이크", icon: Mic, state: micPermission },
+  const rows: { kind: "camera" | "microphone"; label: string; icon: typeof RiCameraLine; state: PermissionState }[] = [
+    { kind: "camera", label: "카메라", icon: RiCameraLine, state: cameraPermission },
+    { kind: "microphone", label: "마이크", icon: RiMicLine, state: micPermission },
   ];
 
   return (
@@ -49,7 +49,7 @@ export default function PermissionsPage() {
       <div className="space-y-3">
         {rows.map((row) => (
           <div key={row.kind} className="flex items-center gap-3 rounded-sm border border-border p-4">
-            <row.icon size={20} className="shrink-0 text-muted-foreground" />
+            <row.icon size={24} className="shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">{row.label}</p>
               <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">

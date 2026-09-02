@@ -46,3 +46,8 @@ CLAUDE.local.md
 .mcp.json
 
 src/main/resources/application-mysql.yml
+
+Agent/.demo_inject.json
+
+# 출하물(서빙이 lifespan 에 적재)은 예외 — 연구용 joblib 과 달리 이건 코드의 일부다
+!Agent/app/artifacts/*.joblib

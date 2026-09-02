@@ -4,7 +4,13 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "cart_item")
+@Table(
+        name = "cart_item",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_cart_item_group_sku",
+                columnNames = {"cart_group_id", "sku_id"}
+        )
+)
 public class CartItem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

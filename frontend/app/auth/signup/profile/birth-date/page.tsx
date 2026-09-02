@@ -1,152 +1,66 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
+import { ProfileStep, ProfileChoice } from "@/components/domain/profile-step";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
+import { readSignupDraft, writeSignupDraft } from "@/lib/signup-draft";
 
-import {
-  readSignupDraft,
-  writeSignupDraft,
-} from "@/lib/signup-draft";
-
-export default function SignupBirthDatePage() {
+function SignupBirthDatePageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editMode = searchParams.get("edit") === "1";
 
-  const [birthDate, setBirthDate] =
-    useState<
-      string | null | undefined
-    >(undefined);
-
-  const nextTimerRef =
-    useRef<ReturnType<typeof setTimeout> | null>(
-      null
-    );
+  const [name, setName] = useState<string | null>(null);
+  const [birthDate, setBirthDate] = useState<string | null | undefined>(undefined);
+  const [skipped, setSkipped] = useState(false);
 
   useEffect(() => {
-    setBirthDate(
-      readSignupDraft().birthDate
-    );
+    const draft = readSignupDraft();
+    setName(draft.name ?? null);
+    setBirthDate(draft.birthDate ?? (draft.birthDate === null ? null : undefined));
+    setSkipped(draft.birthDate === null);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (nextTimerRef.current) {
-        clearTimeout(
-          nextTimerRef.current
-        );
-      }
-    };
-  }, []);
-
-  const moveNext = () => {
-    if (nextTimerRef.current) {
-      clearTimeout(
-        nextTimerRef.current
-      );
-    }
-
-    nextTimerRef.current = setTimeout(() => {
-      router.push(
-        "/auth/signup/profile/gender"
-      );
-    }, 300);
-  };
-
-  const handleBirthDateChange = (
-    value: string
-  ) => {
-    setBirthDate(value);
-
-    writeSignupDraft({
-      birthDate: value,
-    });
-
-    moveNext();
-  };
-
-  const handleSkip = () => {
-    setBirthDate(null);
-
-    writeSignupDraft({
-      birthDate: null,
-    });
-
-    moveNext();
-  };
-
-  const handleSkipAll = () => {
-    router.push(
-      "/auth/signup/profile"
-    );
+  const handleNext = () => {
+    writeSignupDraft({ birthDate: birthDate ?? null });
+    router.push(editMode ? "/auth/signup/profile/confirm" : "/auth/signup/profile/gender");
   };
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() =>
-            router.push(
-              "/auth/signup/profile"
-            )
-          }
-          className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition hover:bg-muted"
-          aria-label="이전"
-        >
-          <ArrowLeft size={18} />
-        </button>
+    <ProfileStep
+      title="생년월일을 입력주세요"
+      description={`정보를 입력해주시면\n${name ?? "회원"} 님을 위해 더 많은 정보를 추천해드릴 수 있어요`}
+      onBack={() => router.push(editMode ? "/auth/signup/profile/confirm" : "/auth/signup")}
+      nextDisabled={birthDate === undefined && !skipped}
+      nextLabel={editMode ? "수정 완료" : "다음"}
+      onNext={handleNext}
+    >
+      <BirthDatePicker
+        value={birthDate ?? ""}
+        onChange={(value) => {
+          setBirthDate(value);
+          setSkipped(false);
+        }}
+      />
+      <ProfileChoice
+        selected={skipped}
+        onClick={() => {
+          setBirthDate(null);
+          setSkipped(true);
+        }}
+      >
+        건너뛰기
+      </ProfileChoice>
+    </ProfileStep>
+  );
+}
 
-        <button
-          type="button"
-          onClick={handleSkipAll}
-          className="rounded-sm px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-muted"
-        >
-          전체 건너뛰기
-        </button>
-      </div>
-
-      <div className="mt-10 space-y-7">
-        <h1 className="text-2xl font-semibold leading-snug">
-          생년월일을
-          <br />
-          알려주세요
-        </h1>
-
-        <div className="space-y-2">
-          <BirthDatePicker
-            value={birthDate ?? ""}
-            onChange={handleBirthDateChange}
-          />
-
-          <button
-            type="button"
-            onClick={handleSkip}
-            className={`
-              flex h-12 w-full
-              items-center justify-start
-              rounded-sm
-              border
-              px-4
-              text-left
-              text-sm
-              transition
-              ${
-                birthDate === null
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-muted-foreground/55 hover:bg-muted/40"
-              }
-            `}
-          >
-            선택 안함
-          </button>
-        </div>
-      </div>
-    </div>
+export default function SignupBirthDatePage() {
+  return (
+    <Suspense fallback={<div className="min-h-full" />}>
+      <SignupBirthDatePageInner />
+    </Suspense>
   );
 }

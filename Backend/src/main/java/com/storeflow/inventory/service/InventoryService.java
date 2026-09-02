@@ -11,6 +11,9 @@ import com.storeflow.inventory.entity.Stock;
 import com.storeflow.inventory.repository.ShelfConfigRepository;
 import com.storeflow.inventory.repository.ShelfEventRepository;
 import com.storeflow.inventory.repository.StockRepository;
+import com.storeflow.cart.repository.CartItemRepository;
+import com.storeflow.notification.service.NotificationService;
+import com.storeflow.product.entity.Product;
 import com.storeflow.product.repository.ProductRepository;
 import com.storeflow.realtime.service.EventBroadcastService;
 import org.springframework.stereotype.Service;
@@ -20,6 +23,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -42,17 +46,23 @@ public class InventoryService {
     private final ShelfEventRepository shelfEventRepository;
     private final ProductRepository productRepository;
     private final EventBroadcastService eventBroadcastService;
+    private final CartItemRepository cartItemRepository;
+    private final NotificationService notificationService;
 
     public InventoryService(StockRepository stockRepository,
-            ShelfConfigRepository shelfConfigRepository,
-            ShelfEventRepository shelfEventRepository,
-            ProductRepository productRepository,
-            EventBroadcastService eventBroadcastService) {
+                            ShelfConfigRepository shelfConfigRepository,
+                            ShelfEventRepository shelfEventRepository,
+                            ProductRepository productRepository,
+                            EventBroadcastService eventBroadcastService,
+                            CartItemRepository cartItemRepository,
+                            NotificationService notificationService) {
         this.stockRepository = stockRepository;
         this.shelfConfigRepository = shelfConfigRepository;
         this.shelfEventRepository = shelfEventRepository;
         this.productRepository = productRepository;
         this.eventBroadcastService = eventBroadcastService;
+        this.cartItemRepository = cartItemRepository;
+        this.notificationService = notificationService;
     }
 
     /** 요구사항 21: shelf_event는 저장한 걸 그대로 Agent 스트림에 흘려보낸다. */
@@ -68,7 +78,7 @@ public class InventoryService {
 
     @Transactional
     public void applyChange(Integer skuId, String locationId, int deltaQty,
-            ShelfEvent.EventType eventType, String taskId) {
+                            ShelfEvent.EventType eventType, String taskId) {
         Stock stock = stockRepository.findWithLockBySkuIdAndLocationId(skuId, locationId)
                 .orElseThrow(() -> new IllegalStateException(
                         "재고 행이 없습니다. skuId=" + skuId + ", locationId=" + locationId));
@@ -96,6 +106,32 @@ public class InventoryService {
             broadcast(shelfEventRepository.save(new ShelfEvent(
                     ShelfEvent.EventType.STOCKOUT, skuId, locationId, 0, null, now, null)));
         }
+
+        // 5-5(알림 트리거) "재입고": 품절(0) 상태였다가 다시 채워졌을 때만 알린다.
+        // 그냥 수량이 조금씩 오르내리는 것까지 매번 알리면 스팸이 되므로, "없다가 생겼다"는
+        // 순간에만 트리거한다. 이 상품을 자기 리스트(장바구니)에 담아둔 회원들에게만 발송.
+        if (eventType == ShelfEvent.EventType.RESTOCK_IN && oldQty == 0 && newQty > 0) {
+            notifyCartOwnersOfRestock(skuId);
+        }
+    }
+
+    private void notifyCartOwnersOfRestock(Integer skuId) {
+        List<Long> consumerIds = cartItemRepository.findConsumerIdsBySkuId(skuId);
+        if (consumerIds.isEmpty()) {
+            return;
+        }
+        Product product = productRepository.findById(skuId).orElse(null);
+        String productName = product != null ? product.getName() : ("상품 #" + skuId);
+
+        for (Long consumerId : consumerIds) {
+            notificationService.createNotification(
+                    consumerId,
+                    "RESTOCK",
+                    "재입고 알림",
+                    productName + "이(가) 다시 입고됐어요. 장바구니에 담아두신 상품이에요!",
+                    null
+            );
+        }
     }
 
     @Transactional
@@ -113,7 +149,7 @@ public class InventoryService {
                 .orElseThrow(() -> new IllegalStateException(
                         "이동할 재고가 없습니다. skuId=" + skuId + ", locationId=" + fromLocationId));
 
-        if (stockRepository.findWithLockBySkuIdAndLocationId(skuId, toLocationId).isPresent()) {
+        if (stockRepository.findWithLockByLocationId(toLocationId).isPresent()) {
             throw new IllegalStateException("대상 위치에 이미 재고가 있습니다. locationId=" + toLocationId);
         }
 
@@ -155,7 +191,7 @@ public class InventoryService {
                 .toList();
     }
 
-        /** replenishment/pending(③). 3개 쿼리를 합쳐서 최종 응답을 만든다. */
+    /** replenishment/pending(③). 3개 쿼리를 합쳐서 최종 응답을 만든다. */
     @Transactional(readOnly = true)
     public List<PendingReplenishmentResponse> getPendingReplenishments() {
         List<PendingReplenishmentRow> rows =
@@ -180,6 +216,43 @@ public class InventoryService {
                         r.getFloorNo(),
                         bulkSkuIds.contains(r.getSkuId()),
                         queuedAtByKey.get(r.getSkuId() + "|" + r.getLocationId())))
+                .toList();
+    }
+
+    /** GET /api/locations/{locationId}/products(신규) — 매대 하나에 진열된 상품 목록. */
+    @Transactional(readOnly = true)
+    public List<com.storeflow.inventory.dto.LocationProductResponse> getProductsAtLocation(String locationId) {
+        return stockRepository.findProductsByLocationId(locationId);
+    }
+
+    /** GET /api/products/inventory?skuIds=1,2,3(신규, 박은우님 요청) — 여러 skuId의 위치별 재고를 한 번에 조회, skuId별로 그룹핑해서 반환. */
+    @Transactional(readOnly = true)
+    public Map<Integer, List<InventoryItemResponse>> getInventoryBatch(List<Integer> skuIds) {
+        if (skuIds == null || skuIds.isEmpty()) {
+            throw new IllegalArgumentException("상품 목록(skuIds)은 필수입니다.");
+        }
+        return stockRepository.findInventoryBySkuIdIn(skuIds).stream()
+                .collect(Collectors.groupingBy(InventoryItemResponse::getSkuId));
+    }
+
+    /**
+     * GET /api/floors/{floorNo}/low-stock-locations(신규) — 층 전체를 한 번의 쿼리로 훑어서
+     * 재고 부족 매대와 그 매대에서 부족한 skuId들을 매대 단위로 묶어서 돌려준다. NPC가
+     * findLowStockTarget에서 매대 하나마다 /api/locations/{id}/products를 순차 호출하던
+     * (매대 수천 개 x 1 요청) 구조를 없애기 위한 전용 엔드포인트.
+     */
+    @Transactional(readOnly = true)
+    public List<com.storeflow.inventory.dto.LowStockLocationResponse> getLowStockLocationsByFloor(int floorNo) {
+        List<PendingReplenishmentRow> rows =
+                stockRepository.findPendingPickShortagesByFloor(Location.TierRole.PICK, (byte) floorNo);
+
+        Map<String, List<Integer>> skuIdsByLocation = new LinkedHashMap<>();
+        for (PendingReplenishmentRow row : rows) {
+            skuIdsByLocation.computeIfAbsent(row.getLocationId(), k -> new java.util.ArrayList<>())
+                    .add(row.getSkuId());
+        }
+        return skuIdsByLocation.entrySet().stream()
+                .map(e -> new com.storeflow.inventory.dto.LowStockLocationResponse(e.getKey(), e.getValue()))
                 .toList();
     }
 

@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  ChevronRight,
-  ShoppingCart,
-} from "lucide-react";
+import { RiArrowRightSLine, RiShoppingCartLine } from "@remixicon/react";
 
 import { SectionTitle } from "./section-title";
 
@@ -38,7 +35,7 @@ export function CartSummary({
       >
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-muted">
-            <ShoppingCart size={18} />
+            <RiShoppingCartLine size={24} />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -51,8 +48,8 @@ export function CartSummary({
             </p>
           </div>
 
-          <ChevronRight
-            size={16}
+          <RiArrowRightSLine
+            size={24}
             className="shrink-0 text-muted-foreground"
           />
         </div>

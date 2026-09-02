@@ -18,6 +18,10 @@ export interface CartGroup {
   title: string;
   description: string;
   createdAt: string;
+  /** ✅ 장 볼 날짜(선택) — 백엔드 CartGroup.shoppingDate. "yyyy-MM-dd" 또는 없으면 null. */
+  shoppingDate: string | null;
+  /** ✅ 마지막 수정 시각 — 리스트 박스에 표시용. 백엔드가 있으면 그 값, 게스트는 클라이언트 시각으로 근사. */
+  updatedAt: string | null;
   store: string;
   products: CartProduct[];
 }
@@ -34,6 +38,8 @@ interface ServerCartGroup {
   title: string;
   description: string | null;
   createdAt: string | null;
+  shoppingDate: string | null;
+  updatedAt: string | null;
   items: ServerCartItem[];
 }
 
@@ -55,6 +61,8 @@ const INITIAL_CART_GROUPS: CartGroup[] = [
     title: "이번 주 장보기",
     description: "일주일 식재료",
     createdAt: "오늘",
+    shoppingDate: null,
+    updatedAt: null,
     store: "스토어플로우 마트",
     products: [],
   },
@@ -63,6 +71,8 @@ const INITIAL_CART_GROUPS: CartGroup[] = [
     title: "생활용품",
     description: "집에 필요한 생활용품",
     createdAt: "오늘",
+    shoppingDate: null,
+    updatedAt: null,
     store: "스토어플로우 마트",
     products: [],
   },
@@ -71,6 +81,8 @@ const INITIAL_CART_GROUPS: CartGroup[] = [
     title: "주말 장보기",
     description: "이번 주말에 필요한 상품",
     createdAt: "오늘",
+    shoppingDate: null,
+    updatedAt: null,
     store: "스토어플로우 마트",
     products: [],
   },
@@ -129,6 +141,8 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
     title: g.title,
     description: g.description ?? "",
     createdAt: g.createdAt ? new Date(g.createdAt).toLocaleDateString("ko-KR") : "",
+    shoppingDate: g.shoppingDate ?? null,
+    updatedAt: g.updatedAt ?? null,
     store: "스토어플로우 마트",
     products: g.items.map((i) => {
       const p = productMap.get(i.skuId);
@@ -230,21 +244,67 @@ export async function addProductToCartGroup(
   return loadCartGroups();
 }
 
-export async function createCartGroup(title: string): Promise<CartGroup> {
+export async function createCartGroup(title: string, shoppingDate?: string | null): Promise<CartGroup> {
   if (!isLoggedIn()) {
     const groups = readGuestGroups();
     const nextId = groups.length > 0 ? Math.max(...groups.map((g) => g.id)) + 1 : 1;
-    const group: CartGroup = { id: nextId, title, description: "새 장보기 목록", createdAt: "방금", store: "스토어플로우 마트", products: [] };
+    const now = new Date().toISOString();
+    const group: CartGroup = {
+      id: nextId,
+      title,
+      description: "새 장보기 목록",
+      createdAt: "방금",
+      shoppingDate: shoppingDate ?? null,
+      updatedAt: now,
+      store: "스토어플로우 마트",
+      products: [],
+    };
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([...groups, group]));
     return group;
   }
 
   const created = await apiFetch<ServerCartGroup>("/api/cart/groups", {
     method: "POST",
-    body: JSON.stringify({ title, description: "새 장보기 목록" }),
+    body: JSON.stringify({ title, description: "새 장보기 목록", shoppingDate: shoppingDate ?? null }),
   });
   await loadCartGroups();
-  return { id: created.cartGroupId, title: created.title, description: created.description ?? "", createdAt: "방금", store: "스토어플로우 마트", products: [] };
+  return {
+    id: created.cartGroupId,
+    title: created.title,
+    description: created.description ?? "",
+    createdAt: "방금",
+    shoppingDate: created.shoppingDate ?? null,
+    updatedAt: created.updatedAt ?? null,
+    store: "스토어플로우 마트",
+    products: [],
+  };
+}
+
+// ✅ 신규 — PATCH /api/cart/groups/{groupId}(백엔드에 이미 있던 API, 제목/설명/장 볼 날짜
+//   수정 지원)로 리스트 생성 후에도 날짜를 나중에 추가·수정할 수 있게 함.
+export async function updateCartGroupInfo(
+  groupId: number,
+  patch: { title?: string; shoppingDate?: string | null }
+): Promise<CartGroup[]> {
+  if (!isLoggedIn()) {
+    return updateCartGroups((groups) =>
+      groups.map((g) =>
+        g.id !== groupId
+          ? g
+          : {
+              ...g,
+              ...(patch.title !== undefined ? { title: patch.title } : {}),
+              ...(patch.shoppingDate !== undefined ? { shoppingDate: patch.shoppingDate } : {}),
+            }
+      )
+    );
+  }
+
+  await apiFetch(`/api/cart/groups/${groupId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return loadCartGroups();
 }
 
 export async function deleteCartGroup(groupId: number): Promise<CartGroup[]> {

@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiLogoutBoxLine } from "@remixicon/react";
 import { LogoutButton } from "@/components/domain/logout-button";
 import { WithdrawButton } from "@/components/domain/withdraw-button";
 import { getMyProfile, type ConsumerMe } from "@/lib/consumer-api";
@@ -54,7 +54,7 @@ export default function AccountPage() {
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/mypage">
-            <ChevronLeft size={20} />
+            <RiArrowLeftSLine size={24} />
           </Link>
           <p className="text-base">내 정보</p>
         </div>
@@ -63,7 +63,7 @@ export default function AccountPage() {
       {/* 닉네임 — 항상 수정 가능 */}
       <Link href="/mypage/account/name" className="mb-4 flex items-center justify-between py-2">
         <p className="text-base font-medium">{profile?.name || (loading ? "불러오는 중..." : "닉네임 입력하기")}</p>
-        <ChevronRight size={18} className="text-muted-foreground" />
+        <RiArrowRightSLine size={24} className="text-muted-foreground" />
       </Link>
 
       {/* 등급 — 마이페이지 메인 "멤버십"이랑 같은 컴포넌트 재사용 */}
@@ -76,13 +76,13 @@ export default function AccountPage() {
           <span>계정</span>
           <span className="flex items-center gap-1 text-muted-foreground">
             {profile ? maskPhone(profile.phoneNumber) : ""}
-            <ChevronRight size={16} />
+            <RiArrowRightSLine size={24} />
           </span>
         </Link>
 
         <Link href="/mypage/account/password" className="flex items-center justify-between py-3 text-sm">
           <span>비밀번호 변경</span>
-          <ChevronRight size={16} className="text-muted-foreground" />
+          <RiArrowRightSLine size={24} className="text-muted-foreground" />
         </Link>
 
         {/* 성별 — 값 있으면 텍스트만, 없으면 입력하러 가는 링크 */}
@@ -96,7 +96,7 @@ export default function AccountPage() {
             <span>성별</span>
             <span className="flex items-center gap-1 text-muted-foreground">
               미입력
-              <ChevronRight size={16} />
+              <RiArrowRightSLine size={24} />
             </span>
           </Link>
         )}
@@ -112,7 +112,7 @@ export default function AccountPage() {
             <span>나이</span>
             <span className="flex items-center gap-1 text-muted-foreground">
               미입력
-              <ChevronRight size={16} />
+              <RiArrowRightSLine size={24} />
             </span>
           </Link>
         )}
@@ -121,13 +121,13 @@ export default function AccountPage() {
           <span>가구원 수</span>
           <span className="flex items-center gap-1 text-muted-foreground">
             {profile ? householdLabel(profile.householdSize) : ""}
-            <ChevronRight size={16} />
+            <RiArrowRightSLine size={24} />
           </span>
         </Link>
       </div>
 
       <LogoutButton className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
-        <LogOut size={16} />
+        <RiLogoutBoxLine size={24} />
         로그아웃
       </LogoutButton>
 

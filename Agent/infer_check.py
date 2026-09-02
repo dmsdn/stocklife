@@ -58,6 +58,20 @@ def _missing():
     return out
 
 
+# ⚠ 진입점이므로 표준출력을 먼저 utf-8로 (08-27). 이게 없어서 cp949 콘솔에서
+#   곡선 표의 `—`에 UnicodeEncodeError 가 나 **사진 갈래까지 도달조차 못 했다** —
+#   "사진은 계속 안 되던데"의 정체가 적재 실패가 아니라 그 앞줄의 print 였다.
+#   env.py 의 헌장과 같다: 공용 준비 코드는 입구가 명시 호출한다.
+from app.env import load_env, use_utf8_stdout                  # noqa: E402
+
+# ⚠ **`load_env()` 를 먼저 부른다.** 08-28 까지 이 파일은 그걸 안 불렀고,
+#   그래서 `.env` 를 못 읽어 **늘 기본값(mock)으로** 돌고 있었다.
+#   가용·소비주기는 출하물이 로컬이라 티가 안 났는데, 위치·취향·사진은
+#   실물 세계를 봐야 하는 것들이라 조용히 딴 세계를 재고 있었다.
+#   (tool_check 머리에 적어 둔 그 덫 — 같은 집에서 두 번 밟았다.)
+load_env()
+use_utf8_stdout()
+
 _gone = _missing()
 if "--photo" not in sys.argv:
     _gone.pop("transformers", None)      # 안 쓸 것으로 시끄럽게 하지 않는다
@@ -86,8 +100,32 @@ if _gone:
 if "numpy" in _gone:
     raise SystemExit("numpy가 없으면 아무것도 못 합니다 — venv를 확인하세요.")
 
-from app import loop                       # noqa: E402
+from app import config, loop               # noqa: E402
 from app.tools import compute, infer, query   # noqa: E402
+
+
+def _pick_fixture(member, sku):
+    """회원·상품을 **실행 시각에 세계에서** 뽑는다. 인자로 주면 그것을 쓴다.
+
+    [왜] mock 과 실물은 회원·상품 번호 축이 아예 다르다(mock 9001·101042 /
+      실물 시드 1001~·2000xx). 한쪽을 박아 두면 다른 쪽에서 404 로 죽는데,
+      그건 도구가 아니라 검사기가 없는 것을 물어본 것이다.
+
+    [어떻게] 구매 이력이 있는 회원을 순서대로 두드려 찾고, 그 사람이 산 상품을
+      쓴다. 그러면 소비주기·취향이 실제로 값을 낼 재료가 된다.
+    """
+    from app import sot_client as _s
+    cands = ([9001, 9002] if config.USE_MOCK_SOT else []) + list(range(1001, 1031))
+    if member is not None:
+        cands = [member]
+    for mid in cands:
+        try:
+            hist = _s.get_purchase_history(mid) or []
+        except Exception:                                      # noqa: BLE001
+            continue
+        if hist:
+            return mid, (sku if sku is not None else int(hist[-1]["sku_id"]))
+    return (member or cands[0]), (sku or 0)
 
 
 def _arg(flag, default=None, cast=str):
@@ -97,18 +135,27 @@ def _arg(flag, default=None, cast=str):
 def _curve(r, indent="      "):
     for p in r.get("curve", []):
         note = f"  ({p['note']})" if p.get("note") else ""
-        print(f"{indent}{p['within']:>7s}  {p['prob']:>5.1f}%{note}")
+        print(f"{indent}{p['within']:>7s}  {p['prob_pct']:>5.1f}%{note}")
 
 
 def main():
-    sku = _arg("--sku", 101042, int)
+    # ⚠ 재료를 코드에 박지 않는다 — `tool_check` 과 같은 규율이다.
+    #   08-28 까지 sku 101042 · 회원 9001 을 박아 뒀는데 **그 둘은 mock 세계의
+    #   것**이라, 실물 모드에서는 상품 조회가 404 로 죽었다. 검사기가 자기가
+    #   재는 세계를 안 보고 있었던 셈이다.
+    sku = _arg("--sku", None, int)
+    member = _arg("--member", None, int)
     photo = _arg("--photo")
 
     # ── ① 적재 ──────────────────────────────────────────────────────────
     print("=" * 66)
     print("출하물 적재  (Agent/app/artifacts/)")
     print("=" * 66)
-    got = infer.load_all(with_photo_encoder=bool(photo))
+    # 사진을 넘겼으면 당연히 켜고, 안 넘겼어도 **서버가 켜는 설정이면 켠다**.
+    # 서버(`main.py` lifespan)는 `config.LOAD_PHOTO_ENCODER` 로 부른다 —
+    # 검사기가 그보다 좁게 부르면 `.env` 에서 켜 놔도 늘 "안 켜져 있음"이 뜬다
+    # (08-28 에 tool_check 도 같은 구멍이었다).
+    got = infer.load_all(with_photo_encoder=bool(photo) or config.LOAD_PHOTO_ENCODER)
     if not got:
         print("  ⚠ 하나도 없습니다 — models/*_ship.py · imagegen/photo_ship.py 를 돌리세요.")
     for k, v in got.items():
@@ -117,12 +164,14 @@ def main():
     # ── 요청 하나를 흉내 낸다 ────────────────────────────────────────────
     # 루프가 요청마다 하는 주입을 여기서 손으로 한다. 이게 없으면 도구가
     # "회원이 누구인지 모른다"로 답한다(B안 — LLM이 정할 값이 아니다).
-    query.set_identity(9001, "sess-7f3a9c")     # 회원 + 세션(= 매장 안)
+    member, sku = _pick_fixture(member, sku)
+    session = "sess-7f3a9c" if config.USE_MOCK_SOT else "inferchk-session"
+    query.set_identity(member, session)          # 회원 + 세션(= 매장 안)
     compute.set_position(2, 5, 15)              # 마지막 스캔 위치
 
     print()
     print("=" * 66)
-    print(f"도구 5종  (회원 9001 · 세션 있음 · 위치 2층 (5,15) · sku {sku})")
+    print(f"도구 5종  (회원 {member} · 세션 있음 · 위치 2층 (5,15) · sku {sku})")
     print("=" * 66)
 
     # ── ② 가용예측 ──────────────────────────────────────────────────────
@@ -139,24 +188,39 @@ def main():
     # ── ③ 소비주기 ──────────────────────────────────────────────────────
     def _repurchase(label, member, session):
         query.set_identity(member, session)
-        r, src = loop._dispatch("predict_repurchase", {"sku_id": sku})
+        # ⚠ 인자는 **`sku_ids`(복수)** 다. 08-27 에 이 도구가 단수에서 복수로
+        #   바뀌었는데(schema_check 가 잡은 계약 구멍) 여기가 안 따라왔다 —
+        #   `sku_id` 를 넘겨 `bad_arguments` 로 죽고 있었다.
+        #   ⚠⚠ 내가 이걸 못 본 이유: 출력에서 `^■` 로 시작하는 줄만 훑었다.
+        #     에러는 **그 다음 줄**에 찍힌다. 요약만 보면 실패가 요약 밖에 숨는다.
+        r, src = loop._dispatch("predict_repurchase", {"sku_ids": [sku]})
         print(f"\n■ predict_repurchase   [출처 {src}]  {label}")
         if "error" in r:
-            print(f"    {r['error']} — {r['message']}")
+            print(f"    ✗ {r['error']} — {r['message']}")
             return
-        print(f"    모델 {r['model']} · 마지막 구매 {r['days_since_last']}일 전"
-              f" · 과거 간격 {r['past_intervals']}회 · 전형 주기 {r['typical_cycle_days']}일")
-        print("    언제까지 다시 살 확률:")
-        _curve(r)
+        items = r.get("items") or []
+        if not items:
+            print(f"    (후보 없음) {r.get('message', '')}")
+            return
+        for it in items[:3]:
+            if it.get("basis"):
+                # 콜드스타트 — 개인 예측이 아니다. 표기를 갈라야 눈으로 안 헷갈린다.
+                print(f"    [{it['basis']}] sku {it['sku_id']} · 이 상품군 전형 주기 "
+                      f"{it['typical_cycle_days']}일 — **개인 예측 아님**")
+            else:
+                print(f"    모델 {it['model']} · sku {it['sku_id']} · 마지막 구매 "
+                      f"{it['days_since_last']}일 전 · 과거 간격 "
+                      f"{it['past_intervals']}회 · 전형 주기 {it['typical_cycle_days']}일")
+            _curve(it)
 
     if "--both" in sys.argv:
         # 세션이 있으면 conditional(매장 안), 없으면 unconditional(매장 밖).
         # 같은 손님·같은 상품인데 **접점이 다르면 답이 다르다** — 그걸 눈으로 본다.
-        _repurchase("← 세션 있음(매장 안)", 9001, "sess-7f3a9c")
-        _repurchase("← 세션 없음(매장 밖·푸시)", 9001, None)
-        query.set_identity(9001, "sess-7f3a9c")
+        _repurchase("← 세션 있음(매장 안)", member, session)
+        _repurchase("← 세션 없음(매장 밖·푸시)", member, None)
+        query.set_identity(member, session)
     else:
-        _repurchase("", 9001, "sess-7f3a9c")
+        _repurchase("", member, session)
 
     # ── ④ 위치 ──────────────────────────────────────────────────────────
     r, src = loop._dispatch("get_position", {})
@@ -181,7 +245,27 @@ def main():
     # ── ⑥ 취향 ──────────────────────────────────────────────────────────
     r, src = loop._dispatch("match_preferences", {})
     print(f"\n■ match_preferences   [출처 {src}]")
-    print(f"    {r['error']} — {r['message']}")
+    # ⚠ 08-28 배선 전까지 이 도구는 **항상 error 를 냈다.** 그래서 여기가
+    #   `r['error']` 를 무조건 읽고 있었고, 배선된 날 KeyError 로 죽었다.
+    #   스텁을 전제한 코드는 스텁이 사라지는 날 반드시 깨진다 —
+    #   **모양을 가정하지 말고 물어본다.**
+    if "error" in r:
+        print(f"    {r['error']} — {r['message']}")
+    elif "state" in r:
+        print(f"    [{r['state']}] {r['message']}")
+    else:
+        t = r.get("taste") or []
+        print(f"    회원 {r['member_id']} · 이력 {r['history_skus']}종 · "
+              f"추정 축 {r['axes_inferred']}")
+        print("    취향: " + " · ".join(
+            f"{x['l2']}({x['bought']}종 {x['share']:.3f})" for x in t))
+        for it in r.get("items", []):
+            w = it["why"]
+            print(f"      · {it['sku_id']} {str(it['name'])[:24]:26s} "
+                  f"{w['l2']} 취향{w['l2_rank']}위"
+                  f"{' ·축보정' if w.get('axis_boosted') else ''}"
+                  f" · 소분류내 인기 {w['popularity_rank_in_l2']}위"
+                  f"{' · 행사' if it.get('on_promo') else ''}")
 
     print()
     print("=" * 66)

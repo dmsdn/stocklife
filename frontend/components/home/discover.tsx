@@ -50,46 +50,42 @@ export function Discover({
   if (popularProducts.length === 0) return null;
 
   return (
-    <section className="w-full pt-10">
-      <div className="px-4 sm:px-6 lg:px-8">
-        <SectionTitle
-          title="발견해보세요"
-          action="더보기"
-          onAction={() => router.push("/search")}
-        />
-      </div>
+    <section className="w-full px-4 sm:px-6 lg:px-8">
+      <SectionTitle
+        title="발견해보세요"
+        action="더보기"
+        onAction={() => router.push("/search")}
+      />
 
-      <div className="w-full overflow-x-auto scrollbar-hide">
-        <div className="flex w-max gap-3 px-4 pb-1 sm:px-6 lg:px-8">
-          {popularProducts.map((product) => (
-            <button
-              key={product.id}
-              type="button"
-              onClick={() =>
-                onProductClick(product.id)
-              }
-              className="w-[140px] shrink-0 text-left"
-            >
-              <div className="relative aspect-square overflow-hidden rounded-sm bg-muted">
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="h-full w-full object-cover"
-                />
-              </div>
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        {popularProducts.map((product) => (
+          <button
+            key={product.id}
+            type="button"
+            onClick={() =>
+              onProductClick(product.id)
+            }
+            className="min-w-0 text-left"
+          >
+            <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
+              <img
+                src={product.image || undefined}
+                alt={product.name}
+                className="h-full w-full object-cover"
+              />
+            </div>
 
-              <p className="mt-2 truncate text-base font-medium">
-                {product.name}
+            <p className="mt-2 truncate text-sm font-medium">
+              {product.name}
+            </p>
+
+            {product.price > 0 && (
+              <p className="mt-1 text-sm font-semibold">
+                {formatPrice(product.price)}
               </p>
-
-              {product.price > 0 && (
-                <p className="mt-1 text-base font-semibold">
-                  {formatPrice(product.price)}
-                </p>
-              )}
-            </button>
-          ))}
-        </div>
+            )}
+          </button>
+        ))}
       </div>
     </section>
   );

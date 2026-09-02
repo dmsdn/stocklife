@@ -58,3 +58,35 @@ ALTER TABLE chat_session
 
 CREATE INDEX idx_chat_session_group
     ON chat_session (group_id);
+
+-- cart_group에 "장 볼 날짜" 컬럼 추가 (nullable, 선택 입력)
+ALTER TABLE cart_group
+    ADD COLUMN shopping_date DATE NULL AFTER description;
+
+
+-- 5-4(등급 재설계): monthly_spend_amount(매달 리셋되는 지출액) 대신
+-- 포인트 잔액 + 평생 누적 적립 포인트 컬럼으로 교체.
+
+ALTER TABLE consumer
+    ADD COLUMN point_balance INT NOT NULL DEFAULT 0 AFTER grade,
+  ADD COLUMN point_earned_total INT NOT NULL DEFAULT 0 AFTER point_balance;
+
+-- 기존 monthly_spend_amount 값이 있다면, 2% 적립률로 소급 환산해서
+-- point_earned_total/point_balance 초기값으로 채워주고 싶을 때 (선택 사항):
+-- UPDATE consumer
+--   SET point_earned_total = FLOOR(monthly_spend_amount * 0.02),
+--       point_balance = FLOOR(monthly_spend_amount * 0.02);
+
+-- monthly_spend_amount 컬럼 제거는 위 마이그레이션이 실제 서비스에 반영되고
+-- 문제없음을 확인한 뒤에 실행하는 걸 권장합니다 (되돌리기 어려움).
+-- ALTER TABLE consumer DROP COLUMN monthly_spend_amount;
+
+-- 5-3(포인트 사용) + 환불 시 정확한 원상복구를 위해, 주문 단위로
+-- 실제 사용/적립된 포인트를 기록한다.
+ALTER TABLE orders
+    ADD COLUMN points_used INT NOT NULL DEFAULT 0 AFTER total_amount,
+  ADD COLUMN points_earned INT NOT NULL DEFAULT 0 AFTER points_used;
+
+ALTER TABLE members
+    ADD COLUMN by_car TINYINT(1) NULL
+    COMMENT '차 있음 여부 (0/1/NULL=미입력)';

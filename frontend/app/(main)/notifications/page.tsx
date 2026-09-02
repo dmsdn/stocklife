@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Settings, Bell, Gift, Package } from "lucide-react";
+import { RiArrowLeftSLine, RiSettings3Line, RiNotification4Line, RiGiftLine, RiBox3Line } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
 
@@ -22,10 +22,20 @@ interface AppNotification {
 
 const TABS: Tab[] = ["전체", "공지", "혜택", "주문"];
 
-const TYPE_ICON: Record<NotificationType, typeof Bell> = {
-  공지: Bell,
-  혜택: Gift,
-  주문: Package,
+// ⚠ 백엔드에서 아직 아무도 createNotification()을 안 불러서(주문완료/프로모션 등 알림을
+//   실제로 만드는 로직 자체가 없음), type에 어떤 문자열이 들어올지 확정된 게 없습니다.
+//   일단 상식적인 값(GENERAL/PROMO/ORDER)으로 가정해서 매핑해뒀고, 실제 값 확인되면
+//   이 매핑만 고치면 됩니다. "전체" 탭은 이 매핑이랑 무관하게 항상 정상 동작합니다.
+function mapBackendType(type: string): NotificationType {
+  if (type === "PROMO" || type === "BENEFIT") return "혜택";
+  if (type === "ORDER") return "주문";
+  return "공지";
+}
+
+const TYPE_ICON: Record<NotificationType, typeof RiNotification4Line> = {
+  공지: RiNotification4Line,
+  혜택: RiGiftLine,
+  주문: RiBox3Line,
 };
 
 // 알림 생성 시각을 현재 시점 기준 상대 시간으로 표시
@@ -72,10 +82,26 @@ export default function NotificationsPage() {
   const [tab, setTab] = useState<Tab>("전체");
   const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
 
-  // ✅ 실제 GET /api/notifications 우선 시도, 실패하면(백엔드 아직 없음) 목업 유지
+  // ✅ 실제 GET /api/notifications 연동. 백엔드 응답 필드명(notificationId, linkUrl)이
+  //   프론트가 쓰는 형태(id, href)랑 달라서 매핑해서 씁니다.
   useEffect(() => {
-    apiFetch<AppNotification[]>("/api/notifications")
-      .then((list) => list.length > 0 && setNotifications(list))
+    apiFetch<
+      { notificationId: number; type: string; title: string; message: string; linkUrl: string | null; read: boolean; createdAt: string }[]
+    >("/api/notifications")
+      .then((list) => {
+        if (list.length === 0) return;
+        setNotifications(
+          list.map((n) => ({
+            id: String(n.notificationId),
+            type: mapBackendType(n.type),
+            title: n.title,
+            message: n.message,
+            createdAt: n.createdAt,
+            read: n.read,
+            href: n.linkUrl ?? undefined,
+          }))
+        );
+      })
       .catch(() => {});
   }, []);
 
@@ -94,12 +120,12 @@ export default function NotificationsPage() {
       <div className="mb-6 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button type="button" onClick={() => router.back()} aria-label="뒤로가기">
-            <ChevronLeft size={20} />
+            <RiArrowLeftSLine size={24} />
           </button>
           <p className="text-base">알림</p>
         </div>
         <Link href="/mypage/notifications" aria-label="알림 설정" className="text-muted-foreground">
-          <Settings size={20} />
+          <RiSettings3Line size={24} />
         </Link>
       </div>
 
@@ -132,7 +158,7 @@ export default function NotificationsPage() {
                 onClick={() => handleClick(item)}
                 className="flex w-full items-start gap-3 py-4 text-left"
               >
-                <Icon size={20} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <Icon size={24} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="mb-0.5 flex items-center gap-1.5">
                     {!item.read && <span className="h-1.5 w-1.5 shrink-0 rounded-sm bg-primary" />}

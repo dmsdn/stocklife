@@ -63,6 +63,12 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
 
+  /* ✅ 신규 — "중요 버튼" 전용 색 (자세한 이유는 :root 쪽 주석 참고) */
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand: var(--brand);
+  --color-main: var(--main);
+  --color-main-foreground: var(--main-foreground);
+
   /* 팝오버/드롭다운 배경 */
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -123,12 +129,24 @@
   --text-base--line-height: 21px;
   --text-md: 16px;   /* 부제목 */
   --text-md--line-height: 25px;
+  /* ✅ 홈 화면 등 실측 픽셀(text-[Npx]) 값을 전부 +5px 해서 이 스케일에 맞춰 넣는 과정에서
+     기존 단계 사이에 걸치는 값이 나와 새로 추가함(2026-09) */
+  --text-17: 17px;
+  --text-17--line-height: 25px;
   --text-lg: 18px;   /* 화면 제목 */
   --text-lg--line-height: 32px;
+  --text-19: 19px;
+  --text-19--line-height: 28px;
   --text-xl: 20px;
   --text-xl--line-height: 28px;
+  --text-21: 21px;
+  --text-21--line-height: 30px;
   --text-2xl: 24px;
   --text-2xl--line-height: 32px;
+  --text-25: 25px;
+  --text-25--line-height: 34px;
+  --text-37: 37px;
+  --text-37--line-height: 44px;
 }
 
 /* ============================================
@@ -137,14 +155,17 @@
    ============================================ */
 :root {
   /* Primitive 그레이 스케일 — 다른 곳에서 직접 참조 금지, 아래 시맨틱 이름을 통해서만 사용 */
+  /* ✅ 2026-08 홈 리디자인 — 무채색이 아니라 살짝 cool(청색 계열)로 기울인 그레이 스케일로
+     조정. 완전 검은색(#000000)이나 R=G=B인 순수 무채색 대신, B채널이 R보다 살짝 높은 값을
+     써서 차갑고 세련된 톤을 냄. gray-950도 순흑이 아니라 짙은 청회색. */
   --gray-0: #ffffff;
-  --gray-50: #fafafa;
-  --gray-100: #f5f5f5;
-  --gray-200: #e5e5e5;
-  --gray-400: #a3a3a3;
-  --gray-700: #525252;
-  --gray-900: #262626;
-  --gray-950: #171717;
+  --gray-50: #f8fafb;
+  --gray-100: #f1f4f6;
+  --gray-200: #dde3e7;
+  --gray-400: #98a1a8;
+  --gray-700: #4a5158;
+  --gray-900: #21252b;
+  --gray-950: #15181c;
 
   /* 페이지 배경 / 기본 글자색 */
   --background: var(--gray-0);   /* 순백 고정 */
@@ -158,9 +179,31 @@
   --popover: var(--gray-0);
   --popover-foreground: var(--gray-950);
 
-  /* 브랜드 강조색 자리 — 지금은 흑, 나중에 포인트 컬러 정해지면 이 두 줄만 교체 */
+  /* ⚠ teal은 메인/전역 포인트 컬러로 쓰지 않기로 함 — 아이콘·버튼은 검은색(흑백)으로
+     통일. --teal-* 값 자체는 남겨둠(포인트 컬러를 부분 적용할 자리를 찾는 리서치용,
+     별첨 PDF 참고) — 아래 시맨틱 토큰은 다시 흑백을 참조하도록 되돌림. */
+  --teal-50: #f0fdfa;
+  --teal-100: #ccfbf1;
+  --teal-200: #99f6e4;
+  --teal-500: #14b8a6;
+  --teal-600: #0d9488;
+  --teal-700: #0f766e;
+  --teal-900: #134e4a;
+
+  /* ✅ 메인 컬러 확정값 — #EE4908. 어디에 적용할지는 아직 미정이라, 우선 변수만
+     정의해두고 --primary/--brand 등 실제 쓰이는 토큰은 지금처럼 흑백을 유지합니다.
+     특정 요소에 브랜드색을 넣고 싶을 때 이 변수(var(--main))를 참조하세요. */
+  --main: #ee4908;
+  --main-foreground: var(--gray-0);
+
+  /* 브랜드 강조색 — 체크박스/선택된 탭/필터칩/진행바 등에서 공용으로 쓰는 포인트 컬러.
+     아이콘·버튼 통일 요청에 따라 다시 검정으로. */
   --primary: var(--gray-950);
   --primary-foreground: var(--gray-0);
+
+  /* "중요 버튼"(꽉 찬 배경의 default/secondary 버튼) 전용 색. 마찬가지로 검정. */
+  --brand: var(--gray-950);
+  --brand-foreground: var(--gray-0);
 
   /* 보조 버튼/배경 */
   --secondary: var(--gray-400);
@@ -247,4 +290,10 @@ input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0 1000px var(--muted) inset;
   box-shadow: 0 0 0 1000px var(--muted) inset;
   transition: background-color 9999s ease-in-out 0s;
+}
+
+/* ✅ 알림 종 위 미확인 개수 배지 — "둥둥 떠다니는" 느낌의 은은한 상하 부유 애니메이션 */
+@keyframes badge-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }

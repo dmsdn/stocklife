@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { RiArrowRightSLine } from "@remixicon/react";
 import { SubpageHeader } from "./subpage-header";
 
 interface CategoryListItem {
@@ -15,7 +15,7 @@ export function CategoryList({ title, items }: { title: string; items: CategoryL
         {items.map((item) => (
           <Link key={item.href} href={item.href} className="flex items-center justify-between py-3 text-sm">
             {item.label}
-            <ChevronRight size={16} className="text-muted-foreground" />
+            <RiArrowRightSLine size={24} className="text-muted-foreground" />
           </Link>
         ))}
       </div>

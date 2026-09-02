@@ -1,3 +1,13 @@
+// app/auth/signup/terms/page.tsx
+// ✅ 참고 디자인(Frame 112) 기준 전면 재작성. 예전엔 카드(bg-card) 안에 2줄 설명+캡션이
+//   붙은 항목이었는데, 참고 디자인은 타이틀 아래 여백 있는 리스트, 항목당 한 줄, 회색 사각
+//   체크박스, 우측 화살표(있는 항목만) 구조입니다.
+//   ⚠ "마케팅 정보 수신 동의"는 참고 이미지에 [필수]로 표기돼 있지만, 마케팅 동의를
+//   필수로 강제하면 정보통신망법상 문제 소지가 있어 실제 필수 체크(버튼 활성화 조건)에는
+//   포함하지 않았습니다 — 라벨 표기만 이미지와 맞추고, "필수"는 실제로 개인정보 동의만
+//   유지합니다. 확인 부탁드립니다.
+//   ⚠ 카메라/마이크/마케팅 항목은 lib/legal-content.ts에 본문이 없어 화살표(상세보기)를
+//   달지 않았습니다 — 실제 콘텐츠가 있는 "개인정보 수집·이용"만 눌러서 볼 수 있습니다.
 "use client";
 
 import { useState } from "react";
@@ -5,46 +15,24 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TermsModal } from "@/components/domain/terms-modal";
-import { legalDocs, signupTermsOrder } from "@/lib/legal-content";
 import { writeSignupDraft } from "@/lib/signup-draft";
-
-const REQUIRED_LEGAL_IDS = ["service", "privacy"];
 
 export default function SignupTermsPage() {
   const router = useRouter();
 
-  const [agreed, setAgreed] = useState<Record<string, boolean>>({});
+  const [personalInfoConsent, setPersonalInfoConsent] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [cameraConsent, setCameraConsent] = useState(false);
   const [micConsent, setMicConsent] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
 
-  const allAgreed =
-    signupTermsOrder.every((id) => agreed[id]) &&
-    cameraConsent &&
-    micConsent &&
-    marketingConsent;
-
-  const requiredMet = REQUIRED_LEGAL_IDS.every(
-    (id) => agreed[id]
-  );
+  const allAgreed = personalInfoConsent && marketingConsent && cameraConsent && micConsent;
+  const requiredMet = personalInfoConsent;
 
   const toggleAll = (checked: boolean) => {
-    setAgreed(
-      Object.fromEntries(
-        signupTermsOrder.map((id) => [id, checked])
-      )
-    );
-
+    setPersonalInfoConsent(checked);
+    setMarketingConsent(checked);
     setCameraConsent(checked);
     setMicConsent(checked);
-    setMarketingConsent(checked);
-  };
-
-  const toggleOne = (id: string) => {
-    setAgreed((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
   };
 
   const handleNext = () => {
@@ -52,119 +40,79 @@ export default function SignupTermsPage() {
 
     /*
      * 약관 동의 상태만 임시 저장.
-     *
-     * 여기서 signup API를 호출하면 안 됨.
-     * 실제 회원가입은 추가정보 입력까지 끝난 뒤
-     * profile/page.tsx에서 최종적으로 호출한다.
+     * 실제 회원가입은 추가정보 입력까지 끝난 뒤 profile/page.tsx에서 최종 호출한다.
      */
-    writeSignupDraft({
-      personalInfoConsent: !!agreed["privacy"],
-      cameraConsent,
-      micConsent,
-      marketingConsent,
-    });
-
+    writeSignupDraft({ personalInfoConsent, cameraConsent, micConsent, marketingConsent });
     router.push("/auth/signup");
   };
 
+  const items: {
+    key: string;
+    label: string;
+    checked: boolean;
+    onChange: () => void;
+    docId: string;
+  }[] = [
+    {
+      key: "personal",
+      label: "[필수] 개인정보 수집, 이용 동의",
+      checked: personalInfoConsent,
+      onChange: () => setPersonalInfoConsent((v) => !v),
+      docId: "privacy",
+    },
+    {
+      key: "marketing",
+      label: "[선택] 마케팅 정보 수신 동의",
+      checked: marketingConsent,
+      onChange: () => setMarketingConsent((v) => !v),
+      docId: "marketing",
+    },
+    {
+      key: "camera",
+      label: "[선택] 카메라 접근 동의",
+      checked: cameraConsent,
+      onChange: () => setCameraConsent((v) => !v),
+      docId: "camera",
+    },
+    {
+      key: "mic",
+      label: "[선택] 마이크 접근 동의",
+      checked: micConsent,
+      onChange: () => setMicConsent((v) => !v),
+      docId: "mic",
+    },
+  ];
+
   return (
-    <div>
-      <div className="space-y-4 rounded-b-md bg-card p-6">
-        {/* 전체 동의 */}
-        <label className="flex items-center gap-2 text-base font-medium">
-          <Checkbox
-            checked={allAgreed}
-            onChange={() => toggleAll(!allAgreed)}
-          />
-          약관 모두 동의
+    <div className="flex min-h-full flex-col pt-[85px]">
+      <h1 className="text-2xl font-bold leading-8">
+        <span className="font-black">STOCK LIFE</span> 서비스 이용약관에
+        <br />
+        동의해주세요
+      </h1>
+
+      <div className="mt-9">
+        <label className="flex items-center gap-2.5 text-sm font-medium">
+          <Checkbox checked={allAgreed} onChange={() => toggleAll(!allAgreed)} variant="brand" />
+          전체 동의
         </label>
 
-        <div className="space-y-3 border-t border-border pt-3">
-          {signupTermsOrder.map((id) => {
-            const required = REQUIRED_LEGAL_IDS.includes(id);
-
-            return (
-              <div
-                key={id}
-                className="flex items-center justify-between text-sm text-muted-foreground"
-              >
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    checked={!!agreed[id]}
-                    onChange={() => toggleOne(id)}
-                  />
-
-                  <span>
-                    [{required ? "필수" : "선택"}]{" "}
-                    {legalDocs[id].title}
-                  </span>
-                </div>
-
-                <TermsModal docId={id} />
-              </div>
-            );
-          })}
-
-          {/* 카메라 */}
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              checked={cameraConsent}
-              onChange={() =>
-                setCameraConsent((v) => !v)
-              }
-            />
-
-            <span>
-              [선택] 카메라 접근 동의
-              <br />
-              <span className="text-xs text-muted-foreground/70">
-                상품 사진 검색 및 상품 스캔에 사용
-              </span>
-            </span>
-          </div>
-
-          {/* 마이크 */}
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              checked={micConsent}
-              onChange={() =>
-                setMicConsent((v) => !v)
-              }
-            />
-
-            <span>
-              [선택] 마이크 접근 동의
-              <br />
-              <span className="text-xs text-muted-foreground/70">
-                음성 질의 기능에 사용
-              </span>
-            </span>
-          </div>
-          {/* 마케팅 */}
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Checkbox
-              checked={marketingConsent}
-              onChange={() =>
-                setMarketingConsent((v) => !v)
-              }
-            />
-
-            <span>
-              [선택] 마케팅 정보 수신 동의
-              <br />
-              <span className="text-xs text-muted-foreground/70">
-                할인/이벤트 알림 등에 사용
-              </span>
-            </span>
-          </div>
+        <div className="mt-[13px] space-y-[17px] border-t border-border pt-[13px]">
+          {items.map((item) => (
+            <div key={item.key} className="flex items-center justify-between gap-2">
+              <label className="flex min-w-0 flex-1 items-center gap-2.5 text-sm">
+                <Checkbox checked={item.checked} onChange={item.onChange} variant="brand" />
+                <span className="truncate">{item.label}</span>
+              </label>
+              <TermsModal docId={item.docId} />
+            </div>
+          ))}
         </div>
+      </div>
 
-        <Button
-          className="w-full"
-          disabled={!requiredMet}
-          onClick={handleNext}
-        >
-          동의하고 계속하기
+      <div className="mt-auto pb-[42px] pt-10">
+        <Button className="h-[60px] w-full rounded-full" disabled={!requiredMet} onClick={handleNext}>
+          동의하고 가입하기
         </Button>
       </div>
     </div>

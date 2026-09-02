@@ -8,7 +8,7 @@
     {
       "zoneId": "F2-A",
       "letter": "A",
-      "label": "반려용품 구역",
+      "label": "반려동물용품 구역",
       "color": "#bce0c0"
     },
     {
@@ -38001,4 +38001,5 @@
     { "id": "optical-hearing-center", "label": "안경 / 보청기 센터", "x": 2, "y": 37, "w": 10, "h": 3 },
     { "id": "pharmacy", "label": "약국", "x": 2, "y": 40, "w": 10, "h": 3 },
     { "id": "tasting-corner", "label": "시식 코너", "x": 14, "y": 37, "w": 30, "h": 5 }
-  ]}
+  ]
+}

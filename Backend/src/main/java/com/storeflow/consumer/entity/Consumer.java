@@ -54,8 +54,14 @@ public class Consumer {
     @Column(name = "grade", nullable = false)
     private Grade grade = Grade.BASIC;
 
-    @Column(name = "monthly_spend_amount", nullable = false)
-    private int monthlySpendAmount = 0;
+    // 사용 가능한 포인트 잔액 — 포인트 사용(차감) 시 줄어든다.
+    @Column(name = "point_balance", nullable = false)
+    private int pointBalance = 0;
+
+    // 평생 누적 적립 포인트 — 사용해도 줄지 않는다. 등급은 이 값을 기준으로 계산한다
+    // (5-4: monthlySpendAmount/매달 리셋 방식 폐기, 누적이라 리셋 개념 자체가 없음).
+    @Column(name = "point_earned_total", nullable = false)
+    private int pointEarnedTotal = 0;
 
     // 회원탈퇴 시각. null이면 정상 회원. phone_number가 UNIQUE라서 완전 삭제 대신
     // 이 컬럼으로 소프트 삭제하고, 전화번호는 재가입 가능하도록 tombstone 값으로 바꿔둔다.
@@ -138,15 +144,52 @@ public class Consumer {
     public boolean isMarketingConsent() { return marketingConsent; }
     public String getRefreshToken() { return refreshToken; }
     public Grade getGrade() { return grade; }
-    public int getMonthlySpendAmount() { return monthlySpendAmount; }
+    public int getPointBalance() { return pointBalance; }
+    public int getPointEarnedTotal() { return pointEarnedTotal; }
 
-    public void addSpend(int amount) {
-        this.monthlySpendAmount += amount;
-        this.grade = Grade.calculateFrom(this.monthlySpendAmount);
+    // 적립률 2%. 결제 금액(원)을 받아 포인트로 환산해 적립하고, 실제 적립된 포인트 수를 반환한다.
+    // 등급은 적립 직후 즉시(스케줄러 없이) 누적 포인트 기준으로 재계산한다.
+    private static final double POINT_EARN_RATE = 0.02;
+
+    public int earnPoints(int paymentAmountKrw) {
+        int earned = (int) Math.floor(paymentAmountKrw * POINT_EARN_RATE);
+        this.pointBalance += earned;
+        this.pointEarnedTotal += earned;
+        this.grade = Grade.calculateFrom(this.pointEarnedTotal);
+        return earned;
     }
 
-    public void resetMonthlySpend() {
-        this.monthlySpendAmount = 0;
-        this.grade = Grade.calculateFrom(0);
+    /**
+     * 포인트 사용(차감). 5-3: checkout에서 결제 시 사용할 포인트 수량을 검증 후 차감한다.
+     * 잔액(pointBalance)만 줄이고 누적 적립(pointEarnedTotal)은 그대로 둬서 등급에 영향 없음.
+     */
+    public void usePoints(int amount) {
+        if (amount <= 0) return;
+        if (amount > this.pointBalance) {
+            throw new IllegalStateException("포인트 잔액이 부족합니다. 잔액=" + pointBalance + ", 요청=" + amount);
+        }
+        this.pointBalance -= amount;
+    }
+
+    /**
+     * 환불 시 "사용했던 포인트"를 잔액으로 되돌린다. 이건 새로 적립되는 게 아니라
+     * 원래 있던 걸 되돌려주는 것뿐이라 pointEarnedTotal(등급 산정용 누적)은 건드리지 않는다.
+     */
+    public void refundUsedPoints(int amount) {
+        if (amount <= 0) return;
+        this.pointBalance += amount;
+    }
+
+    /**
+     * 환불 시 "이 결제로 적립됐던 포인트"를 취소한다. 애초에 정상적으로 적립된 게 아니게
+     * 되므로 잔액과 누적 적립 둘 다 줄이고, 등급도 취소 후 기준으로 다시 계산한다.
+     * 이미 다른 데 써버려서 잔액이 부족한 경우엔 잔액은 0까지만 깎는다(음수 방지) —
+     * 데모 범위에서는 이 정도로 충분하고, 실서비스라면 "포인트 마이너스 잔액" 정책을 정해야 함.
+     */
+    public void reverseEarnedPoints(int amount) {
+        if (amount <= 0) return;
+        this.pointBalance = Math.max(0, this.pointBalance - amount);
+        this.pointEarnedTotal = Math.max(0, this.pointEarnedTotal - amount);
+        this.grade = Grade.calculateFrom(this.pointEarnedTotal);
     }
 }

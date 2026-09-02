@@ -43,6 +43,11 @@ dependencies {
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	runtimeOnly 'com.h2database:h2' // 로컬 개발용 (팀원 MySQL 컨테이너 접속 전까지 임시 사용)
 
+	// 채팅 첨부파일(카메라/갤러리/파일/영수증) 업로드용 — NCP Object Storage가 S3 호환 API라 AWS SDK v2로 접근.
+	// [저장소 비용 문제로 임시 비활성화] NCP Object Storage(유료) — 다시 쓸 때 주석 해제
+	// implementation platform('software.amazon.awssdk:bom:2.28.11')
+	// implementation 'software.amazon.awssdk:s3'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

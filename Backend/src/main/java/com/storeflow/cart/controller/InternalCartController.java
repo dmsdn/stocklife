@@ -50,7 +50,16 @@ public class InternalCartController {
         addRequest.setSkuId(request.getSkuId());
         addRequest.setQuantity(request.getQuantity() != null ? request.getQuantity() : 1);
 
-        cartService.addItem(request.getConsumerId(), addRequest);
+        // groupId가 오면 그 리스트에, 없으면 기존과 동일하게 "기본 장바구니"에 담는다(하위 호환).
+        if (request.getGroupId() != null) {
+            try {
+                cartService.addItemToGroup(request.getConsumerId(), request.getGroupId(), addRequest);
+            } catch (IllegalStateException e) {
+                return ResponseEntity.status(404).body(e.getMessage());
+            }
+        } else {
+            cartService.addItem(request.getConsumerId(), addRequest);
+        }
         return ResponseEntity.status(201).build();
     }
 
@@ -65,6 +74,19 @@ public class InternalCartController {
 
         List<CartItemResponse> cart = cartService.getCart(consumerId);
         return ResponseEntity.ok(cart);
+    }
+
+    /** 시뮬레이션 상단 UI에서 "어느 리스트에 담을지" 고르는 드롭다운을 채우기 위한 목록 조회. */
+    @GetMapping("/groups")
+    public ResponseEntity<?> getGroups(@RequestHeader("X-Internal-Service-Key") String key,
+                                       @RequestParam Long consumerId) {
+        try {
+            internalServiceAuth.verify(key);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(401).body(e.getMessage());
+        }
+
+        return ResponseEntity.ok(cartService.getGroups(consumerId));
     }
 
     @PatchMapping("/{cartItemId}")
@@ -107,7 +129,7 @@ public class InternalCartController {
         return ResponseEntity.noContent().build();
     }
 
-        @GetMapping("/session")
+    @GetMapping("/session")
     public ResponseEntity<?> getSessionCart(@RequestHeader("X-Internal-Service-Key") String key,
                                             @RequestParam Long consumerId) {
         try {
@@ -117,5 +139,23 @@ public class InternalCartController {
         }
 
         return ResponseEntity.ok(cartService.getSessionCart(consumerId));
+    }
+
+    @GetMapping("/scanned")
+    public ResponseEntity<?> getScannedCart(
+            @RequestHeader("X-Internal-Service-Key") String key,
+            @RequestParam Long consumerId
+    ) {
+        try {
+            internalServiceAuth.verify(key);
+        } catch (SecurityException e) {
+            return ResponseEntity
+                    .status(401)
+                    .body(e.getMessage());
+        }
+
+        return ResponseEntity.ok(
+                cartService.getScannedCart(consumerId)
+        );
     }
 }

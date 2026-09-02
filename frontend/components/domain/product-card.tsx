@@ -1,4 +1,4 @@
-import { Trash2, Heart } from "lucide-react";
+import { RiDeleteBin6Line, RiBookmarkLine, RiBookmarkFill, RiMapPinLine } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { QuantityStepper } from "./quantity-stepper";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +20,10 @@ export interface ProductCardProps {
   onWishlistToggle?: () => void;
   wishlisted?: boolean;
   className?: string;
+  // ✅ "3층 유제품 코너" 같은 위치 텍스트. 있으면 버튼으로 렌더링하고 누르면 onLocationClick 호출.
+  //   둘 다 안 넘기면 기존과 동일하게 아무것도 안 보여줌(기존 화면들 영향 없음).
+  locationText?: string;
+  onLocationClick?: () => void;
 }
 
 export function ProductCard({
@@ -38,6 +42,8 @@ export function ProductCard({
   onWishlistToggle,
   wishlisted = false,
   className,
+  locationText,
+  onLocationClick,
 }: ProductCardProps) {
   const showSelect = variant === "selectable" || variant === "simple";
 
@@ -68,6 +74,17 @@ export function ProductCard({
           <p className="text-xs text-muted-foreground">(개당 {unitPrice.toLocaleString()}원)</p>
         </div>
 
+        {locationText && (
+          <button
+            type="button"
+            onClick={onLocationClick}
+            className="mt-1 flex w-fit items-center gap-1 text-xs text-muted-foreground underline underline-offset-2"
+          >
+            <RiMapPinLine size={24} />
+            {locationText}
+          </button>
+        )}
+
         {variant === "selectable" && (
           <div className="mt-2 flex items-center gap-2">
             <QuantityStepper quantity={quantity} onChange={(q) => onQuantityChange?.(q)} size="md" />
@@ -78,7 +95,7 @@ export function ProductCard({
                 onClick={onRemove}
                 className="ml-auto flex h-7 w-7 items-center justify-center text-muted-foreground"
               >
-                <Trash2 size={16} />
+                <RiDeleteBin6Line size={24} />
               </button>
             )}
           </div>
@@ -102,7 +119,7 @@ export function ProductCard({
                 aria-label={wishlisted ? "찜 해제" : "찜하기"}
                 className="flex h-7 w-7 items-center justify-center text-muted-foreground"
               >
-                <Heart size={16} fill={wishlisted ? "currentColor" : "none"} />
+                {wishlisted ? <RiBookmarkFill size={24} /> : <RiBookmarkLine size={24} />}
               </button>
             )}
           </div>

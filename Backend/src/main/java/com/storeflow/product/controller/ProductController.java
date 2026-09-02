@@ -20,6 +20,12 @@ public class ProductController {
         this.productSearchService = productSearchService;
     }
 
+    /** 소비 분석 화면의 대분류 필터/범례용 — 전체 대분류(categoryL1) 목록. */
+    @GetMapping("/categories")
+    public ResponseEntity<List<String>> getAllCategoryL1() {
+        return ResponseEntity.ok(productSearchService.getAllCategoryL1());
+    }
+
     /** 쇼핑몰/요구사항 8번 조건형 검색. */
     @GetMapping("/search")
     public ResponseEntity<List<ProductSearchResponse>> search(
@@ -64,8 +70,8 @@ public class ProductController {
             return ResponseEntity.status(404).body(e.getMessage());
         }
     }
-        /** 바코드 조회(36번). Scan&Go의 시작점. */
-        @GetMapping("/barcode/{barcode}")
+    /** 바코드 조회(36번). Scan&Go의 시작점. */
+    @GetMapping("/barcode/{barcode}")
     public ResponseEntity<?> getByBarcode(@PathVariable String barcode) {
         try {
             return ResponseEntity.ok(productSearchService.getByBarcode(barcode));

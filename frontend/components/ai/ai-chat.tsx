@@ -5,7 +5,7 @@
 //   이미 담당). 전체화면 형태로 어딘가에 다시 쓰고 싶으시면 이 컴포넌트를 그대로 불러쓰면 됩니다.
 "use client";
 
-import { ChevronLeft } from "lucide-react";
+import { RiArrowLeftSLine } from "@remixicon/react";
 import { AiChatBody, type AiChatBodyProps } from "./ai-chat-body";
 
 interface AiChatProps extends AiChatBodyProps {
@@ -18,7 +18,7 @@ export function AiChat({ onBack, ...bodyProps }: AiChatProps) {
       <div className="flex shrink-0 items-center gap-3 p-4">
         {onBack && (
           <button type="button" onClick={onBack} aria-label="뒤로가기">
-            <ChevronLeft size={20} />
+            <RiArrowLeftSLine size={24} />
           </button>
         )}
         <span className="text-base">AI에게 물어보기</span>
