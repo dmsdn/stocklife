@@ -587,6 +587,14 @@ def main() -> None:
     from collections import Counter
     cause_all = Counter()
     cause_by_case = {c["id"]: Counter() for c in cases}
+    # ── ② 도구 시퀀스 수집 (09-02) — PASS 안정성과 **다른 축**이다 ──────────
+    # tally 는 「붙었나」를 모으고, 이것은 「어느 길로 갔나」를 모은다.
+    # 같은 케이스가 3판 다 PASS 인데 매판 다른 도구 순서로 갔다면, 그 PASS 는
+    # 규율이 아니라 **아직 안 걸린 것**이다 — B회신22 의 「지원 0 인데 PASS」
+    # (D3 에서 붙고 D4 에서 뒤집힘)의 실시간 짝. J2 심판도 이걸 원리적으로
+    # 못 본다(실행된 호출만 재검하므로). tuple 로 바꿔 담는 이유: set 에 넣어
+    # 종수를 세려면 해시 가능해야 한다(리스트는 안 된다).
+    seqs = {c["id"]: [] for c in cases}
     for rep_i in range(1, repeat + 1):
         if repeat > 1:
             print(f"── {rep_i}/{repeat} 회차 " + "─" * 46)
@@ -604,6 +612,7 @@ def main() -> None:
                 crashes.append(f"{case['id']}: {type(e).__name__}")
             mark = "PASS" if r["ok"] else "FAIL"
             tally[case["id"]].append(bool(r["ok"]))
+            seqs[case["id"]].append(tuple(r.get("tools") or ()))
             if r["ok"]:
                 n_pass += 1
             print(f"{i:>2}. {mark}  {case['id']:<22} {case['why'][:44]}")   # ㊿
@@ -634,6 +643,11 @@ def main() -> None:
             bar = "".join("●" if x else "○" for x in v)
             tag = ("  ← 흔들림" if k in flaky else
                    "  ← 항상 실패" if k in always else "")
+            # 시퀀스 종수 — 1종이 정상이다. 2종 이상이면 모델이 매판 길을
+            # 새로 고르고 있다는 뜻이라, PASS 여도 여기 표시가 남는다.
+            _ns = len(set(seqs[k]))
+            if _ns > 1:
+                tag += f"  · 시퀀스 {_ns}종"
             # 흔들리거나 늘 깨지는 케이스는 **어느 층에서** 그런지를 같이 찍는다.
             # 같은 「흔들림」이라도 routing 이면 설명문, content 면 재료다.
             if cause_by_case[k]:
@@ -649,6 +663,26 @@ def main() -> None:
             print("     고칠 곳은 프롬프트·description 이다.")
         if always:
             print(f"  ❌ 항상 실패 {len(always)}개: {', '.join(always)}")
+
+        # ── ② 시퀀스 갈림 보고 ──────────────────────────────────────────────
+        # 전판 PASS 인데 갈린 케이스가 **제일 위험하다** — 채점으로는 안 보이고
+        # 다음 판(모델·설명문이 조금 바뀐 날)에 뒤집힌다. FAIL 이 섞인 갈림은
+        # 이미 흔들림 보고에 잡히므로 여기서는 위험 표시만 더한다.
+        diverged = {k: len(set(v)) for k, v in seqs.items() if len(set(v)) > 1}
+        if diverged:
+            risky = [k for k in diverged if all(tally[k])]
+            print(f"\n■ 도구 시퀀스 갈림 {len(diverged)}건"
+                  + (f" — 그중 **전판 PASS 인 채 갈림 {len(risky)}건** ← 위험"
+                     if risky else ""))
+            for k, ns in sorted(diverged.items()):
+                mark = " ← PASS 인데 갈림" if k in risky else ""
+                print(f"  {k}: {ns}종{mark}")
+                for sq in sorted(set(seqs[k])):
+                    print(f"      · {' → '.join(sq) if sq else '(도구 없음)'}")
+            if risky:
+                print("     PASS 라서 아무도 안 보게 되는 자리다. 원인은 대개")
+                print("     설명문 경계의 모호함이고, 로컬 모델이면 그 문형 칸의")
+                print("     재료가 두 길을 반반 가르치고 있는 것이다(28:28 계열).")
 
     if cause_all:
         # ── 원인 분포 — 「무엇이 깨졌나」가 아니라 「어느 층이 깨졌나」 ──────────
@@ -667,6 +701,17 @@ def main() -> None:
         print("     같은 예외가 전 케이스에 걸렸으면 코드가 아니라 **환경**을 본다")
         print("     (인터프리터·백엔드·시드). 케이스마다 다르면 그때가 코드다.")
 
+    # ── ③ 소계 분리 — 부정 행동 케이스는 **딴 표**다 ────────────────────────
+    # 본표 수(28)는 D3·D4 채점의 기준선이라 여기 섞으면 판 간 비교가 죽는다.
+    # 합계는 그대로 두고(종료 코드도 합계 기준) 소계만 갈라 찍는다.
+    _grp = {c["id"]: c.get("group", "main") for c in cases}
+    if any(g != "main" for g in _grp.values()):
+        for gname, glabel in (("main", "본표"), ("negative", "부정 행동")):
+            ids = [k for k, g in _grp.items() if g == gname]
+            if ids:
+                gp = sum(sum(tally[k]) for k in ids)
+                gt = sum(len(tally[k]) for k in ids)
+                print(f"  {glabel:5s} {gp}/{gt}")
     print(f"\n결과: {n_pass}/{total} PASS" + (f" ({repeat}회 합산)" if repeat > 1 else ""))
     # 하나라도 깨졌으면 실패 코드로 끝낸다 — 스크립트가 이어지는 걸 막는다(㊾)
     sys.exit(0 if n_pass == total else 1)
