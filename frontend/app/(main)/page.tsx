@@ -32,6 +32,7 @@ import { apiFetch, getAccessToken, isLoggedIn } from "@/lib/api-client";
 import { getMyProfile } from "@/lib/consumer-api";
 import { getClientId } from "@/lib/client-id";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notifications";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { getCategoryColor } from "@/lib/category-colors";
 import { CartPicker } from "@/components/home/cart-picker";
 import { Footer } from "@/components/layout/footer";
@@ -87,6 +88,14 @@ export default function HomePage() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [profileName, setProfileName] = useState<string | null>(null);
   const unreadCount = useUnreadNotificationCount();
+  // ✅ 신규 — 이 페이지는 Footer가 있어서 Footer 스스로 하단탭바 여백을 확보함(자기 배경색
+  //   그대로). main이 똑같은 여백을 또 예약하면 이중으로 잡혀서(그것도 다른 색으로) "이상한
+  //   패딩"처럼 보였던 진짜 원인 — main의 예약을 꺼서 이 문제 자체를 없앰.
+  const { setNoReserve } = useBottomBarVisibility();
+  useEffect(() => {
+    setNoReserve(true);
+    return () => setNoReserve(false);
+  }, [setNoReserve]);
 
   useEffect(() => {
     setShoppingSession(readShoppingSession());
@@ -187,14 +196,14 @@ export default function HomePage() {
 
   return (
     <div className="min-h-full w-full overflow-x-hidden bg-surface-subtle text-[#171717]">
-      <div className="mx-auto w-full max-w-[390px] bg-surface-subtle">
+      <div className="mx-auto w-full bg-surface-subtle md:max-w-2xl">
         {/* Header */}
         <header className="flex h-[55px] items-center justify-between px-4">
           <Link href="/" aria-label="홈">
-            <img src="/icons/logo-shopping.svg" alt="STOCK LIFE" className="h-[17px] w-auto" />
+            <img src="/icons/logo-shopping.svg" alt="STOCK LIFE" className="h-[24px] w-auto" />
           </Link>
           <Link href="/notifications" aria-label="알림" className="relative flex h-8 w-8 items-center justify-center">
-            <RiNotification4Line size={20} />
+            <RiNotification4Line size={24} />
             {unreadCount > 0 && (
               <span className="absolute right-0 top-0 flex h-4 min-w-4 animate-[badge-float_2s_ease-in-out_infinite] items-center justify-center rounded-full bg-main px-0.5 text-xs font-semibold leading-none text-white">
                 {unreadCount > 9 ? "9+" : unreadCount}
@@ -203,15 +212,19 @@ export default function HomePage() {
           </Link>
         </header>
 
-        <main className="px-3">
-          {/* ✅ 수정(요청 2번) — 상단 검색바 제거(바로가기 카드의 "상품 검색"으로 충분).
+        <main>
+          {/* ✅ 수정(요청) — main의 공통 px-3를 없애고, 섹션마다 필요한 만큼만 좌우 여백을
+              직접 줌(카드류는 mx-3, 텍스트는 px-3). 이렇게 해야 배너/운영시간 이미지처럼
+              화면 끝까지 붙어야 하는 요소들이 main의 여백에 딸려오지 않고 자연스럽게
+              풀블리드가 됨(-mx-3로 상쇄하던 예전 방식 대신, 애초에 안 물려받게).
+              ✅ 수정(요청 2번) — 상단 검색바 제거(바로가기 카드의 "상품 검색"으로 충분).
               대신 그 자리를 인사말 위쪽 여백으로 돌려서 인사말을 더 여유있게 보이게 함.
               인사말을 누르면 마이페이지로 이동. */}
           {loggedIn ? (
             <button
               type="button"
               onClick={() => router.push("/mypage")}
-              className="block w-full pb-3 pt-8 text-left"
+              className="block w-full px-[20px] pb-3 pt-[30px] text-left"
             >
               <p className="text-19 font-medium">
                 {profileName ? `${profileName}님, ` : ""}
@@ -220,11 +233,11 @@ export default function HomePage() {
               <p className="mt-1 text-sm text-content-tertiary">3일 뒤에 STOCKLIFE에 방문하실 예정이에요</p>
             </button>
           ) : (
-            <div className="pt-8" />
+            <div className="pt-[30px]" />
           )}
 
           {!loggedIn ? (
-            <section className="rounded-[20px] border border-card-border bg-white p-5">
+            <section className="mx-[20px] rounded-[20px] border border-card-border bg-white p-5">
               <p className="text-md text-content-quaternary">로그인하고</p>
               <div className="mt-1 flex items-center justify-between">
                 <p className="text-xl font-medium">LIV와 함께 시작해보세요</p>
@@ -241,7 +254,7 @@ export default function HomePage() {
           ) : (
             // ✅ 쇼핑 중(스캔 세션 있음)일 때만 "방문해주셔서 감사합니다" 카드,
             //   평소(세션 없음)엔 "다음 방문 날짜" 카드 — 예전엔 이 둘이 뒤바뀌어 있었음.
-            <section className="rounded-[20px] border border-card-border bg-white p-5">
+            <section className="mx-[20px] rounded-[20px] border border-card-border bg-white p-5">
               <p className="text-17 font-medium">{shoppingSession ? "STOCK LIFE 매장에 방문해주셔서 감사합니다." : "이번주 장보기"}</p>
               <p className="mt-1 text-sm text-content-tertiary">영업중 · 11:00 마감</p>
               {!shoppingSession ? (
@@ -305,7 +318,7 @@ export default function HomePage() {
               왼쪽 카드는 고정 높이를 안 주고 grid의 기본 stretch로 오른쪽 두 칸 합친
               높이에 맞춰 늘어나게 함 — 오른쪽 칸 높이가 바뀌어도 항상 자동으로 맞음.
               이미지 3개 전부 카드 우측 하단에서 20px(=bottom-5 right-5) 띄워서 고정. */}
-          <section className="mt-2 grid grid-cols-2 items-stretch gap-2">
+          <section className="mx-[20px] mt-2 grid grid-cols-2 items-stretch gap-2">
             <button type="button" onClick={recentSession ? () => openSession(recentSession.sessionId) : () => openAiChat()} className="relative h-[288px] rounded-[20px] border border-card-border bg-white p-5 text-left">
               <div className="absolute left-5 top-5 text-left">
                 <p className="text-17 font-medium">리브와 함께</p>
@@ -335,13 +348,11 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* 포인트 / 장보기 배너 — ✅ 수정(2026-09) — 예전엔 mt-2만 있고 좌우로는 main의
-              px-3가 그대로 적용돼서 다른 카드들처럼 여백 있는 사각형으로 보였음(배너는
-              카드가 아니라 화면 끝까지 붙는 배너라 좌우 여백이 없어야 함). -mx-3로 그 여백을
-              지우고 화면 끝까지 붙이는 대신, 위아래로 my-5(20px)를 줘서 다른 섹션과는
-              분리되게 함. */}
+          {/* 포인트 / 장보기 배너 — ✅ 수정(2026-09) — main 자체에 좌우 padding이 없어졌기
+              때문에(예전엔 px-3라 -mx-3로 상쇄해야 했음) 이제 아무 여백 없이 그냥 두면
+              화면 끝까지 자연스럽게 붙음. 위아래로만 my-5(20px)를 줘서 다른 섹션과 분리. */}
           {loggedIn ? (
-            <section className="relative -mx-3 my-5 h-[105px] overflow-hidden bg-[#F7AE93] p-5">
+            <section className="relative my-[20px] h-[105px] overflow-hidden bg-[#F7AE93] p-5">
               <p className="text-19 font-bold">앱으로 결제하면 포인트 두 배</p>
               <p className="mt-1 text-xs">포인트를 적립할수록 더 많은 혜택이 있어요!</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -355,7 +366,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => router.push("/auth/login")}
-              className="relative -mx-3 my-5 block h-[125px] w-full overflow-hidden bg-[#92ECBD] p-5 text-left"
+              className="relative my-[20px] block h-[125px] w-full overflow-hidden bg-[#92ECBD] p-5 text-left"
             >
               <p className="text-21 font-bold">장보기 리스트, 간편하게 만들어보세요</p>
               <p className="mt-1 text-sm text-[#2f6850]">리브에게 물어보고 3초 만에 리스트 완성!</p>
@@ -374,7 +385,7 @@ export default function HomePage() {
             // ✅ 신규(요청 6번) — 스크롤 걸림 원인 추가 발견: 이 카드도 데이터가 늦게
             //   도착하면 갑자기 나타나서(또는 데이터가 없으면 사라져서) 아래 내용을
             //   밀어냈음. 로딩 중엔 같은 높이의 스켈레톤을 깔아 둠.
-            <div className="mt-2 h-[132px] animate-pulse rounded-[20px] border border-card-border bg-white p-5">
+            <div className="mx-[20px] mt-2 h-[132px] animate-pulse rounded-[20px] border border-card-border bg-white p-5">
               <div className="h-3.5 w-24 rounded-sm bg-card-border" />
               <div className="mt-2 h-4 w-40 rounded-sm bg-card-border" />
               <div className="mt-4 h-1.5 w-full rounded-full bg-card-border" />
@@ -383,7 +394,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => router.push("/mypage/spending")}
-              className="mt-2 block w-full rounded-[20px] border border-card-border bg-white p-5 text-left"
+              className="mx-[20px] mt-2 block w-full rounded-[20px] border border-card-border bg-white p-5 text-left"
             >
               {(() => {
                 const sorted = [...spending].sort((a, b) => b.totalSpentKrw - a.totalSpentKrw);
@@ -426,7 +437,7 @@ export default function HomePage() {
           ) : null}
 
           {/* 추천 상품 */}
-          <section className="mt-5">
+          <section className="mt-[30px] px-[20px]">
             <div className="mb-2 flex items-center gap-1 px-1 text-md font-semibold">
               <img src="/icons/liv-line.svg" alt="" className="h-4 w-4 shrink-0" />
               리브 추천
@@ -471,21 +482,22 @@ export default function HomePage() {
               실시간으로 바뀌는 상태 문구만 이미지 위 캡션으로 따로 남겨둠(이미지는 정적
               이라 그 부분은 이미지에 못 담음). 이미지 파일은 /public/store-hours/hours.png
               경로에 넣으면 됩니다.
-              ✅ 수정 — 배너와 마찬가지로 좌우 끝까지(-mx-3) + 라운드 제거(요청 4·5번). */}
-          {loggedIn ? (
-            <section className="mt-12">
-              <h2 className="text-lg font-semibold">매장 운영 시간</h2>
-              <p className="mt-1 text-sm text-content-tertiary">영업중 · 11:00 마감</p>
+              ✅ 수정 — main에 좌우 padding이 없어져서 이미지는 그냥 두면 화면 끝까지
+              자연스럽게 붙음(-mx-3 필요 없음). 제목/캡션 텍스트에만 px-3. 라운드 제거(요청
+              4·5번)도 유지. */}
+
+            <section className="mt-[30px]">
+              <h2 className="px-[20px] text-lg font-semibold">매장 운영 시간</h2>
+              <p className="px-[20px] mt-1 text-sm text-content-tertiary">영업중 · 11:00 마감</p>
               <button
                 type="button"
                 onClick={() => router.push("/store-hours")}
-                className="-mx-3 mt-3 block w-full overflow-hidden"
+                className="mt-3 block w-full overflow-hidden"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/store-hours/hours.png" alt="매장 운영 시간 안내" className="w-full object-cover" />
               </button>
             </section>
-          ) : null}
         </main>
 
         <Footer paddingClassName="px-3 md:px-8" />

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { login, toBackendPhone } from "@/lib/auth";
-import { notifySimulationLogin } from "@/lib/simulation-bridge";
 
 
 function formatPhone(value: string) {
@@ -47,9 +46,6 @@ function LoginPageInner() {
       // ✅ 로그인 유지 체크 여부를 실제로 반영 — 안 누르면 이 탭 닫을 때(sessionStorage)
       //   또는 새 탭/새 창을 열 때 로그아웃 상태로 보이게 됩니다.
       await login(toBackendPhone(phone), password, keepLoggedIn);
-      // ✅ 로그인 성공 직후 시뮬레이션(왼쪽 화면)에도 로그인 사실을 알려서
-      //   손님 캐릭터가 이 계정으로 전환되도록 함 (postMessage 브릿지).
-      void notifySimulationLogin();
       const next = searchParams.get("next");
       router.push(next && next.startsWith("/") ? next : "/");
     } catch (e) {

@@ -7,8 +7,6 @@ import { AiPanel } from "./ai-panel";
 import { AiMobileSheet } from "./ai-mobile-sheet";
 import { HomeAiHeader } from "./home-ai-header";
 import { AiProactiveBubble } from "./ai-proactive-bubble";
-import { useEffect } from "react";
-import { notifySimulationOfCurrentAuthOnce } from "@/lib/simulation-bridge";
 
 // ✅ AiPanel이 이제 position:fixed로 완전히 분리돼서 더 이상 flex 형제로 main 옆에
 //   나란히 배치되지 않는다(= main이 자동으로 좁아지지 않는다). 그래서 패널이 열려있을 때
@@ -20,7 +18,10 @@ function AppShellBody({ children }: { children: React.ReactNode }) {
   const { isOpen } = useAiPanel();
   // ✅ 하단탭바를 동적으로 숨기는 화면(스캔, 리스트 상세, 매장지도 등)에서 main의 고정
   //   여백(pb-16)까지 같이 없애야 그 밑에 빈 공간이 안 남는다.
-  const { hidden: bottomBarHidden } = useBottomBarVisibility();
+  // ✅ noReserve — 탭바는 계속 보이지만(hidden 아님), Footer가 스스로 그 여백을
+  //   자기 배경색으로 확보하는 페이지(홈, 마이페이지)에서 main이 중복으로 또 예약하지
+  //   않게 함(이중 여백/색 다른 여백 방지).
+  const { hidden: bottomBarHidden, noReserve } = useBottomBarVisibility();
 
   return (
     <div className="mx-auto flex min-h-full w-full flex-col md:max-w-[1440px]">
@@ -35,7 +36,7 @@ function AppShellBody({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 md:pt-16">
         <main
           className={`min-w-0 flex-1 transition-[margin] md:pb-0 ${
-            bottomBarHidden ? "" : "pb-[calc(4rem+env(safe-area-inset-bottom))]"
+            bottomBarHidden || noReserve ? "" : "pb-[calc(4rem+env(safe-area-inset-bottom))]"
           } ${isOpen ? "md:mr-[420px]" : ""}`}
         >
           {children}
@@ -51,15 +52,6 @@ function AppShellBody({ children }: { children: React.ReactNode }) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const active = pathname === "/ai" ? "ai" : "home";
-
-  // ✅ iframe(시뮬레이션 오른쪽 패널)이 새로 로드됐을 때, 이미 로그인되어 있으면
-  //   그 상태를 시뮬레이션에 한 번 알려준다 (새로고침/최초 진입 시 로그인 상태 반영).
-  useEffect(() => {
-    notifySimulationOfCurrentAuthOnce();
-  }, []);
-
   return (
     <AiPanelProvider>
       <BottomBarVisibilityProvider>

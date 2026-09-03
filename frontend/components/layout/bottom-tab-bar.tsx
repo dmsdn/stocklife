@@ -103,16 +103,19 @@ export function BottomTabBar() {
       <div className="relative shrink-0">
         {showHint && !aiOpen && (
           <div
-            className="absolute bottom-full left-1/2 mb-3 flex -translate-x-1/2 animate-[badge-float_2s_ease-in-out_infinite] items-center gap-1 whitespace-nowrap rounded-full border border-main bg-white py-2 pl-3 pr-2 text-xs font-medium text-main shadow-[0_6px_14px_rgba(0,0,0,0.12)]"
+            className="absolute bottom-full left-1/2 mb-3 flex -translate-x-1/2 animate-[badge-float_2s_ease-in-out_infinite] items-center gap-1 whitespace-nowrap rounded-full border border-main bg-white py-2 pl-3 pr-2 text-xs font-medium text-black shadow-[0_6px_14px_rgba(0,0,0,0.12)]"
           >
             liv에게 물어보세요
-            {/* 말풍선 꼬리 — 리브 버튼을 가리키도록 아래쪽 중앙에 작은 삼각형 */}
-            <span className="absolute left-1/2 top-full -mt-px h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-main bg-white" />
+            {/* ✅ 수정 — 참고 이미지(Union.png)처럼 각진 다이아몬드 대신 둥근 말풍선 꼬리로.
+                테두리색 삼각형(살짝 크게) 위에 흰색 삼각형(살짝 작게)을 겹쳐서, 테두리만
+                가늘게 보이는 꼬리를 만듦. */}
+            <span className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-l-[7px] border-r-[7px] border-t-[9px] border-l-transparent border-r-transparent border-t-main" />
+            <span className="absolute left-1/2 top-full -mt-px h-0 w-0 -translate-x-1/2 border-l-[6px] border-r-[6px] border-t-[7px] border-l-transparent border-r-transparent border-t-white" />
             <button
               type="button"
               onClick={dismissHint}
               aria-label="안내 닫기"
-              className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-main/60"
+              className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-black/60"
             >
               <RiCloseLine size={14} />
             </button>

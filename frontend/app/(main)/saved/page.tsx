@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { RiSearchLine, RiAddLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
 import { startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
@@ -207,42 +208,57 @@ function SavedPageInner() {
 
       {tab === "cart" && (
         <div className="mt-4">
-          {showNewGroupInput && (
-            <div className="mb-4 space-y-2 rounded-sm border border-border p-3">
+          {/* ✅ 수정(요청) — 인라인 박스 대신 진짜 모달로. 이름 입력은 아이디/비밀번호
+              입력란처럼 밑줄만(테두리 박스 없이), 장 볼 날짜는 라벨을 왼쪽에 두고 값은
+              테두리 없이 오른쪽 정렬로, 오늘 이전 날짜는 선택 자체가 안 되게(disablePast).
+              버튼은 취소(왼쪽)/추가(오른쪽) 순서. */}
+          <Dialog open={showNewGroupInput} onOpenChange={setShowNewGroupInput}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>새 리스트</DialogTitle>
+              </DialogHeader>
+
               <Input
                 placeholder="리스트 이름 (예: 이번 주 장보기)"
                 value={newGroupTitle}
                 onChange={(e) => setNewGroupTitle(e.target.value)}
                 autoFocus
+                className="h-10 rounded-none border-0 border-b-2 border-border bg-transparent px-0 py-0 text-sm focus-visible:border-brand"
               />
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground shrink-0">장 볼 날짜 (선택)</label>
-                <div className="flex-1">
+
+              <div className="flex items-center justify-between gap-2">
+                <label className="shrink-0 text-sm text-muted-foreground">장 볼 날짜 (선택)</label>
+                <div className="min-w-0">
                   <BirthDatePicker
                     value={newGroupDate}
                     onChange={setNewGroupDate}
                     minYear={new Date().getFullYear()}
                     maxYear={new Date().getFullYear() + 1}
-                    placeholder="장 볼 날짜를 선택해주세요"
+                    placeholder="선택 안 함"
                     title="장 볼 날짜"
+                    variant="bare"
+                    align="right"
+                    disablePast
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button className="flex-1" onClick={handleCreateGroup}>추가</Button>
+
+              <div className="mt-2 flex gap-2">
                 <Button
                   variant="outline"
                   className="flex-1"
                   onClick={() => {
                     setShowNewGroupInput(false);
                     setNewGroupDate("");
+                    setNewGroupTitle("");
                   }}
                 >
                   취소
                 </Button>
+                <Button className="flex-1" onClick={handleCreateGroup}>추가</Button>
               </div>
-            </div>
-          )}
+            </DialogContent>
+          </Dialog>
 
           {filteredGroups.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">
@@ -257,18 +273,16 @@ function SavedPageInner() {
                 >
                   <Link href={`/saved/${group.id}`} className="min-w-0 flex-1">
                     <p className="line-clamp-2 text-sm font-semibold">
-                      {group.title} ({group.products.length})
+                      {group.title}
+                      {group.shoppingDate ? ` (${formatShoppingDate(group.shoppingDate)})` : ""}
                     </p>
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      {group.products.length}개
-                      {group.shoppingDate ? ` · ${formatShoppingDate(group.shoppingDate)}` : ""}
-                    </p>
+                    <p className="mt-1.5 text-xs text-muted-foreground">{group.products.length}개</p>
                   </Link>
 
                   <button
                     type="button"
                     onClick={() => handleAskLiv(group.id)}
-                    className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-md font-medium"
+                    className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-xs font-normal"
                   >
                     <img src="/icons/liv-full.svg" alt="" className="h-4 w-4 shrink-0" />
                     리브에게 물어보기

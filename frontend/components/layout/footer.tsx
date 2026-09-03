@@ -7,13 +7,19 @@ interface FooterProps {
   paddingClassName?: string;
 }
 
-// ✅ 하단 플로팅 탭바가 항상 화면 아래 떠 있어서(AppShell이 main에 pb 여백을 이미 확보해둠),
-//   푸터가 그 여백 바로 위에서 끝나면 배경색이 다른 여백이 살짝 보였음. 푸터 전체를 위로
-//   옮기는 대신, 배경(-mb로 그 여백까지 그대로 채움)만 아래까지 늘리고 텍스트는 그 여백만큼
-//   더 위쪽에 오도록 안쪽 padding을 키워서 "글자만 탭바 위, 배경은 끝까지" 되게 함.
+// ✅ 수정(2026-09) — 예전엔 main의 하단탭바 예약 padding(pb-16) 영역까지 배경을 끌어오려고
+//   음수 마진(-mb) 트릭을 썼는데, margin은 부모의 padding 영역엔 절대 끼어들지 않아서
+//   (padding은 margin 상쇄 대상이 아님) 실제로는 안 먹히고 계속 색이 다른 여백이 남아
+//   보이는 원인이었음. 이제 이 트릭 자체를 없앴습니다 — 대신 Footer를 쓰는 페이지가
+//   useBottomBarVisibility().setNoReserve(true)를 호출해서 main이 그 padding을 아예 안
+//   만들게 하고, Footer는 평범하게 자기 padding-bottom으로 탭바 높이만큼만 확보합니다.
+//   그래서 그 영역은 항상 Footer 자신의 배경색(bg-muted)으로, 다른 트릭 없이 그냥 정상적인
+//   박스 모델로 칠해집니다.
 export function Footer({ paddingClassName = "px-4 md:px-8" }: FooterProps) {
   return (
-    <footer className={`-mb-[calc(4rem+env(safe-area-inset-bottom))] space-y-4 bg-muted ${paddingClassName} pb-[calc(4rem+env(safe-area-inset-bottom)+2rem)] pt-8 text-xs text-muted-foreground md:mb-0 md:pb-8`}>
+    <footer
+      className={`space-y-4 bg-muted ${paddingClassName} pb-[calc(4rem+env(safe-area-inset-bottom)+2rem)] pt-8 text-xs text-muted-foreground md:pb-8`}
+    >
       <img src="/icons/logo-shopping.svg" alt="로고" className="h-6" />
 
       <div className="flex items-center gap-2">

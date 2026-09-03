@@ -29,7 +29,7 @@
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RiArrowLeftSLine, RiArrowDownSLine, RiMapLine, RiCameraLine, RiCameraOffLine, RiBankCardLine, RiSubtractLine, RiAddLine, RiCoinLine, RiLoginBoxLine, RiCloseLine } from "@remixicon/react";
@@ -146,6 +146,30 @@ function ScanPageInner() {
   const [removeQuantityDraft, setRemoveQuantityDraft] = useState(1);
   const [pendingAction, setPendingAction] = useState<{ skuId: number; quantity: number } | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
+  // ✅ 신규 — 담은 상품 목록 위 손잡이를 위로 끌어올리면(또는 탭하면) 카메라·바코드
+  //   입력을 숨기고 목록만 화면 가득 채워서 쭉 나열되게 함. 아래로 다시 끌면 원상복구.
+  const [listExpanded, setListExpanded] = useState(false);
+  const listDragStartY = useRef<number | null>(null);
+  const listDragged = useRef(false);
+
+  const handleListDragStart = (e: React.PointerEvent) => {
+    listDragStartY.current = e.clientY;
+    listDragged.current = false;
+  };
+  const handleListDragMove = (e: React.PointerEvent) => {
+    if (listDragStartY.current == null) return;
+    const delta = e.clientY - listDragStartY.current;
+    if (Math.abs(delta) < 20) return;
+    listDragged.current = true;
+    if (delta < -20) setListExpanded(true);
+    if (delta > 20) setListExpanded(false);
+  };
+  const handleListDragEnd = () => {
+    // 드래그가 거의 없었으면(=그냥 탭) 토글로 처리
+    if (!listDragged.current) setListExpanded((v) => !v);
+    listDragStartY.current = null;
+    listDragged.current = false;
+  };
 
   // ✅ 수정(2026-09) — 백엔드에 실제 cart_group.status가 생겨서 그걸 우선 사용. 체크아웃
   //   성공 시 서버가 실제로 COMPLETED로 바꿔주는 호출이 아직 안 붙어있어서(markCompleted()가
@@ -452,7 +476,10 @@ function ScanPageInner() {
         {/* ✅ 카메라 — 화면 좌우 끝까지 꽉 채우고(마진 없음), 켜짐/꺼짐 상관없이 항상
             "화면 윗부분 전체"(flex-1, 남는 공간 다 차지)를 씀. 켜져 있으면 실시간 영상,
             꺼져 있으면 그냥 꺼짐 안내만 같은 자리에 표시 — 자리 자체는 그대로 유지되니까
-            아래 입력창/목록/결제 버튼이 화면 중간에 붕 뜨지 않고 항상 하단에 붙어있음. */}
+            아래 입력창/목록/결제 버튼이 화면 중간에 붕 뜨지 않고 항상 하단에 붙어있음.
+            ✅ 수정(2026-09) — 담은 상품 목록을 위로 끌어올리면(listExpanded) 카메라·바코드
+            입력을 통째로 숨김. */}
+        {!listExpanded && (
         <div className="relative min-h-0 flex-1 overflow-hidden bg-[#666666]">
           {cameraEnabled && cameraStreamState !== "denied" && cameraStreamState !== "insecure" ? (
             <>
@@ -506,8 +533,10 @@ function ScanPageInner() {
             </div>
           )}
         </div>
+        )}
 
-        {/* ✅ 바코드 입력 — 카메라 바로 아래, 담은 상품 목록 바로 위. */}
+        {/* ✅ 바코드 입력 — 카메라 바로 아래, 담은 상품 목록 바로 위. listExpanded면 숨김. */}
+        {!listExpanded && (
         <div className="shrink-0 px-4 py-2">
           <form onSubmit={handleLookup} className="flex gap-2">
             <Input
@@ -532,6 +561,21 @@ function ScanPageInner() {
             </Button>
           </form>
         </div>
+        )}
+
+        {/* ✅ 신규 — 목록 손잡이. 탭하면 토글, 위/아래로 끌면(20px 이상) 펼침/접힘.
+            항상 보이게 해서 "펼쳐진 상태에서 다시 접는 방법"도 명확하게 남겨둠. */}
+        <button
+          type="button"
+          onPointerDown={handleListDragStart}
+          onPointerMove={handleListDragMove}
+          onPointerUp={handleListDragEnd}
+          onPointerCancel={handleListDragEnd}
+          aria-label={listExpanded ? "목록 접기" : "목록 펼치기"}
+          className="flex shrink-0 touch-none flex-col items-center gap-1 border-t border-card-border bg-background pb-1 pt-2"
+        >
+          <span className="h-1 w-10 rounded-full bg-[#eee]" />
+        </button>
 
         {/* ✅ 담은 상품 — 바코드 입력 바로 아래에 붙어서(margin 없이), "하나 정도 보이는"
             작은 높이로. 화면에 남는 공간은 이 블록이 아니라 바로 아래 spacer가 떠맡아서
@@ -539,8 +583,11 @@ function ScanPageInner() {
             ✅ 수정 — 리스트 전체(selectedGroup.products) 대신, 이번 세션에 실제로 바코드를
             찍은 상품(scannedProducts)만, 최근 스캔한 순으로 보여줌.
             ✅ 수정(2026-09, 2차) — "스캔 직후" 팝업 카드는 완전히 없앰. "−"를 누르면 그
-            행이 선택 표시(배경색)되고, 몇 개를 뺄지는 목록 바로 아래 패널에서 고름. */}
-        <div className="max-h-48 shrink-0 overflow-y-auto border-t border-card-border px-4">
+            행이 선택 표시(배경색)되고, 몇 개를 뺄지는 목록 바로 아래 패널에서 고름.
+            ✅ 수정(2026-09, 3차) — listExpanded면 max-h-48 대신 flex-1로 남는 공간을 다
+            차지해서 전체 목록이 쭉 나열되게(요청: 목록을 위로 올리면 카메라·입력을 숨기고
+            목록만 화면 가득 나열). */}
+        <div className={`${listExpanded ? "flex-1" : "max-h-48 shrink-0"} overflow-y-auto px-4`}>
           {scannedProducts.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">아직 찍은 상품이 없어요.</p>
           ) : (

@@ -282,6 +282,16 @@ interface BirthDatePickerProps {
   placeholder?: string;
   /** modal 모드의 다이얼로그 제목. 기본은 기존 문구("생년월일") 그대로. */
   title?: string;
+  /** ✅ 신규 — "box"(기본, 테두리 있는 버튼) | "bare"(테두리·배경 없이 텍스트+화살표만 —
+   *  저장 리스트 상세의 장 볼 날짜, 새 리스트 만들기 모달처럼 폼 박스 느낌을 안 주고 싶을 때). */
+  variant?: "box" | "bare";
+  /** ✅ 신규 — bare variant에서 텍스트 정렬. "새 리스트 만들기"처럼 라벨은 왼쪽에 따로 두고
+   *  값만 오른쪽 정렬하고 싶을 때 "right". */
+  align?: "left" | "right";
+  /** ✅ 신규 — 켜면 오늘보다 이전 날짜는 연/월/일 휠에서 아예 고를 수 없게 막음(장 볼
+   *  날짜처럼 미래 날짜만 의미 있는 필드용). 년도 범위(minYear)는 호출부에서 이미
+   *  올해로 좁혀서 넘기는 걸 전제로, 여기서는 그 해의 "오늘 이전 월/일"만 추가로 막음. */
+  disablePast?: boolean;
 }
 
 export function BirthDatePicker({
@@ -292,6 +302,9 @@ export function BirthDatePicker({
   maxYear = CURRENT_YEAR,
   placeholder = "생년월일을 선택해주세요",
   title = "생년월일",
+  variant = "box",
+  align = "left",
+  disablePast = false,
 }: BirthDatePickerProps) {
   const [open, setOpen] =
     useState(mode === "modal" ? false : true);
@@ -335,6 +348,18 @@ export function BirthDatePicker({
     selectedMonth,
   ]);
 
+  // ✅ 신규 — disablePast: 오늘 이전 월/일은 휠에 아예 안 뜨게(선택 못 하게) 거름.
+  //   올해가 아니면(미래 연도) 전부 그대로 보여줌 — 그 해는 몇 월이든 이미 미래라서.
+  const visibleMonths = useMemo(() => {
+    if (!disablePast || selectedYear !== today.year) return MONTHS;
+    return MONTHS.filter((m) => m >= today.month);
+  }, [disablePast, selectedYear]);
+
+  const visibleDays = useMemo(() => {
+    if (!disablePast || selectedYear !== today.year || selectedMonth !== today.month) return days;
+    return days.filter((d) => d >= today.day);
+  }, [disablePast, selectedYear, selectedMonth, days]);
+
   useEffect(() => {
     const maxDay =
       getDaysInMonth(
@@ -355,6 +380,22 @@ export function BirthDatePicker({
     selectedMonth,
     selectedDay,
   ]);
+
+  // ✅ disablePast — 연도를 올해로 바꿨는데 이미 골라둔 월이 지난 달이면 이번 달로,
+  //   월까지는 맞는데 일이 지난 날이면 오늘로 자동 보정.
+  useEffect(() => {
+    if (!disablePast) return;
+    if (selectedYear === today.year && selectedMonth < today.month) {
+      setSelectedMonth(today.month);
+    }
+  }, [disablePast, selectedYear, selectedMonth]);
+
+  useEffect(() => {
+    if (!disablePast) return;
+    if (selectedYear === today.year && selectedMonth === today.month && selectedDay < today.day) {
+      setSelectedDay(today.day);
+    }
+  }, [disablePast, selectedYear, selectedMonth, selectedDay]);
 
   // ✅ inline 모드는 페이지 들어오자마자 현재/기존 값 기준으로 휠을 세팅
   useEffect(() => {
@@ -455,7 +496,7 @@ export function BirthDatePicker({
         />
 
         <WheelPicker
-          values={MONTHS}
+          values={visibleMonths}
           value={selectedMonth}
           onChange={
             setSelectedMonth
@@ -464,7 +505,7 @@ export function BirthDatePicker({
         />
 
         <WheelPicker
-          values={days}
+          values={visibleDays}
           value={selectedDay}
           onChange={
             setSelectedDay
@@ -492,11 +533,17 @@ export function BirthDatePicker({
 
   return (
     <>
-      {/* 생년월일 입력란 */}
+      {/* 생년월일 입력란 — ✅ variant="bare"면 테두리·배경 없이 텍스트+화살표만(요청:
+          저장 리스트 상세/새 리스트 만들기처럼 폼 박스 느낌을 안 주고 싶을 때). */}
       <button
         type="button"
         onClick={openPicker}
-        className={`
+        className={
+          variant === "bare"
+            ? `flex h-auto w-full items-center gap-1 bg-transparent text-left text-sm ${
+                align === "right" ? "justify-end" : "justify-start"
+              } ${formattedValue ? "text-foreground" : "text-muted-foreground/55"}`
+            : `
           flex h-12 w-full
           items-center justify-between
           rounded-[8px]
@@ -510,7 +557,8 @@ export function BirthDatePicker({
               ? "border-foreground bg-foreground text-background"
               : "border-border bg-background text-muted-foreground/55 hover:bg-muted/40"
           }
-        `}
+        `
+        }
       >
         <span>
           {formattedValue ||
@@ -519,9 +567,11 @@ export function BirthDatePicker({
 
         <span
           className={
-            formattedValue
-              ? "text-background/70"
-              : "text-muted-foreground/50"
+            variant === "bare"
+              ? "text-muted-foreground/50"
+              : formattedValue
+                ? "text-background/70"
+                : "text-muted-foreground/50"
           }
         >
           ›

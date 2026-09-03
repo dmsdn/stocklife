@@ -39,13 +39,13 @@ interface Product {
   finalPriceKrw: number;
   unit: string;
   discontinued: boolean;
+  imageUrl?: string | null;
 }
 
 function SearchPageInner() {
   const searchParams = useSearchParams();
 
   const [keyword, setKeyword] = useState("");
-  const [aiMode, setAiMode] = useState(false);
   // ⚠ localStorage는 서버에 없는 값이라, useState(() => readSearchHistory())처럼 렌더 중
   //   바로 읽으면 서버(빈 배열)와 클라이언트 첫 렌더(실제 캐시)가 달라 hydration mismatch가
   //   납니다. 항상 []로 시작하고, 마운트 후 useEffect에서만 채웁니다.
@@ -99,18 +99,6 @@ function SearchPageInner() {
   const runSearch = async (kw?: string) => {
     setLoading(true);
     try {
-      // ✅ AI 자연어 검색 모드면 실제 POST /api/ai/search로 보냅니다.
-      if (aiMode && kw) {
-        const res = await apiFetch<{ results?: Product[] } | Product[]>("/api/ai/search", {
-          method: "POST",
-          body: JSON.stringify({ query: kw }),
-        });
-        const list = Array.isArray(res) ? res : res.results ?? [];
-        setProducts(list);
-        setLoading(false);
-        return;
-      }
-
       const qs = new URLSearchParams();
       if (kw) qs.set("keyword", kw);
       if (filters.categories[0]) qs.set("categoryL1", filters.categories[0]);
@@ -240,15 +228,6 @@ function SearchPageInner() {
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-5xl md:p-8">
-      {/* ✅ 실제 POST /api/ai/search 연동 — 켜면 자연어로 검색됨 */}
-      <button
-        type="button"
-        onClick={() => setAiMode((v) => !v)}
-        className={`mb-2 rounded-full border px-3 py-1 text-xs ${aiMode ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"}`}
-      >
-        {aiMode ? "AI 검색 켜짐" : "AI로 검색하기"}
-      </button>
-
       <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
         <Link href="/">
           <RiArrowLeftSLine size={24} />
@@ -315,7 +294,12 @@ function SearchPageInner() {
       </div>
 
       <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0 lg:grid-cols-4">
-        {results.map((product) => (
+        {results.map((product) => {
+          const discountPercent =
+            product.onPromo && product.priceKrw > 0
+              ? Math.round((product.discountKrw / product.priceKrw) * 100)
+              : 0;
+          return (
           <div key={product.skuId} className="flex gap-3 py-3">
             <div
               role="button"
@@ -324,8 +308,13 @@ function SearchPageInner() {
               onKeyDown={(e) => e.key === "Enter" && setDetailProductId(product.skuId)}
               className="flex flex-1 cursor-pointer gap-3 text-left"
             >
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-border bg-muted text-xs text-muted-foreground">
-                IMG
+              {/* ✅ 수정 — 목업 "IMG" 텍스트 박스 대신 실제 상품 이미지(imageUrl), 크기도
+                  h-20(80px) → h-28(112px)로 키움. */}
+              <div className="h-28 w-28 shrink-0 overflow-hidden rounded-sm border border-border bg-muted">
+                {product.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                )}
               </div>
               <div className="flex min-w-0 flex-1 flex-col justify-between">
                 <div>
@@ -335,8 +324,17 @@ function SearchPageInner() {
                 </div>
 
                 <div>
+                  {/* ✅ 수정 — 할인 중이면 원래 가격(취소선)+할인율도 같이 보여줌. 예전엔
+                      "할인" 글자만 있고 정작 원래 가격/몇 % 할인인지는 안 보였음. */}
+                  {product.onPromo && !product.discontinued && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground line-through">
+                        {product.priceKrw.toLocaleString()}원
+                      </span>
+                      <span className="text-xs font-semibold text-danger">{discountPercent}%</span>
+                    </div>
+                  )}
                   <p className={`truncate text-base font-semibold ${product.discontinued ? "text-muted-foreground/50" : ""}`}>
-                    {product.onPromo && <span className="mr-1 text-danger">할인</span>}
                     {product.finalPriceKrw.toLocaleString()}원
                   </p>
 
@@ -370,7 +368,8 @@ function SearchPageInner() {
               )}
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {!loading && results.length === 0 && (

@@ -28,6 +28,7 @@ import {
 } from "@remixicon/react";
 
 import { Footer } from "@/components/layout/footer";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { LogoutButton } from "@/components/domain/logout-button";
 
 import { isLoggedIn as checkLoggedIn } from "@/lib/api-client";
@@ -107,6 +108,14 @@ export default function MyPage() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [profile, setProfile] = useState<ConsumerMe | null>(null);
   const [latestNotice, setLatestNotice] = useState<Notice | null>(null);
+
+  // ✅ 신규 — 이 페이지도 Footer가 있어서(하단탭바 여백을 Footer 스스로 확보) main의
+  //   중복 예약을 꺼서 색 다른 이중 여백이 안 생기게 함. app/(main)/page.tsx와 동일 이유.
+  const { setNoReserve } = useBottomBarVisibility();
+  useEffect(() => {
+    setNoReserve(true);
+    return () => setNoReserve(false);
+  }, [setNoReserve]);
 
   useEffect(() => {
     const isIn = checkLoggedIn();
