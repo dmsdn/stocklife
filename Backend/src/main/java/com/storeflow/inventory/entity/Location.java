@@ -35,7 +35,7 @@ public class Location {
     @Column(name = "y", nullable = false)
     private short y;
 
-    public enum TierRole { PICK, BULK }
+    public enum TierRole { PICK, BULK, FACILITY }   // 09-03: 시설(화장실·계산대…)도 위치다 — 동선 정지점·출발점
 
     protected Location() {}
 

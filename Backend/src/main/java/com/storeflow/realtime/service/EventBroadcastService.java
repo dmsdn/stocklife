@@ -110,7 +110,19 @@ public class EventBroadcastService {
         } catch (IOException | IllegalStateException e) {
             // 끊긴 연결에 쓰다 나는 에러 — 스트림 하나 실패가 다른 구독자한테 영향 주면 안 되므로 로그만 남긴다.
             log.debug("SSE 전송 실패, emitter 정리: {}", e.getMessage());
-            emitter.completeWithError(e);
+            // ⚠ 09-02 시연 점검: 이미 닫힌 emitter 에 completeWithError 를 부르면 그 자체가
+            //   IllegalStateException 을 다시 던진다 — 이 catch 밖이라 컨트롤러까지 올라가
+            //   POST /api/events 가 500 이 되고 @Transactional 이 저장을 롤백했다
+            //   (event_id 가 하나 비는 것으로 관측). FastAPI 를 재기동할 때마다 옛 구독이
+            //   죽은 emitter 로 남아 "재기동 뒤 첫 스캔이 증발"하는 모양이었다.
+            //   정리는 목록에서 먼저 빼고, complete 는 실패해도 삼킨다.
+            agentEmitters.remove(emitter);
+            frontendEmittersBySession.values().forEach(list -> list.remove(emitter));
+            try {
+                emitter.completeWithError(e);
+            } catch (RuntimeException ignored) {
+                // 이미 완료된 emitter — 정리는 위에서 끝났다.
+            }
         }
     }
 }

@@ -12,6 +12,11 @@ public class RouteStopRequest {
     private Integer skuId;
     private String locationId;
     private String label;
+    // 09-03: 시설(화장실·계산대…)은 location_id 가 없다 — 격자 좌표로 직접 목적지를 준다.
+    //   skuId/locationId 가 없을 때만 본다. 세 칸이 다 있어야 유효.
+    private Integer floorNo;
+    private Integer x;
+    private Integer y;
 
     public Integer getSkuId() { return skuId; }
     public void setSkuId(Integer skuId) { this.skuId = skuId; }
@@ -19,4 +24,7 @@ public class RouteStopRequest {
     public void setLocationId(String locationId) { this.locationId = locationId; }
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
+    public Integer getFloorNo() { return floorNo; }
+    public Integer getX() { return x; }
+    public Integer getY() { return y; }
 }

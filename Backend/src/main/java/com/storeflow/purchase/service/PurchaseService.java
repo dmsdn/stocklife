@@ -43,6 +43,17 @@ public class PurchaseService {
     }
 
     /**
+     * 내부(Agent)용 — memberId 를 **직접** 받는다. 공개판과 달리 toMemberId 변환을
+     * 거치지 않는 이유: Agent 는 시드 회원(1001~11000)과 실사용자(10,000,000+)를
+     * 이미 member_id 축으로 다룬다. 여기서 consumerId 로 받아 변환하면 시드
+     * 회원 1005 가 10,001,005 로 둔갑해 이력이 항상 빈다 (2026-08-27).
+     */
+    @Transactional(readOnly = true)
+    public List<PurchaseHistoryResponse> getPurchaseHistoryByMemberId(int memberId) {
+        return purchaseRepository.findHistoryByMemberId(memberId);
+    }
+
+    /**
      * "A샴푸보다 B샴푸가 더 잘 나가나?" — 상품 여러 개를 골라 전체 회원 기준 집계로 비교한다.
      * 개인 구매내역이 아니라 전 회원의 합계·구매자 수만 반환하므로 프라이버시 문제가 없다.
      */

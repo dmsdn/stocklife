@@ -7,6 +7,10 @@ import com.storeflow.product.entity.Product;
 import com.storeflow.product.repository.ProductRepository;
 import com.storeflow.promotion.entity.Promotion;
 import com.storeflow.promotion.repository.PromotionRepository;
+import com.storeflow.inventory.entity.Location;
+import com.storeflow.inventory.entity.Stock;
+import com.storeflow.inventory.repository.LocationRepository;
+import com.storeflow.inventory.repository.StockRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,13 +59,19 @@ public class ProductSearchService {
 
     private final ProductRepository productRepository;
     private final PromotionRepository promotionRepository;
+    private final StockRepository stockRepository;
+    private final LocationRepository locationRepository;
 
     public ProductSearchService(
             ProductRepository productRepository,
-            PromotionRepository promotionRepository
+            PromotionRepository promotionRepository,
+            StockRepository stockRepository,
+            LocationRepository locationRepository
     ) {
         this.productRepository = productRepository;
         this.promotionRepository = promotionRepository;
+        this.stockRepository = stockRepository;
+        this.locationRepository = locationRepository;
     }
 
     /**
@@ -181,12 +191,22 @@ public class ProductSearchService {
                                         )
                         );
 
-        return new ProductDetailResponse(
+        ProductDetailResponse response = new ProductDetailResponse(
                 product,
                 findActivePromotion(
                         product.getSkuId()
                 )
         );
+        // 09-02: 스캔 위치 앵커용 — 이 SKU 의 PICK 매대 하나(여러 개면 첫 것). 재고가 0 이어도
+        // 매대 자리는 자리다(손님은 빈 매대 앞에서도 스캔한다). 없으면 null 로 둔다.
+        for (Stock stock : stockRepository.findBySkuId(product.getSkuId())) {
+            Location location = locationRepository.findById(stock.getLocationId()).orElse(null);
+            if (location != null && location.getTierRole() == Location.TierRole.PICK) {
+                response.setPickLocation(location.getLocationId(), (int) location.getFloorNo());
+                break;
+            }
+        }
+        return response;
     }
 
     /**

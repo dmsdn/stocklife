@@ -192,4 +192,14 @@ public class Consumer {
         this.pointEarnedTotal = Math.max(0, this.pointEarnedTotal - amount);
         this.grade = Grade.calculateFrom(this.pointEarnedTotal);
     }
+
+    /**
+     * GradeResetScheduler(월초 크론)가 부른다. 등급 기준이 월 지출액에서
+     * 누적 적립 포인트로 바뀌면서 「초기화」할 대상이 사라졌다 - 여기서
+     * pointEarnedTotal 을 0 으로 만들면 매달 전 회원 등급이 날아간다.
+     * 그래서 지금은 등급만 다시 계산한다. 스케줄러를 남길지는 팀 판단.
+     */
+    public void resetMonthlySpend() {
+        this.grade = Grade.calculateFrom(this.pointEarnedTotal);
+    }
 }

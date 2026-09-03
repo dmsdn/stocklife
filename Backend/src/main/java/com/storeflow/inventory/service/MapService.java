@@ -60,11 +60,15 @@ public class MapService {
                         Location.TierRole.PICK
                 );
 
+        List<LocationResponse> facilities =
+                locationRepository.findFacilityLocationsByFloorNo(floorNo);
+
         return new FloorMapResponse(
                 floorNo,
                 zones,
                 cells,
-                locations
+                locations,
+                facilities
         );
     }
 }

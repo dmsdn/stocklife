@@ -54,14 +54,33 @@ public class CartGroup {
     void onUpdate() { updatedAt = LocalDateTime.now(); }
 
     public void updateInfo(String title, String description) {
-        if (title != null && !title.isBlank()) this.title = title.trim();
-        if (description != null) this.description = description.trim();
+    assertNotCompleted();
+    if (title != null && !title.isBlank()) this.title = title.trim();
+    if (description != null) this.description = description.trim();
     }
 
     /** 장 볼 날짜 수정. null이 넘어오면 "미입력 상태로 지운다"는 의미로 그대로 반영한다. */
     public void updateShoppingDate(LocalDate shoppingDate) {
-        this.shoppingDate = shoppingDate;
+    assertNotCompleted();
+    this.shoppingDate = shoppingDate;
     }
+
+    /** 결제 완료 후 잠금 — 체크아웃 성공 시 OrderService에서 호출. */
+    public void markCompleted() {
+        this.status = Status.COMPLETED;
+    }
+
+    public boolean isCompleted() {
+        return status == Status.COMPLETED;
+    }
+
+    private void assertNotCompleted() {
+        if (status == Status.COMPLETED) {
+            throw new IllegalStateException("결제 완료된 리스트는 수정할 수 없습니다.");
+        }
+    }
+
+    public Status getStatus() { return status; }
 
     public Long getCartGroupId() { return cartGroupId; }
     public Long getConsumerId() { return consumerId; }
@@ -70,4 +89,10 @@ public class CartGroup {
     public LocalDate getShoppingDate() { return shoppingDate; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
+
+    public enum Status { ACTIVE, COMPLETED }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private Status status = Status.ACTIVE;
 }

@@ -82,6 +82,11 @@ public class ChatSession {
         }
     }
 
+    /** 리스트 모달에서 대화 이름을 직접 수정할 때 사용 — setTitleIfEmpty()와 달리 값이 있어도 덮어쓴다. */
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
     /**
      * 비회원으로 만든 채팅을 같은 브라우저에서 로그인한 뒤 이어갈 때 사용.
      * anonymousId가 일치하는 경우에만 Service에서 호출한다.

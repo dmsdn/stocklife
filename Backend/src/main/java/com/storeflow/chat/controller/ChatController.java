@@ -3,6 +3,7 @@ package com.storeflow.chat.controller;
 import com.storeflow.chat.dto.ChatRequest;
 import com.storeflow.chat.dto.ChatSessionResponse;
 import com.storeflow.chat.dto.CreateChatSessionRequest;
+import com.storeflow.chat.dto.UpdateChatSessionRequest;
 import com.storeflow.chat.service.ChatService;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
 import jakarta.validation.Valid;
@@ -34,14 +35,12 @@ public class ChatController {
     public ResponseEntity<?> chat(
             @Valid @RequestBody ChatRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
-    ) {
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
 
             return ResponseEntity.ok(
-                    chatService.relay(request, consumerId, anonymousId)
-            );
+                    chatService.relay(request, consumerId, anonymousId));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (IllegalArgumentException e) {
@@ -65,15 +64,13 @@ public class ChatController {
     public ResponseEntity<?> createSession(
             @RequestBody(required = false) CreateChatSessionRequest request,
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
-    ) {
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
             Long groupId = request == null ? null : request.getGroupId();
 
             return ResponseEntity.ok(
-                    chatService.createSession(consumerId, anonymousId, groupId)
-            );
+                    chatService.createSession(consumerId, anonymousId, groupId));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (IllegalArgumentException e) {
@@ -89,14 +86,12 @@ public class ChatController {
     @GetMapping("/sessions")
     public ResponseEntity<?> getSessions(
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
-    ) {
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
 
             return ResponseEntity.ok(
-                    chatService.getSessions(consumerId, anonymousId)
-            );
+                    chatService.getSessions(consumerId, anonymousId));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (IllegalArgumentException e) {
@@ -113,16 +108,40 @@ public class ChatController {
     public ResponseEntity<?> getSession(
             @PathVariable String sessionId,
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
-    ) {
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
 
-            ChatSessionResponse response =
-                    chatService.getSession(sessionId, consumerId, anonymousId);
+            ChatSessionResponse response = chatService.getSession(sessionId, consumerId, anonymousId);
 
             return ResponseEntity.ok(response);
 
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
+     * 리스트 모달에서 대화 이름 직접 수정.
+     *
+     * PATCH /api/chat/sessions/{sessionId}
+     * body: { "title": "새 이름" }
+     */
+    @PatchMapping("/sessions/{sessionId}")
+    public ResponseEntity<?> renameSession(
+            @PathVariable String sessionId,
+            @Valid @RequestBody UpdateChatSessionRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
+        try {
+            Long consumerId = resolveConsumerIdOrNull(authorization);
+
+            return ResponseEntity.ok(
+                    chatService.renameSession(sessionId, request.getTitle(), consumerId, anonymousId));
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(404).body(e.getMessage());
         } catch (SecurityException e) {
@@ -142,14 +161,12 @@ public class ChatController {
     public ResponseEntity<?> getMessages(
             @PathVariable String sessionId,
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
-    ) {
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
 
             return ResponseEntity.ok(
-                    chatService.getMessages(sessionId, consumerId, anonymousId)
-            );
+                    chatService.getMessages(sessionId, consumerId, anonymousId));
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(404).body(e.getMessage());
         } catch (SecurityException e) {
@@ -169,14 +186,12 @@ public class ChatController {
     public ResponseEntity<?> search(
             @RequestParam String keyword,
             @RequestHeader(value = "Authorization", required = false) String authorization,
-            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId
-    ) {
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
         try {
             Long consumerId = resolveConsumerIdOrNull(authorization);
 
             return ResponseEntity.ok(
-                    chatService.searchMessages(consumerId, anonymousId, keyword)
-            );
+                    chatService.searchMessages(consumerId, anonymousId, keyword));
         } catch (SecurityException e) {
             return ResponseEntity.status(403).body(e.getMessage());
         } catch (IllegalArgumentException e) {

@@ -12,6 +12,7 @@ public class CartGroupResponse {
     private final String createdAt;
     private final String updatedAt;    // 리스트 박스에 "n일 전 수정" 등 표시할 때 사용
     private final List<CartItemResponse> items;
+    private final String status; // ACTIVE | COMPLETED
 
     public CartGroupResponse(CartGroup group, List<CartItemResponse> items) {
         this.cartGroupId = group.getCartGroupId();
@@ -22,6 +23,7 @@ public class CartGroupResponse {
         this.createdAt = group.getCreatedAt() == null ? null : group.getCreatedAt().toString();
         this.updatedAt = group.getUpdatedAt() == null ? null : group.getUpdatedAt().toString();
         this.items = items;
+        this.status = group.getStatus().name();
     }
 
     public Long getCartGroupId() { return cartGroupId; }
@@ -32,4 +34,5 @@ public class CartGroupResponse {
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }
     public List<CartItemResponse> getItems() { return items; }
+    public String getStatus() { return status; }
 }

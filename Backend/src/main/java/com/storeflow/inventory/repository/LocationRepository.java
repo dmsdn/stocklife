@@ -36,4 +36,17 @@ public interface LocationRepository extends JpaRepository<Location, String> {
             @Param("floorNo") byte floorNo,
             @Param("tierRole") Location.TierRole tierRole
     );
+
+    /**
+     * 09-03: 그 층의 시설 위치(tier_role=FACILITY) — 'F1-X-RESTROOM_M-1' 처럼 id 에 종류가 들어 있다.
+     * 위 지도 질의는 PICK/BULK만 고르므로 시설 행은 자동으로 빠진다 — 매대 그리기에
+     * 섞이지 않고, 여기서 따로 내려준다. 에이전트 find_facility 와 동선 정지점의 재료.
+     */
+    @Query("""
+        SELECT NEW com.storeflow.inventory.dto.LocationResponse(
+            l.locationId, l.zoneId, l.rackNo, l.bayNo, l.x, l.y)
+        FROM Location l
+        WHERE l.floorNo = :floorNo AND l.tierRole = com.storeflow.inventory.entity.Location$TierRole.FACILITY
+        """)
+    List<LocationResponse> findFacilityLocationsByFloorNo(@Param("floorNo") byte floorNo);
 }

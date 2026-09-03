@@ -4,7 +4,7 @@
 // 합쳐서 기존 FloorData 형태로 만들어준다 — Phaser 씬 등 나머지 프론트 코드는 이 병합
 // 결과만 보므로 전혀 수정할 필요가 없다.
 
-import type { FloorData, LocationInfo, ZoneInfo } from '../game/types';
+import type { FloorData, LocationInfo, ZoneInfo, FacilityInfo } from '../game/types';
 import { FLOOR_AMENITIES, ZONE_COLORS, fallbackZoneColor, OCCUPIED_CELL_OVERRIDES } from '../data/floorAmenities';
 import { fetchProductsAtLocation } from './products';
 
@@ -17,6 +17,7 @@ interface MapCellDto {
   transitId: string | null;
   kind?: 'AISLE' | 'SHELF' | 'FACILITY' | 'TRANSIT' | null;   // 09-02: 백엔드 map_cells.kind
   shelfZone?: string | null;                                    // 09-02: kind=SHELF 의 zone_id
+  facilityKind?: string | null;                                 // 09-03: kind=FACILITY/TRANSIT 일 때 시설 종류
 }
 
 interface ZoneMapDto {
@@ -39,6 +40,8 @@ interface FloorMapDto {
   zones: ZoneMapDto[];
   cells: MapCellDto[];
   locations: LocationDto[];
+  facilities?: LocationDto[];   // 09-03: tier_role=FACILITY 위치. locationId 3번째 조각이 종류
+                                 // (예: 'F1-X-RESTROOM_M-1' -> 'RESTROOM_M')
 }
 
 function zoneLetter(zoneId: string): string {
@@ -86,6 +89,72 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
 
   const amenities = FLOOR_AMENITIES[floor] ?? { pitchPx: 20, facilities: [], serviceAreas: [] };
 
+  // 09-03: 시설이 이제 DB의 실제 위치 데이터(locations.tier_role=FACILITY)로 내려온다.
+  // 있으면 이걸로 정확한 좌표를 쓰고, floorAmenities.ts의 손좌표는 폴백(옛 백엔드)으로만 남긴다.
+  // locationId 3번째 조각이 종류다: 'F1-X-RESTROOM_M-1' -> 'RESTROOM_M'.
+  const dbFacilities = dto.facilities ?? [];
+  let facilities = amenities.facilities;
+  let serviceAreas = amenities.serviceAreas;
+  if (dbFacilities.length > 0) {
+    // 아이콘+상호작용(엘리베이터 층 이동 등)이 걸려 있는 종류만 FacilityType으로 매핑한다.
+    const KIND_TO_TYPE: Record<string, FacilityInfo['type']> = {
+      ELEVATOR: 'elevator',
+      RESTROOM_M: 'restroom_male',
+      RESTROOM_F: 'restroom_female',
+    };
+    // 나머지는 예전 serviceArea처럼 이름표만 그린다(회색 블록 자체는 map_cells.kind=FACILITY로
+    // 이미 정확히 칠해지므로 여기 w/h는 실제로 안 쓰인다 — StoreScene이 facilityCells가 있으면
+    // 박스를 안 그리고 라벨만 남기기 때문).
+    const LABEL_ONLY_KIND: Record<string, string> = {
+      ATM: 'ATM',
+      BAKERY: '베이커리',
+      CHECKOUT: '계산대 / SCAN',
+      CUSTOMER_SERVICE: '고객센터',
+      ENTRANCE: '입구',
+      EVENT: '행사 상품',
+      FOODCOURT: '푸드코트',
+      TRASH: '휴지통',
+      OPTICAL: '안경 / 보청기 센터',
+      PHARMACY: '약국',
+      TASTING: '시식 코너',
+      AS_CENTER: 'A/S센터',
+      EXPERIENCE: '가전 체험존',
+      LOUNGE: '휴게 라운지',
+    };
+    // 09-03 (성원님 확정): 에스컬레이터는 x=94 칸이 상행, x=92 칸이 하행이다.
+    // 1층은 상행만, 3층은 하행만, 2층은 둘 다 인터랙션(층 이동)을 연다 — 나머지 한쪽은
+    // 블록 자체는 그대로 보이되(실제 통행 가능 칸이라 시각적으로 존재) 이름표만 붙이고
+    // 층 이동은 안 걸어준다(눌러도 반응 없음, 기존에도 그 층엔 그 방향이 없었다).
+    const ESCALATOR_UP_X = 94;
+    const ESCALATOR_DOWN_X = 92;
+    const allowEscalatorUp = floor !== 3;
+    const allowEscalatorDown = floor !== 1;
+
+    const dbMapped: typeof facilities = [];
+    const dbAreas: NonNullable<typeof serviceAreas> = [];
+    for (const f of dbFacilities) {
+      const kind = f.locationId.split('-')[2] ?? '';
+      if (kind === 'ESCALATOR') {
+        if (f.x === ESCALATOR_UP_X && allowEscalatorUp) {
+          dbMapped.push({ type: 'escalator_up', x: f.x, y: f.y });
+        } else if (f.x === ESCALATOR_DOWN_X && allowEscalatorDown) {
+          dbMapped.push({ type: 'escalator_down', x: f.x, y: f.y });
+        } else {
+          dbAreas.push({ id: f.locationId, label: '에스컬레이터', x: f.x, y: f.y, w: 1, h: 1 });
+        }
+        continue;
+      }
+      const type = KIND_TO_TYPE[kind];
+      if (type) {
+        dbMapped.push({ type, x: f.x, y: f.y });
+      } else if (LABEL_ONLY_KIND[kind]) {
+        dbAreas.push({ id: f.locationId, label: LABEL_ONLY_KIND[kind], x: f.x, y: f.y, w: 1, h: 1 });
+      }
+    }
+    facilities = dbMapped;
+    serviceAreas = dbAreas;
+  }
+
   // 09-02 (로컬 검증안): 칸의 정체를 백엔드가 주면 그대로 넘긴다 — StoreScene 이
   // 최근접 존 추측 대신 이것으로 칠한다. 옛 백엔드(kind 없음)면 둘 다 비어 폴백.
   const shelfCells = dto.cells
@@ -106,8 +175,8 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
     zones,
     locations,
     occupied,
-    facilities: amenities.facilities,
-    serviceAreas: amenities.serviceAreas,
+    facilities,
+    serviceAreas,
   };
 }
 

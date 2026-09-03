@@ -18,6 +18,11 @@ public class ProductDetailResponse {
     private String spec;      // 규격 JSON 원문
     private String imageUrl;
     private boolean discontinued; // true면 단종 — "그 커피 어디 갔어요?" 같은 질문에 응답용
+    // ⚠ 09-02 시연 점검: 스캔 = "그 매대 앞에 서 있다"는 가장 확실한 위치 증거인데,
+    //   바코드 응답에 위치가 없어 프론트가 SCAN_ADD 에 locationId 를 채울 수 없었다.
+    //   PICK(집는 매대) 자리 하나를 실어 보낸다. 없으면 null — 없는 값을 지어내지 않는다.
+    private String pickLocationId;
+    private Integer pickFloorNo;
 
     public ProductDetailResponse(Product product) {
         this(product, null);
@@ -48,6 +53,12 @@ public class ProductDetailResponse {
     }
 
     public Integer getSkuId() { return skuId; }
+    public String getPickLocationId() { return pickLocationId; }
+    public Integer getPickFloorNo() { return pickFloorNo; }
+    public void setPickLocation(String locationId, Integer floorNo) {
+        this.pickLocationId = locationId;
+        this.pickFloorNo = floorNo;
+    }
     public String getName() { return name; }
     public String getBrand() { return brand; }
     public String getCategoryL1() { return categoryL1; }

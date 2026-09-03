@@ -35,6 +35,17 @@ public class AgentEventStreamController {
         this.internalServiceAuth = internalServiceAuth;
     }
 
+    /**
+     * ⚠ 반환 타입은 반드시 SseEmitter 그대로여야 한다 — ResponseEntity<?> 로 감싸면 500이 난다.
+     *
+     * Spring MVC는 SseEmitter를 비동기 반환 타입으로 특별 취급하는데(ResponseBodyEmitterReturnValueHandler),
+     * 그 핸들러는 **선언된 반환 타입**을 본다. ResponseEntity<?> 는 제네릭이 와일드카드라 본문 타입이
+     * SseEmitter로 해석되지 않아 핸들러가 이 메소드를 안 맡는다. 그러면 일반 메시지 컨버터로 떨어지고,
+     * SseEmitter 객체를 text/event-stream 으로 직렬화할 컨버터가 없어 500이 된다.
+     *
+     * 같은 파일의 RealtimeController.stream 은 SseEmitter를 그대로 돌려줘서 정상이다 — 그 차이가 전부였다.
+     * 인증 실패는 body를 돌려줄 수 없으므로 ResponseStatusException으로 상태만 세운다.
+     */
     @GetMapping(value = "/stream", produces = "text/event-stream")
     public SseEmitter stream(@RequestHeader("X-Internal-Service-Key") String key) {
         try {

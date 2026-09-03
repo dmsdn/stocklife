@@ -23,8 +23,8 @@ public class CartService {
     private final ProductRepository productRepository;
 
     public CartService(CartItemRepository cartItemRepository,
-                       CartGroupRepository cartGroupRepository,
-                       ProductRepository productRepository) {
+            CartGroupRepository cartGroupRepository,
+            ProductRepository productRepository) {
         this.cartItemRepository = cartItemRepository;
         this.cartGroupRepository = cartGroupRepository;
         this.productRepository = productRepository;
@@ -89,39 +89,6 @@ public class CartService {
         cartGroupRepository.delete(group);
     }
 
-    @Transactional
-    public CartItemResponse addItemToGroup(Long consumerId, Long groupId, AddCartItemRequest request) {
-        requireOwnedGroup(consumerId, groupId);
-        LocalDateTime now = LocalDateTime.now();
-        CartItem existing = findAndMergeDuplicateItems(groupId, request.getSkuId());
-        CartItem item;
-        if (existing != null) {
-            existing.increaseQuantity(request.getQuantity());
-            existing.markScanned(now);
-            item = existing;
-        } else {
-            CartItem created = cartItemRepository.save(
-                    new CartItem(groupId, request.getSkuId(), request.getQuantity()));
-            created.markScanned(now);
-            item = created;
-        }
-        return new CartItemResponse(item);
-    }
-
-    @Transactional
-    public void updateItem(Long consumerId, Long cartItemId, UpdateCartItemRequest request) {
-        CartItem item = cartItemRepository.findByCartItemIdAndConsumerId(cartItemId, consumerId)
-                .orElseThrow(() -> new IllegalStateException("장바구니 항목을 찾을 수 없습니다."));
-        applyUpdate(item, request);
-    }
-
-    @Transactional
-    public void deleteItem(Long consumerId, Long cartItemId) {
-        CartItem item = cartItemRepository.findByCartItemIdAndConsumerId(cartItemId, consumerId)
-                .orElseThrow(() -> new IllegalStateException("장바구니 항목을 찾을 수 없습니다."));
-        cartItemRepository.delete(item);
-    }
-
     /**
      * 로그인 직후 프론트의 비회원 localStorage 장바구니를 회원 DB로 승계한다.
      * 동일 제목 그룹은 재사용하고, 같은 그룹의 동일 SKU는 수량을 더한다.
@@ -134,7 +101,8 @@ public class CartService {
         }
 
         for (MigrateGuestCartRequest.Group guestGroup : request.getGroups()) {
-            if (guestGroup == null || guestGroup.getTitle() == null || guestGroup.getTitle().isBlank()) continue;
+            if (guestGroup == null || guestGroup.getTitle() == null || guestGroup.getTitle().isBlank())
+                continue;
 
             String title = guestGroup.getTitle().trim();
             CartGroup group = cartGroupRepository.findFirstByConsumerIdAndTitle(consumerId, title)
@@ -143,12 +111,15 @@ public class CartService {
                             title,
                             guestGroup.getDescription() == null ? "" : guestGroup.getDescription().trim())));
 
-            if (guestGroup.getProducts() == null) continue;
+            if (guestGroup.getProducts() == null)
+                continue;
             for (MigrateGuestCartRequest.Item guestItem : guestGroup.getProducts()) {
-                if (guestItem == null || guestItem.getId() == null) continue;
+                if (guestItem == null || guestItem.getId() == null)
+                    continue;
                 // localStorage에 과거 목업 SKU가 남아 있어도 FK 오류로 전체 승계를 실패시키지 않는다.
                 // 실제 products 테이블에 존재하는 상품만 회원 장바구니로 승계한다.
-                if (!productRepository.existsById(guestItem.getId())) continue;
+                if (!productRepository.existsById(guestItem.getId()))
+                    continue;
 
                 int qty = guestItem.getQuantity() == null ? 1 : Math.max(1, guestItem.getQuantity());
                 boolean checked = guestItem.getChecked() == null || guestItem.getChecked();
@@ -193,10 +164,12 @@ public class CartService {
         List<CartItem> matches = cartItemRepository
                 .findAllByCartGroupIdAndSkuIdOrderByCartItemIdAsc(groupId, skuId);
 
-        if (matches.isEmpty()) return null;
+        if (matches.isEmpty())
+            return null;
 
         CartItem keeper = matches.get(0);
-        if (matches.size() == 1) return keeper;
+        if (matches.size() == 1)
+            return keeper;
 
         int mergedQuantity = 0;
         boolean mergedChecked = false;
@@ -213,7 +186,8 @@ public class CartService {
 
         keeper.changeQuantity(mergedQuantity);
         keeper.toggleChecked(mergedChecked);
-        if (latestScannedAt != null) keeper.markScanned(latestScannedAt);
+        if (latestScannedAt != null)
+            keeper.markScanned(latestScannedAt);
 
         cartItemRepository.deleteAll(matches.subList(1, matches.size()));
         return keeper;
@@ -230,9 +204,17 @@ public class CartService {
                 .orElseThrow(() -> new IllegalStateException("장바구니 그룹을 찾을 수 없습니다."));
     }
 
+    private void requireNotCompleted(CartGroup group) {
+        if (group.isCompleted()) {
+            throw new IllegalStateException("결제 완료된 리스트는 수정할 수 없습니다.");
+        }
+    }
+
     private void applyUpdate(CartItem cartItem, UpdateCartItemRequest request) {
-        if (request.getQuantity() != null) cartItem.changeQuantity(request.getQuantity());
-        if (request.getChecked() != null) cartItem.toggleChecked(request.getChecked());
+        if (request.getQuantity() != null)
+            cartItem.changeQuantity(request.getQuantity());
+        if (request.getChecked() != null)
+            cartItem.toggleChecked(request.getChecked());
     }
 
     private SessionCartResponse buildSessionCart(List<CartItem> items) {
@@ -246,5 +228,41 @@ public class CartService {
             total += subtotal;
         }
         return new SessionCartResponse(itemResponses, total);
+    }
+
+    @Transactional
+    public CartItemResponse addItemToGroup(Long consumerId, Long groupId, AddCartItemRequest request) {
+        CartGroup group = requireOwnedGroup(consumerId, groupId);
+        requireNotCompleted(group);
+        LocalDateTime now = LocalDateTime.now();
+        CartItem existing = findAndMergeDuplicateItems(groupId, request.getSkuId());
+        CartItem item;
+        if (existing != null) {
+            existing.increaseQuantity(request.getQuantity());
+            existing.markScanned(now);
+            item = existing;
+        } else {
+            CartItem created = cartItemRepository.save(
+                    new CartItem(groupId, request.getSkuId(), request.getQuantity()));
+            created.markScanned(now);
+            item = created;
+        }
+        return new CartItemResponse(item);
+    }
+
+    @Transactional
+    public void updateItem(Long consumerId, Long cartItemId, UpdateCartItemRequest request) {
+        CartItem item = cartItemRepository.findByCartItemIdAndConsumerId(cartItemId, consumerId)
+                .orElseThrow(() -> new IllegalStateException("장바구니 항목을 찾을 수 없습니다."));
+        requireNotCompleted(requireOwnedGroup(consumerId, item.getCartGroupId()));
+        applyUpdate(item, request);
+    }
+
+    @Transactional
+    public void deleteItem(Long consumerId, Long cartItemId) {
+        CartItem item = cartItemRepository.findByCartItemIdAndConsumerId(cartItemId, consumerId)
+                .orElseThrow(() -> new IllegalStateException("장바구니 항목을 찾을 수 없습니다."));
+        requireNotCompleted(requireOwnedGroup(consumerId, item.getCartGroupId()));
+        cartItemRepository.delete(item);
     }
 }

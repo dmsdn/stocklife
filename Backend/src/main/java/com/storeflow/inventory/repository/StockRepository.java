@@ -103,4 +103,11 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
         ORDER BY s.skuId
         """)
     List<LocationProductResponse> findProductsByLocationId(@Param("locationId") String locationId);
+
+    /**
+     * 그 자리에 무엇이든 놓여 있는가. `stocks` 에 UNIQUE(location_id) 가 걸려 있어
+     * **한 자리에 한 SKU** 이므로, 이동 목적지를 고를 때 sku 를 안 보고 자리만 본다.
+     * (안 보고 옮기면 INSERT 에서 제약 위반으로 500 이 난다 - move 의 주석 참조)
+     */
+    Optional<Stock> findByLocationId(String locationId);
 }

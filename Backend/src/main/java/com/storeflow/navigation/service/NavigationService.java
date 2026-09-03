@@ -105,6 +105,14 @@ public class NavigationService {
         if (stop.getSkuId() != null) {
             return resolveBySkuId(stop.getSkuId());
         }
+        // 09-03: 좌표 목적지 — 시설(화장실·엘리베이터·계산대…)로 가는 경로.
+        //   sku 도 location 도 없는 자리이므로 격자 좌표를 그대로 목적지로 삼는다.
+        //   A* 는 통행 가능 칸만 밟으므로, 이름 있는 시설 칸이 passable=TRUE 여야 도착한다.
+        if (stop.getFloorNo() != null && stop.getX() != null && stop.getY() != null) {
+            return new ResolvedStop(null, null, null,
+                    GridKey.of(stop.getFloorNo().byteValue(),
+                            stop.getX().shortValue(), stop.getY().shortValue()));
+        }
         return null;
     }
 

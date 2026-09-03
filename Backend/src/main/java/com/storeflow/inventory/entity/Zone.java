@@ -16,7 +16,7 @@ public class Zone {
     @Column(name = "name", nullable = false)
     private String name;
 
-    public enum ZoneType { SALES, BACKROOM }
+    public enum ZoneType { SALES, BACKROOM, FACILITY }   // 09-03: 층별 시설 존 'F1-X'
 
     @Enumerated(EnumType.STRING)
     @Column(name = "zone_type", nullable = false)

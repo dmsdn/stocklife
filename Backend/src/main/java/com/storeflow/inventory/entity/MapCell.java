@@ -36,6 +36,10 @@ public class MapCell {
     @Column(name = "shelf_zone", length = 8)
     private String shelfZone;
 
+    // 09-03: kind=FACILITY/TRANSIT 일 때 시설 종류(RESTROOM_M·ELEVATOR·CHECKOUT…). 없으면 null.
+    @Column(name = "facility_kind", length = 24)
+    private String facilityKind;
+
     protected MapCell() {}
 
     public Byte getFloorNo() { return floorNo; }
@@ -45,6 +49,7 @@ public class MapCell {
     public String getTransitId() { return transitId; }
     public String getKind() { return kind; }
     public String getShelfZone() { return shelfZone; }
+    public String getFacilityKind() { return facilityKind; }
 
     public static class MapCellId implements Serializable {
         private Byte floorNo;

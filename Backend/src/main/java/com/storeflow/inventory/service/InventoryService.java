@@ -152,6 +152,17 @@ public class InventoryService {
         if (stockRepository.findWithLockByLocationId(toLocationId).isPresent()) {
             throw new IllegalStateException("대상 위치에 이미 재고가 있습니다. locationId=" + toLocationId);
         }
+        // stocks 에 UNIQUE(location_id) 가 걸려 있다 — **한 자리에 한 SKU** 가
+        // 이 세계의 불변식이다(매대 한 칸 = 상품 하나). 위 검사는 "같은 SKU"만
+        // 보므로, 다른 SKU 가 이미 쓰는 자리로 옮기면 여기를 통과했다가
+        // INSERT 에서 제약 위반으로 **500** 이 난다. 부르는 쪽에서는 서버가
+        // 고장난 것처럼 보이는데 실제로는 요청이 규칙을 어긴 것이다.
+        // 409 로 이유를 말한다 — 조용히 500 을 내면 그 자리를 못 찾는다.
+        if (stockRepository.findByLocationId(toLocationId).isPresent()) {
+            throw new IllegalStateException(
+                    "대상 위치가 이미 다른 상품에 쓰이고 있습니다(한 자리에 한 SKU). locationId="
+                            + toLocationId);
+        }
 
         int qty = source.getQty();
         stockRepository.delete(source);
