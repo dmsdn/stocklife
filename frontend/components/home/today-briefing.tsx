@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Lightbulb } from "lucide-react";
+import { RiArrowRightLine, RiLightbulbLine } from "@remixicon/react";
 
 import { SectionTitle } from "./section-title";
 
@@ -12,16 +12,14 @@ export function TodayBriefing({
   onClick,
 }: TodayBriefingProps) {
   return (
-    <section className="w-full px-4 pt-8 sm:px-6 lg:px-8">
+    <section className="w-full px-4 sm:px-6 lg:px-8">
       <SectionTitle
         title="오늘의 쇼핑 브리핑"
       />
 
       <div className="rounded-sm bg-muted/70 p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-background">
-            <Lightbulb size={24} />
-          </div>
+          <RiLightbulbLine size={24} className="mt-0.5 shrink-0 text-foreground" />
 
           <div className="min-w-0 flex-1">
             <p className="text-base font-semibold">
@@ -51,7 +49,7 @@ export function TodayBriefing({
 
           <span className="flex items-center gap-1 text-sm font-medium">
             장보기 보기
-            <ArrowRight size={24} />
+            <RiArrowRightLine size={24} />
           </span>
         </button>
       </div>

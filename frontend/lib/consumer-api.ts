@@ -17,6 +17,10 @@ export interface ConsumerMe {
     byCar: boolean | null;
     grade: string;
     monthlySpendAmount: number;
+    /** ✅ 실제 사용 가능한 포인트 잔액 (적립 시 증가, 사용 시 감소) */
+    pointBalance: number;
+    /** ✅ 평생 누적 적립 포인트 (등급 산정 기준 — 사용해도 안 줄어듦) */
+    pointEarnedTotal: number;
     marketingConsent: boolean;
     cameraConsent: boolean;
     micConsent: boolean;

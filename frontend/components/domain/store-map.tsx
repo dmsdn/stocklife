@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { getFloorMap, fetchRealFloorMap } from "@/lib/map-config";
+import { getFloorMap, fetchRealFloorMap, getFloorLocations } from "@/lib/map-config";
 import { findPath, type GridPoint } from "@/lib/pathfinding";
 
 export interface MapPin {
@@ -22,6 +22,9 @@ export interface StoreMapProps {
   floorNo: number;
   pins: MapPin[];
   routeOrder: number[];
+  /** ✅ 매대(위치) 박스를 클릭 가능하게 표시하고 싶을 때 전달 — 아무 매대나 눌러서
+   *  그 안의 상품 목록을 보는 "매장 둘러보기" 기능용. 안 넘기면 기존처럼 핀만 보여줌. */
+  onLocationClick?: (locationId: string) => void;
 }
 
 const MIN_ZOOM = 1;
@@ -32,7 +35,7 @@ function dist(a: React.Touch, b: React.Touch) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-export function StoreMap({ floorNo, pins, routeOrder }: StoreMapProps) {
+export function StoreMap({ floorNo, pins, routeOrder, onLocationClick }: StoreMapProps) {
   const config = getFloorMap(floorNo);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -133,6 +136,26 @@ export function StoreMap({ floorNo, pins, routeOrder }: StoreMapProps) {
             </svg>
           )}
 
+          {onLocationClick &&
+            getFloorLocations(floorNo).map((loc) => {
+              const { left, top } = toPercent(loc.x, loc.y);
+              return (
+                <button
+                  key={loc.locationId}
+                  type="button"
+                  onClick={() => onLocationClick(loc.locationId)}
+                  aria-label={`매대 ${loc.locationId} 상품 보기`}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-foreground/15 bg-foreground/5 hover:bg-foreground/15"
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    width: `${(1 / config.gridWidth) * 100}%`,
+                    height: `${(1 / config.gridHeight) * 100}%`,
+                  }}
+                />
+              );
+            })}
+
           {pins.map((pin) => {
             const { left, top } = toPercent(pin.x, pin.y);
             const order = routeOrder.indexOf(pin.id);
@@ -168,7 +191,10 @@ export function StoreMap({ floorNo, pins, routeOrder }: StoreMapProps) {
       </div>
 
       <div className="flex items-center justify-between px-4 pb-4 text-xs text-muted-foreground">
-        <span>손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.</span>
+        <span>
+          손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.
+          {onLocationClick && " 매대 칸을 누르면 그 안의 상품 목록을 볼 수 있어요."}
+        </span>
         <button type="button" onClick={resetView} className="shrink-0 underline">
           원래대로
         </button>

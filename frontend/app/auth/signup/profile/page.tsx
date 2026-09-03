@@ -143,38 +143,36 @@ export default function SignupProfilePage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="space-y-8">
-        <p className="text-2xl font-semibold leading-snug">
-          추천을 위한 추가 정보를
-          <br />
-          입력해주세요
-        </p>
+    <div className="flex min-h-full flex-col pt-[87px]">
+      <h1 className="text-2xl font-bold leading-8">
+        서비스 이용을 위한 추가 정보를
+        <br />
+        입력해주세요
+      </h1>
 
+      {error && (
+        <p className="mt-4 text-xs text-danger">
+          {error}
+        </p>
+      )}
+
+      <div className="mt-auto space-y-2 pb-[42px] pt-10">
         <Button
           type="button"
           onClick={handleStart}
           disabled={submitting}
           className="h-12 w-full rounded-sm"
         >
-          추가정보 입력하기
+          다음
         </Button>
 
-        {error && (
-          <p className="text-sm text-danger">
-            {error}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-auto pt-10">
         <button
           type="button"
           onClick={handleSkipAll}
           disabled={submitting}
-          className="flex h-12 w-full items-center justify-center rounded-sm text-sm text-muted-foreground transition hover:bg-muted disabled:opacity-50"
+          className="flex h-12 w-full items-center justify-center rounded-sm border border-border text-sm text-muted-foreground transition hover:bg-muted disabled:opacity-50"
         >
-          추가정보 전체 건너뛰기
+          바로 가입하기
         </button>
       </div>
 

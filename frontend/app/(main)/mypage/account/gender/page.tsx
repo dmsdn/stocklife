@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { RiArrowLeftSLine } from "@remixicon/react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { Button } from "@/components/ui/button";
 import { getMyProfile, updateMyProfile } from "@/lib/consumer-api";
@@ -49,7 +49,7 @@ export default function AccountGenderPage() {
                 <div className="py-10 text-center">
                     <p className="text-sm text-muted-foreground">성별은 한 번 입력하면 수정할 수 없어요.</p>
                     <button type="button" onClick={() => router.back()} className="mt-4 mx-auto flex items-center justify-center gap-1 text-sm">
-                        <ChevronLeft size={24} />
+                        <RiArrowLeftSLine size={24} />
                         돌아가기
                     </button>
                 </div>

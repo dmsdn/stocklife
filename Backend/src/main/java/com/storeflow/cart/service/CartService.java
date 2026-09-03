@@ -173,7 +173,9 @@ public class CartService {
 
     /**
      * cart_item.is_checked = true 인 항목만 모은 "실제 결제 대상" 장바구니.
-     * 매장에서 스캔/체크한 상품과 미리 계획만 해둔 상품을 구분해서 보여줄 때 사용한다.
+     * 계산대 스캔 화면용 — 이 회원의 장바구니(모든 리스트 통틀어) 중 매장에서 실제로
+     * 스캔/체크한 상품만 골라서 합계를 낸다. InternalCartController의
+     * GET /internal/cart/scanned 에서 사용.
      */
     @Transactional(readOnly = true)
     public SessionCartResponse getScannedCart(Long consumerId) {

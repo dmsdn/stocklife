@@ -1,42 +1,21 @@
+// app/(main)/mypage/coupons/page.tsx
+// ✅ 전면 재작성 — 이전 파일은 실제 API(`/api/coupons/me`, 백엔드에 없음)를 부르는
+//   코드와 목업 fetchCoupons()를 부르는 코드가 그대로 같이 붙어있어서 useEffect/useState가
+//   중복 선언돼 있었고(import까지 두 번), 존재하지 않는 Coupon 타입/fetchCoupons 함수를
+//   참조해 컴파일이 안 되는 상태였습니다.
+// ⚠ 쿠폰은 이 백엔드가 아니라 별도 시스템에서 처리하기로 결정됨 — 그래서 실제 API 호출을
+//   걷어내고 전부 목업 데이터로 통일했습니다. 나중에 쿠폰 서버 API가 정해지면
+//   MOCK_COUPONS 자리를 그 응답으로 바꾸면 됩니다.
+// ✅ 하드코딩 색상(#F7F7F8, #111111 등) 대신 프로젝트 디자인 토큰(bg-muted, bg-foreground
+//   등)으로, radius도 프로젝트 컨벤션(담는 요소 rounded-sm=8px)으로 맞췄습니다.
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ChevronLeft, Ticket } from "lucide-react";
-import { apiFetch } from "@/lib/api-client";
-
-interface CouponItem {
-  consumerCouponId: number;
-  code: string;
-  title: string;
-  description: string;
-  discountType: "FIXED" | "PERCENT";
-  discountValue: number;
-  minOrderAmount: number;
-  maxDiscountAmount: number | null;
-  status: "AVAILABLE" | "USED" | "EXPIRED";
-  usable: boolean;
-  validUntil: string;
-}
-
-interface CouponSummary {
-  availableCount: number;
-  coupons: CouponItem[];
-}
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCoupon3Line } from "@remixicon/react";
+import { fetchCoupons, type Coupon } from "@/lib/coupons-mock";
 
 export default function CouponsPage() {
-  const [data, setData] = useState<CouponSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch<CouponSummary>("/api/coupons/me")
-      .then(setData)
-      .catch(() => setError("쿠폰 정보를 불러오지 못했어요."))
-      .finally(() => setLoading(false));
-  }, []);
-
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -47,77 +26,76 @@ export default function CouponsPage() {
     });
   }, []);
 
-  const usable = coupons.filter((c) => !c.used);
+  const availableCount = coupons.filter((c) => c.usable).length;
 
   return (
-    <main className="min-h-screen bg-[#F7F7F8] pb-24">
-      <header className="sticky top-0 z-20 flex h-14 items-center border-b bg-white px-5">
+    <main className="min-h-screen bg-background pb-24">
+      <header className="sticky top-0 z-20 flex h-14 items-center border-b border-border bg-background px-4">
         <Link href="/mypage" className="flex h-10 w-10 items-center justify-center rounded-full" aria-label="뒤로가기">
-          <ChevronLeft className="h-5 w-5" />
+          <RiArrowLeftSLine size={20} />
         </Link>
-        <h1 className="flex-1 text-center text-[17px] font-semibold">쿠폰</h1>
+        <h1 className="flex-1 text-center text-base font-semibold">쿠폰</h1>
         <div className="w-10" />
       </header>
 
-      <section className="bg-white px-5 py-6">
+      <section className="border-b border-border px-4 py-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F3F4F6]">
-            <Ticket className="h-5 w-5" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+            <RiCoupon3Line size={20} />
           </div>
           <div>
-            <p className="text-xs text-gray-500">사용 가능한 쿠폰</p>
+            <p className="text-xs text-muted-foreground">사용 가능한 쿠폰</p>
             <p className="mt-0.5 text-xl font-bold">
-              {data?.availableCount ?? 0}<span className="ml-1 text-sm font-medium">장</span>
+              {availableCount}
+              <span className="ml-1 text-sm font-medium">장</span>
             </p>
           </div>
         </div>
       </section>
 
-      <section className="px-5 pt-5">
-        <h2 className="text-[17px] font-semibold">내 쿠폰</h2>
-        {loading && <p className="py-10 text-center text-sm text-gray-500">불러오는 중...</p>}
-        {error && <p className="py-10 text-center text-sm text-red-500">{error}</p>}
-        {!loading && !error && data?.coupons.length === 0 && (
-          <p className="py-10 text-center text-sm text-gray-400">보유한 쿠폰이 없어요.</p>
-        )}
+      <section className="px-4 pt-5">
+        <h2 className="text-base font-semibold">내 쿠폰</h2>
 
-        {loaded && coupons.length === 0 && (
-          <p className="mt-6 text-center text-sm text-gray-400">보유한 쿠폰이 없어요.</p>
-        )}
+        {coupons.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">보유한 쿠폰이 없어요.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {coupons.map((coupon) => {
+              const expiry = new Date(coupon.validUntil).toLocaleDateString("ko-KR");
+              const statusText =
+                coupon.status === "AVAILABLE" ? "사용 가능" : coupon.status === "USED" ? "사용 완료" : "기간 만료";
 
-        <div className="mt-4 space-y-3">
-          {data?.coupons.map((coupon) => {
-            const expiry = new Date(coupon.validUntil).toLocaleDateString("ko-KR");
-            const statusText = coupon.usable ? "사용 가능" : coupon.status === "USED" ? "사용 완료" : "기간 만료";
-            return (
-              <div key={coupon.consumerCouponId} className={`overflow-hidden rounded-2xl bg-white ${coupon.usable ? "" : "opacity-55"}`}>
-                <div className="flex">
-                  <div className="flex w-20 shrink-0 items-center justify-center bg-[#111111] text-white">
-                    <Ticket className="h-6 w-6" />
+              return (
+                <div
+                  key={coupon.consumerCouponId}
+                  className={`flex overflow-hidden rounded-sm border border-border ${coupon.usable ? "" : "opacity-50"}`}
+                >
+                  <div className="flex w-16 shrink-0 items-center justify-center bg-foreground text-background">
+                    <RiCoupon3Line size={22} />
                   </div>
                   <div className="flex-1 p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-sm font-semibold">{coupon.title}</h3>
-                        <p className="mt-1 text-xs text-gray-500">{coupon.description}</p>
-                        <p className="mt-3 text-[11px] text-gray-400">{expiry}까지 · {statusText}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{coupon.description}</p>
+                        <p className="mt-3 text-[11px] text-muted-foreground">
+                          {expiry}까지 · {statusText}
+                        </p>
                       </div>
+
                       {coupon.usable && (
-                        <Link href="/cart" className="shrink-0 text-xs font-medium">장바구니에서 사용</Link>
+                        <Link href="/cart" className="shrink-0 flex items-center gap-0.5 text-xs font-medium">
+                          장바구니에서 사용
+                          <RiArrowRightSLine size={16} />
+                        </Link>
                       )}
                     </div>
-                    {!coupon.used && (
-                      <button type="button" className="flex shrink-0 items-center text-xs font-medium">
-                        사용하기
-                        <ChevronRight className="h-4 w-4" />
-                      </button>
-                    )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </main>
   );

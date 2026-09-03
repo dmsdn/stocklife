@@ -7,6 +7,10 @@
 // ⚠ POST /api/navigation/route(서버가 직접 A*까지 계산해주는 API)는 응답 형태가 지금의
 //   핀 기반 렌더링과 안 맞아서(경로만 주지 핀 좌표를 안 줌) 이번엔 안 바꿨습니다 —
 //   나중에 StoreMap 렌더링 자체를 그 응답 형태에 맞게 새로 짜면 서버 계산으로 바꿀 수 있어요.
+// ✅ 신규 — "아무 매대나 눌러서 그 안의 상품 목록 보기". 담은 상품 핀/동선과는 별개로,
+//   지도의 매대 칸을 누르면 실제 GET /api/locations/{locationId}/products를 호출해
+//   그 매대에 진열된 상품을 보여줍니다(LocationController 주석에 정확히 이 용도로
+//   만들어둔 API라고 적혀 있었음).
 "use client";
 
 import { useEffect, useState } from "react";
@@ -14,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { StoreMap, type MapPin } from "./store-map";
 import { readCartGroups } from "@/lib/cart-storage";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
+import { fetchProductsAtLocation, type LocationProduct } from "@/lib/location-products";
 import { computeNearestNeighborOrder } from "@/lib/route-order";
 
 interface StoreMapDialogProps {
@@ -25,6 +30,20 @@ interface StoreMapDialogProps {
 
 export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMapDialogProps) {
   const [pins, setPins] = useState<MapPin[] | null>(null);
+
+  // ✅ 매대 클릭으로 연 상품 목록
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [locationProducts, setLocationProducts] = useState<LocationProduct[] | null>(null);
+  const [locationError, setLocationError] = useState(false);
+
+  const handleLocationClick = (locationId: string) => {
+    setSelectedLocationId(locationId);
+    setLocationProducts(null);
+    setLocationError(false);
+    fetchProductsAtLocation(locationId)
+      .then(setLocationProducts)
+      .catch(() => setLocationError(true));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -76,7 +95,7 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
           </p>
         ) : (
           <>
-            <StoreMap floorNo={1} pins={pins} routeOrder={routeOrder} />
+            <StoreMap floorNo={1} pins={pins} routeOrder={routeOrder} onLocationClick={handleLocationClick} />
             <p className="p-4 pt-2 text-xs text-muted-foreground">
               아직 안 담은 상품 {remainingPins.length}개 기준으로 동선을 계산했어요. 스캔해서 담으면 그 핀은
               동선에서 빠집니다.
@@ -84,6 +103,35 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
           </>
         )}
       </DialogContent>
+
+      {/* ✅ 매대 칸을 눌렀을 때 그 안의 상품 목록 */}
+      <Dialog open={selectedLocationId !== null} onOpenChange={(v) => !v && setSelectedLocationId(null)}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>매대 상품 목록</DialogTitle>
+          </DialogHeader>
+
+          {locationError ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">상품 목록을 불러오지 못했어요.</p>
+          ) : locationProducts === null ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">불러오는 중...</p>
+          ) : locationProducts.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">이 매대엔 등록된 상품이 없어요.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {locationProducts.map((p) => (
+                <li key={p.skuId} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">재고 {p.stock}개</p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold">{p.price.toLocaleString()}원</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

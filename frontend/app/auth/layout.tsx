@@ -12,10 +12,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     return <div className="min-h-full bg-background">{children}</div>;
   }
 
-  // 나머지 인증 화면(회원가입 등)은 기존대로 가운데 정렬 카드
+  // 나머지 인증 화면(회원가입 등)은 상단 고정 정렬 — 참고 디자인(Frame 109 등)이
+  // 화면을 세로 중앙정렬하지 않고 위에서부터 고정 위치로 내용을 배치하고 있어서
+  // items-center/justify-center(세로 중앙정렬)를 걷어냈습니다.
   return (
-    <div className="flex min-h-full items-center justify-center bg-background p-4">
-      <div className="w-full max-w-sm md:max-w-md">{children}</div>
+    <div className="min-h-full bg-background">
+      <div className="mx-auto w-full max-w-sm px-5 md:max-w-md">{children}</div>
     </div>
   );
 }

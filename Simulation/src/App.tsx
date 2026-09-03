@@ -211,39 +211,33 @@ export default function App() {
         [busy, viewFloor, playerFloor, viewFloorData]
     );
 
-    // 반환값: 목적지 층까지 실제로 도착했으면 true. false면(경로 없음/시설 없음/에러 등)
-    // 호출부가 "도착한 셈 치고" 다음 단계로 넘어가면 안 된다 — 2번(쇼핑목록이 걷지도 않고
-    // 다음 층으로 넘어가버리는) 버그가 바로 이걸 안 지켜서 생겼던 것.
-    // fromFloor는 반드시 "호출 시점의 실제 캐릭터 층"을 명시적으로 받는다 — playerFloor
-    // React state를 클로저로 참조하면, 쇼핑목록 자동 안내처럼 한 번의 비동기 루프 안에서
-    // startTrip을 연달아 호출할 때 그 루프 시작 시점의 오래된(stale) playerFloor 값이
-    // 계속 재사용돼서(리렌더로 startTrip이 새로 안 만들어지므로) 이미 이동한 뒤인데도
-    // "출발 층"이 처음 그 자리로 되돌아가 버린다 — 쇼핑목록 안내 중 캐릭터가 뜬금없이
-    // 이전 층으로 순간이동했다가 다시 엘리베이터를 타는 버그의 원인이었다.
+    // 반환값: 목적지 층까지 실제로 도착했으면 true.
+    // fromFloor를 명시적으로 전달해서 쇼핑목록 자동 안내 중 React state가 늦게 갱신되는
+    // stale state 문제를 피한다. 실제 좌표는 canvas.getPlayerGrid()를 우선 사용한다.
     const startTrip = useCallback(
-        async (fromFloor: number, toFloor: number, targetCell: GridPoint, method: TransferMethod): Promise<boolean> => {
+        async (
+            fromFloor: number,
+            toFloor: number,
+            targetCell: GridPoint,
+            method: TransferMethod
+        ): Promise<boolean> => {
             const canvas = canvasRef.current;
             if (!canvas) return false;
+
             setBusy(true);
             setTransferPrompt(null);
             setElevatorPrompt(false);
 
-            // 트립 시작 전, 씬을 캐릭터가 실제로 있는 층 + 실제 위치로 되돌려 놓는다
-            // (지금 보고 있던 화면이 목적지 층이었을 수 있으므로).
-            // 중간에 fetch/이동 중 에러가 나도 busy가 true로 영영 남아있으면 그 이후로는
-            // 매대 클릭/층 전환/쇼핑목록 안내가 전부 조용히 아무 반응도 안 하는 것처럼 보인다 —
-            // try/finally로 무슨 일이 있어도 busy는 반드시 풀리게 한다.
             try {
                 const startData = await getFloorData(fromFloor);
                 setViewFloor(fromFloor);
                 setViewFloorData(startData);
-                // playerCell(React state)이 아니라 캔버스에서 지금 이 순간의 실제 좌표를 직접 읽는다.
-                // 쇼핑목록 자동 안내처럼 한 번의 루프 안에서 startTrip을 연달아 호출하면, 이전 호출들
-                // 사이에 playerCell state가 갱신돼도 이미 실행 중인 이 함수의 클로저는 루프 시작 시점의
-                // 오래된 playerCell을 계속 들고 있다 — fromFloor에서 고친 것과 같은 종류의 stale 버그라서,
-                // 캐릭터가 엉뚱한(예전 층의) 좌표에서 다시 그려지는 원인이 될 수 있다.
+
                 const liveCell = canvas.getPlayerGrid() ?? playerCell ?? undefined;
-                canvas.loadFloor(startData, { startCell: liveCell, hidePlayer: false });
+                canvas.loadFloor(startData, {
+                    startCell: liveCell,
+                    hidePlayer: false,
+                });
 
                 const arrived = await runTrip({
                     canvas,
@@ -651,6 +645,7 @@ export default function App() {
                         </div>
                     )}
                 </div>
+
                 {showFrontend && (
                     <>
                         <div

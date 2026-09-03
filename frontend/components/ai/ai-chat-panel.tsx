@@ -4,7 +4,7 @@
 
 "use client";
 
-import { X } from "lucide-react";
+import { RiCloseLine } from "@remixicon/react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AiChatBody } from "./ai-chat-body";
 import { useMediaQuery } from "@/lib/use-media-query";
@@ -43,7 +43,7 @@ export function AiChatPanel({
             onClick={onClose}
             aria-label="닫기"
           >
-            <X size={24} />
+            <RiCloseLine size={24} />
           </button>
         </div>
 
@@ -86,7 +86,7 @@ export function AiChatPanel({
             onClick={onClose}
             aria-label="닫기"
           >
-            <X size={24} />
+            <RiCloseLine size={24} />
           </button>
         </div>
 
