@@ -317,8 +317,20 @@ def run_chat(message: str,
              session_id: str | None = None,
              history: list[dict] | None = None,
              allow_actions: bool = True,
-             position: tuple[int, int, int] | None = None) -> dict:
+             position: tuple[int, int, int] | None = None,
+             member_id: int | None = None) -> dict:
     """자연어 입력 하나를 대화 한 번으로 완주시킨다. main.py가 부르는 유일한 입구.
+
+    ⚠ 09-03 신원 축 정정 — `member_id` 인자. 반응형(main.py)은 로그인 손님의
+      `consumer_id` 를 주고 여기서 `to_member_id` 로 세계 축을 만든다. 그런데
+      **자발형(dispatch·scenario_runner)은 SSE 가 준 `memberId`(이미 세계 축)를
+      가지고 있다.** 그것을 `consumer_id` 자리에 넣으면 `to_member_id` 가 한 번 더
+      더해져 10,000,016 이 **20,000,016** 이 되고 — 그런 회원은 없으니 브리핑 안에서
+      부른 도구가 전부 "이력 없음"을 낸다. 실측: 구매 115건인 손님 16 의 진입 브리핑이
+      *"아직 취향 파악은 초반이지만 … 블루베리잼"* 으로 나갔다(재구매 후보 3개를
+      지시문에 실어 줬는데도 — 모델이 도구로 확인하니 빈손이라 "조용히 뺀" 것).
+      자발형은 `member_id=` 로 넘긴다. 그 경우 백엔드 축은 `to_consumer_id` 로
+      역산하되 시드 회원(OFFSET 미만)은 None — 장바구니 액션은 어차피 잠겨 있다.
 
     [입력]
       message     : 사용자 발화 (프론트 → 백엔드 → 우리)
@@ -352,8 +364,13 @@ def run_chat(message: str,
     #    둘 다 `consumer_id` 를 넣어 **개인화가 통째로 빈 결과**였다(config.to_member_id
     #    의 주석 참조). 같은 줄에 나란히 두는 이유는, 다음에 고치는 사람이 두 축이
     #    다르다는 것을 **눈으로 보게** 하기 위해서다.
+    if member_id is not None and consumer_id is None:   # 자발형 — 세계 축이 먼저 온다
+        world_member = int(member_id)
+        consumer_id = config.to_consumer_id(member_id)   # 시드 회원이면 None
+    else:                                                # 반응형 — 백엔드 축이 먼저 온다
+        world_member = config.to_member_id(consumer_id)
     action.set_consumer_id(consumer_id)                  # 백엔드 축 (장바구니)
-    query.set_identity(config.to_member_id(consumer_id), session_id)   # 세계 축
+    query.set_identity(world_member, session_id)         # 세계 축
     # 위치도 같은 부류다(08-25). LLM이 좌표를 옮겨 적게 두지 않는다 —
     # optimize_route의 start_* 칸은 남아 있지만 **비우는 것이 기본**이고
     # compute._resolve_start가 이 값을 채운다. 자세히는 compute.py의 주입 블록.

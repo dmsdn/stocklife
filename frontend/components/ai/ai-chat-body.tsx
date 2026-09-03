@@ -6,7 +6,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine } from "@remixicon/react";
+import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine } from "@remixicon/react";
 
 // ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
 //   비슷한 상품을 찾아옵니다.
@@ -68,6 +68,10 @@ interface ChatTurn {
   /** ✅ 대화 검색(기록 > 리브)에서 특정 메시지로 스크롤 이동하기 위한 식별자.
    *  백엔드가 안 주는 옛 메시지/스트리밍 중인 임시 turn은 없을 수 있음. */
   messageId?: number;
+  /** ✅ 신규 — 이 유저 메시지에 대한 응답을 못 받아왔을 때(네트워크/백엔드 에러) true.
+   *  "다시 보내기" 버튼을 보여주는 용도 — 답변 실패는 별도 assistant 말풍선 대신
+   *  이 플래그로 표시해서, 나중에 같은 메시지를 재전송할 수 있게 함. */
+  failed?: boolean;
 }
 
 interface Attachment {
@@ -198,29 +202,10 @@ export function AiChatBody({
     };
   }, []);
 
-  const handleSend = async (text?: string) => {
-    const content = (text ?? message).trim();
-
-    if (!content || sending) return;
-
-    // ✅ 업로드된 첨부(camera/image/document/receipt)의 attachmentId만 모아서 같이 보냄.
-    //   아직 업로드 중이거나 실패한 건 제외 — list/voice는 애초에 attachmentId가 없음.
-    const attachmentIds = attachments
-      .map((a) => a.attachmentId)
-      .filter((id): id is number => id != null);
-
-    setTurns((prev) => [
-      ...prev,
-      {
-        role: "user",
-        content,
-      },
-    ]);
-
-    setMessage("");
-    setAttachments([]);
+  // ✅ 실제로 백엔드에 보내는 부분만 분리 — 처음 보낼 때도, 실패 후 "다시 보내기"할 때도
+  //   이 함수 하나만 씀(유저 말풍선을 새로 추가하느냐만 다름).
+  const sendToBackend = async (content: string, attachmentIds: number[], turnIndex: number) => {
     setSending(true);
-
     try {
       const sessionId = await getOrCreateSessionId(groupId);
 
@@ -242,24 +227,54 @@ export function AiChatBody({
       }
 
       setTurns((prev) => [
-        ...prev,
+        ...prev.map((t, i) => (i === turnIndex ? { ...t, failed: false } : t)),
         {
           role: "assistant",
           content: res.reply,
         },
       ]);
     } catch {
-      setTurns((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "지금은 답변을 가져오지 못했어요. 잠시 후 다시 시도해주세요.",
-        },
-      ]);
+      // ✅ 실패해도 별도 assistant 말풍선을 안 붙이고, 이 유저 메시지 자체를 실패
+      //   상태로 표시만 함 — "다시 보내기" 버튼으로 나중에 같은 내용을 재전송할 수 있게.
+      setTurns((prev) => prev.map((t, i) => (i === turnIndex ? { ...t, failed: true } : t)));
     } finally {
       setSending(false);
     }
+  };
+
+  const handleSend = async (text?: string) => {
+    const content = (text ?? message).trim();
+
+    if (!content || sending) return;
+
+    // ✅ 업로드된 첨부(camera/image/document/receipt)의 attachmentId만 모아서 같이 보냄.
+    //   아직 업로드 중이거나 실패한 건 제외 — list/voice는 애초에 attachmentId가 없음.
+    const attachmentIds = attachments
+      .map((a) => a.attachmentId)
+      .filter((id): id is number => id != null);
+
+    const turnIndex = turns.length;
+    setTurns((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content,
+      },
+    ]);
+
+    setMessage("");
+    setAttachments([]);
+
+    await sendToBackend(content, attachmentIds, turnIndex);
+  };
+
+  // ✅ 신규 — 실패한 유저 메시지 다시 보내기. 말풍선을 새로 안 만들고 같은 자리에서 재시도.
+  const handleResend = (turnIndex: number) => {
+    if (sending) return;
+    const turn = turns[turnIndex];
+    if (!turn || turn.role !== "user") return;
+    setTurns((prev) => prev.map((t, i) => (i === turnIndex ? { ...t, failed: false } : t)));
+    void sendToBackend(turn.content, [], turnIndex);
   };
 
   const handleFileSelected =
@@ -503,7 +518,7 @@ export function AiChatBody({
                     key={i}
                     type="button"
                     onClick={() => handleSend(prompt)}
-                    className="block w-full rounded-md border border-[#F4F4F4] px-4 py-3 text-left text-sm shadow-[0_0_20px_rgba(0,0,0,0.05)]"
+                    className="block w-full rounded-md border border-[#F4F4F4] px-4 py-3 text-left text-sm"
                   >
                     {prompt}
                   </button>
@@ -534,6 +549,19 @@ export function AiChatBody({
                 >
                   {turn.content}
                 </p>
+
+                {/* ✅ 신규 — 실패한 유저 메시지엔 "다시 보내기" 버튼 */}
+                {turn.role === "user" && turn.failed && (
+                  <button
+                    type="button"
+                    onClick={() => handleResend(i)}
+                    disabled={sending}
+                    className="mt-1 flex items-center gap-1 text-xs text-danger disabled:opacity-50"
+                  >
+                    <RiErrorWarningLine size={14} />
+                    답변을 가져오지 못했어요 · 다시 보내기
+                  </button>
+                )}
               </div>
             ))
           )}
@@ -598,7 +626,7 @@ export function AiChatBody({
           </div>
         )}
 
-        <div className="flex min-w-0 items-center gap-2 rounded-full border border-[#F4F4F4] bg-white p-2 shadow-[0_0_20px_rgba(0,0,0,0.05)]">
+        <div className="flex min-w-0 items-center gap-2 rounded-full border border-[#F4F4F4] bg-white p-2">
           <button
             type="button"
             onClick={() => setAttachOpen((v) => !v)}

@@ -68,6 +68,14 @@ def fanout(event_type: str, data: dict, now: float | None = None) -> None:
         return
 
     sid = data.get("sessionId")
+    # ⚠ 09-03: **기록이 먼저, 판단은 그다음.** 전에는 진입 브리핑(on_store_entry)을 먼저
+    #   돌리고 behavior.on_event 를 뒤에 불렀다. 그런데 on_store_entry 는 재구매 모델과
+    #   백엔드 조회를 돌리느라 몇 초가 걸리고, 그동안 이 세션의 **스캔 앵커(_ANCHOR)가
+    #   아직 안 적혀** 있다 — 스캔 6초 뒤 첫 질문("가장 가까운 화장실")이 번번이 "위치
+    #   모름"이던 원인(시연 점검 09-03). on_event 는 기록만 하므로(판정은 tick) 먼저
+    #   불러도 묶음 순서에 영향이 없다 — 위 docstring 의 "진입이 먼저 스테이지에" 는
+    #   같은 틱의 **판정** 순서 이야기지 기록 순서가 아니다.
+    behavior.on_event(event_type, data, now=now)
     if event_type == ENTRY_EVIDENCE and sid and sid not in _SEEN_SESSIONS:
         _SEEN_SESSIONS.add(sid)
         try:
@@ -75,7 +83,6 @@ def fanout(event_type: str, data: dict, now: float | None = None) -> None:
         except Exception as e:                                  # noqa: BLE001
             # 브리핑을 못 만들어도 장보기는 계속돼야 한다. 조용히 삼키지는 않는다.
             print(f"[runner] 진입 브리핑 실패 session={sid}: {type(e).__name__}: {e}")
-    behavior.on_event(event_type, data, now=now)
 
 
 def sessions() -> list:

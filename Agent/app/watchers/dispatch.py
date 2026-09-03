@@ -207,9 +207,12 @@ async def _deliver(session_id: str, decision: dict) -> bool:
         member_id = decision["items"][0].get("member_id")
         # allow_actions=False: 손님이 시키지 않았으므로 장바구니 조작을 **경로에서**
         # 잠근다(프롬프트 금지는 지침일 뿐 — 08-24 검수).
+        # ⚠ member_id 는 **세계 축**이다(SSE 의 memberId). consumer_id 자리에 넣으면
+        #   run_chat 이 OFFSET 을 한 번 더 더해 없는 회원이 된다(09-03 시연 점검 —
+        #   구매 115건 손님의 브리핑이 "아직 취향 파악은 초반" 으로 나가던 원인).
         result = await asyncio.to_thread(
-            _CHAT or loop.run_chat, message, member_id, session_id, None,
-            allow_actions=False)
+            _CHAT or loop.run_chat, message, None, session_id, None,
+            allow_actions=False, member_id=member_id)
 
         gv = guard.check(result["reply"], result["ledgers"])
         if not gv["ok"]:
@@ -240,7 +243,14 @@ async def _deliver(session_id: str, decision: dict) -> bool:
                 done(cand)
         print(f"[dispatch] {decision['mode']} 발화 완료 session={session_id} "
               f"유형={decision['topic_type']} 항목={len(decision['items'])}")
-        _tape("delivered", session_id, decision, chars=len(result["reply"] or ""))
+        # 09-03 시연 점검: 브리핑 **내용**이 세션마다 달라지는데(같은 회원인데 어제는
+        # 재구매, 오늘은 "아직 잘 모르지만…") 테이프에 글자 수만 있어 왜인지 못 봤다.
+        # 루프가 부른 도구 이름과 발화 앞부분을 같이 적는다 — 후보(items)와 발화가
+        # 어긋난 자리를 테이프만으로 가를 수 있게.
+        _tape("delivered", session_id, decision, chars=len(result["reply"] or ""),
+              items=[c.get("topic_key") for c in decision["items"]],
+              tools=[t for turn in (result.get("trace") or []) for t in (turn.get("tools") or [])],
+              reply=(result["reply"] or "")[:160])
         return True
     except Exception as e:
         print(f"[dispatch] 개입 처리 실패 session={session_id}: "
@@ -362,7 +372,10 @@ if __name__ == "__main__":
         register("LOCATION_MOVED", _b)
 
         def _fake_chat(message, consumer_id=None, session_id=None, history=None,
-                       allow_actions=True, position=None):
+                       allow_actions=True, position=None, member_id=None):
+            # 09-03: 자발형은 member_id= 로 온다 — 스텁도 같은 서명을 가져야 이음매가 검사된다
+            assert member_id is not None and consumer_id is None, "자발형 신원 축이 바뀌었다"
+
             assert allow_actions is False, "자발형 잠금이 이음매에서 풀렸다"
             return {"reply": "찾으시는 상품의 자리가 바뀌었어요.",
                     "trace": [], "ledgers": {}}

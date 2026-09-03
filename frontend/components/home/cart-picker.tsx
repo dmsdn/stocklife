@@ -10,6 +10,8 @@ type CartPickerProps = {
   onClose: () => void;
   onAddToCart: (groupId: number) => void;
   onCreateCart: () => void;
+  /** ✅ 신규 — 담기 실패 시 보여줄 메시지(없으면 표시 안 함) */
+  error?: string | null;
 };
 
 export function CartPicker({
@@ -19,6 +21,7 @@ export function CartPicker({
   onClose,
   onAddToCart,
   onCreateCart,
+  error,
 }: CartPickerProps) {
   if (!open || !selectedProduct) return null;
 
@@ -52,6 +55,9 @@ export function CartPicker({
         </div>
 
         <div className="space-y-2">
+          {error && (
+            <p className="rounded-sm bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
+          )}
           {cartGroups.map((group) => (
             <button
               key={group.id}

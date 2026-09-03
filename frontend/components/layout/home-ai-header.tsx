@@ -14,8 +14,7 @@ import {
 
 import { useAiPanel } from "./ai-panel-context";
 import { useMediaQuery } from "@/lib/use-media-query";
-
-const MOCK_UNREAD_COUNT = 2;
+import { useUnreadNotificationCount } from "@/lib/use-unread-notifications";
 
 interface HomeAiHeaderProps {
   active?: "home" | "ai";
@@ -29,6 +28,7 @@ interface HomeAiHeaderProps {
 export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, variant = "inline" }: HomeAiHeaderProps) {
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const unreadCount = useUnreadNotificationCount();
   const { toggle: toggleAiPanel } = useAiPanel();
 
   const handleAiClick = () => {
@@ -127,9 +127,9 @@ export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, vari
           className={`relative ml-1 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground ${active === "ai" ? "hidden md:flex" : ""}`}
         >
           <RiNotification4Line size={20} />
-          {MOCK_UNREAD_COUNT > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
-              {MOCK_UNREAD_COUNT}
+          {unreadCount > 0 && (
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 animate-[badge-float_2s_ease-in-out_infinite] items-center justify-center rounded-full bg-danger px-0.5 text-base font-semibold leading-none text-primary-foreground">
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </Link>

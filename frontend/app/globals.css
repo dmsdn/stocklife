@@ -129,12 +129,24 @@
   --text-base--line-height: 21px;
   --text-md: 16px;   /* 부제목 */
   --text-md--line-height: 25px;
+  /* ✅ 홈 화면 등 실측 픽셀(text-[Npx]) 값을 전부 +5px 해서 이 스케일에 맞춰 넣는 과정에서
+     기존 단계 사이에 걸치는 값이 나와 새로 추가함(2026-09) */
+  --text-17: 17px;
+  --text-17--line-height: 25px;
   --text-lg: 18px;   /* 화면 제목 */
   --text-lg--line-height: 32px;
+  --text-19: 19px;
+  --text-19--line-height: 28px;
   --text-xl: 20px;
   --text-xl--line-height: 28px;
+  --text-21: 21px;
+  --text-21--line-height: 30px;
   --text-2xl: 24px;
   --text-2xl--line-height: 32px;
+  --text-25: 25px;
+  --text-25--line-height: 34px;
+  --text-37: 37px;
+  --text-37--line-height: 44px;
 }
 
 /* ============================================
@@ -278,4 +290,10 @@ input:-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0 1000px var(--muted) inset;
   box-shadow: 0 0 0 1000px var(--muted) inset;
   transition: background-color 9999s ease-in-out 0s;
+}
+
+/* ✅ 알림 종 위 미확인 개수 배지 — "둥둥 떠다니는" 느낌의 은은한 상하 부유 애니메이션 */
+@keyframes badge-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }

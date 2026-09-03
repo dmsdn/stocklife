@@ -60,7 +60,7 @@ export function ProfileStep({
 
       <div className="mt-auto pb-[42px] pt-10">
         <Button
-          className="h-[60px] w-full rounded-full shadow-[0_0_20px_rgba(0,0,0,0.05)]"
+          className="h-[60px] w-full rounded-full"
           disabled={nextDisabled}
           onClick={onNext}
         >

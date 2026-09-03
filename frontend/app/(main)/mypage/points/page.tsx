@@ -71,7 +71,7 @@ export default function PointsPage() {
               </div>
 
               <div className="mt-3 flex items-end gap-1">
-                <strong className="text-[32px] font-bold tracking-tight">
+                <strong className="text-37 font-bold tracking-tight">
                   {pointBalance!.toLocaleString()}
                 </strong>
                 <span className="mb-1 text-sm font-medium">P</span>

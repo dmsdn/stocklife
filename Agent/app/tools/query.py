@@ -82,15 +82,25 @@ from app import searchterm, sot_client
 # 남의 번호를 불러달라면 그대로 부른다(남의 구매 이력이 새는 보안 구멍).
 # 그래서 definitions의 조회·추론 스키마에서 이 두 칸을 지우고,
 # 루프가 요청마다 등록한 값을 run()이 채운다. LLM의 손이 닿지 않는 경로다.
-_CURRENT_MEMBER_ID: int | None = None
-_CURRENT_SESSION_ID: str | None = None
+# ⚠ 09-03 — 요청 상태는 **ContextVar** 다, 모듈 전역이 아니다.
+#   전에는 `_CURRENT_… = None` 전역이었고 요청마다 덮어썼다. 그런데 요청은 동시에
+#   온다: 손님의 채팅(스레드풀)과 그 손님의 진입 브리핑(dispatch 의 to_thread)이
+#   **같은 초에** 돌면 브리핑의 set_position(None) 이 채팅의 앵커를 지운다 — 09-03
+#   시연 점검에서 스캔 직후 첫 질문("가장 가까운 화장실")만 번번이 "위치 모름"이
+#   나온 원인. 손님 둘이 겹치면 **신원까지** 섞인다(남의 member_id 로 이력을 읽는다).
+#   contextvars.ContextVar 는 스레드·태스크마다 값이 따로 산다. asyncio.to_thread 와
+#   FastAPI 의 스레드풀은 컨텍스트를 **복사해서** 넘기므로 set() 이 새 스레드 안에
+#   갇힌다. 읽기는 .get(), 쓰기는 .set() — 함수 껍데기(set_/current_)는 그대로라
+#   호출부는 안 바뀐다.
+from contextvars import ContextVar
+_CURRENT_MEMBER_ID: ContextVar = ContextVar("member_id", default=None)
+_CURRENT_SESSION_ID: ContextVar = ContextVar("session_id", default=None)
 
 
 def set_identity(member_id: int | None, session_id: str | None) -> None:
     """루프가 요청을 시작할 때 현재 사용자·세션을 등록한다. 비회원이면 None."""
-    global _CURRENT_MEMBER_ID, _CURRENT_SESSION_ID
-    _CURRENT_MEMBER_ID = member_id
-    _CURRENT_SESSION_ID = session_id
+    _CURRENT_MEMBER_ID.set(member_id)
+    _CURRENT_SESSION_ID.set(session_id)
 
 
 def current_member_id() -> int | None:
@@ -101,7 +111,7 @@ def current_member_id() -> int | None:
     모듈이 집어 쓰기 시작하면 '내부용'이라는 신호가 죽고, 나중에 이 변수의
     형태를 바꿀 때 어디가 물려 있는지 알 수 없게 된다. 함수 한 겹이 그 경계다.
     """
-    return _CURRENT_MEMBER_ID
+    return _CURRENT_MEMBER_ID.get()
 
 
 def current_session_id() -> str | None:
@@ -113,7 +123,7 @@ def current_session_id() -> str | None:
     current_member_id()와 같은 이유로 함수 한 겹을 둔다 — 밑줄 변수를 다른
     모듈이 집어 쓰면 '내부용'이라는 신호가 죽는다.
     """
-    return _CURRENT_SESSION_ID
+    return _CURRENT_SESSION_ID.get()
 
 
 # ── 결과 크기 상한 ──────────────────────────────────────────────────────────
@@ -444,18 +454,18 @@ def run(tool_name: str, tool_input: dict) -> dict:
         # 등록된 값이 없으면(비회원·세션 없음) 실행하지 않고 오류를 값으로
         # 돌려준다(원칙 ④) — LLM이 이 결과를 보고 로그인 안내로 착지한다.
         if "member_id" in allowed:
-            if _CURRENT_MEMBER_ID is None:
+            if _CURRENT_MEMBER_ID.get() is None:
                 return {"error": "no_member",
                         "message": "비회원 세션이라 회원 정보를 쓸 수 없습니다. "
                                    "손님에게 회원번호를 묻지 말고, 로그인하면 "
                                    "이용할 수 있다고 안내하세요."}
-            clean["member_id"] = _CURRENT_MEMBER_ID
+            clean["member_id"] = _CURRENT_MEMBER_ID.get()
         if "session_id" in allowed:
-            if _CURRENT_SESSION_ID is None:
+            if _CURRENT_SESSION_ID.get() is None:
                 return {"error": "no_session",
                         "message": "장보기 세션이 없습니다. 앱에서 장보기를 "
                                    "시작하면 자동으로 연결된다고 안내하세요."}
-            clean["session_id"] = _CURRENT_SESSION_ID
+            clean["session_id"] = _CURRENT_SESSION_ID.get()
 
     try:                                # 개념 ⑱
         return fn(**clean)             # 개념 ⑰: dict를 낱개 인자로 풀어 호출

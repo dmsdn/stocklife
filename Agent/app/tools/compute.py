@@ -142,10 +142,21 @@ def _product_name(sku_id: int) -> str:
 # [08-27 갱신] `infer.get_position`이 규칙판(스캔 앵커 + 보행 격자 스냅)으로 섰다.
 #   주입 창구는 예고대로 그대로다 — 달라진 것은 `_resolve_start`가 실물 모드에서
 #   출발 좌표를 **통행 칸으로 스냅**해 넘긴다는 것뿐(매대 칸은 A*가 못 밟는다).
-_CURRENT_POSITION: tuple[int, int, int] | None = None
+# ⚠ 09-03 — 요청 상태는 **ContextVar** 다, 모듈 전역이 아니다.
+#   전에는 `_CURRENT_… = None` 전역이었고 요청마다 덮어썼다. 그런데 요청은 동시에
+#   온다: 손님의 채팅(스레드풀)과 그 손님의 진입 브리핑(dispatch 의 to_thread)이
+#   **같은 초에** 돌면 브리핑의 set_position(None) 이 채팅의 앵커를 지운다 — 09-03
+#   시연 점검에서 스캔 직후 첫 질문("가장 가까운 화장실")만 번번이 "위치 모름"이
+#   나온 원인. 손님 둘이 겹치면 **신원까지** 섞인다(남의 member_id 로 이력을 읽는다).
+#   contextvars.ContextVar 는 스레드·태스크마다 값이 따로 산다. asyncio.to_thread 와
+#   FastAPI 의 스레드풀은 컨텍스트를 **복사해서** 넘기므로 set() 이 새 스레드 안에
+#   갇힌다. 읽기는 .get(), 쓰기는 .set() — 함수 껍데기(set_/current_)는 그대로라
+#   호출부는 안 바뀐다.
+from contextvars import ContextVar
+_CURRENT_POSITION: ContextVar = ContextVar("position", default=None)
 
 
-_POSITION_AGE: float | None = None    # 앵커의 나이(초). set_position 이 채운다
+_POSITION_AGE: ContextVar = ContextVar("position_age", default=None)    # 앵커의 나이(초). set_position 이 채운다
 
 
 def set_position(floor: int | None, x: int | None = None, y: int | None = None,
@@ -168,18 +179,17 @@ def set_position(floor: int | None, x: int | None = None, y: int | None = None,
       그 사실은 위치를 **옮겨서** 쓰는 게 아니라, **얼마나 믿을지**를 바꿔서
       쓴다. 그러려면 나이가 필요하다.
     """
-    global _CURRENT_POSITION, _POSITION_AGE
     if floor is None or x is None or y is None:
-        _CURRENT_POSITION = None
-        _POSITION_AGE = None
+        _CURRENT_POSITION.set(None)
+        _POSITION_AGE.set(None)
     else:
-        _CURRENT_POSITION = (int(floor), int(x), int(y))
-        _POSITION_AGE = None if age_sec is None else float(age_sec)
+        _CURRENT_POSITION.set((int(floor), int(x), int(y)))
+        _POSITION_AGE.set(None if age_sec is None else float(age_sec))
 
 
 def position_age() -> float | None:
     """마지막 스캔으로부터 경과 초. 모르면 None."""
-    return _POSITION_AGE
+    return _POSITION_AGE.get()
 
 
 def current_position() -> tuple[int, int, int] | None:
@@ -188,7 +198,7 @@ def current_position() -> tuple[int, int, int] | None:
     query.current_member_id()와 같은 이유로 함수 한 겹을 둔다: 밑줄 변수를 다른
     모듈이 집어 쓰면 '내부용'이라는 신호가 죽는다.
     """
-    return _CURRENT_POSITION
+    return _CURRENT_POSITION.get()
 
 
 def _resolve_start(start_location_id, start_floor, start_x, start_y):
@@ -209,7 +219,7 @@ def _resolve_start(start_location_id, start_floor, start_x, start_y):
         if loc:
             start = (int(loc["floor_no"]), int(loc["x"]), int(loc["y"]))
     if start is None:
-        start = _CURRENT_POSITION       # ③ 없으면 None — 호출부가 에러로 돌린다
+        start = _CURRENT_POSITION.get()  # ③ 없으면 None — 호출부가 에러로 돌린다
     # 실물 모드에서는 출발점을 통행 칸으로 스냅한다(08-27). 주입값은 스캔한
     # **매대의** 좌표인데 매대 칸은 장애물이라, 그대로 넘기면 백엔드 A*가
     # "출발점이 통행 불가"로 경로를 못 만든다. 스냅 로직은 위치추정 자산의
@@ -244,16 +254,19 @@ def _mock_cost(a: tuple, b: tuple) -> int:
             + abs(tx - bx) + abs(ty - by))                  # ③ 거기서 다시 걷는다
 
 
-def _backend_single_leg(start: tuple, sku_id: int):
+def _backend_single_leg(start: tuple, dest):
     """실물 모드: 백엔드 A*로 '출발점 → 상품 하나'의 실제 보행 비용을 잰다.
 
     반환 (거리, 도착 좌표) 또는 None(경로 없음). 도착 좌표를 함께 돌려주는
     이유: 다음 구간의 출발점은 매대 좌표가 아니라 **A*가 실제로 도착한
     통행 가능 칸**이어야 한다 — 매대 칸 자체는 밟을 수 없는 장애물이다.
     """
+    # 09-03: dest 는 정지점 dict — 상품(sku_id)이거나 시설(location_id 'F1-X-…').
+    #   옛 서명은 sku_id 하나였다. 시설이 locations 의 1급 시민이 되면서 정지점을
+    #   {"locationId"} 로도 보낼 수 있게 됐고(백엔드 resolveStop 의 locationId 갈래),
+    #   그 덕에 "화장실 들렀다가 계란, 마지막에 계산대"가 도구 한 번이 된다.
     route = sot_client.get_navigation_route(
-        start[0], start[1], start[2],
-        [{"skuId": int(sku_id), "label": _product_name(sku_id)}])
+        start[0], start[1], start[2], [_stop_payload(dest)])
     legs = route.get("legs") or []
     if not legs or str(legs[0].get("status")) != "OK":
         return None
@@ -263,6 +276,18 @@ def _backend_single_leg(start: tuple, sku_id: int):
     p = path[-1]
     endpoint = (int(p["floorNo"]), int(p["x"]), int(p["y"]))
     return int(legs[0].get("distance", route.get("totalDistance", 0))), endpoint
+
+
+def _stop_payload(d: dict) -> dict:
+    """정지점 dict → 백엔드 stops 원소. 상품이면 skuId, 시설이면 locationId."""
+    if d.get("sku_id") is not None:
+        return {"skuId": int(d["sku_id"]), "label": d.get("name") or _product_name(d["sku_id"])}
+    return {"locationId": d["location_id"], "label": d.get("name") or d["location_id"]}
+
+
+def _stop_key(d: dict):
+    """memo·중복 제거용 키 — 상품은 sku, 시설은 location_id."""
+    return ("sku", int(d["sku_id"])) if d.get("sku_id") is not None else ("loc", d["location_id"])
 
 
 def _held_karp_endings(start_cost: list, pair_cost: list):
@@ -385,7 +410,7 @@ def _route_floor_decomposed(start: tuple, destinations: list, leg):
     memo: dict = {}
 
     def cached_leg(pt: tuple, i: int):
-        key = (pt, destinations[i]["sku_id"])
+        key = (pt, _stop_key(destinations[i]))
         if key not in memo:
             memo[key] = leg(pt, destinations[i])
         return memo[key]
@@ -459,18 +484,23 @@ def _route_floor_decomposed(start: tuple, destinations: list, leg):
     return best[1], int(best[0])
 
 
-def _optimize_route(sku_ids: list, start_location_id: str | None = None,
+def _optimize_route(sku_ids: list | None = None, start_location_id: str | None = None,
                     start_floor: int | None = None, start_x: int | None = None,
-                    start_y: int | None = None) -> dict:
+                    start_y: int | None = None, facility_stops: list | None = None) -> dict:
     """방문 순서 최적화의 입구. 실패는 전부 값으로(원칙 ④)."""
     # dict.fromkeys(목록) = 목록의 원소를 키로 하는 dict — 파이썬 dict는 넣은
     # 순서를 기억하므로, 이걸 다시 list로 뜨면 **순서를 보존한 중복 제거**가 된다.
     # set(목록)으로 지우면 순서가 사라져서 같은 입력에 다른 순서가 나올 수 있다.
-    sku_ids = list(dict.fromkeys(int(x) for x in sku_ids))
-    if len(sku_ids) < 2:
+    # 09-03: `facility_stops` — 시설 정지점. 원소는 find_facility 가 준 location_id
+    #   ('F1-X-RESTROOM_M-1') 또는 종류('RESTROOM'·'CHECKOUT' — 출발점에서 가장 가까운 것).
+    #   상품과 섞어 한 번에 순서를 낸다. 시설은 `locations` 의 행이라 백엔드 A* 가
+    #   locationId 로 그대로 받는다 — 좌표를 옮겨 적는 갈래가 없다.
+    sku_ids = list(dict.fromkeys(int(x) for x in (sku_ids or [])))
+    facility_stops = [str(x) for x in (facility_stops or [])]
+    if len(sku_ids) + len(facility_stops) < 2:
         return {"error": "need_multiple_stops",
-                "message": "동선 최적화에는 상품이 2개 이상 필요합니다. 1개면 get_inventory의 위치로 안내하세요."}
-    if len(sku_ids) > MAX_EXACT_STOPS:
+                "message": "동선 최적화에는 정지점(상품·시설)이 2개 이상 필요합니다. 1개면 get_inventory 나 find_facility 의 위치로 안내하세요."}
+    if len(sku_ids) + len(facility_stops) > MAX_EXACT_STOPS:
         return {"error": "too_many_stops", "max_stops": MAX_EXACT_STOPS,
                 "message": f"정확 최적화는 한 번에 최대 {MAX_EXACT_STOPS}개까지입니다. 나눠서 요청하세요."}
 
@@ -491,9 +521,26 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
         else:
             d["name"] = _product_name(sku)
             destinations.append(d)
+    # 시설 정지점 — id 면 그 점, 종류면 출발점에서 가장 가까운 점 (infer 가 백엔드
+    # /api/map/floors/{n} 의 facilities 를 상주시켜 둔다)
+    from app.tools import infer as _infer
+    unresolved_facilities, seen_fac = [], set()
+    for fs in facility_stops:
+        p = _infer.facility_point(fs) if "-X-" in fs else _infer.nearest_facility_point(fs, start)
+        if p is None:
+            unresolved_facilities.append(fs)
+            continue
+        if p["location_id"] in seen_fac:
+            continue
+        seen_fac.add(p["location_id"])
+        destinations.append({"sku_id": None, "location_id": p["location_id"],
+                             "zone_id": f"F{p['floor_no']}-X", "floor_no": int(p["floor_no"]),
+                             "x": int(p["x"]), "y": int(p["y"]), "qty": None,
+                             "tier_role": "FACILITY", "kind": p["kind"], "name": p["label"]})
     if len(destinations) < 2:
         return {"error": "not_enough_resolved_stops", "unresolved_sku_ids": unresolved,
-                "message": "위치를 확인할 수 있는 상품이 2개 미만입니다."}
+                "unresolved_facilities": unresolved_facilities,
+                "message": "위치를 확인할 수 있는 정지점(상품·시설)이 2개 미만입니다."}
 
     # ── mock: 좌표 휴리스틱 leg — 분해 구조는 실물과 **같은 코드**를 탄다 ──
     # 실물만 분해하고 mock을 단일 Held-Karp로 두면, 골든셋·스모크가 검증하는
@@ -512,16 +559,16 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
                 "start": {"floor_no": start[0], "x": start[1], "y": start[2]},
                 "visit_order": ordered,
                 "floor_order": [d["floor_no"] for d in ordered],
-                "estimated_cost": total, "unresolved_sku_ids": unresolved,
+                "estimated_cost": total, "unresolved_sku_ids": unresolved, "unresolved_facilities": unresolved_facilities,
                 "note": "mock 모드 — 장애물·무빙워크 없는 좌표 휴리스틱 순서입니다."}
 
     # ── 실물: 백엔드 A* leg — 층 분해가 호출 수를 n²+n → Σnf(nf−1)+α로 줄인다 ──
     def _leg(pt, d):
-        return _backend_single_leg(pt, d["sku_id"])
+        return _backend_single_leg(pt, d)
 
     solved = _route_floor_decomposed(start, destinations, _leg)
     if solved is None:
-        return {"error": "route_unreachable", "unresolved_sku_ids": unresolved,
+        return {"error": "route_unreachable", "unresolved_sku_ids": unresolved, "unresolved_facilities": unresolved_facilities,
                 "message": "현재 위치에서 모든 목적지를 잇는 경로를 찾지 못했습니다."}
     order_idx, optimized_cost = solved
     ordered = [destinations[i] for i in order_idx]
@@ -529,8 +576,7 @@ def _optimize_route(sku_ids: list, start_location_id: str | None = None,
     # 확정된 순서 전체를 한 번 더 보내 실제 경로선(폴리라인)·구간 비용을 받는다 —
     # 프론트 지도에 그릴 재료. 순서는 우리가 정했고 백엔드는 그리기만 한다.
     final_route = sot_client.get_navigation_route(
-        start[0], start[1], start[2],
-        [{"skuId": d["sku_id"], "label": d["name"]} for d in ordered])
+        start[0], start[1], start[2], [_stop_payload(d) for d in ordered])
 
     floor_order = []
     for d in ordered:                   # 연속 중복만 접는다: [2,2,1] → [2,1]

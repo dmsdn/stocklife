@@ -93,13 +93,23 @@ INTERNAL_CART_PATH = "/internal/cart"
 #   LLM이 9002 같은 남의 번호를 채워 넣을 수 있고, 그러면 남의 장바구니가
 #   바뀐다. 백엔드가 JWT로 확인해 넘겨준 값만 쓰도록, LLM의 손이 닿지 않는
 #   경로로 전달한다. (definitions.py의 액션 3종 스키마에 consumer_id가 없는 이유)
-_CURRENT_CONSUMER_ID: int | None = None
+# ⚠ 09-03 — 요청 상태는 **ContextVar** 다, 모듈 전역이 아니다.
+#   전에는 `_CURRENT_… = None` 전역이었고 요청마다 덮어썼다. 그런데 요청은 동시에
+#   온다: 손님의 채팅(스레드풀)과 그 손님의 진입 브리핑(dispatch 의 to_thread)이
+#   **같은 초에** 돌면 브리핑의 set_position(None) 이 채팅의 앵커를 지운다 — 09-03
+#   시연 점검에서 스캔 직후 첫 질문("가장 가까운 화장실")만 번번이 "위치 모름"이
+#   나온 원인. 손님 둘이 겹치면 **신원까지** 섞인다(남의 member_id 로 이력을 읽는다).
+#   contextvars.ContextVar 는 스레드·태스크마다 값이 따로 산다. asyncio.to_thread 와
+#   FastAPI 의 스레드풀은 컨텍스트를 **복사해서** 넘기므로 set() 이 새 스레드 안에
+#   갇힌다. 읽기는 .get(), 쓰기는 .set() — 함수 껍데기(set_/current_)는 그대로라
+#   호출부는 안 바뀐다.
+from contextvars import ContextVar
+_CURRENT_CONSUMER_ID: ContextVar = ContextVar("consumer_id", default=None)
 
 
 def set_consumer_id(consumer_id: int | None) -> None:
     """루프가 요청을 시작할 때 현재 사용자를 등록한다. 비회원이면 None."""
-    global _CURRENT_CONSUMER_ID      # ㉕: 바깥 변수를 바꾸겠다는 선언
-    _CURRENT_CONSUMER_ID = consumer_id
+    _CURRENT_CONSUMER_ID.set(consumer_id)     # ContextVar — 이 요청(스레드·태스크)에만
 
 
 def current_consumer_id() -> int | None:
@@ -113,7 +123,7 @@ def current_consumer_id() -> int | None:
     빈 결과라 부정 행동 기준선(09-02)에서야 드러났다("장바구니가 비어 있어요"가
     데이터가 아니라 축 착오였다). 09-01 의 반대 방향 사고와 같은 계열이다.
     """
-    return _CURRENT_CONSUMER_ID
+    return _CURRENT_CONSUMER_ID.get()
 
 
 def _require_member() -> tuple[int | None, dict | None]:
@@ -128,11 +138,11 @@ def _require_member() -> tuple[int | None, dict | None]:
     # `is None`은 "값이 없음"인지 보는 것(개념 ⑤). `== None`이 아니라 `is None`을
     # 쓰는 게 파이썬 관례다 — None은 프로그램 전체에 딱 하나뿐인 값이라 "같은
     # 물건인가(is)"로 묻는 것이 정확하다.
-    if _CURRENT_CONSUMER_ID is None:
+    if _CURRENT_CONSUMER_ID.get() is None:
         # 실패 → (None, 오류dict). 쉼표로 두 값을 돌려주면 튜플이 된다(㉕-a).
         return None, {"ok": False, "error": "not_a_member",
                       "message": "로그인한 회원만 장바구니를 사용할 수 있습니다."}
-    return _CURRENT_CONSUMER_ID, None      # 성공 → (회원번호, 오류없음)
+    return _CURRENT_CONSUMER_ID.get(), None      # 성공 → (회원번호, 오류없음)
 
 
 def _call(method: str, path: str, json_body: dict | None = None,

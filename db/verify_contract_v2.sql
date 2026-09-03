@@ -41,7 +41,7 @@ INSERT INTO _chk VALUES (2,'S','locations 좌표 3종','floor_no,x,y',
      AND TABLE_NAME='locations' AND COLUMN_NAME IN ('floor_no','x','y')));
 
 -- 3. 불변식 #2 tier_role — 수직 보충의 근거
-INSERT INTO _chk VALUES (3,'S','tier_role 정의',"enum('PICK','BULK')",
+INSERT INTO _chk VALUES (3,'S','tier_role 정의',"enum('PICK','BULK','FACILITY')",
  (SELECT IFNULL(COLUMN_TYPE,'(없음)') FROM information_schema.COLUMNS
    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='locations' AND COLUMN_NAME='tier_role'));
 

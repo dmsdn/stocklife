@@ -25,23 +25,6 @@ const PICKER_HEIGHT =
 const CURRENT_YEAR =
   new Date().getFullYear();
 
-const MIN_YEAR =
-  CURRENT_YEAR - 100;
-
-const MAX_YEAR =
-  CURRENT_YEAR;
-
-const YEARS = Array.from(
-  {
-    length:
-      MAX_YEAR -
-      MIN_YEAR +
-      1,
-  },
-  (_, index) =>
-    MAX_YEAR - index
-);
-
 const MONTHS = Array.from(
   { length: 12 },
   (_, index) => index + 1
@@ -267,7 +250,7 @@ function WheelPicker({
                 ${
                   selected
                     ? "text-sm font-semibold text-foreground"
-                    : "text-[11px] font-normal text-muted-foreground/40"
+                    : "text-md font-normal text-muted-foreground/40"
                 }
               `}
               style={{
@@ -291,15 +274,36 @@ interface BirthDatePickerProps {
   /** ✅ "modal"(기본, 회원가입 화면에서 쓰는 버튼+팝업 방식) | "inline"(버튼 없이
    *  휠 선택 UI를 그 자리에 바로 보여줌 — 별도 페이지에서 곧장 뜨게 할 때 사용) */
   mode?: "modal" | "inline";
+  /** ✅ 신규 — 생년월일(과거)이 아닌 다른 날짜(예: 장 볼 날짜, 미래 포함)에도 재사용할 수
+   *  있게 연도 범위를 열어둠. 기본값은 기존 생년월일 동작(최근 100년~올해) 그대로. */
+  minYear?: number;
+  maxYear?: number;
+  /** modal 모드의 트리거 버튼 placeholder 텍스트. 기본은 기존 문구 그대로. */
+  placeholder?: string;
+  /** modal 모드의 다이얼로그 제목. 기본은 기존 문구("생년월일") 그대로. */
+  title?: string;
 }
 
 export function BirthDatePicker({
   value,
   onChange,
   mode = "modal",
+  minYear = CURRENT_YEAR - 100,
+  maxYear = CURRENT_YEAR,
+  placeholder = "생년월일을 선택해주세요",
+  title = "생년월일",
 }: BirthDatePickerProps) {
   const [open, setOpen] =
     useState(mode === "modal" ? false : true);
+
+  const years = useMemo(
+    () =>
+      Array.from(
+        { length: maxYear - minYear + 1 },
+        (_, index) => maxYear - index
+      ),
+    [minYear, maxYear]
+  );
 
   const today = getToday();
 
@@ -442,7 +446,7 @@ export function BirthDatePicker({
 
       <div className="relative z-20 flex gap-0">
         <WheelPicker
-          values={YEARS}
+          values={years}
           value={selectedYear}
           onChange={
             setSelectedYear
@@ -510,7 +514,7 @@ export function BirthDatePicker({
       >
         <span>
           {formattedValue ||
-            "생년월일을 선택해주세요"}
+            placeholder}
         </span>
 
         <span
@@ -534,7 +538,7 @@ export function BirthDatePicker({
         >
           <DialogHeader>
             <DialogTitle className="text-md">
-              생년월일
+              {title}
             </DialogTitle>
           </DialogHeader>
 

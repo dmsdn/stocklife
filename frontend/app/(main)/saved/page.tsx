@@ -20,6 +20,7 @@ import { getClientId } from "@/lib/client-id";
 import { formatRelativeTime, formatShoppingDate } from "@/lib/format-time";
 import { searchChatMessages, highlightMatch, type ChatSearchResult } from "@/lib/chat-search";
 import { readCartGroups, loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
+import { BirthDatePicker } from "@/components/domain/birth-date-picker";
 
 interface ChatSession {
   sessionId: string;
@@ -211,12 +212,16 @@ function SavedPageInner() {
               />
               <div className="flex items-center gap-2">
                 <label className="text-xs text-muted-foreground shrink-0">장 볼 날짜 (선택)</label>
-                <input
-                  type="date"
-                  value={newGroupDate}
-                  onChange={(e) => setNewGroupDate(e.target.value)}
-                  className="h-9 flex-1 rounded-sm border border-border bg-background px-2 text-sm outline-none focus-visible:border-foreground"
-                />
+                <div className="flex-1">
+                  <BirthDatePicker
+                    value={newGroupDate}
+                    onChange={setNewGroupDate}
+                    minYear={new Date().getFullYear()}
+                    maxYear={new Date().getFullYear() + 1}
+                    placeholder="장 볼 날짜를 선택해주세요"
+                    title="장 볼 날짜"
+                  />
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button className="flex-1" onClick={handleCreateGroup}>추가</Button>
@@ -258,7 +263,7 @@ function SavedPageInner() {
                   <button
                     type="button"
                     onClick={() => handleAskLiv(group.id)}
-                    className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-[11px] font-medium"
+                    className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-md font-medium"
                   >
                     <img src="/icons/liv-full.svg" alt="" className="h-4 w-4 shrink-0" />
                     리브에게 물어보기

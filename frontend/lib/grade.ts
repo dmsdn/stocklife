@@ -25,5 +25,5 @@ export function calculateGrade(accumulatedPoints: number): GradeTier {
 /** ✅ 등급 아이콘(24x24) 경로 — /public/grade/{basic|bronze|silver|gold}.png 로 넣으면
     이 함수 하나로 모든 화면(마이페이지, 등급 안내, 홈)에 자동 반영됩니다. */
 export function gradeIconSrc(key: GradeTier["key"]): string {
-  return `/grade/${key.toLowerCase()}.png`;
+  return `/grade/${key.toLowerCase()}.svg`;
 }

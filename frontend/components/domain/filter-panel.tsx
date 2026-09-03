@@ -53,7 +53,10 @@ export function FilterPanel({
     ...draftCategories.map((v) => ({ group: "카테고리" as FilterTab, value: v })),
     ...draftStatuses.map((v) => ({ group: "재고여부" as FilterTab, value: v })),
     ...(priceChanged
-      ? [{ group: "가격" as FilterTab, value: `${draftPriceRange[0].toLocaleString()}~${draftPriceRange[1].toLocaleString()}원` }]
+      ? [{
+          group: "가격" as FilterTab,
+          value: `${draftPriceRange[0].toLocaleString()}~${draftPriceRange[1].toLocaleString()}원${draftPriceRange[1] >= PRICE_MAX ? " 이상" : ""}`,
+        }]
       : []),
   ];
 

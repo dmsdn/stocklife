@@ -146,6 +146,41 @@ def _internal_headers() -> dict:
     return {"X-Internal-Service-Key": os.environ.get("INTERNAL_SERVICE_KEY", "")}
 
 
+# ── 공유 HTTP 클라이언트 (09-03) ─────────────────────────────────────────────
+# 전에는 호출마다 `httpx.get(...)`·`httpx.post(...)` 모듈 함수를 썼다. 그 편의 함수는
+# **매번 새 Client 를 만들고 요청 뒤 닫는다** — 즉 TCP 연결을 새로 맺는다.
+#
+# [실측 09-03] 같은 경로 계산 요청을 다섯 번:
+#     매번 새 연결  246ms/회
+#     연결 재사용    11ms/회      ← 22배
+# localhost 인데도 이만큼 차이 나는 것은 윈도우의 연결 수립 비용이 크기 때문이다.
+# 응답 본문은 2.5KB 라 전송은 아무 몫도 아니었다 — **전부 악수 비용**이었다.
+#
+# 왜 크게 걸리나: 동선 최적화는 구간 비용을 재려고 이 창구를 한 질문에 십수 번
+# 부른다(4정지점 15회 · 8정지점 59회). 246ms × 59 = 15초가 순전히 연결 수립이다.
+# 조회 도구도 한 번의 대화에서 여러 번 도니 이 이득은 경로만의 것이 아니다.
+#
+# [수명] 프로세스 하나에 클라이언트 하나. 명시적으로 닫지 않는다 — 종료 시 OS 가
+# 회수하고, 중간에 닫으면 다른 스레드의 요청이 깨진다. httpx.Client 는 스레드
+# 안전하므로 스레드풀·to_thread 에서 같이 써도 된다.
+# [import 를 함수 안에 두는 관례] 아래 주석 참조 — mock 모드에서는 httpx 가 없어도
+# 서버가 떠야 한다. 그래서 클라이언트도 **처음 쓸 때** 만든다.
+_CLIENT = None
+
+
+def _client():
+    """공유 httpx.Client. 없으면 만든다(연결 유지 = keep-alive)."""
+    global _CLIENT
+    if _CLIENT is None:
+        import httpx
+        _CLIENT = httpx.Client(
+            # 연결 풀: 백엔드 하나만 보므로 작게. keepalive 를 넉넉히 둬야
+            # 동선 계산의 연속 호출이 같은 연결을 재사용한다.
+            limits=httpx.Limits(max_keepalive_connections=8, max_connections=16),
+        )
+    return _CLIENT
+
+
 def _http_get(path: str, params: dict | None = None, headers: dict | None = None):
     """백엔드에 GET 요청을 보내고 응답을 파이썬 dict/list로 돌려주는 내부 공용 함수.
 
@@ -160,13 +195,12 @@ def _http_get(path: str, params: dict | None = None, headers: dict | None = None
     # 동안에는 httpx가 설치돼 있지 않아도 서버가 떠야 한다. 맨 위에 두면
     # 파일을 읽는 순간 "httpx 없음" 에러로 죽는다 — 의존성은 실제로 쓰는
     # 순간에만 요구하는 것.
-    import httpx
-    # httpx.get(주소, ...) = 그 주소로 GET 요청을 보내고 응답 객체(r)를 받는다.
+    # _client().get(주소, ...) = 그 주소로 GET 요청을 보내고 응답 객체(r)를 받는다.
     # timeout: 응답이 이 시간(초) 안에 안 오면 포기하고 예외를 던진다.
     #   왜 필요한가: 백엔드가 느려질 때 무한정 기다리면 사용자 화면이 멈춘
     #   것처럼 보인다. 빨리 실패하고 "지금 확인이 어렵네요"로 착지하는 게 낫다.
-    r = httpx.get(config.BACKEND_BASE_URL + path, params=params, headers=headers,
-                  timeout=config.BACKEND_TIMEOUT_SEC)
+    r = _client().get(config.BACKEND_BASE_URL + path, params=params, headers=headers,
+                      timeout=config.BACKEND_TIMEOUT_SEC)
     # raise_for_status(): 응답이 실패 코드(4xx/5xx)면 예외를 던진다(개념 ②:
     # 응답 객체 r이 스스로 가진 기능). 이걸 생략하면 에러 응답도 조용히
     # 지나가서, 도구가 빈 결과를 "재고 없음"으로 오해한다. 실패는 실패로
@@ -185,9 +219,8 @@ def _http_post(path: str, json_body: dict, headers: dict | None = None):
     단순 조회보다 오래 걸릴 수 있는데, 조회 기준(3초)으로 끊으면 멀쩡한
     계산을 실패로 오판한다. max(a, b) = 둘 중 큰 값.
     """
-    import httpx
-    r = httpx.post(config.BACKEND_BASE_URL + path, json=json_body, headers=headers,
-                   timeout=max(config.BACKEND_TIMEOUT_SEC, 10.0))
+    r = _client().post(config.BACKEND_BASE_URL + path, json=json_body, headers=headers,
+                       timeout=max(config.BACKEND_TIMEOUT_SEC, 10.0))
     r.raise_for_status()
     return r.json()
 
@@ -1202,6 +1235,23 @@ def push_proactive_message(session_id: str, content: str) -> dict:
     if config.USE_MOCK_SOT:
         print(f"[proactive:mock] session={session_id} :: {content}")
         return {"ok": True, "mock": True}
-    return _http_post(_API["push_proactive"],
-                      {"sessionId": session_id, "content": content},
-                      headers=_internal_headers())
+    # ⚠ 09-02 시연 점검에서 잡힘 — 백엔드는 200 에 저장된 메시지 자체
+    # ({"messageId": 78, "sender": "AI_PROACTIVE", ...})를 돌려준다. "ok" 키가
+    # 없으므로 그대로 넘기면 dispatch 가 **전달된 발화를 "전달 실패"로** 적고
+    # 예절 장부(etiquette.record)와 감시자 상태 비우기(on_delivered)를 건너뛴다
+    # — 사안당 1회·총량 상한이 안 깎여 같은 브리핑이 다음 스캔에 또 나갈 수 있다.
+    # 여기서 모양을 통일한다: 성공이면 ok=True 와 message_id, 실패(4xx·5xx·통신)면
+    # ok=False 와 사유. dispatch 는 ok 만 본다.
+    import httpx                       # 이 파일의 관례 — 의존성은 쓰는 자리에서 (158행)
+    try:
+        body = _http_post(_API["push_proactive"],
+                          {"sessionId": session_id, "content": content},
+                          headers=_internal_headers())
+    except httpx.HTTPStatusError as e:
+        # 404 = 그 sessionId 의 chat_session 이 없다(프론트가 세션을 안 만들었다).
+        return {"ok": False, "status": e.response.status_code,
+                "reason": e.response.text[:200]}
+    except httpx.HTTPError as e:
+        return {"ok": False, "status": None, "reason": f"{type(e).__name__}: {e}"}
+    message_id = body.get("messageId") if isinstance(body, dict) else None
+    return {"ok": True, "message_id": message_id, "raw": body}

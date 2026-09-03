@@ -366,6 +366,8 @@ def main() -> int:
     run("predict_availability", sku_id=pend_sku)
     run("predict_repurchase")
     run("get_position")
+    run("find_facility", kind="RESTROOM")            # 09-03: 시설 — 위치 모르면 층별
+    run("find_facility", kind="ELEVATOR", floor_no=2)
     run("match_preferences")
     run("identify_product_photo", image_ref=_photo_fixture())
 

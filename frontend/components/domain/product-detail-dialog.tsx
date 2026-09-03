@@ -159,13 +159,18 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
         onClose={() => setSavePickerOpen(false)}
         onSelect={(groupIds) => {
           if (!product) return;
-          groupIds.forEach((groupId) => {
-            addProductToCartGroup(groupId, {
-              id: product.skuId,
-              name: product.name,
-              category: product.categoryL1,
-              price: product.finalPriceKrw,
-            });
+          Promise.all(
+            groupIds.map((groupId) =>
+              addProductToCartGroup(groupId, {
+                id: product.skuId,
+                name: product.name,
+                category: product.categoryL1,
+                price: product.finalPriceKrw,
+              })
+            )
+          ).catch(() => {
+            console.error("리스트에 담기 실패");
+            alert("리스트에 담지 못했어요. 다시 시도해주세요.");
           });
         }}
       />
