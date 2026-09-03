@@ -39,8 +39,10 @@ export default function FrontendPanel({
                 title="frontend"
                 src={src}
                 style={{ width: '100%', height: '100%', border: 'none' }}
-                // 결제/스캔 등에서 카메라·클립보드가 필요할 수 있어 넉넉히 허용.
-                allow="camera; clipboard-read; clipboard-write"
+                // 결제/스캔·AI 챗봇 음성입력(STT) 등에서 카메라·마이크·클립보드가 필요할 수 있어 넉넉히 허용.
+                // ⚠ microphone이 빠져있으면 iframe 안(프론트엔드)에서 getUserMedia가 브라우저 프롬프트도
+                //   뜨기 전에 Permissions Policy 단계에서 막혀서, 사이트 설정에 잡히지도 않은 채 "거부됨"처럼 보인다.
+                allow="camera; microphone; clipboard-read; clipboard-write"
             />
         </div>
     );
