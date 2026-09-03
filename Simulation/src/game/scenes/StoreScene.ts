@@ -3,6 +3,7 @@ import type { FloorData, LocationInfo, FacilityInfo, GridPoint } from '../types'
 import { Grid, findPath } from '../pathfinding/astar';
 import { fetchProductsAtLocation, fetchLowStockLocations, adjustStock } from '../../api/products';
 import { confirmRestock } from '../../api/locations';
+import { ZONE_LABEL_OVERRIDES, SERVICE_AREA_LABEL_OVERRIDES } from '../../data/floorAmenities';
 
 // ════════════════════════════════════════════════════════════════════════════
 // StoreScene.ts — 매장 층(B1/1F/2F/3F) 하나를 그리고 캐릭터를 움직이는 Phaser Scene.
@@ -46,8 +47,17 @@ import { confirmRestock } from '../../api/locations';
 // 반비례하게 맞추므로 기본(꽉 채운) 화면에서 전체 크기는 그대로고, 실제로 달라지는 건
 // 렌더링 선명도 + 사용자가 확대했을 때 보이는 디테일이다.
 const TILE = 24;
-const PLAYER_SPEED = 460; // px/sec — 330에서 상향(성원님 요청: 손님 캐릭터 이동속도 더 빠르게)
-const HOLD_MOVE_DELAY = 140; // 방향키를 누르고 있을 때 한 칸 이동 간격(ms)
+const PLAYER_SPEED = 2000; // px/sec — 09-03: 성원님 요청으로 1500에서 재상향(NPC_SPEED보다도
+// 빠름). 타일 이동 tween에는 최소 40ms 바닥이 걸려 있어(advancePath() 참고) 아무리 빨라도
+// 순간이동처럼 보이진 않는다.
+// 09-03: 이전엔 140ms 고정값이었는데, PLAYER_SPEED를 크게 올려도(타일 하나 이동에 실제로
+// 걸리는 시간은 훨씬 짧아짐) 이 값이 그대로 140ms라서 "한 칸 휙 움직이고 ~130ms 가만히
+// 서있다가 다음 칸 휙"처럼 뚝뚝 끊겨 보였다(성원님 피드백) — 실제 원인은 tween 길이가
+// 아니라 이 입력 간격이 tween보다 훨씬 길었던 것. 그래서 타일 하나 이동에 걸리는 실제
+// 시간(TILE / PLAYER_SPEED)에 맞춰 계산하도록 바꿨다 — PLAYER_SPEED가 나중에 또 바뀌어도
+// 같은 문제가 재발하지 않는다. 최소 8ms는 advancePath()의 tween 하한과 동일한 이유로
+// 둔 바닥(0이면 같은 프레임에서 다음 입력을 계속 받아 과도하게 자주 처리될 수 있음).
+const HOLD_MOVE_DELAY = Math.max((TILE / PLAYER_SPEED) * 1000, 8); // 방향키를 누르고 있을 때 한 칸 이동 간격(ms)
 
 // ── NPC(재고 담당 직원) 관련 상수 ──
 // NPC는 "지하 창고에서 물건을 받아 각 층 매대로 배달"하는 흐름을 표현한다 — 실제로 B1 씬까지
@@ -66,8 +76,10 @@ const NPC_IDLE_WAIT_MS = 1200; // 재입고할 매대가 없을 때 배회 후 �
 // 나중에 추가돼 그 위를 덮어버리는 문제가 있었음 — depth로 고정해서 항상 같은 순서 보장)
 const DEPTH_FLOOR_TILE = 0;
 const DEPTH_SHELF = 10;
-const DEPTH_FACILITY = 20;
 const DEPTH_LABEL = 30;
+// 09-03: 시설 아이콘/이름표(엘리베이터·에스컬레이터 등)가 존 이름표(DEPTH_LABEL)에 가려
+// 보이던 문제 — 존 이름표보다 위(DEPTH_LABEL보다 큰 값)로 올려서 항상 위에 그려지게 한다.
+const DEPTH_FACILITY = 35;
 const DEPTH_PATH = 40;
 const DEPTH_NPC = 900;
 const DEPTH_PLAYER = 1000;
@@ -197,6 +209,7 @@ export default class StoreScene extends Phaser.Scene {
   private grid!: Grid;
   private player!: Phaser.GameObjects.Container;
   private playerSprite!: Phaser.GameObjects.Sprite; // player 컨테이너 안의 실제 캐릭터 스프라이트
+  private playerLabel!: Phaser.GameObjects.Text; // 09-03: 플레이어 머리 위 이름표(휴대폰 뒷번호/비로그인 표시)
   private playerGrid: GridPoint = { x: 2, y: 2 };
   private pathGraphics!: Phaser.GameObjects.Graphics;
   private floorTileLayer?: Phaser.GameObjects.Graphics;
@@ -452,7 +465,18 @@ export default class StoreScene extends Phaser.Scene {
     this.locationsByCell.clear();
     this.facilityByCell.clear();
     this.buildFloor();
-    this.placePlayerAt(opts?.startCell ?? this.findEntranceCell());
+    // 09-03: hidePlayer(다른 층을 "구경만" 할 때 — 층 드롭다운으로 안 서있는 층 조회)로
+    // 불릴 때도 이 아래 placePlayerAt()이 항상 실행돼서, 캐릭터가 화면엔 안 보이지만
+    // playerGrid(씬 내부 실제 좌표)는 "지금 구경 중인 층의 입구 칸"(대개 지도 왼쪽 하단)
+    // 으로 조용히 덮어써지고 있었다. 이후 다른 층 상품으로 이동(App.tsx의 startTrip)할 때
+    // canvas.getPlayerGrid()로 "현재 위치"를 물어보면 이 오염된 좌표가 나와서, 실제 층을
+    // 다시 불러올 때 캐릭터가 그 잘못된(막힌) 자리에 떨어져 못 움직이는 버그였다(성원님
+    // 리포트: "다른층 매대로 이동하면 1층 왼쪽 하단에 갇힘"). startCell이 명시적으로 주어지지
+    // 않은 채 hidePlayer인 경우(=순수 구경용 조회)는 아예 재배치를 건너뛰어 playerGrid를
+    // 보존한다 — 화면에 안 보이는 캐릭터를 굳이 옮길 이유도 없다.
+    if (opts?.startCell || !opts?.hidePlayer) {
+      this.placePlayerAt(opts?.startCell ?? this.findEntranceCell());
+    }
     this.setPlayerVisible(!opts?.hidePlayer);
     this.pathGraphics.clear();
     this.currentPath = [];
@@ -535,9 +559,13 @@ export default class StoreScene extends Phaser.Scene {
     // 줘도 컨테이너 단위로 비교되어 바닥 밑에 깔려 안 보이는 문제가 있었다. 그래서 이
     // 표시 박스도 shelfLayer에 함께 넣어서 "바닥 다음, 매대 그리기 전" 순서를 보장한다
     // (Phaser 컨테이너는 넣은 순서대로 그려지므로: 바닥 → 서비스 영역 → 매대).
+    // 09-03: zone 이름표와 같은 방식의 수동 좌표 지정 — floorAmenities.ts의
+    // SERVICE_AREA_LABEL_OVERRIDES 참고.
+    const serviceAreaOverridesForFloor = SERVICE_AREA_LABEL_OVERRIDES[this.floorData.floor] ?? {};
     for (const area of this.floorData.serviceAreas ?? []) {
-      const ax = area.x * TILE;
-      const ay = area.y * TILE;
+      const areaManualPos = serviceAreaOverridesForFloor[area.id];
+      const ax = (areaManualPos ? areaManualPos.x : area.x) * TILE;
+      const ay = (areaManualPos ? areaManualPos.y : area.y) * TILE;
       const aw = area.w * TILE;
       const ah = area.h * TILE;
       // 09-02 (로컬 검증안): 백엔드가 시설 footprint(kind=FACILITY)를 주면 진짜 자리는
@@ -550,14 +578,27 @@ export default class StoreScene extends Phaser.Scene {
       }
 
       // 참고 도면과 동일하게 이미지 없이 회색 박스 + 가운데 이름표만 그린다.
+      // 09-03: DB 기반 시설(api/locations.ts의 LABEL_ONLY_KIND)은 실제 매장 폭이 아니라
+      // 좌표 하나짜리 점이라 area.w/h가 전부 1칸(24px)으로 내려온다 — 그 폭 그대로
+      // wordWrap을 걸면 "계산대 / SCAN" 같은 긴 라벨이 한 칸 상자에 억지로 줄바꿈되며
+      // 글자가 잘려 보였다(성원님 피드백). 라벨 상자 폭은 이제 실제 배치에 안 쓰이는
+      // 표시 전용 값이므로, 최소 200px은 확보해서 안 잘리게 한다(옛 floorAmenities.ts
+      // 손좌표처럼 원래도 넉넉한 폭이었던 경우는 Math.max라 그대로 유지된다).
+      const labelWrapWidth = Math.max(aw - 6, 200);
       const label = this.add.text(ax + aw / 2, ay + ah / 2, area.label, {
         fontSize: '20px',
         color: '#3a3a3a',
         align: 'center',
-        wordWrap: { width: aw - 6 },
+        wordWrap: { width: labelWrapWidth },
       });
       label.setOrigin(0.5);
-      this.shelfLayer.add(label);
+      // 09-03(성원님 피드백: "다 그래픽 뒤로 가있나봐" — 정확했다): 이 라벨을 박스처럼
+      // shelfLayer에 넣으면, shelfLayer 안에 라벨보다 "나중에" 추가되는 facilityCells
+      // 회색 블록(불투명, 아래쪽 코드 참고)이 같은 좌표를 완전히 덮어버려서 라벨이 안
+      // 보였다 — Phaser 컨테이너는 넣은 순서대로 그려지므로 나중에 추가된 게 위로 온다.
+      // 라벨은 항상 그 블록 위에 보여야 하므로, shelfLayer보다 위(DEPTH_LABEL) 레이어인
+      // labelLayer에 넣는다 — 존 이름표와 같은 레이어라 깊이 문제 없이 항상 블록 위에 뜬다.
+      this.labelLayer.add(label);
     }
 
     const zoneById = new Map(this.floorData.zones.map((z) => [z.zoneId, z]));
@@ -719,29 +760,41 @@ export default class StoreScene extends Phaser.Scene {
     // x좌표 자체도 그 칼럼 바로 다음 칸(minX+1)부터 시작하도록 옮겨서 라벨 왼쪽 끝이 그 매대
     // 위에 겹쳐 찍히는 걸 막는다.
     const LABEL_SPAN = 9; // 라벨 텍스트가 대략 차지하는 칸 수
+    // 09-03: floorAmenities.ts의 ZONE_LABEL_OVERRIDES에 이 층/zone 좌표가 지정돼 있으면
+    // 아래 자동계산(바운딩박스 + 빈 행 탐색)을 건너뛰고 그 좌표를 그대로 쓴다 — 자동계산이
+    // 이상한 자리에 놓는 zone을 성원님이 직접 손으로 고정시킬 수 있게 하기 위함.
+    const labelOverridesForFloor = ZONE_LABEL_OVERRIDES[this.floorData.floor] ?? {};
     for (const zone of this.floorData.zones) {
       const b = zoneBBox.get(zone.zoneId);
       if (!b) continue;
-      const labelX = b.minX + 1;
-      const isRowClear = (row: number) => {
-        for (let x = labelX; x < labelX + LABEL_SPAN; x++) {
-          if (!this.grid.isWalkable(x, row)) return false;
+      const manualPos = labelOverridesForFloor[zone.zoneId];
+      let labelX: number;
+      let labelRow: number;
+      if (manualPos) {
+        labelX = manualPos.x;
+        labelRow = manualPos.y;
+      } else {
+        labelX = b.minX + 1;
+        const isRowClear = (row: number) => {
+          for (let x = labelX; x < labelX + LABEL_SPAN; x++) {
+            if (!this.grid.isWalkable(x, row)) return false;
+          }
+          return true;
+        };
+        // 존의 좌측 상단 바로 위 행부터, 라벨이 깔릴 가로 폭 전체가 매대로 막혀있지 않은 행을
+        // 만날 때까지 한 칸씩 위로 올라가며 찾는다.
+        labelRow = b.minY - 1;
+        let guard = 0;
+        while (labelRow >= 0 && !isRowClear(labelRow) && guard < 10) {
+          labelRow--;
+          guard++;
         }
-        return true;
-      };
-      // 존의 좌측 상단 바로 위 행부터, 라벨이 깔릴 가로 폭 전체가 매대로 막혀있지 않은 행을
-      // 만날 때까지 한 칸씩 위로 올라가며 찾는다.
-      let labelRow = b.minY - 1;
-      let guard = 0;
-      while (labelRow >= 0 && !isRowClear(labelRow) && guard < 10) {
-        labelRow--;
-        guard++;
+        // 그래도 못 찾았으면(매장 맨 위 벽에 닿는 등) 원래 자리로 되돌린다 — 탐색 중 엉뚱한
+        // 매대 위에 멈춰있는 상태로 남지 않도록.
+        if (labelRow < 0 || !isRowClear(labelRow)) labelRow = Math.max(0, b.minY - 1);
       }
-      // 그래도 못 찾았으면(매장 맨 위 벽에 닿는 등) 원래 자리로 되돌린다 — 탐색 중 엉뚱한
-      // 매대 위에 멈춰있는 상태로 남지 않도록.
-      if (labelRow < 0 || !isRowClear(labelRow)) labelRow = Math.max(0, b.minY - 1);
       const txt = this.add.text(labelX * TILE, labelRow * TILE, `${zone.letter} ${zone.label}`, {
-        fontSize: '20px', // 전체 라벨 20px로 통일(성원님 요청)
+        fontSize: '25px', // 전체 라벨 20px로 통일(성원님 요청)
         color: '#333333',
         backgroundColor: '#ffffffaa',
         padding: { x: 2, y: 1 },
@@ -789,7 +842,7 @@ export default class StoreScene extends Phaser.Scene {
       const tier = LABEL_TIER[fac.type] ?? 1; // 기본: 바로 아래
       const labelY = fy + Math.sign(tier) * (iconRadius + 2 + (Math.abs(tier) - 1) * 12);
       const label = this.add.text(fx, labelY, FACILITY_LABEL[fac.type] ?? fac.type, {
-        fontSize: '20px',
+        fontSize: '25px',
         color: '#1f2937',
         backgroundColor: '#ffffffcc',
         padding: { x: 2, y: 1 },
@@ -815,9 +868,26 @@ export default class StoreScene extends Phaser.Scene {
     this.fitCharSprite(sprite, PLAYER_CHAR);
     sprite.play(`${PLAYER_CHAR.key}-idle`);
     this.playerSprite = sprite;
-    const c = this.add.container(0, 0, [shadow, sprite]);
+    // 09-03: NPC(직원) 이름표와 같은 스타일로, 플레이어 머리 위에도 이름표를 띄운다.
+    // 초기 텍스트는 App.tsx가 setPlayerLabel()로 로그인 상태를 알려주기 전까지 보일
+    // 기본값 — 로그인 여부를 아직 모르는 상태이므로 비로그인으로 시작한다.
+    const label = this.add.text(0, -PLAYER_CHAR.displayHeight * 0.62, '(비로그인)', {
+      fontSize: '20px',
+      color: '#78350f',
+      backgroundColor: '#fef3c7cc',
+      padding: { x: 2, y: 0 },
+    });
+    label.setOrigin(0.5);
+    this.playerLabel = label;
+    const c = this.add.container(0, 0, [shadow, sprite, label]);
     c.setDepth(DEPTH_PLAYER);
     return c;
+  }
+
+  // App.tsx(우측 frontend iframe에서 postMessage로 받은 로그인 상태)가 로그인/로그아웃될
+  // 때마다 호출 — 휴대폰 뒷번호(마지막 4자리) 또는 "(비로그인)"을 플레이어 머리 위에 표시한다.
+  setPlayerLabel(text: string) {
+    this.playerLabel?.setText(text);
   }
 
   // 직원(NPC) 캐릭터 — "로봇" 에셋 팩 스프라이트 + 위에 "직원" 이름표를 띄운다.
@@ -936,7 +1006,12 @@ export default class StoreScene extends Phaser.Scene {
         const tx = next.x * TILE + TILE / 2;
         const ty = next.y * TILE + TILE / 2;
         const dist = Phaser.Math.Distance.Between(npc.container.x, npc.container.y, tx, ty);
-        const duration = Math.max((dist / NPC_SPEED) * 1000, 40);
+        // 09-03: 하한을 40ms->8ms로 낮춤(성원님 요청: 높을 이유 없음). 0으로 두지
+        // 않는 이유는 duration:0인 tween은 onComplete가 같은 프레임에서 바로 또 불려서,
+        // 경로가 아주 길면 advancePath()가 동기적으로 계속 재귀 호출되며 콜스택을 먹을
+        // 위험이 있다 — 8ms(최소 한 프레임)만 줘도 매 스텝이 다음 프레임으로 넘어가서
+        // 그 문제가 없다.
+        const duration = Math.max((dist / NPC_SPEED) * 1000, 8);
         this.setCharMotion(npc.sprite, NPC_CHAR, true, next.x - npc.gridPos.x);
         this.tweens.add({
           targets: npc.container,
@@ -1091,7 +1166,7 @@ export default class StoreScene extends Phaser.Scene {
       return;
     }
     const g = this.add.graphics();
-    g.setDepth(DEPTH_LABEL + 1); // 매대/라벨보다도 위에 그려서 확실히 보이게
+    g.setDepth(DEPTH_PATH + 1); // 매대/라벨/시설보다도 위에 그려서 확실히 보이게
     g.fillStyle(0xff0000, 0.35);
     for (const [x, y] of this.floorData.occupied) {
       g.fillRect(x * TILE, y * TILE, TILE, TILE);
@@ -1125,7 +1200,7 @@ export default class StoreScene extends Phaser.Scene {
       padding: { x: 4, y: 2 },
     });
     label.setOrigin(0.5, 1);
-    label.setDepth(DEPTH_LABEL + 2);
+    label.setDepth(DEPTH_PATH + 2);
     this.cellAddressLabel = label;
   }
 
@@ -1185,7 +1260,7 @@ export default class StoreScene extends Phaser.Scene {
       targets: this.player,
       x: targetX,
       y: targetY,
-      duration: Math.max(duration, 40),
+      duration: Math.max(duration, 8), // 09-03: 40ms->8ms로 낮춤(성원님 요청) — 이유는 위 NPC 쪽 주석과 동일
       onComplete: () => {
         this.playerGrid = next;
         this.advancePath();
@@ -1216,6 +1291,25 @@ export default class StoreScene extends Phaser.Scene {
     this.advancePath();
   }
 
+  // 09-03: 우클릭 드래그(pointermove)가 scrollX/scrollY를 clamp 없이 그냥 더해서, 지도
+  // 밖으로 한없이 끌고 나갈 수 있었다("확대/축소해도 끝까지 안 보인다"는 성원님 피드백의
+  // 원인) — getScrollInfo()/setScrollX()/setScrollY()가 쓰는 것과 똑같은 공식으로 여기서도
+  // 매번 다시 맵 범위 안으로 당겨준다. 휠 줌도 줌 배율이 바뀌면 한 화면에 보이는 world
+  // 폭/높이(viewWidth/viewHeight)가 바뀌어서 기존 스크롤 위치가 새 범위를 벗어날 수 있으므로
+  // 줌을 바꾼 직후에도 똑같이 다시 당겨준다.
+  private clampCameraScroll() {
+    if (!this.floorData) return;
+    const cam = this.cameras.main;
+    const worldWidth = this.floorData.gridWidth * TILE;
+    const worldHeight = this.floorData.gridHeight * TILE;
+    const viewWidth = cam.width / cam.zoom;
+    const viewHeight = cam.height / cam.zoom;
+    const maxX = Math.max(0, worldWidth - viewWidth);
+    const maxY = Math.max(0, worldHeight - viewHeight);
+    cam.scrollX = Phaser.Math.Clamp(cam.scrollX, 0, maxX);
+    cam.scrollY = Phaser.Math.Clamp(cam.scrollY, 0, maxY);
+  }
+
   private setupCameraDrag() {
     let dragging = false;
     let start = { x: 0, y: 0 };
@@ -1230,11 +1324,13 @@ export default class StoreScene extends Phaser.Scene {
       this.cameras.main.scrollX -= (p.x - start.x) / this.cameras.main.zoom;
       this.cameras.main.scrollY -= (p.y - start.y) / this.cameras.main.zoom;
       start = { x: p.x, y: p.y };
+      this.clampCameraScroll();
     });
     this.input.on('pointerup', () => (dragging = false));
     this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => {
       const zoom = Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.001, this.minZoom, 3);
       this.cameras.main.setZoom(zoom);
+      this.clampCameraScroll();
     });
   }
 }

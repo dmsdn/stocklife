@@ -249,6 +249,17 @@ public class OrderService {
                                 checkedItems);
 
                 /*
+                 * 09-03(박은우팀원 리포트): 결제 완료된 리스트는 이후 수정 못 하게 잠근다
+                 * (groupId로 결제한 경우만) — CartGroup.markCompleted()는 정의만 돼 있고
+                 * 여기서 호출이 빠져 있어서, 결제해도 서버 status가 계속 ACTIVE로 남는
+                 * 버그가 있었다. 별도 save() 호출 불필요 — 트랜잭션 안에서 관리되는
+                 * 엔티티라 dirty checking으로 자동 flush됨.
+                 */
+                if (group != null) {
+                        group.markCompleted();
+                }
+
+                /*
                  * 주문 완료 알림
                  */
                 notificationService.createNotification(

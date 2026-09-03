@@ -166,6 +166,30 @@ export const OCCUPIED_CELL_OVERRIDES: Record<number, Set<string>> = {
   1: new Set(['10,70', '10,71', '10,72']),
 };
 
+// 09-03: 존 이름표(예: "A 청과") 위치는 원래 StoreScene.ts가 zone의 매대 좌표 범위를 보고
+// 자동으로 계산한다(맨 왼쪽 위 칸 근처, 매대에 안 겹치는 빈 행을 찾아서). 근데 매장 구조가
+// 복잡한 곳에서는 자동계산이 이상한 자리에 라벨을 놓는 경우가 있어서, zoneId별로 직접
+// 좌표(그리드 x,y — 라벨의 왼쪽 위 기준점)를 지정할 수 있게 해뒀다. 여기 값이 있으면
+// 자동계산 대신 이 좌표를 그대로 쓴다(StoreScene.ts의 zone 라벨 렌더링 부분 참고).
+// floor(1=1F 등) -> zoneId -> {x, y}.
+export const ZONE_LABEL_OVERRIDES: Record<number, Record<string, { x: number; y: number }>> = {
+  1: {'F1-A': { x: 4, y: 39 },'F1-B': { x: 40, y: 48 },'F1-C': { x: 65, y: 45 }, 'F1-D': { x: 4, y: 20 }, 'F1-E': { x: 40, y: 24 }, 'F1-F': { x: 4, y: 1 }, 'F1-G': { x: 40, y: 1 }, 'F1-H': { x: 61, y: 1 }},
+  2: {'F2-A': { x: 49, y: 46 },'F2-B': { x: 2, y: 39 },'F2-C': { x: 49, y: 23 }, 'F2-D': { x: 2, y: 23 }, 'F2-E': { x: 43, y: 1 }, 'F2-F': { x: 2, y: 2 }, 'F2-G': { x: 40, y: 1 }, 'F2-H': { x: 61, y: 1 }},
+  3: {'F3-A': { x: 71, y: 3 },'F3-B': { x: 2, y: 42 },'F3-C': { x: 28, y: 18 }, 'F3-D': { x: 3, y: 2 }, 'F3-E': { x: 28, y: 2 }},
+};
+
+// 09-03: 계산대/ATM/베이커리 같은 "표시용 구역"(ServiceArea) 이름표도 zone 이름표와 같은
+// 문제(위치 제각각, 겹침)가 있어서 똑같은 방식으로 직접 좌표를 지정할 수 있게 해뒀다.
+// 키는 area.id — DB에서 온 경우 시설의 locationId 그대로다(예: 'F1-X-CHECKOUT-1',
+// 'F1-X-ATM-1' 등 — api/locations.ts의 dbAreas.push()가 f.locationId를 id로 넣는다).
+// 값은 라벨이 "가운데" 놓일 그리드 칸(x,y) — P키로 확인한 좌표를 그대로 넣으면 된다.
+// floor(1=1F 등) -> locationId -> {x, y}.
+export const SERVICE_AREA_LABEL_OVERRIDES: Record<number, Record<string, { x: number; y: number }>> = {
+  1: {'F1-X-CHECKOUT-1': { x: 25, y: 69 },'F1-X-ATM-1': { x: 36, y: 69 },'F1-X-BAKERY-1': { x: 62, y: 72 }, 'F1-X-FOODCOURT-1': { x: 75, y: 72 }, 'F1-X-CUSTOMER_SERVICE-1': { x: 46, y: 72 }, 'F1-X-TRASH-1': { x: 93, y: 38 }, 'F1-X-EVENT-1': { x: 29, y: 32 }, 'F1-X-EVENT-2': { x: 74, y: 36 }},
+  2: {'F2-X-OPTICAL-1': { x: 5, y: 66 },'F2-X-PHARMACY-1': { x: 5, y: 72 },'F2-X-TASTING-1': { x: 46, y: 68 },'F2-X-TRASH-1': { x: 93, y: 38 }},
+  3: {'F3-X-TRASH-1': { x: 93, y: 38 }},
+};
+
 export function fallbackZoneColor(zoneId: string): string {
   let h = 0;
   for (let i = 0; i < zoneId.length; i++) h = (h * 31 + zoneId.charCodeAt(i)) >>> 0;

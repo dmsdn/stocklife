@@ -55,6 +55,18 @@ export default function App() {
     const [loggedInPhone, setLoggedInPhone] = useState<string | null>(getCurrentConsumerPhone());
     const draggingRef = useRef(false);
 
+    // 09-03: 캐릭터 머리 위 이름표 — 휴대폰 뒷번호(마지막 4자리)만 노출한다(전체 번호는
+    // 화면에 그대로 띄우기엔 과하다는 판단). 로그인 안 했으면 "(비로그인)"으로 표시.
+    // 의도적으로 deps 배열을 안 둔다(매 렌더마다 실행) — 바로 아래 events 주입 effect와
+    // 같은 이유: Phaser 씬(게임)이 floorData 로딩 이후 비동기로 생겨서, loggedInPhone이
+    // 이미 정해진 상태에서 씬만 늦게 준비되는 경우 deps 배열이 있으면 그 갱신을 영영
+    // 놓친다 — 매 렌더 재실행이 그 타이밍 문제를 없애준다(setText는 값이 같으면 사실상
+    // 공짜라 매 렌더 호출해도 성능에 문제없다).
+    useEffect(() => {
+        const label = loggedInPhone ? loggedInPhone.slice(-4) : '(비로그인)';
+        canvasRef.current?.setPlayerLabel(label);
+    });
+
     // 상단바 — 지금은 실제 결제 API 연동 전이라 잔액/구매내역은 프론트 로컬 상태(placeholder)다.
     // 구매하기/환불하기는 이 로컬 상태 안에서만 금액 차감·환급 및 재고 증감(products.ts의 오버레이)을 흉내낸다.
     const [cash, setCash] = useState(99999999);
@@ -604,7 +616,7 @@ export default function App() {
                         }}
                         title="frontend에서 로그인한 계정을 따라갑니다"
                     >
-                        👤 {loggedInPhone ? `${loggedInPhone}` : '기본 캐릭터(비로그인)'}
+                        👤 {loggedInPhone ? `손님 캐릭터(${loggedInPhone.slice(-4)})` : '기본 캐릭터(비로그인)'}
                     </span>
 
                     {viewFloor !== playerFloor && (

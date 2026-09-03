@@ -125,8 +125,9 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
     // 1층은 상행만, 3층은 하행만, 2층은 둘 다 인터랙션(층 이동)을 연다 — 나머지 한쪽은
     // 블록 자체는 그대로 보이되(실제 통행 가능 칸이라 시각적으로 존재) 이름표만 붙이고
     // 층 이동은 안 걸어준다(눌러도 반응 없음, 기존에도 그 층엔 그 방향이 없었다).
-    const ESCALATOR_UP_X = 94;
-    const ESCALATOR_DOWN_X = 92;
+    // 09-03(2차 조정, 성원님 확정): x=92/94 -> x=91/93 로 한 칸씩 안쪽(왼쪽)으로 이동.
+    const ESCALATOR_UP_X = 93;
+    const ESCALATOR_DOWN_X = 91;
     const allowEscalatorUp = floor !== 3;
     const allowEscalatorDown = floor !== 1;
 
@@ -139,9 +140,12 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
           dbMapped.push({ type: 'escalator_up', x: f.x, y: f.y });
         } else if (f.x === ESCALATOR_DOWN_X && allowEscalatorDown) {
           dbMapped.push({ type: 'escalator_down', x: f.x, y: f.y });
-        } else {
-          dbAreas.push({ id: f.locationId, label: '에스컬레이터', x: f.x, y: f.y, w: 1, h: 1 });
         }
+        // 09-03(성원님 피드백): 그 층에서 안 쓰는 방향(예: 1층의 하행 칸)은 예전엔 "에스컬레이터"
+        // 라벨을 따로 붙였는데, 바로 옆 칸(2칸 거리)에 실제 인터랙션 되는 에스컬레이터가 이미
+        // "에스컬레이터(상행)" 같은 제대로 된 이름표를 달고 있어서 중복이었고, 좁은 1칸 상자에
+        // 억지로 줄바꿈되면서 글자가 잘려 보이는 원인이었다 — 그래서 그냥 라벨을 안 붙인다.
+        // 블록 자체(회색 칸)는 facilityCells가 그대로 그려주니 자리는 계속 보인다.
         continue;
       }
       const type = KIND_TO_TYPE[kind];
@@ -160,8 +164,11 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
   const shelfCells = dto.cells
     .filter((c) => c.kind === 'SHELF' && c.shelfZone && !overrides?.has(`${c.x},${c.y}`))
     .map((c) => ({ x: c.x, y: c.y, zoneId: c.shelfZone as string }));
+  // 09-03(2차 조정): 입구(ENTRANCE) 칸은 회색 시설 블록으로 칠하지 않는다 — 실제 매장
+  // 입구는 막힌 공간이 아니라 열린 통로라서, 다른 시설(엘리베이터/화장실 등)과 달리
+  // 회색 박스를 그리면 오히려 부자연스럽다는 성원님 피드백.
   const facilityCells: [number, number][] = dto.cells
-    .filter((c) => c.kind === 'FACILITY')
+    .filter((c) => c.kind === 'FACILITY' && c.facilityKind !== 'ENTRANCE')
     .map((c) => [c.x, c.y]);
 
   return {

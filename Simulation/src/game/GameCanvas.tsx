@@ -24,6 +24,9 @@ export interface GameCanvasHandle {
   } | null;
   setScrollX: (x: number) => void;
   setScrollY: (y: number) => void;
+  // 09-03: 플레이어 머리 위 이름표(휴대폰 뒷번호/비로그인 표시) — App.tsx가 로그인 상태
+  // 바뀔 때마다 호출한다.
+  setPlayerLabel: (text: string) => void;
 }
 
 const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ floorData, events }, ref) {
@@ -161,6 +164,10 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     setScrollY: (y) => {
       const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
       scene?.setScrollY(y);
+    },
+    setPlayerLabel: (text) => {
+      const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+      scene?.setPlayerLabel(text);
     },
   }));
 
