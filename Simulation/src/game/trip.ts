@@ -82,8 +82,10 @@ export async function runTrip({
       }
 
       if (method === 'escalator') {
-        // 중간층을 실제로 거쳤는지 확인 가능하도록 1초 머무른다.
-        await wait(1000);
+        // 중간층을 실제로 거쳤는지 확인 가능하도록 잠깐 머무른다.
+        // 09-03: 1000ms -> 500ms로 줄임(성원님 요청 — 여러 층을 거치는 에스컬레이터
+        // 이동에서 이 대기가 층 수만큼 겹쳐 느리게 느껴졌음).
+        await wait(500);
       }
 
       const nextData = await loadFloorCached(nextFloor);

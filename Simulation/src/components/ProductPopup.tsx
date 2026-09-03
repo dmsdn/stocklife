@@ -75,9 +75,6 @@ export default function ProductPopup({ baseLabel, groups, cartQtyByKey, onAddToC
                     <div style={{ fontSize: 13, color: '#6b7280' }}>진열된 상품이 없습니다.</div>
                 )}
             </div>
-            <div style={{ fontSize: 10, color: '#6b7280', marginTop: 10 }}>
-                * 실제 재고 데이터가 아니라 임시로 생성한 예시 상품입니다.
-            </div>
         </Modal>
     );
 }
