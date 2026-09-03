@@ -1,7 +1,10 @@
 // components/ai/ai-chat-body.tsx
 // ✅ 마이크 버튼 — 실제 navigator.mediaDevices.getUserMedia로 브라우저 권한 요청, 허용하면
 //   MediaRecorder로 실제 녹음 시작(빨간 점+타이머), 다시 누르면 종료.
-// ⚠ 녹음한 음성을 텍스트로 바꿔주는 서버(STT)가 없어서, 지금은 "음성 메모"로 첨부만 됩니다.
+// ✅ 09-03: 별도 STT 서버 없이 브라우저 내장 Web Speech API(SpeechRecognition)로 녹음과
+//   동시에 실시간 음성 인식을 돌려서, 인식된 텍스트를 입력창(message)에 그대로 채워준다.
+//   지원 안 하는 브라우저(예: 구형 Firefox)에서는 recognitionRef가 null로 남고, 기존처럼
+//   "음성 메모" 오디오 첨부만 되는 방식으로 자연스럽게 폴백된다.
 
 "use client";
 
@@ -150,6 +153,8 @@ export function AiChatBody({
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
+  // ✅ Web Speech API 인식기 — SpeechRecognition은 표준 타입 정의가 없어 any로 다룬다.
+  const recognitionRef = useRef<any>(null);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -395,6 +400,13 @@ export function AiChatBody({
           clearInterval(recordTimerRef.current);
         }
 
+        // ✅ 녹음이 끝나면 음성 인식기도 같이 멈춘다.
+        if (recognitionRef.current) {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        }
+
         setRecording(false);
 
         const blob = new Blob(chunks, {
@@ -425,6 +437,49 @@ export function AiChatBody({
         () => setRecordSeconds((s) => s + 1),
         1000
       );
+
+      // ✅ Web Speech API로 실시간 음성 인식 — 지원하는 브라우저(Chrome/Edge/삼성인터넷 등)면
+      //   녹음과 동시에 돌려서 인식된 문장을 입력창에 채운다. 서버/API 키 불필요.
+      const SpeechRecognitionCtor =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+      if (SpeechRecognitionCtor) {
+        try {
+          const recognition = new SpeechRecognitionCtor();
+          recognition.lang = "ko-KR";
+          recognition.continuous = true;
+          recognition.interimResults = true;
+
+          recognition.onresult = (event: any) => {
+            let transcript = "";
+            for (let i = 0; i < event.results.length; i++) {
+              transcript += event.results[i][0].transcript;
+            }
+            setMessage(transcript);
+          };
+
+          // ✅ 인식기가 (녹음은 계속 켜져 있는데) 무음 등으로 스스로 멈추는 경우가 있어,
+          //   아직 녹음 중이면 재시작해서 계속 듣게 한다.
+          recognition.onend = () => {
+            if (mediaRecorderRef.current?.state === "recording") {
+              try {
+                recognition.start();
+              } catch {
+                // 이미 시작된 상태 등 — 무시
+              }
+            }
+          };
+
+          recognition.onerror = () => {
+            // 음성 인식 실패는 조용히 무시 — 녹음(음성 메모)은 별개로 계속 진행됨
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch {
+          recognitionRef.current = null;
+        }
+      }
     } catch {
       setMicError(
         "마이크 권한이 거부됐어요. 브라우저 설정에서 허용해주세요."
