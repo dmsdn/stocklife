@@ -70,7 +70,7 @@ CREATE TABLE zones (
                                             -- 이미 0=지하 관례를 쓰고 있어 혼선을 만들지 않는다
   name      VARCHAR(40)  NOT NULL,          -- '세제·청소 구역' — 소비자 노출 라벨.
                                             -- 에이전트가 "2층 세제·청소 구역이에요"라고 말할 때 쓴다
-  zone_type ENUM('SALES','BACKROOM') NOT NULL DEFAULT 'SALES',
+  zone_type ENUM('SALES','BACKROOM','FACILITY') NOT NULL DEFAULT 'SALES',   -- 09-03: 층별 시설 존 'F1-X'
                                             -- 백룸을 별도 테이블이 아니라 존의 한 유형으로 두는 이유:
                                             -- 보충 경로(수평/층간)가 "존→존 이동"으로 균일하게 표현된다
   PRIMARY KEY (zone_id)
@@ -85,7 +85,10 @@ CREATE TABLE locations (
   rack_no     TINYINT     NOT NULL,
   bay_no      TINYINT     NOT NULL,
   level_no    TINYINT     NOT NULL,         -- 1~6단
-  tier_role   ENUM('PICK','BULK') NOT NULL, -- L1~L3=PICK(손 닿는 진열), L4~L6=BULK(위 예비).
+  tier_role   ENUM('PICK','BULK','FACILITY') NOT NULL, -- L1~L3=PICK(손 닿는 진열), L4~L6=BULK(위 예비).
+                                            -- 09-03 FACILITY: 시설(화장실·계산대·엘리베이터…) 위치 행.
+                                            --   id 'F1-X-RESTROOM_M-1', rack 0 · bay=순번 · level 0,
+                                            --   x,y = 블록 중심(통행 칸). 동선 정지점·출발점으로 쓴다
                                             -- 수직 보충(분 단위 리드타임)이라는 개념의 물리적 근거.
                                             -- 규칙은 생성기가 보장하고 계약 테스트가 검사한다
   floor_no    TINYINT     NOT NULL,         -- zones.floor_no와 중복 저장. 비정규화하는 이유:

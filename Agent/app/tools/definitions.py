@@ -302,6 +302,7 @@ TOOLS = [
     {
         "name": "optimize_route",
         "description": (
+            "정지점은 상품(sku_ids)과 시설(facility_stops — 화장실·계산대·엘리베이터 등 location_id 나 종류)을 섞을 수 있다(09-03). "
             "여러 상품을 도는 최소 보행 순서와 경로를 계산한다(층 구분 포함). "
             "쓸 때: 상품이 2개 이상인 동선 질문('이것들 어떤 순서로 돌면 돼?'), 리스트 기반 안내. "
             "쓰지 말 때: 상품 1개의 위치 안내(get_inventory의 좌표로 충분). "
@@ -311,7 +312,12 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "sku_ids": {"type": "array", "items": {"type": "integer"},
-                            "description": "방문할 상품들(2개 이상)"},
+                            "description": "방문할 상품들. 시설과 합쳐 2개 이상"},
+                "facility_stops": {"type": "array", "items": {"type": "string"},
+                                   "description": ("들를 시설. find_facility 가 준 location_id"
+                                                   "('F1-X-RESTROOM_M-1') 또는 종류(RESTROOM·"
+                                                   "CHECKOUT·ELEVATOR…). 종류면 출발점에서 가장 "
+                                                   "가까운 것. 계산대는 보통 마지막에 넣는다")},
                 # 08-21(jmy): 출발점은 location_id 문자열보다 좌표 3종(floor/x/y)이
                 # 정확하다 — 실물에서 location_id는 '매대'지 '사람이 선 자리'가 아니다.
                 # ⚠ 08-25: **비워 두는 것이 기본이다.** 루프가 현재 위치를 주입하므로
@@ -326,7 +332,7 @@ TOOLS = [
                 "start_location_id": {"type": "string",
                                       "description": "출발 위치 id(좌표를 모를 때의 차선). 둘 다 모르면 비워둘 것"},
             },
-            "required": ["sku_ids"],
+            "required": [],
         },
     },
     {

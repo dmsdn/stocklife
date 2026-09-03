@@ -179,7 +179,7 @@ def _load_floormap() -> str:
     "이 칸을 밟을 수 있나"라는 판정뿐이고, set의 in 검사는 O(1)이다.
     """
     fm = {}
-    fac_cells: dict = {}                 # (층, 종류) → {(x, y), …}
+    facilities: dict = {}                # 층 → [{"location_id","kind","label","x","y","floor_no"}]
     for f in (1, 2, 3):
         m = sot_client.get_floor_map(f)
         cells = (m or {}).get("cells") or []
@@ -187,42 +187,24 @@ def _load_floormap() -> str:
             raise RuntimeError(f"{f}층 격자가 비어 있습니다 — nav_cells 시드 확인")
         fm[f] = frozenset((int(c["x"]), int(c["y"])) for c in cells
                           if c.get("passable"))
-        # 09-03: 시설 칸을 종류별로 모은다 — 백엔드 map_cells.facility_kind. 옛 백엔드
-        #   (칸 없음)면 비어 있고, find_facility 가 "시설 정보 없음"으로 답한다.
-        for c in cells:
-            fk = c.get("facilityKind")
-            if fk and fk != "STRUCTURE":
-                fac_cells.setdefault((f, fk), set()).add((int(c["x"]), int(c["y"])))
+        # 09-03: 시설은 이제 `locations` 의 행이다(tier_role=FACILITY, id 'F1-X-RESTROOM_M-1').
+        #   같은 창구(/api/map/floors/{n})의 `facilities` 목록으로 받는다 — 종류는 id 의
+        #   셋째 조각. 옛 백엔드(칸 없음)면 비어 있고 find_facility 가 no_facility_map 을 낸다.
+        for loc in (m or {}).get("facilities") or []:
+            lid = str(loc.get("locationId") or "")
+            parts = lid.split("-")
+            if len(parts) < 4 or parts[1] != "X":
+                continue
+            kind = parts[2]
+            facilities.setdefault(f, []).append({
+                "location_id": lid, "kind": kind,
+                "label": FACILITY_LABELS.get(kind, kind),
+                "floor_no": f, "x": int(loc["x"]), "y": int(loc["y"])})
     _STATE["floormap"] = fm
-    _STATE["facilities"] = _group_facility_blocks(fac_cells)
-    n_blocks = sum(len(b) for by_kind in _STATE["facilities"].values() for b in by_kind.values())
+    _STATE["facilities"] = facilities
+    n_fac = sum(len(v) for v in facilities.values())
     return ("격자 " + " · ".join(f"{f}층 {len(s):,}칸" for f, s in fm.items())
-            + f" · 시설 {n_blocks}블록")
-
-
-def _group_facility_blocks(fac_cells: dict) -> dict:
-    """같은 층·같은 종류의 인접 칸을 블록 하나로 묶는다 → {층: {종류: [블록]}}.
-
-    블록 = {"cells": [(x,y)…], "cx", "cy", "n"}. 도면의 남자 화장실은 6×4 칸 24개인데
-    손님에게는 "화장실 하나"다 — 칸 단위로 두면 "가장 가까운 화장실"이 24개가 된다.
-    4-이웃 연결 성분(flood fill). 칸 수가 3,876이라 O(n) 이면 충분하다.
-    """
-    out: dict = {}
-    for (f, fk), cells in fac_cells.items():
-        left = set(cells)
-        while left:
-            start = left.pop()
-            comp, stack = [start], [start]
-            while stack:
-                x, y = stack.pop()
-                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-                    if (nx, ny) in left:
-                        left.remove((nx, ny)); comp.append((nx, ny)); stack.append((nx, ny))
-            cx = round(sum(c[0] for c in comp) / len(comp))
-            cy = round(sum(c[1] for c in comp) / len(comp))
-            out.setdefault(f, {}).setdefault(fk, []).append(
-                {"cells": comp, "cx": cx, "cy": cy, "n": len(comp)})
-    return out
+            + f" · 시설 {n_fac}곳")
 
 
 def _ensure_floormap() -> dict | None:
@@ -1016,16 +998,18 @@ FACILITY_ALIASES = {
 def find_facility(kind: str, floor_no: int | None = None) -> dict:
     """시설(화장실·엘리베이터·에스컬레이터·계산대·입구·고객센터…)의 위치 — 도구 find_facility.
 
-    [입력] kind: FACILITY_LABELS 의 키 또는 'RESTROOM'(남녀 통칭). floor_no: 층을 지정하면
-           그 층만(없으면 현재 층, 위치도 모르면 전 층).
-    [출력] {"kind","label","floor_no","x","y","distance_m","distance_basis","others","read_as"}
-           위치를 알면 **가장 가까운 것 하나**(거리는 백엔드 A* 실보행 거리, 안 되면 격자
-           추정)와 같은 종류의 나머지 목록. 위치를 모르면 층별 위치만.
-    [왜 여기(infer)인가] 재료가 위치 추정과 같다 — 스캔 앵커(compute.current_position)와
-      보행 격자(_STATE). 시설 칸은 world_gen 이 도면에서 만든 사실이라 출처 원장은
-      floormap 과 같은 "infer" 칸에 적힌다(가드가 층·거리 숫자를 여기서 대조한다).
-    [한계를 값에 싣는다] 거리 기준(route/grid_estimate)과 위치 신뢰를 read_as 에 적는다.
-      도면에 없는 것(카트 보관대·주차장·흡연구역)은 unknown_kind 로 — 지어내지 않는다.
+    [입력] kind: FACILITY_LABELS 의 키 또는 'RESTROOM'(남녀 통칭). floor_no: 층을 지정하면 그
+           층만(없으면 현재 층, 위치도 모르면 전 층).
+    [출력] {"location_id","kind","label","floor_no","x","y","distance_m","distance_basis",
+            "position","others","read_as"} — 위치를 알면 **가장 가까운 것 하나**(거리는 백엔드
+           A* 실보행, 안 되면 격자 직선 추정)와 같은 종류의 나머지. 위치를 모르면 층별 위치만.
+    [location_id 가 핵심] 09-03 결정 — 시설은 `locations` 의 행이다('F1-X-RESTROOM_M-1').
+      이 id 를 그대로 optimize_route 의 `facility_stops` 에 넣으면 상품과 섞어 동선을 짠다.
+      백엔드 resolveStop 의 locationId 갈래가 받으므로 좌표를 따로 옮겨 적을 일이 없다.
+    [왜 여기(infer)인가] 재료가 위치 추정과 같다 — 스캔 앵커와 보행 격자(_STATE). 출처 원장은
+      floormap 과 같은 "infer" 칸(가드가 층·거리 숫자를 여기서 대조한다).
+    [한계를 값에 싣는다] 거리 기준(route/grid_estimate)과 위치 신뢰를 read_as 에 적는다. 도면에
+      없는 것(카트 보관대·주차장·흡연구역)은 unknown_kind — 지어내지 않는다.
     """
     from app.tools import compute
     kinds = FACILITY_ALIASES.get(str(kind).upper()) or [str(kind).upper()]
@@ -1039,80 +1023,63 @@ def find_facility(kind: str, floor_no: int | None = None) -> dict:
     fac = _STATE.get("facilities") or {}
     if not fac:
         return {"error": "no_facility_map",
-                "message": "시설 격자를 아직 못 받았습니다(백엔드 map_cells.facility_kind). 층 안내판을 권하세요."}
+                "message": "시설 위치를 아직 못 받았습니다(백엔드 locations tier_role=FACILITY). 층 안내판을 권하세요."}
 
     pos = compute.current_position()
     age = compute.position_age()
     floors = [int(floor_no)] if floor_no else ([pos[0]] if pos else [1, 2, 3])
-    cands = []
-    for f in floors:
-        for k in kinds:
-            for b in fac.get(f, {}).get(k, []):
-                if pos and pos[0] == f:
-                    # 블록 안에서 손님과 가장 가까운 칸 — 도착 좌표로 쓴다
-                    tx, ty = min(b["cells"], key=lambda c: abs(c[0] - pos[1]) + abs(c[1] - pos[2]))
-                    est = abs(tx - pos[1]) + abs(ty - pos[2])
-                else:
-                    tx, ty, est = b["cx"], b["cy"], None
-                cands.append({"kind": k, "label": FACILITY_LABELS[k], "floor_no": f,
-                              "x": int(tx), "y": int(ty), "cells": b["n"], "est": est})
+    def points(fl_list):
+        return [dict(p) for f in fl_list for p in fac.get(f, []) if p["kind"] in kinds]
+    cands = points(floors)
     if not cands and floor_no is None and pos:
-        # 현재 층에 없으면(계산대는 1층뿐) 전 층으로 넓힌다 — 손님이 층을 안 짚었으니
-        # "이 층엔 없고 1층에 있다"가 답이다. 층을 짚었을 때만 not_on_floor.
+        # 현재 층에 없으면(계산대는 1층뿐) 전 층으로 넓힌다 — "이 층엔 없고 1층에" 가 답.
         floors = [1, 2, 3]
-        for f in floors:
-            for k in kinds:
-                for b in fac.get(f, {}).get(k, []):
-                    cands.append({"kind": k, "label": FACILITY_LABELS[k], "floor_no": f,
-                                  "x": b["cx"], "y": b["cy"], "cells": b["n"], "est": None})
+        cands = points(floors)
     if not cands:
         return {"error": "not_on_floor",
                 "message": f"{'·'.join(FACILITY_LABELS[k] for k in kinds)} 은(는) "
                            f"{floors} 층 도면에 없습니다. 다른 층을 물어보세요."}
+    for c in cands:
+        c["est"] = (abs(c["x"] - pos[1]) + abs(c["y"] - pos[2])) if (pos and pos[0] == c["floor_no"]) else None
 
-    if pos and any(c["est"] is not None for c in cands):
-        same = [c for c in cands if c["est"] is not None]
+    same = [c for c in cands if c["est"] is not None]
+    if same:
         same.sort(key=lambda c: c["est"])
         best = same[0]
         dist, basis = best["est"], "grid_estimate"
         if not config.USE_MOCK_SOT:
-            try:   # 실보행 거리 — 백엔드 A*(09-03: 좌표 목적지 허용)
+            try:   # 실보행 거리 — 백엔드 A*, 정지점은 location_id 그대로
                 r = sot_client.get_navigation_route(
                     pos[0], pos[1], pos[2],
-                    [{"floorNo": best["floor_no"], "x": best["x"], "y": best["y"],
-                      "label": best["label"]}])
+                    [{"locationId": best["location_id"], "label": best["label"]}])
                 legs = (r or {}).get("legs") or []
                 if legs and str(legs[0].get("status")) == "OK":
                     dist, basis = int(legs[0].get("distance", dist)), "route"
             except Exception:                                  # noqa: BLE001
-                pass                       # 추정 거리로 답한다 — 위치 자체는 산다
+                pass
         tier, _ = _confidence(age)
         read_as = (f"손님 위치 기준 가장 가까운 {best['label']}. 거리 {dist}m 는 "
                    + ("실제 보행 경로" if basis == "route" else "격자 직선 추정") + "입니다. "
                    + ("스캔 직후라 위치가 확실합니다." if tier == "high" else
-                      "위치는 마지막 스캔 기준 추정이니 '마지막 스캔 기준으로'라고 밝히세요."))
-        others = [{k: c[k] for k in ("kind", "label", "floor_no", "x", "y")} for c in cands if c is not best]
-        return {"kind": best["kind"], "label": best["label"], "floor_no": best["floor_no"],
-                "x": best["x"], "y": best["y"], "distance_m": dist, "distance_basis": basis,
-                # 손님 위치도 싣는다 — "지금 2층에 계시니" 의 '2층'이 원장에 있어야 한다.
-                # ⚠ 키 이름이 floor_no 여야 가드의 층 검사(_locations)가 읽는다.
+                      "위치는 마지막 스캔 기준 추정이니 '마지막 스캔 기준으로'라고 밝히세요.")
+                   + " 이 시설을 동선에 넣으려면 optimize_route 의 facility_stops 에 location_id 를 넣으세요.")
+        others = [{k: c[k] for k in ("location_id", "kind", "label", "floor_no", "x", "y")}
+                  for c in cands if c is not best]
+        return {"location_id": best["location_id"], "kind": best["kind"], "label": best["label"],
+                "floor_no": best["floor_no"], "x": best["x"], "y": best["y"],
+                "distance_m": dist, "distance_basis": basis,
                 "position": {"floor_no": pos[0], "x": pos[1], "y": pos[2]},
                 "position_confidence": tier, "others": others[:6], "read_as": read_as}
 
-    # 위치를 모른다 — 층별로 어디에 있는지만
     by_floor = {}
     for c in cands:
-        # ⚠ 층 번호를 **값으로도** 넣는다 — 09-03 실측: dict 키로만 두면 원장에서 숫자로
-        #   안 잡혀 "계산대는 1층에 있어요"의 '1층'이 unsupported 로 막혔다(가드는 값만 본다).
         by_floor.setdefault(str(c["floor_no"]), []).append(
-            {k: c[k] for k in ("kind", "label", "floor_no", "x", "y")})
+            {k: c[k] for k in ("location_id", "kind", "label", "floor_no", "x", "y")})
     on_floors = sorted({c["floor_no"] for c in cands})
     return {"kind": kinds[0] if len(kinds) == 1 else "RESTROOM",
             "label": "·".join(dict.fromkeys(FACILITY_LABELS[k] for k in kinds)),
             "floor_no": on_floors[0] if len(on_floors) == 1 else None,
             "floors_with_facility": [{"floor_no": f} for f in on_floors],
-            # 가드의 층 검사는 키 이름 floor_no 만 읽는다(guard._locations) — current_floor
-            # 같은 이름으로 두면 "지금 2층" 이 unsupported 로 막힌다(09-03 실측).
             "position": {"floor_no": pos[0], "x": pos[1], "y": pos[2]} if pos else None,
             "x": None, "y": None, "distance_m": None, "distance_basis": None,
             "by_floor": by_floor,
@@ -1122,6 +1089,31 @@ def find_facility(kind: str, floor_no: int | None = None) -> dict:
                         "손님 위치를 모릅니다(스캔 기록 없음). 층별 위치만 말하고, 몇 층인지 물어보세요. ")
                        + "좌표는 격자(1칸=1m, 원점 좌상단)라 '오른쪽 벽 쪽' 같은 방향어로 옮겨 "
                          "말하세요 — 숫자 좌표를 그대로 읽지 않습니다."}
+
+
+def facility_point(location_id: str) -> dict | None:
+    """시설 location_id → {"location_id","kind","label","floor_no","x","y"}. compute 의 동선 정지점 해석용."""
+    _ensure_floormap()
+    for pts in (_STATE.get("facilities") or {}).values():
+        for p in pts:
+            if p["location_id"] == location_id:
+                return dict(p)
+    return None
+
+
+def nearest_facility_point(kind: str, start: tuple | None) -> dict | None:
+    """종류 → 출발점에서 가장 가까운 시설 점(같은 층 우선, 없으면 층 무관 첫 것). compute 용."""
+    _ensure_floormap()
+    kinds = FACILITY_ALIASES.get(str(kind).upper()) or [str(kind).upper()]
+    fac = _STATE.get("facilities") or {}
+    pts = [p for f in (1, 2, 3) for p in fac.get(f, []) if p["kind"] in kinds]
+    if not pts:
+        return None
+    if start:
+        same = [p for p in pts if p["floor_no"] == start[0]]
+        if same:
+            return dict(min(same, key=lambda p: abs(p["x"] - start[1]) + abs(p["y"] - start[2])))
+    return dict(pts[0])
 
 
 def get_position() -> dict:
