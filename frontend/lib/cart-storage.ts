@@ -24,6 +24,9 @@ export interface CartGroup {
   updatedAt: string | null;
   store: string;
   products: CartProduct[];
+  /** ✅ 신규 — 백엔드 CartGroup.status(ACTIVE|COMPLETED). 결제 완료된 리스트는 서버가
+   *  COMPLETED로 잠급니다(수정 API 자체가 거부됨). 게스트(로컬)는 이 개념이 없어 항상 undefined. */
+  status?: "ACTIVE" | "COMPLETED";
 }
 
 interface ServerCartItem {
@@ -41,6 +44,7 @@ interface ServerCartGroup {
   shoppingDate: string | null;
   updatedAt: string | null;
   items: ServerCartItem[];
+  status?: "ACTIVE" | "COMPLETED";
 }
 
 interface ProductDetail {
@@ -144,6 +148,7 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
     shoppingDate: g.shoppingDate ?? null,
     updatedAt: g.updatedAt ?? null,
     store: "스토어플로우 마트",
+    status: g.status,
     products: g.items.map((i) => {
       const p = productMap.get(i.skuId);
       return {

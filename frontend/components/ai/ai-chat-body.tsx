@@ -101,6 +101,11 @@ export interface AiChatBodyProps {
    *  useSearchParams()를 여기서 직접 읽지 않고, 이미 Suspense 안에 있는 /ai 페이지가
    *  prop으로 내려줍니다. */
   highlightMessageId?: number;
+  /** ✅ 신규 — 이 컴포넌트가 실제로 활성화한(또는 새로 만든) sessionId를 부모에게 알려줌.
+   *  부모(AiMobileSheet/AiPanel)가 헤더에 대화 이름을 보여주거나 이름 수정 기능을
+   *  붙이려면 실제 sessionId가 있어야 하는데, sessionIdOverride가 없는 "새 대화" 상태에서는
+   *  이 컴포넌트가 세션을 만들기 전까지 부모가 sessionId를 알 방법이 없었음. */
+  onSessionReady?: (sessionId: string) => void;
 }
 
 const DEFAULT_PROMPTS = [
@@ -121,6 +126,7 @@ export function AiChatBody({
   suggestedPrompts = DEFAULT_PROMPTS,
   initialMessage,
   highlightMessageId: highlightMessageIdProp,
+  onSessionReady,
 }: AiChatBodyProps) {
   const { groupId } = useAiPanel();
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(
@@ -160,6 +166,7 @@ export function AiChatBody({
         }
 
         const sessionId = await getOrCreateSessionId(groupId);
+        onSessionReady?.(sessionId);
 
         const messages = await apiFetch<
           { messageId: number; sender: string; content: string }[]

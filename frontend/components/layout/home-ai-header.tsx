@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   RiSearchLine,
   RiBookmarkLine,
@@ -13,7 +12,6 @@ import {
 } from "@remixicon/react";
 
 import { useAiPanel } from "./ai-panel-context";
-import { useMediaQuery } from "@/lib/use-media-query";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notifications";
 
 interface HomeAiHeaderProps {
@@ -26,8 +24,6 @@ interface HomeAiHeaderProps {
 }
 
 export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, variant = "inline" }: HomeAiHeaderProps) {
-  const router = useRouter();
-  const isDesktop = useMediaQuery("(min-width: 768px)");
   const unreadCount = useUnreadNotificationCount();
   const { toggle: toggleAiPanel } = useAiPanel();
 
@@ -36,12 +32,9 @@ export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, vari
       onAiChat();
       return;
     }
-    // 데스크톱은 오른쪽 분할 패널(AiPanel, 진짜 sidebar), 모바일은 /ai 전체화면으로 이동
-    if (isDesktop) {
-      toggleAiPanel();
-    } else {
-      router.push("/ai");
-    }
+    // ✅ 수정(2026-09) — "리브 페이지"(구 /ai 라우트) 삭제. 데스크톱은 오른쪽 분할
+    //   패널(AiPanel), 모바일은 전역 AiMobileSheet(모달) — 둘 다 toggle() 하나로 열림.
+    toggleAiPanel();
   };
 
   const content = (

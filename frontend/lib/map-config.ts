@@ -40,6 +40,45 @@ interface MapLocation {
   x: number;
   y: number;
 }
+
+/** ✅ 신규 — "매대 색마다 눌러도 반응이 없는" 문제의 원인: 개별 매대 클릭 영역
+ *  (getFloorLocations)은 백엔드 locations 시드가 있어야만 생기는데, zones(구역
+ *  이름/색상 단위) 시드는 있어도 locations(칸 하나하나의 좌표) 시드가 비어있으면
+ *  지도 위에 누를 수 있는 버튼 자체가 하나도 안 생김. 그래서 locations 유무와 무관하게
+ *  항상 누를 수 있는 "구역 전체" 큰 클릭 영역을 하나 더 깐다. 실제 매대 이미지
+ *  (public/maps/floor-1.png)를 보고 격자(24×16) 기준으로 대략의 사각 범위를 잡음 —
+ *  정확한 칸 단위는 아니지만 "그 구역 아무 데나 눌러도 그 구역 이름은 뜨게" 하기엔 충분.
+ *  2층·3층은 이미지에 구역 글자가 없어서(참고 이미지엔 1층만 A~H 라벨이 있었음) 색깔과
+ *  zoneId를 확신 있게 매칭 못 해 비워뒀습니다 — 2층 F2-A~F2-F가 이미지의 어느 색인지
+ *  알려주시면 채워넣을게요.
+ */
+interface ZoneRegion {
+  zoneId: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+const ZONE_REGIONS: Record<number, ZoneRegion[]> = {
+  1: [
+    { zoneId: "F1-F", x1: 0, y1: 0, x2: 9, y2: 5 }, // 음료·주류 (좌상단, 하늘색)
+    { zoneId: "F1-D", x1: 0, y1: 5, x2: 9, y2: 8 }, // 정육·수산·계란 (좌중단, 분홍)
+    { zoneId: "F1-A", x1: 0, y1: 8, x2: 9, y2: 12 }, // 쌀·면·통조림 (좌하단, 베이지)
+    { zoneId: "F1-G", x1: 10, y1: 0, x2: 15, y2: 5 }, // 냉장식품 (중상단, 보라)
+    { zoneId: "F1-E", x1: 10, y1: 5, x2: 16, y2: 10 }, // 소스·조미료·오일 (중중단, 노랑)
+    { zoneId: "F1-B", x1: 10, y1: 10, x2: 16, y2: 13 }, // 간식·베이커리 (중하단, 주황)
+    { zoneId: "F1-H", x1: 16, y1: 0, x2: 23, y2: 5 }, // 냉동식품 (우상단, 남색)
+    { zoneId: "F1-C", x1: 16, y1: 8, x2: 23, y2: 13 }, // 청과·채소 (우하단, 초록)
+  ],
+  2: [],
+  3: [],
+};
+
+export function getZoneRegions(floorNo: number): ZoneRegion[] {
+  return ZONE_REGIONS[floorNo] ?? [];
+}
+
 interface FloorMapApiResponse {
   floorNo: number;
   zones: { zoneId: string; name: string; zoneType: string }[];

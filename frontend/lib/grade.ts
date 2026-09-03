@@ -22,6 +22,18 @@ export function calculateGrade(accumulatedPoints: number): GradeTier {
   return [...GRADE_TIERS].reverse().find((t) => accumulatedPoints >= t.threshold) ?? GRADE_TIERS[0];
 }
 
+// ✅ 신규 — 등급별 포인트 바 색상(요청 2번, 직접 지정한 색상 코드 그대로).
+export const GRADE_COLORS: Record<GradeTier["key"], string> = {
+  BASIC: "#87D78A",
+  BRONZE: "#C1C4CA",
+  SILVER: "#D99368",
+  GOLD: "#F7E259",
+};
+
+export function gradeColor(key: GradeTier["key"]): string {
+  return GRADE_COLORS[key];
+}
+
 /** ✅ 등급 아이콘(24x24) 경로 — /public/grade/{basic|bronze|silver|gold}.png 로 넣으면
     이 함수 하나로 모든 화면(마이페이지, 등급 안내, 홈)에 자동 반영됩니다. */
 export function gradeIconSrc(key: GradeTier["key"]): string {

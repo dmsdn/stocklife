@@ -76,7 +76,7 @@ export function WhatToBuy({ onProductClick, onSave }: WhatToBuyProps) {
   return (
     <section className="w-full px-4 sm:px-6 lg:px-8">
       <div className="mb-3 flex items-center gap-1.5">
-        <img src="/icons/liv-full.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+        <img src="/icons/liv-full.svg" alt="" aria-hidden="true" className="h-5 w-5 shrink-0" />
         <h2 className="text-lg font-semibold">리브 추천</h2>
       </div>
 
@@ -171,7 +171,7 @@ function WhatToBuyCard({
 
       <button type="button" onClick={onProductClick} className="mt-2 block w-full text-left">
         <span className="flex items-center gap-1 text-xs text-brand">
-          <img src="/icons/liv-full.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" />
+          <img src="/icons/liv-full.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
           {/* ✅ 리브가 추천하는 짧은 이유(product.reason, 실제 데이터 기반 — lib/home-data.ts
               참고) — 없는 탭(자주사요 등)은 기존처럼 "인기상품"으로 대체 */}
           {product.reason || "인기상품"}

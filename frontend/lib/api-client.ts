@@ -4,9 +4,10 @@
 // - 401(토큰 만료)을 한 번 감지해서 리프레시하고
 // - 응답을 JSON으로 파싱해준다.
 //
-// ⚠ 백엔드에 전역 예외 핸들러(@ControllerAdvice)가 안 보여서, 에러 응답 바디 형식이
-//   통일되어 있는지 확인 못 했습니다. 지금은 "실패하면 그냥 실패"로만 처리합니다 —
-//   에러 메시지를 화면에 그대로 보여줘야 하면 백엔드 쪽에 표준 에러 응답 포맷을 문의해주세요.
+// ⚠ 백엔드에 전역 예외 핸들러(@ControllerAdvice)가 없는 곳이 많아서(예: 결제 실패),
+//   Spring Boot 기본 에러 바디({message: "..."} 형태로 오는 경우가 많음)에서 message를
+//   최대한 꺼내서 보여줍니다. 그래도 백엔드가 표준 에러 응답 포맷을 정해서 항상
+//   {message: "..."}를 내려주면 훨씬 안정적이니, 가능하면 그쪽으로 정리 요청해주세요.
 
 // lib/session-id.ts를 따로 만들지 않고 여기서 바로 관리 — 비회원(게스트) 장바구니/이벤트가
 // 전부 X-Session-Id 헤더 하나에 의존하는데, 지금까지는 apiFetch가 이 헤더를 자동으로 붙여주지
@@ -110,6 +111,12 @@ export async function apiFetch<T = unknown>(path: string, options: ApiOptions = 
 
   const finalHeaders: Record<string, string> = {
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    // ✅ 수정(2026-09) — Accept 헤더를 안 보내고 있었음. Spring Boot는 에러가 나면
+    //   기본적으로 클라이언트가 뭘 원하는지 Accept 헤더를 보고 응답 형식을 정하는데,
+    //   이게 없으면(또는 브라우저 fetch 기본값이 */* 라서 애매하면) HTML 에러 페이지
+    //   (Whitelabel Error Page)를 내려줄 수 있어서, 아래에서 JSON으로 파싱을 시도해도
+    //   항상 실패해 실제 에러 메시지를 못 꺼내오고 있었을 가능성이 큽니다.
+    Accept: "application/json",
     ...(headers as Record<string, string>),
   };
 
@@ -126,8 +133,24 @@ export async function apiFetch<T = unknown>(path: string, options: ApiOptions = 
   const res = await fetch(`${API_BASE_URL}${path}`, { ...rest, headers: finalHeaders });
 
   if (!res.ok) {
-    // TODO: 백엔드 에러 응답 형식 확정되면 message를 바디에서 꺼내도록 개선
-    throw new ApiError(res.status, `요청 실패 (${res.status})`);
+    // ✅ 수정(2026-09) — 에러 바디를 아예 안 읽고 늘 "요청 실패 (상태코드)"만 보여주고
+    //   있었음. 백엔드가 전역 예외 처리기 없이 예외를 그대로 던지는 곳들(예:
+    //   결제 시 "결제할 상품이 선택되지 않았습니다.", "재고가 부족합니다." 등)이 있어서,
+    //   Spring 기본 에러 바디({message: "..."} 형태)에 실제 원인이 들어있는 경우 그걸
+    //   그대로 보여주면 사용자도, 디버깅하는 우리도 훨씬 도움이 됨. 바디가 없거나 그
+    //   형식이 아니면 기존처럼 상태코드만.
+    let message = `요청 실패 (${res.status})`;
+    try {
+      const body = await res.clone().json();
+      if (body && typeof body.message === "string" && body.message.trim()) {
+        message = body.message;
+      } else if (typeof body === "string" && body.trim()) {
+        message = body;
+      }
+    } catch {
+      // JSON이 아니거나 바디가 없으면 기본 메시지 유지
+    }
+    throw new ApiError(res.status, message);
   }
 
   // ⚠ 201(예: 회원가입)처럼 몸통 없이 성공만 알리는 응답이 있어서, 204뿐 아니라

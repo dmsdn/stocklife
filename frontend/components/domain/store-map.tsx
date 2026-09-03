@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { getFloorMap, fetchRealFloorMap, getFloorLocations, FLOOR_MAPS } from "@/lib/map-config";
+import { getFloorMap, fetchRealFloorMap, getFloorLocations, getZoneRegions, FLOOR_MAPS } from "@/lib/map-config";
 import { findPath, type GridPoint } from "@/lib/pathfinding";
 
 export interface MapPin {
@@ -29,6 +29,9 @@ export interface StoreMapProps {
   /** ✅ 매대(위치) 박스를 클릭 가능하게 표시하고 싶을 때 전달 — 아무 매대나 눌러서
    *  그 안의 상품 목록을 보는 "매장 둘러보기" 기능용. 안 넘기면 기존처럼 핀만 보여줌. */
   onLocationClick?: (locationId: string) => void;
+  /** ✅ 신규 — 개별 매대 좌표(locations) 시드가 비어있어도 항상 누를 수 있는 "구역 전체"
+   *  큰 클릭 영역(lib/map-config.ts의 getZoneRegions)을 깔고 싶을 때 전달. */
+  onZoneClick?: (zoneId: string) => void;
   /** ✅ 신규 — 넘기면 우측 하단에 층 선택 알약(3F/2F/1F 세로 스택)을 띄움.
    *  안 넘기면(단일 층 동선 등) 표시 안 함. */
   onFloorChange?: (floorNo: number) => void;
@@ -38,6 +41,9 @@ export interface StoreMapProps {
    *  전달. 넘기면 이 안에서 A*를 다시 계산하지 않고 이 좌표를 그대로 씀(현재 층에 해당하는
    *  좌표만 걸러서 넘겨주면 됨). 안 넘기면 기존처럼 로컬 A*로 계산(매장 둘러보기 등). */
   precomputedPath?: GridPoint[];
+  /** ✅ 신규 — 지도 영역 높이 클래스. 기본은 기존과 동일한 70vh(리스트 동선 다이얼로그 등).
+   *  화면 전체를 지도로 쓰는 "매장 지도 둘러보기" 페이지처럼 더 넓게 쓰고 싶을 때 오버라이드. */
+  heightClassName?: string;
 }
 
 const MIN_ZOOM = 1;
@@ -48,7 +54,7 @@ function dist(a: React.Touch, b: React.Touch) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onFloorChange, onLivClick, precomputedPath }: StoreMapProps) {
+export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onZoneClick, onFloorChange, onLivClick, precomputedPath, heightClassName }: StoreMapProps) {
   const config = getFloorMap(floorNo);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -128,7 +134,7 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onFloorCh
   return (
     <div className="space-y-2">
       <div
-        className="relative h-[70vh] w-full touch-none overflow-hidden bg-muted select-none"
+        className={`relative w-full touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -159,6 +165,27 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onFloorCh
               />
             </svg>
           )}
+
+          {onZoneClick &&
+            getZoneRegions(floorNo).map((z) => {
+              const p1 = toPercent(z.x1, z.y1);
+              const p2 = toPercent(z.x2, z.y2);
+              return (
+                <button
+                  key={z.zoneId}
+                  type="button"
+                  onClick={() => onZoneClick(z.zoneId)}
+                  aria-label={`${z.zoneId} 구역 정보`}
+                  className="absolute bg-transparent transition-colors hover:bg-foreground/10"
+                  style={{
+                    left: `${p1.left}%`,
+                    top: `${p1.top}%`,
+                    width: `${p2.left - p1.left}%`,
+                    height: `${p2.top - p1.top}%`,
+                  }}
+                />
+              );
+            })}
 
           {onLocationClick &&
             getFloorLocations(floorNo).map((loc) => {
@@ -236,6 +263,16 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onFloorCh
           </div>
         )}
 
+        {/* ✅ 신규(2026-09) — "원래대로"를 하단 안내문 옆 텍스트 링크 대신, 지도 우측 상단에
+            떠 있는 버튼으로. 확대/이동한 채로 지도를 보다가 바로 손 닿는 자리에서 리셋할 수 있게. */}
+        <button
+          type="button"
+          onClick={resetView}
+          className="absolute top-4 right-4 rounded-full border border-border bg-white/90 px-3 py-1.5 text-xs font-medium shadow-[0_4px_20px_rgba(0,0,0,0.12)] backdrop-blur"
+        >
+          원래대로
+        </button>
+
         {/* ✅ 리브 — 하단 중앙 원형 버튼 */}
         {onLivClick && (
           <button
@@ -243,21 +280,16 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onFloorCh
             onClick={onLivClick}
             className="absolute bottom-4 left-1/2 flex h-14 w-14 -translate-x-1/2 flex-col items-center justify-center gap-0.5 rounded-full bg-white text-xs shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
           >
-            <img src="/icons/liv-line.svg" alt="" className="h-5 w-5" />
+            <img src="/icons/liv-line.svg" alt="" className="h-5 w-5 shrink-0" />
             리브
           </button>
         )}
       </div>
 
-      <div className="flex items-center justify-between px-4 pb-4 text-xs text-muted-foreground">
-        <span>
-          손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.
-          {onLocationClick && " 매대 칸을 누르면 그 안의 상품 목록을 볼 수 있어요."}
-        </span>
-        <button type="button" onClick={resetView} className="shrink-0 underline">
-          원래대로
-        </button>
-      </div>
+      <p className="px-4 pb-4 text-xs text-muted-foreground">
+        손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.
+        {onLocationClick && " 매대 칸을 누르면 그 안의 상품 목록을 볼 수 있어요."}
+      </p>
     </div>
   );
 }

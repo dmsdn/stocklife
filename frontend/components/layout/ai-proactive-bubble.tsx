@@ -9,12 +9,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { RiSparkling2Line, RiCloseLine } from "@remixicon/react";
 import { apiFetch, isLoggedIn } from "@/lib/api-client";
+import { useAiPanel } from "./ai-panel-context";
 
 export function AiProactiveBubble() {
-  const pathname = usePathname();
+  const { isOpen } = useAiPanel();
   const [message, setMessage] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -27,8 +27,10 @@ export function AiProactiveBubble() {
       .catch(() => {});
   }, []);
 
-  // 채팅 화면 자체에서는 안 겹치게 숨김 (모바일 /ai 전체화면)
-  if (pathname === "/ai" || !message || dismissed) return null;
+  // ✅ 수정(2026-09) — "리브 페이지"(구 /ai 라우트)가 삭제되면서 pathname으로 채팅 화면
+  //   여부를 판단할 수 없어짐. 이제 리브가 모달로만 뜨므로, 그 모달이 열려있는 동안(isOpen)
+  //   숨기면 된다(겹쳐 보이는 문제 방지).
+  if (isOpen || !message || dismissed) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[90] flex justify-center px-4 md:bottom-4">

@@ -18,23 +18,113 @@
 //   지원 여부와 무관하게 항상 화면 맨 아래까지 확실히 덮도록 고쳤습니다.
 // ⚠ z-index도 여유 있게 올림 — 앱 안에 이미 z-[120](장바구니 담기 시트) 등 이 시트보다
 //   높은 값이 있어서, 이 모달은 "어디서든 열리는 전역 모달"답게 항상 최상단이어야 합니다.
+// ✅ 수정(2026-09) — "리브 페이지"(구 /ai 라우트) 완전 삭제에 맞춰 이 모달이 유일한
+//   진입점이 됨. context의 sessionId/highlightMessageId를 받아 특정 대화를 이어서 열 수
+//   있게 하고, 헤더 타이틀도 고정 문구 대신 그 대화의 실제 이름(+로컬 이름수정)을 보여줌.
 "use client";
 
-import { useEffect, useState } from "react";
-import { RiArrowDownSLine, RiMenuLine } from "@remixicon/react";
+import { useEffect, useRef, useState } from "react";
+import { RiArrowDownSLine, RiMenuLine, RiPencilLine, RiCheckLine } from "@remixicon/react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { useAiPanel } from "./ai-panel-context";
 import { useBottomBarVisibility } from "./bottom-bar-visibility-context";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { apiFetch } from "@/lib/api-client";
 import { AiChatBody } from "@/components/ai/ai-chat-body";
 import { SessionListDrawer } from "@/components/ai/session-list-drawer";
 
 export function AiMobileSheet() {
-  const { isOpen, initialMessage, close } = useAiPanel();
+  const { isOpen, initialMessage, sessionId, highlightMessageId, openSession, close } = useAiPanel();
   const isDesktop = useMediaQuery("(min-width: 768px)");
   const { setHidden: setBottomBarHidden } = useBottomBarVisibility();
   const [sessionListOpen, setSessionListOpen] = useState(false);
+
+  // ✅ 신규 — 손잡이(핸들)를 잡고 아래로 끌면 그만큼 시트가 따라 내려오다가, 일정 거리
+  //   이상 끌면 닫힘. 살짝만 끌고 놓으면 원래 자리로 스냅백(그냥 탭한 거면 dragDistance가
+  //   0에 가까워서 기존처럼 탭-닫기로 처리).
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartY = useRef<number | null>(null);
+  const DRAG_CLOSE_THRESHOLD = 120;
+
+  const handleDragStart = (e: React.PointerEvent) => {
+    dragStartY.current = e.clientY;
+    setDragging(true);
+  };
+  const handleDragMove = (e: React.PointerEvent) => {
+    if (dragStartY.current == null) return;
+    const delta = e.clientY - dragStartY.current;
+    if (delta > 0) setDragY(delta);
+  };
+  const handleDragEnd = () => {
+    setDragging(false);
+    if (dragY > DRAG_CLOSE_THRESHOLD) {
+      close();
+    }
+    setDragY(0);
+    dragStartY.current = null;
+  };
+
+  // ✅ AiChatBody가 실제로 활성화(또는 새로 생성)한 sessionId. context의 sessionId는
+  //   "이미 있는 대화를 이어서 열 때"만 채워지고, 새 대화는 AiChatBody가 만들기 전까지
+  //   모름 — 그래서 별도 state로 추적해서 헤더 타이틀/이름수정에 씀.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionId);
+  const [serverTitle, setServerTitle] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  useEffect(() => {
+    setActiveSessionId(sessionId);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setServerTitle(null);
+      return;
+    }
+    apiFetch<{ title: string | null }>(`/api/chat/sessions/${activeSessionId}`)
+      .then((s) => setServerTitle(s.title))
+      .catch(() => setServerTitle(null));
+  }, [activeSessionId]);
+
+  const displayTitle = activeSessionId ? serverTitle ?? "새로운 대화" : "새로운 대화";
+
+  const startEditTitle = () => {
+    if (!activeSessionId) return; // 세션이 아직 없으면(첫 메시지 전) 이름 붙일 대상이 없음
+    setTitleDraft(displayTitle);
+    setEditingTitle(true);
+  };
+
+  // ✅ 수정(2026-09) — 백엔드에 실제 PATCH /api/chat/sessions/{sessionId} (body: {title})가
+  //   생겨서, 로컬 임시 저장(lib/session-title-override.ts) 대신 이걸 직접 씀 — 이제 다른
+  //   기기/브라우저에서도 바뀐 이름이 그대로 보입니다.
+  const commitTitle = async () => {
+    if (!activeSessionId) {
+      setEditingTitle(false);
+      return;
+    }
+    const next = titleDraft.trim();
+    if (!next) {
+      setEditingTitle(false);
+      return;
+    }
+    setRenaming(true);
+    try {
+      const updated = await apiFetch<{ title: string | null }>(`/api/chat/sessions/${activeSessionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title: next }),
+      });
+      setServerTitle(updated.title ?? next);
+    } catch {
+      // 실패해도 화면엔 일단 반영(다음에 다시 열면 서버 값으로 되돌아갈 수 있음)
+      setServerTitle(next);
+    } finally {
+      setRenaming(false);
+      setEditingTitle(false);
+    }
+  };
 
   useEffect(() => {
     if (!isDesktop) setBottomBarHidden(isOpen);
@@ -61,6 +151,10 @@ export function AiMobileSheet() {
             화면이 클릭됨). z-[150]으로 백드롭보다도 위, 앱 전체에서 최상단. */}
         <DialogPrimitive.Popup
           data-slot="dialog-content"
+          style={{
+            transform: dragY ? `translateY(${dragY}px)` : undefined,
+            transition: dragging ? "none" : "transform 0.2s ease-out",
+          }}
           className="
             fixed inset-x-0 top-10 bottom-0 z-[150] flex w-full
             flex-col overflow-hidden rounded-t-[20px] border-none bg-background p-0
@@ -71,39 +165,84 @@ export function AiMobileSheet() {
             md:hidden
           "
         >
-          {/* 위로 당겨서 연 시트 — 상단 핸들을 누르면 리브 쪽으로 내려가면서 닫힘 */}
-          <DialogPrimitive.Close
-            aria-label="시트 닫기"
-            className="flex shrink-0 flex-col items-center gap-1 pb-1 pt-3"
+          {/* ✅ 신규 — 손잡이를 손가락/마우스로 잡고 아래로 끌면 시트가 따라 내려오다가
+              일정 거리 이상이면 닫힘(handleDragEnd). 살짝 끌었다 놓으면 스냅백. 그냥
+              탭만 하면(끈 거리 0) 기존처럼 닫힘. */}
+          <div
+            role="button"
+            aria-label="시트 닫기(끌어서 닫기)"
+            onPointerDown={handleDragStart}
+            onPointerMove={handleDragMove}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
+            onClick={() => dragY === 0 && close()}
+            className="flex shrink-0 touch-none flex-col items-center gap-1 pb-1 pt-3"
           >
             <span className="h-1 w-10 rounded-full bg-[#eee]" />
-          </DialogPrimitive.Close>
+          </div>
 
-          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 pb-3">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 pb-3">
             <button
               type="button"
               onClick={() => setSessionListOpen(true)}
               aria-label="지난 대화 목록"
-              className="flex h-8 w-8 items-center justify-center text-muted-foreground"
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
             >
               <RiMenuLine size={20} />
             </button>
-            <DialogPrimitive.Title className="text-sm font-semibold">
-              리브에게 물어보기
-            </DialogPrimitive.Title>
+
+            {/* ✅ 수정 — 고정 문구 "리브에게 물어보기" 대신 실제 대화 이름. 눌러서 인라인 수정. */}
+            {editingTitle ? (
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitTitle();
+                    if (e.key === "Escape") setEditingTitle(false);
+                  }}
+                  className="h-8 min-w-0 flex-1 rounded-sm border border-border bg-background px-2 text-center text-sm outline-none"
+                />
+                <button type="button" onClick={commitTitle} disabled={renaming} aria-label="이름 저장" className="shrink-0 text-primary disabled:opacity-50">
+                  <RiCheckLine size={18} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={startEditTitle}
+                className="flex min-w-0 flex-1 items-center justify-center gap-1 text-sm font-semibold disabled:opacity-60"
+                disabled={!activeSessionId}
+              >
+                <span className="truncate">{displayTitle}</span>
+                {activeSessionId && <RiPencilLine size={13} className="shrink-0 text-muted-foreground" />}
+              </button>
+            )}
+
             <DialogPrimitive.Close
               aria-label="닫기"
-              className="flex h-8 w-8 items-center justify-center text-muted-foreground"
+              className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
             >
               <RiArrowDownSLine size={22} />
             </DialogPrimitive.Close>
           </div>
 
           <div className="min-h-0 flex-1">
-            <AiChatBody initialMessage={initialMessage} />
+            <AiChatBody
+              sessionIdOverride={sessionId ?? undefined}
+              initialMessage={initialMessage}
+              highlightMessageId={highlightMessageId ?? undefined}
+              onSessionReady={setActiveSessionId}
+            />
           </div>
 
-          <SessionListDrawer open={sessionListOpen} onClose={() => setSessionListOpen(false)} />
+          <SessionListDrawer
+            open={sessionListOpen}
+            onClose={() => setSessionListOpen(false)}
+            currentSessionId={activeSessionId}
+            onSelect={(id) => openSession(id)}
+          />
         </DialogPrimitive.Popup>
       </DialogPortal>
     </Dialog>

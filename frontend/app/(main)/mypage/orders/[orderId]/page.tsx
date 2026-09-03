@@ -1,7 +1,6 @@
 // app/(main)/mypage/orders/[orderId]/page.tsx
-// ⚠ 백엔드에 주문 단건 조회(GET /api/orders/{id})가 있는지 확인 못 해서, 안전하게 목록
-//   API(GET /api/orders)를 받아 그 안에서 id로 찾는 방식으로 만들었습니다. 단건 조회 API가
-//   확인되면 그걸로 바로 바꾸면 됩니다.
+// ✅ 수정(2026-09) — 백엔드에 실제 단건 조회(GET /api/orders/{orderId})가 있는 걸 확인해서
+//   (OrderController.getOrderDetail), 예전처럼 목록 전체를 받아 id로 찾지 않고 바로 사용.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -20,6 +19,7 @@ interface Order {
   orderId: number;
   totalAmount: number;
   status: string;
+  pointsEarned?: number;
   items: OrderItem[];
 }
 
@@ -30,8 +30,8 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
 
   useEffect(() => {
-    apiFetch<Order[]>("/api/orders")
-      .then((orders) => setOrder(orders.find((o) => o.orderId === orderId) ?? null))
+    apiFetch<Order>(`/api/orders/${orderId}`)
+      .then(setOrder)
       .catch(() => setOrder(null));
   }, [orderId]);
 

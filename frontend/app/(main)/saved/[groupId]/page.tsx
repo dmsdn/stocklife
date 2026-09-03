@@ -24,6 +24,7 @@ import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 import { apiFetch } from "@/lib/api-client";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
+import { isGroupCompleted } from "@/lib/completed-groups";
 
 export default function SavedGroupDetailPage() {
   const router = useRouter();
@@ -33,6 +34,13 @@ export default function SavedGroupDetailPage() {
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
   const openAiChat = useOpenAiChat();
+
+  // ✅ 수정(2026-09) — 백엔드에 실제 cart_group.status(ACTIVE|COMPLETED)가 생겨서 이제
+  //   그걸 우선 사용. 다만 체크아웃 성공 시 서버가 실제로 COMPLETED로 바꿔주는 호출이
+  //   아직 안 붙어있어서(markCompleted()가 정의만 되고 어디서도 안 불림 — 확인 필요),
+  //   로컬 플래그(lib/completed-groups.ts)도 함께 OR로 봐서 최소한 이번 결제 이후
+  //   같은 브라우저에서는 확실히 잠기게 이중 안전장치를 둠.
+  const completed = group?.status === "COMPLETED" || isGroupCompleted(groupId);
 
   // ✅ 리스트 상세(담은 목록)는 자체 하단 액션바(동선/리브)가 이미 있어서, 전역
   //   하단탭바는 숨김 — 스캔 화면과 같은 패턴.
@@ -163,11 +171,19 @@ export default function SavedGroupDetailPage() {
       {/* 상단 헤더 — 타이틀+날짜(좌) / 스캔 아이콘+"장보러 가기"(우, "장보기 시작" 겸용) */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="truncate text-xl font-bold">{group.title}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-xl font-bold">{group.title}</h1>
+            {completed && (
+              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                결제 완료
+              </span>
+            )}
+          </div>
           <div className="mt-1">
             <BirthDatePicker
               value={group.shoppingDate ?? ""}
               onChange={(value) => {
+                if (completed) return;
                 updateCartGroupInfo(groupId, { shoppingDate: value || null }).then((next) =>
                   setGroup(next.find((g) => g.id === groupId) ?? null)
                 );
@@ -180,15 +196,23 @@ export default function SavedGroupDetailPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => router.push(`/scan?group=${groupId}`)}
-          className="mt-0.5 flex shrink-0 items-center gap-1 text-sm font-medium text-foreground"
-        >
-          <RiQrScanLine size={18} />
-          장보러 가기
-        </button>
+        {!completed && (
+          <button
+            type="button"
+            onClick={() => router.push(`/scan?group=${groupId}`)}
+            className="mt-0.5 flex shrink-0 items-center gap-1 text-sm font-medium text-foreground"
+          >
+            <RiQrScanLine size={18} />
+            장보러 가기
+          </button>
+        )}
       </div>
+
+      {completed && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          결제 완료된 리스트예요. 더 이상 수정할 수 없어요 — 전자영수증은 마이페이지에서 확인할 수 있어요.
+        </p>
+      )}
 
       {/* 상품 목록 */}
       <div className="mt-5 divide-y divide-border">
@@ -206,7 +230,7 @@ export default function SavedGroupDetailPage() {
             <div key={product.id} className="flex gap-3 py-4">
               {/* 체크 */}
               <div className="pt-1">
-                <Checkbox checked={product.checked} onChange={() => handleToggleChecked(product.id)} />
+                <Checkbox checked={product.checked} onChange={() => !completed && handleToggleChecked(product.id)} />
               </div>
 
               {/* 상품 이미지 */}
@@ -222,14 +246,16 @@ export default function SavedGroupDetailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <p className="line-clamp-2 text-sm leading-5">{product.name}</p>
 
-                  <button
-                    type="button"
-                    aria-label="상품 삭제"
-                    onClick={() => handleRemove(product.id)}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <RiCloseLine size={22} />
-                  </button>
+                  {!completed && (
+                    <button
+                      type="button"
+                      aria-label="상품 삭제"
+                      onClick={() => handleRemove(product.id)}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <RiCloseLine size={22} />
+                    </button>
+                  )}
                 </div>
 
                 <p className="mt-0.5 text-xs text-muted-foreground">{product.category}</p>
@@ -247,11 +273,15 @@ export default function SavedGroupDetailPage() {
 
                 {/* 수량 + 상품 총액 */}
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <QuantityStepper
-                    quantity={product.quantity}
-                    onChange={(q) => handleQuantityChange(product.id, q)}
-                    size="lg"
-                  />
+                  {completed ? (
+                    <span className="text-sm text-muted-foreground">{product.quantity}개</span>
+                  ) : (
+                    <QuantityStepper
+                      quantity={product.quantity}
+                      onChange={(q) => handleQuantityChange(product.id, q)}
+                      size="lg"
+                    />
+                  )}
 
                   <p className="shrink-0 text-base font-semibold">{productTotal.toLocaleString()}원</p>
                 </div>
@@ -295,7 +325,7 @@ export default function SavedGroupDetailPage() {
           onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
           className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
         >
-          <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px]" />
+          <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
           {linkedSessionId ? "이어서" : "리브"}
         </button>
       </div>

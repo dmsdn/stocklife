@@ -4,6 +4,19 @@
 //   순수 JS로 프레임을 직접 분석하는 @zxing/library로 바꿔서 브라우저/기기 상관없이
 //   동작합니다. package.json에 아직 없으면 설치 필요:
 //     npm install @zxing/library
+// ✅ 수정(2026-09) — "모바일 크롬에서 카메라 권한이 열려있음에도 카메라가 안 열리는" 원인 두 가지를
+//   찾아서 고쳤습니다.
+//   1) getUserMedia는 "보안 컨텍스트"(https 또는 localhost)에서만 동작합니다. 개발 중
+//      http://192.168.x.x:3000처럼 같은 와이파이의 IP로 접속하면(이 프로젝트 CORS 설정에
+//      실제로 이런 주소가 등록돼 있음) 모바일 크롬은 브라우저 자체 카메라 권한 설정에서
+//      "허용"으로 보여도 API 호출 자체가 안 됩니다(desktop 크롬은 http://localhost는
+//      예외로 봐주지만 IP 주소는 봐주지 않음, 모바일은 더 엄격). 이걸 "권한 거부"와
+//      구분되는 별도 상태(insecure)로 감지해서, 진짜 원인(https 필요)을 안내하도록 함.
+//   2) facingMode: "environment"를 문자열 그대로(=exact 취급될 수 있음) 넘기면, 일부
+//      안드로이드 기기·브라우저 조합에서 요청한 카메라를 정확히 못 찾아
+//      OverconstrainedError로 조용히 실패합니다(권한 프롬프트는 이미 통과한 뒤라
+//      "권한은 있는데 안 열림"처럼 보임). ideal로 완화하고, 그래도 실패하면 제약 없이
+//      (아무 카메라나) 한 번 더 시도하는 폴백을 추가했습니다.
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +25,7 @@ import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 export function useBarcodeScanner(onDetected: (code: string) => void) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const [permission, setPermission] = useState<"idle" | "granted" | "denied">("idle");
+  const [permission, setPermission] = useState<"idle" | "granted" | "denied" | "insecure">("idle");
   // ✅ zxing은 브라우저 내장 API가 아니라 순수 JS 디코딩이라, 사실상 모든 최신 브라우저에서
   //   동작합니다 — 그래도 카메라 API(getUserMedia) 자체가 없는 아주 오래된 브라우저 대비용으로
   //   플래그는 남겨뒀습니다.
@@ -23,6 +36,12 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
   };
 
   const start = async () => {
+    // ✅ 보안 컨텍스트가 아니면 getUserMedia 자체가 없거나(대부분) 있어도 항상 실패합니다.
+    //   이 경우는 "권한 거부"가 아니라 "https 또는 localhost가 필요함"이라 별도로 표시.
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setPermission("insecure");
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setPermission("denied");
       return;
@@ -33,27 +52,35 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
       readerRef.current = new BrowserMultiFormatReader();
     }
 
+    const onFrame = (result: { getText(): string } | undefined, err: unknown) => {
+      setPermission("granted");
+      if (result) {
+        onDetected(result.getText());
+      }
+      // NotFoundException은 "이번 프레임엔 바코드가 없었다"는 정상적인 매 프레임 상황이라 무시
+      if (err && !(err instanceof NotFoundException)) {
+        // 다른 종류의 에러(카메라 끊김 등)는 조용히 다음 프레임에서 재시도됨
+      }
+    };
+
     try {
       // ✅ undefined = 카메라 기기 자동 선택. deviceId를 직접 안 넘기고 후면 카메라를
       //   요청하려면 아래처럼 constraints를 넘기는 대신, 대부분의 폰에서는 기본 카메라가
-      //   후면이라 이것만으로 충분합니다. 필요하면 deviceId 목록에서 "back"/"rear" 문자열
-      //   포함된 걸 골라 넘기도록 확장 가능.
+      //   후면이라 이것만으로 충분합니다. ideal로 줘서 후면 카메라가 없거나 정확히
+      //   매칭이 안 돼도 OverconstrainedError 없이 아무 카메라로 폴백되게 함.
       await readerRef.current.decodeFromConstraints(
-        { video: { facingMode: "environment" } },
+        { video: { facingMode: { ideal: "environment" } } },
         videoRef.current,
-        (result, err) => {
-          setPermission("granted");
-          if (result) {
-            onDetected(result.getText());
-          }
-          // NotFoundException은 "이번 프레임엔 바코드가 없었다"는 정상적인 매 프레임 상황이라 무시
-          if (err && !(err instanceof NotFoundException)) {
-            // 다른 종류의 에러(카메라 끊김 등)는 조용히 다음 프레임에서 재시도됨
-          }
-        }
+        onFrame
       );
     } catch {
-      setPermission("denied");
+      // ✅ 위가 실패하면(그래도 남아있는 극히 일부 기기별 제약 충돌 대비) 카메라 제약을
+      //   아예 없애고 한 번 더 시도 — 그래도 실패하면 그때 진짜 "denied"로 표시.
+      try {
+        await readerRef.current.decodeFromConstraints({ video: true }, videoRef.current, onFrame);
+      } catch {
+        setPermission("denied");
+      }
     }
   };
 

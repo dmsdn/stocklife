@@ -1,6 +1,9 @@
 // app/(main)/mypage/receipts/page.tsx
 // ✅ 구매내역과 별개 화면이 아니라 이게 유일한 목록입니다(실제 주문 데이터 GET /api/orders).
 //   누르면 전자 영수증을 모달로 바로 띄워서 보여줍니다(페이지 이동 없음).
+// ✅ 수정(2026-09) — 예전엔 실제 주문이 0건이거나 API 실패 시 목업 영수증 3건으로
+//   자동 대체해서, 실제로 아무것도 안 샀는데도 가짜 구매내역이 항상 보였다. 이제
+//   실제 데이터만 보여주고, 정말 없으면 "영수증이 없어요"를 솔직하게 표시한다.
 "use client";
 
 import { useEffect, useState } from "react";
@@ -8,7 +11,6 @@ import { RiBillLine } from "@remixicon/react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { ReceiptDialog } from "@/components/domain/receipt-dialog";
 import { apiFetch } from "@/lib/api-client";
-import { MOCK_ORDERS } from "@/lib/mock-orders";
 
 interface Order {
   orderId: number;
@@ -22,14 +24,13 @@ interface Order {
 export default function ReceiptsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    // ✅ 실제 GET /api/orders 연동. 결과가 비어있거나(시드데이터 없음) 요청이 실패하면
-    //   (백엔드 미기동 등) 목업 영수증 3건으로 자동 대체 — 화면을 바로 확인할 수 있게.
     apiFetch<Order[]>("/api/orders")
-      .then((data) => setOrders(data.length > 0 ? data : MOCK_ORDERS))
-      .catch(() => setOrders(MOCK_ORDERS))
+      .then(setOrders)
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -38,7 +39,10 @@ export default function ReceiptsPage() {
       <SubpageHeader title="전자 영수증" />
 
       {loading && <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>}
-      {!loading && orders.length === 0 && (
+      {!loading && loadError && (
+        <p className="py-10 text-center text-sm text-muted-foreground">영수증을 불러오지 못했어요. 잠시 후 다시 시도해주세요.</p>
+      )}
+      {!loading && !loadError && orders.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">영수증이 없어요.</p>
       )}
 

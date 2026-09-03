@@ -4,30 +4,18 @@
 //   top-16(헤더 아래) ~ bottom-0 에 고정되고, 내부는 AiChatBody가 자체 스크롤한다.
 //   대신 패널이 열려 있을 때 본문이 패널 밑에 깔리지 않도록 AppShell에서 main에 오른쪽
 //   여백(md:mr-[420px])을 별도로 준다.
+// ✅ 수정(2026-09) — "리브 페이지"(구 /ai 라우트) 완전 삭제. 예전엔 모바일 폭에서 패널이
+//   열리면 무조건 /ai로 강제 이동시켰는데, 이제 그 라우트 자체가 없어졌고 모바일은 항상
+//   AiMobileSheet(모달)가 담당하므로 이 리다이렉트가 불필요 + 오히려 존재하지 않는 라우트로
+//   보내는 버그가 됨. 세션 전환(openSession)도 라우팅 없이 이 컨텍스트만으로 동작.
 "use client";
 
-import { useEffect } from "react";
 import { RiCloseLine } from "@remixicon/react";
-import { useRouter, usePathname } from "next/navigation";
 import { useAiPanel } from "./ai-panel-context";
 import { AiChatBody } from "@/components/ai/ai-chat-body";
-import { useMediaQuery } from "@/lib/use-media-query";
 
 export function AiPanel() {
-  const { isOpen, initialMessage, close } = useAiPanel();
-  const isDesktop = useMediaQuery("(min-width: 768px)");
-  const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    // ✅ 웹에서 AI 패널을 켜놓은 채로 창을 모바일 폭까지 줄이면(또는 모바일 기기로 전환하면)
-    //   패널은 md:flex라 화면에서 사라지는데 페이지는 그대로 홈이라 "AI챗이 꺼진 것"처럼
-    //   보이던 문제. 모바일 폭이 되는 순간 같은 대화(initialMessage 포함)를 들고
-    //   /ai 전체화면으로 자연스럽게 넘겨준다.
-    if (!isDesktop && isOpen && pathname !== "/ai") {
-      router.push("/ai");
-    }
-  }, [isDesktop, isOpen, pathname, router]);
+  const { isOpen, initialMessage, sessionId, highlightMessageId, close } = useAiPanel();
 
   if (!isOpen) return null;
 
@@ -39,7 +27,11 @@ export function AiPanel() {
           <RiCloseLine size={24} />
         </button>
       </div>
-      <AiChatBody initialMessage={initialMessage} />
+      <AiChatBody
+        sessionIdOverride={sessionId ?? undefined}
+        initialMessage={initialMessage}
+        highlightMessageId={highlightMessageId ?? undefined}
+      />
     </aside>
   );
 }

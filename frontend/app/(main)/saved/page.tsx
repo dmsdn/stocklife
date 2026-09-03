@@ -11,7 +11,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiSearchLine } from "@remixicon/react";
+import { RiSearchLine, RiAddLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch, getAccessToken } from "@/lib/api-client";
@@ -21,6 +21,7 @@ import { formatRelativeTime, formatShoppingDate } from "@/lib/format-time";
 import { searchChatMessages, highlightMatch, type ChatSearchResult } from "@/lib/chat-search";
 import { readCartGroups, loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
+import { useAiPanel } from "@/components/layout/ai-panel-context";
 
 interface ChatSession {
   sessionId: string;
@@ -39,6 +40,7 @@ function chatHeaders(): Record<string, string> {
 function SavedPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { open: openAiChat, openSession } = useAiPanel();
   // ✅ /ai의 "이전 대화 불러오기"와 하단탭 리브 버튼이 ?tab=ai로 곧장 리브 탭을 열 수 있게 함
   const initialTab = searchParams.get("tab") === "ai" ? "ai" : "cart";
   const [tab, setTab] = useState<"cart" | "ai">(initialTab);
@@ -82,14 +84,14 @@ function SavedPageInner() {
 
   const handleNewChat = async () => {
     await startNewSession();
-    router.push("/ai");
+    openAiChat();
   };
 
   // ✅ 리스트에 연결된 세션 찾기 → 있으면 이어서, 없으면 그 리스트로 새 세션 생성
   const handleAskLiv = async (groupId: number) => {
     const existing = sessions.find((s) => s.groupId === groupId);
     if (existing) {
-      router.push(`/ai?session=${existing.sessionId}`);
+      openSession(existing.sessionId);
       return;
     }
     try {
@@ -98,10 +100,10 @@ function SavedPageInner() {
         headers: chatHeaders(),
         body: JSON.stringify({ groupId }),
       });
-      router.push(`/ai?session=${created.sessionId}`);
+      openSession(created.sessionId);
     } catch {
       await startNewSession();
-      router.push("/ai");
+      openAiChat();
     }
   };
 
@@ -191,12 +193,15 @@ function SavedPageInner() {
             className="h-11 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm outline-none focus-visible:border-foreground"
           />
         </div>
+        {/* ✅ 수정(요청 4번) — 텍스트 링크 대신 + 아이콘 원형 버튼. border는 검색바와
+            같은 border-border 색으로 맞춤. */}
         <button
           type="button"
           onClick={() => (tab === "cart" ? setShowNewGroupInput(true) : handleNewChat())}
-          className="shrink-0 text-sm font-medium text-foreground"
+          aria-label={tab === "cart" ? "새 리스트" : "새 대화"}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-foreground"
         >
-          {tab === "cart" ? "새 리스트" : "새 대화"}
+          <RiAddLine size={22} />
         </button>
       </div>
 
@@ -302,10 +307,11 @@ function SavedPageInner() {
                       {r.matches.map((m) => {
                         const hl = highlightMatch(m.content, query);
                         return (
-                          <Link
+                          <button
+                            type="button"
                             key={m.messageId}
-                            href={`/ai?session=${r.sessionId}&highlight=${m.messageId}`}
-                            className="block truncate rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                            onClick={() => openSession(r.sessionId, m.messageId)}
+                            className="block w-full truncate rounded-sm px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
                           >
                             {hl ? (
                               <>
@@ -316,7 +322,7 @@ function SavedPageInner() {
                             ) : (
                               m.content
                             )}
-                          </Link>
+                          </button>
                         );
                       })}
                     </div>
@@ -330,10 +336,11 @@ function SavedPageInner() {
             {titleOnlyMatches.map((s) => {
               const linkedTitle = s.groupId ? groupTitleById.get(s.groupId) : null;
               return (
-                <Link
+                <button
+                  type="button"
                   key={s.sessionId}
-                  href={`/ai?session=${s.sessionId}`}
-                  className="flex items-start justify-between gap-3 py-4"
+                  onClick={() => openSession(s.sessionId)}
+                  className="flex w-full items-start justify-between gap-3 py-4 text-left"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{s.title ?? "한 줄 요약"}</p>
@@ -344,7 +351,7 @@ function SavedPageInner() {
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {formatRelativeTime(s.updatedAt)}
                   </span>
-                </Link>
+                </button>
               );
             })}
           </div>

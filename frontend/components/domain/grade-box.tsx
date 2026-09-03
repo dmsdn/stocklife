@@ -5,7 +5,7 @@
 //   진행률 계산이 profile.monthlySpendAmount(더 이상 등급과 무관한 값)를 그대로 쓰고
 //   있던 버그를 고쳤습니다 — pointEarnedTotal 기준으로 교체.
 import Link from "next/link";
-import { GRADE_TIERS, gradeIconSrc } from "@/lib/grade";
+import { GRADE_TIERS, gradeIconSrc, gradeColor } from "@/lib/grade";
 import type { ConsumerMe } from "@/lib/consumer-api";
 
 interface GradeBoxProps {
@@ -44,7 +44,7 @@ export function GradeBox({ profile, href = "/mypage/tier-guide" }: GradeBoxProps
       {nextTier ? (
         <>
           <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-foreground" style={{ width: `${progressPercent}%` }} />
+            <div className="h-full rounded-full" style={{ width: `${progressPercent}%`, backgroundColor: gradeColor(currentTier.key) }} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             다음 등급 &gt; {nextTier.label}까지 {(nextTier.threshold - profile.pointEarnedTotal).toLocaleString()}P 남았어요

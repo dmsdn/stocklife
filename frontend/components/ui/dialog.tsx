@@ -51,7 +51,10 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/20 duration-100",
+        // ✅ 수정(2026-09) — z-50이 하단탭바(BottomTabBar, z-[100])보다 낮아서, 이 Dialog를
+        //   쓰는 모든 모달(매대 상품 목록 등)이 하단탭바 "뒤"에 깔려 보이던 문제. 하단탭바보다
+        //   위로 올림.
+        "fixed inset-0 isolate z-[105] bg-black/20 duration-100",
         "supports-backdrop-filter:backdrop-blur-sm",
         "data-open:animate-in data-open:fade-in-0",
         "data-closed:animate-out data-closed:fade-out-0",
@@ -78,7 +81,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-40px)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 rounded-sm bg-popover px-5 py-8 text-sm text-popover-foreground duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-[105] grid w-[calc(100%-40px)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 rounded-sm bg-popover px-5 py-8 text-sm text-popover-foreground duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}

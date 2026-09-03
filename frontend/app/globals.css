@@ -115,6 +115,13 @@
   --radius-lg: 24px;
   --radius-xl: 24px;
   --radius-2xl: 48px;
+
+  /* ✅ 신규(2026-09) — 홈/마이페이지 page.tsx 실측 감사. text-[#999] 같은 임의값(bracket
+     notation)으로 곳곳에 흩어져 있던 반복 색을 시맨틱 토큰으로 승격. */
+  --color-card-border: var(--card-border);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-content-tertiary: var(--content-tertiary);
+  --color-content-quaternary: var(--content-quaternary);
 }
 
 /* ============================================
@@ -262,6 +269,20 @@
   --sidebar-accent-foreground: var(--gray-950);
   --sidebar-border: var(--gray-200);
   --sidebar-ring: var(--gray-950);
+
+  /* ✅ 신규(2026-09) — 요청 1번(page.tsx 기준 감사): 홈/마이페이지 화면에서
+     text-[#999]/border-[#F4F4F4]/border-[#eee] 등 실측 hex 임의값(bracket notation)이
+     반복적으로 쓰이고 있었음. 기존 --border(--gray-200, #dde3e7)보다 훨씬 옅은 "카드 내부
+     구분선" 용도로 #eee·#F4F4F4·#eeeeee·#e9e9e9·#e5e5e5가 사실상 같은 의도로 쓰이고 있어
+     하나로, 옅은 배경 채움용 #f8f8f8·#f2f2f2도 하나로 묶었습니다. 값 자체(#F4F4F4,
+     #f8f8f8)는 실측값 그대로 두어 화면이 바뀌지 않게 했고, 각 페이지의 bracket notation을
+     이 토큰으로 교체해서 앞으로는 새 코드가 재사용하게 했습니다. --primary/--brand(진한
+     텍스트/버튼)와 헷갈리지 않도록 이름을 card-border/surface-subtle로 분리.
+     text-[#999]/text-[#aaa]도 같은 방식으로 text-tertiary/text-quaternary로 승격. */
+  --card-border: #f4f4f4;
+  --surface-subtle: #f8f8f8;
+  --content-tertiary: #999999;
+  --content-quaternary: #aaaaaa;
 }
 
 /* ============================================

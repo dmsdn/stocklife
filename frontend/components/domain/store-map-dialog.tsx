@@ -12,9 +12,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StoreMap, type MapPin } from "./store-map";
-import { readCartGroups, type CartGroup } from "@/lib/cart-storage";
+import { readCartGroups, loadCartGroups, type CartGroup } from "@/lib/cart-storage";
 import { fetchProductsAtLocation, type LocationProduct } from "@/lib/location-products";
 import { getRoute, type RouteResult, type RouteStop } from "@/lib/navigation";
+import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 import { FLOOR_MAPS } from "@/lib/map-config";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
@@ -56,24 +57,72 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
 
   useEffect(() => {
     if (!open) return;
-    const found = readCartGroups().find((g) => g.id === groupId) ?? null;
-    setGroup(found);
-    const remainingItems = (found?.products ?? []).filter((p) => !collectedIds.has(p.id));
+    // ✅ 수정(2026-09) — "동선이 안 불러와짐" 원인: readCartGroups()는 로컬(비회원) 캐시만
+    //   읽는 동기 함수라, 회원인데 이 세션에서 아직 /saved를 안 들렀으면(예: 홈→스캔→바로
+    //   동선 보기) 그 로컬 캐시가 비어있어서 group을 못 찾고 "담긴 상품이 없어요"로 잘못
+    //   떴음. loadCartGroups()로 서버에서 최신 목록을 직접 받아오게(실패 시 로컬 폴백).
+    let cancelled = false;
+    (async () => {
+      const groups = await loadCartGroups().catch(() => readCartGroups());
+      if (cancelled) return;
+      const found = groups.find((g) => g.id === groupId) ?? null;
+      setGroup(found);
+      const remainingItems = (found?.products ?? []).filter((p) => !collectedIds.has(p.id));
 
-    if (remainingItems.length === 0) {
+      if (remainingItems.length === 0) {
+        setRoute(null);
+        setRouteError("담긴 상품이 없거나 전부 스캔했어요.");
+        return;
+      }
+
       setRoute(null);
-      setRouteError("담긴 상품이 없거나 전부 스캔했어요.");
-      return;
-    }
+      setRouteError(null);
+      setFloorNo(1);
 
-    setRoute(null);
-    setRouteError(null);
-    setFloorNo(1);
+      // ✅ 신규 — "agent가 계산해준 최적의 동선" 요청: POST /api/navigation/route는 방문
+      //   순서를 스스로 안 정하고(백엔드 주석: "Agent가 자연어를 해석해서 이미 정해서
+      //   넘긴다"), 넘긴 stops 배열 순서 그대로 구간만 이어줍니다. 그런데 프론트가 지금까지
+      //   순서를 안 정하고 담긴 순서 그대로 넘기고 있었음 — 최적 동선이 아니었던 원인.
+      //   실제 좌표(fetchInventoryBatch)를 먼저 받아서, 출발점(입구 0,0)부터 매번 가장
+      //   가까운 미방문 상품을 고르는 최근접 이웃(nearest-neighbor)으로 방문 순서를 정한
+      //   뒤에 그 순서로 stops를 넘깁니다 — 완벽한 최적해는 아니지만 담긴 순서 그대로보다
+      //   훨씬 동선 낭비가 적습니다.
+      const inventoryMap = await fetchInventoryBatch(remainingItems.map((p) => p.id));
+      if (cancelled) return;
 
-    const stops: RouteStop[] = remainingItems.map((item) => ({ skuId: item.id, label: item.name }));
-    getRoute({ floorNo: 1, x: 0, y: 0 }, stops)
-      .then(setRoute)
-      .catch(() => setRouteError("동선을 불러오지 못했어요."));
+      const withLoc = remainingItems
+        .map((item) => ({ item, loc: pickLocation(inventoryMap.get(item.id)) }))
+        .filter((v): v is { item: (typeof remainingItems)[number]; loc: NonNullable<typeof v.loc> } => !!v.loc);
+      const withoutLoc = remainingItems.filter((item) => !withLoc.some((v) => v.item.id === item.id));
+
+      const ordered: typeof remainingItems = [];
+      let cursor = { x: 0, y: 0 };
+      const pool = [...withLoc];
+      while (pool.length > 0) {
+        let nearestIdx = 0;
+        let nearestDist = Infinity;
+        pool.forEach((v, i) => {
+          const d = Math.hypot(v.loc.x - cursor.x, v.loc.y - cursor.y);
+          if (d < nearestDist) {
+            nearestDist = d;
+            nearestIdx = i;
+          }
+        });
+        const [picked] = pool.splice(nearestIdx, 1);
+        ordered.push(picked.item);
+        cursor = { x: picked.loc.x, y: picked.loc.y };
+      }
+      // 위치를 못 찾은 상품(품절 등)은 끝에 그대로 붙임 — 백엔드가 UNRESOLVED로 표시해줌
+      ordered.push(...withoutLoc);
+
+      const stops: RouteStop[] = ordered.map((item) => ({ skuId: item.id, label: item.name }));
+      getRoute({ floorNo: 1, x: 0, y: 0 }, stops)
+        .then((r) => !cancelled && setRoute(r))
+        .catch(() => !cancelled && setRouteError("동선을 불러오지 못했어요."));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open, groupId, collectedIds]);
 
   const remainingItems = (group?.products ?? []).filter((p) => !collectedIds.has(p.id));

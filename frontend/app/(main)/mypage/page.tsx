@@ -32,7 +32,7 @@ import { LogoutButton } from "@/components/domain/logout-button";
 
 import { isLoggedIn as checkLoggedIn } from "@/lib/api-client";
 import { getMyProfile, type ConsumerMe } from "@/lib/consumer-api";
-import { GRADE_TIERS, gradeIconSrc } from "@/lib/grade";
+import { GRADE_TIERS, gradeIconSrc, gradeColor } from "@/lib/grade";
 import { fetchNotices, type Notice } from "@/lib/notices";
 
 const quickLinks = [
@@ -138,7 +138,7 @@ export default function MyPage() {
       : 0;
 
   return (
-    <div className="flex min-h-full flex-col bg-[#f8f8f8]">
+    <div className="flex min-h-full flex-col bg-surface-subtle">
       {/* ✅ 신규 — Figma엔 있는데 기존 코드엔 없던 "마이페이지" 타이틀 바 */}
       <div className="flex h-14 w-full items-center px-5">
         <p className="text-[16px] font-medium leading-[1.6] text-[#111]">마이페이지</p>
@@ -166,13 +166,13 @@ export default function MyPage() {
 
               <div className="mt-4 flex gap-[6px]">
                 <Link href="/auth/login" className="flex-1">
-                  <span className="flex h-[48px] w-full items-center justify-center rounded-[50px] border border-[#eee] bg-white text-[16px] font-medium text-[#111]">
+                  <span className="flex h-[48px] w-full items-center justify-center rounded-[50px] border border-card-border bg-white text-[16px] font-medium text-[#111]">
                     로그인하기
                   </span>
                 </Link>
 
                 <Link href="/auth/signup/terms" className="flex-1">
-                  <span className="flex h-[48px] w-full items-center justify-center rounded-[50px] border border-[#ffc9b4] bg-[#f7ded4] text-[16px] font-medium text-[#ee4908]">
+                  <span className="flex h-[48px] w-full items-center justify-center rounded-[50px] border border-[#ffc9b4] bg-[#f7ded4] text-[16px] font-medium text-main">
                     회원가입
                   </span>
                 </Link>
@@ -185,21 +185,21 @@ export default function MyPage() {
              ========================= */}
 
           {loggedIn && profile && (
-            <div className="mt-3 rounded-[20px] border border-[#eee] bg-white px-5 pt-4 pb-5">
+            <div className="mt-3 rounded-[20px] border border-card-border bg-white px-5 pt-4 pb-5">
               <div className="flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={gradeIconSrc(currentTier.key)} alt="" className="h-6 w-6 shrink-0" />
                 <p className="text-[14px] font-semibold text-[#111]">{currentTier.label}</p>
               </div>
 
-              <div className="mt-2 h-[6px] w-full rounded-[10px] bg-[#eee]">
+              <div className="mt-2 h-[6px] w-full rounded-[10px] bg-card-border">
                 <div
-                  className="h-full rounded-[10px] bg-[#111]"
-                  style={{ width: `${nextTier ? progressPercent : 100}%` }}
+                  className="h-full rounded-[10px]"
+                  style={{ width: `${nextTier ? progressPercent : 100}%`, backgroundColor: gradeColor(currentTier.key) }}
                 />
               </div>
 
-              <p className="mt-2 text-[13px] text-[#999]">
+              <p className="mt-2 text-[13px] text-content-tertiary">
                 {nextTier
                   ? `${nextTier.label} 등급까지 ${(nextTier.threshold - profile.pointEarnedTotal).toLocaleString()} P 남았습니다.`
                   : "가장 높은 등급이에요."}
@@ -211,7 +211,7 @@ export default function MyPage() {
               저장 / 최근 본 / 전자영수증
              ========================= */}
 
-          <div className="mt-3 flex h-[75px] items-center justify-around rounded-[20px] border border-[#eee] bg-white">
+          <div className="mt-3 flex h-[75px] items-center justify-around rounded-[20px] border border-card-border bg-white">
             {quickLinks.map((q) => (
               <Link key={q.href} href={q.href} className="flex flex-col items-center gap-2">
                 <q.icon size={24} className="text-[#111]" />
@@ -227,7 +227,7 @@ export default function MyPage() {
           {latestNotice && (
             <Link
               href={`/mypage/notices/${latestNotice.id}`}
-              className="mt-3 flex h-10 items-center gap-2 overflow-hidden rounded-[20px] border border-[#e9e9e9] bg-[#f2f2f2] px-4"
+              className="mt-3 flex h-10 items-center gap-2 overflow-hidden rounded-[20px] border border-card-border bg-surface-subtle px-4"
             >
               <RiMegaphoneLine size={16} className="shrink-0 text-[#111]" />
               <span className="truncate text-[14px] text-black">
@@ -246,7 +246,7 @@ export default function MyPage() {
               .filter((group) => loggedIn || !group.loggedInOnly)
               .map((group) => (
                 <section key={group.title}>
-                  <p className="mb-1 text-[13px] text-[#999]">{group.title}</p>
+                  <p className="mb-1 text-[13px] text-content-tertiary">{group.title}</p>
 
                   <div className="-mx-5">
                     {group.items.map((item) => (
@@ -256,7 +256,7 @@ export default function MyPage() {
                         className="flex items-center justify-between px-[30px] py-[15px] text-[15px] text-black"
                       >
                         <span>{item.label}</span>
-                        <RiArrowRightSLine size={18} className="shrink-0 text-[#999]" />
+                        <RiArrowRightSLine size={18} className="shrink-0 text-content-tertiary" />
                       </Link>
                     ))}
                   </div>
@@ -269,7 +269,7 @@ export default function MyPage() {
              ========================= */}
 
           {loggedIn && (
-            <LogoutButton className="mt-8 flex w-full items-center justify-center gap-1.5 py-4 text-[14px] text-[#999]">
+            <LogoutButton className="mt-8 flex w-full items-center justify-center gap-1.5 py-4 text-[14px] text-content-tertiary">
               <RiLogoutBoxLine size={20} />
               로그아웃
             </LogoutButton>

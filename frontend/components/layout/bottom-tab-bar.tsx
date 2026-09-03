@@ -7,8 +7,16 @@
 //   비치게 했습니다(참고 이미지에서 카드 텍스트가 바 아래로 살짝 비치는 효과).
 //   ⚠ "하단바에만 적용" 지시에 따라 이 플로팅+블러 처리는 하단바 한정입니다 — 다른
 //   카드/다이얼로그는 기존 스타일(불투명 배경) 그대로입니다.
+// ✅ 수정(2026-09) —
+//   1) 반응형(요청 7번) — 예전엔 아이템마다 w-16 고정이라, 아주 좁은 화면(작은 폰)에서
+//      캡슐+리브 버튼 폭 합이 화면보다 넓어질 수 있었음. 캡슐 안 아이템을 flex-1로
+//      바꾸고 캡슐 자체는 w-full max-w-[280px]로 — 화면이 좁아지면 그만큼 같이 줄어듦.
+//   2) 리브 버튼 위 안내 말풍선(요청 6번) — "liv에게 물어보세요", 처음 방문 때만(한 번
+//      닫으면 localStorage에 저장돼 다시 안 뜸) 둥둥 뜨는 애니메이션 + 아래쪽으로 옅은
+//      그림자. X로 닫음.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   RiHome5Line,
   RiHome5Fill,
@@ -18,6 +26,7 @@ import {
   RiBookmarkFill,
   RiUser3Line,
   RiUser3Fill,
+  RiCloseLine,
 } from "@remixicon/react";
 
 import { cn } from "@/lib/utils";
@@ -26,12 +35,13 @@ import { useAiPanel } from "./ai-panel-context";
 
 export const navigationItems = [
   { href: "/", label: "홈", LineIcon: RiHome5Line, FillIcon: RiHome5Fill },
-  { href: "/scan", label: "스캔", LineIcon: RiQrScanLine, FillIcon: RiQrScanFill },
   { href: "/saved", label: "저장", LineIcon: RiBookmarkLine, FillIcon: RiBookmarkFill },
+  { href: "/scan", label: "스캔", LineIcon: RiQrScanLine, FillIcon: RiQrScanFill },
   { href: "/mypage", label: "마이", LineIcon: RiUser3Line, FillIcon: RiUser3Fill },
 ];
 
 const AI_ITEM = { label: "리브" };
+const LIV_HINT_DISMISSED_KEY = "storeflow_liv_hint_dismissed";
 
 export function BottomTabBar() {
   const pathname = usePathname();
@@ -42,6 +52,17 @@ export function BottomTabBar() {
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
 
+  // ✅ 신규 — 리브 버튼 위 "liv에게 물어보세요" 안내 말풍선, 한 번 닫으면 다시 안 뜸.
+  const [showHint, setShowHint] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setShowHint(window.localStorage.getItem(LIV_HINT_DISMISSED_KEY) !== "1");
+  }, []);
+  const dismissHint = () => {
+    setShowHint(false);
+    window.localStorage.setItem(LIV_HINT_DISMISSED_KEY, "1");
+  };
+
   if (hidden) return null;
 
   return (
@@ -51,8 +72,9 @@ export function BottomTabBar() {
     >
       {/* 메인 캡슐 — 홈/스캔/저장/마이. 흰색 20% 투명 배경 + 보더는 100% 불투명, 흐림은
           진하게(backdrop-blur-2xl) — 그림자는 없앰(보더만). 높이는 h-16 고정, 아이템은 그 안에서
-          세로 중앙정렬만 해서 리브 원형 버튼과 정확히 같은 높이를 갖게 함 */}
-      <div className="flex h-16 items-center gap-1 rounded-full border border-border bg-white/20 px-2 backdrop-blur-2xl">
+          세로 중앙정렬만 해서 리브 원형 버튼과 정확히 같은 높이를 갖게 함.
+          ✅ 수정 — w-16 고정 대신 flex-1 + 캡슐 자체 w-full max-w-[280px]로 반응형화. */}
+      <div className="flex h-16 w-full max-w-[280px] items-center gap-1 rounded-full border border-border bg-white/20 px-2 backdrop-blur-2xl">
         {navigationItems.map(({ href, label, LineIcon, FillIcon }) => {
           const active = isActive(href);
           return (
@@ -60,7 +82,7 @@ export function BottomTabBar() {
               key={href}
               href={href}
               className={cn(
-                "flex h-full w-16 flex-col items-center justify-center gap-0.5 rounded-full text-xs",
+                "flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-xs",
                 active ? "text-primary" : "text-muted-foreground"
               )}
             >
@@ -78,21 +100,43 @@ export function BottomTabBar() {
       {/* 분리된 원형 캡슐 — AI(리브) 전용, liv 로고 사용. w-16 h-16로 정사각형을 고정해야
           rounded-full이 진짜 "원"이 됨 (패딩 기반 크기는 텍스트 길이에 따라 타원이 될 수 있음),
           h-16는 왼쪽 메인 캡슐과 동일한 값이라 높이도 항상 같이 감 */}
-      <button
-        type="button"
-        onClick={() => openAiPanel()}
-        className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
-      >
-        <img
-          src={aiOpen ? "/icons/liv-full.svg" : "/icons/liv-line.svg"}
-          alt=""
-          aria-hidden="true"
-          className="h-[22px] w-[22px]"
-        />
-        <span className={aiOpen ? "text-foreground" : "text-muted-foreground"}>
-          {AI_ITEM.label}
-        </span>
-      </button>
+      <div className="relative shrink-0">
+        {showHint && !aiOpen && (
+          <div
+            className="absolute bottom-full left-1/2 mb-3 flex -translate-x-1/2 animate-[badge-float_2s_ease-in-out_infinite] items-center gap-1 whitespace-nowrap rounded-full border border-main bg-white py-2 pl-3 pr-2 text-xs font-medium text-main shadow-[0_6px_14px_rgba(0,0,0,0.12)]"
+          >
+            liv에게 물어보세요
+            {/* 말풍선 꼬리 — 리브 버튼을 가리키도록 아래쪽 중앙에 작은 삼각형 */}
+            <span className="absolute left-1/2 top-full -mt-px h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-main bg-white" />
+            <button
+              type="button"
+              onClick={dismissHint}
+              aria-label="안내 닫기"
+              className="ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center text-main/60"
+            >
+              <RiCloseLine size={14} />
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (showHint) dismissHint();
+            openAiPanel();
+          }}
+          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+        >
+          <img
+            src={aiOpen ? "/icons/liv-full.svg" : "/icons/liv-line.svg"}
+            alt=""
+            aria-hidden="true"
+            className="h-[22px] w-[22px]"
+          />
+          <span className={aiOpen ? "text-foreground" : "text-muted-foreground"}>
+            {AI_ITEM.label}
+          </span>
+        </button>
+      </div>
     </nav>
   );
 }

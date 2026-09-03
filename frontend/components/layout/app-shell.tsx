@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { BottomTabBar } from "./bottom-tab-bar";
 import { AiPanelProvider, useAiPanel } from "./ai-panel-context";
 import { BottomBarVisibilityProvider, useBottomBarVisibility } from "./bottom-bar-visibility-context";
@@ -13,7 +12,9 @@ import { AiProactiveBubble } from "./ai-proactive-bubble";
 //   나란히 배치되지 않는다(= main이 자동으로 좁아지지 않는다). 그래서 패널이 열려있을 때
 //   본문이 패널 밑에 깔리지 않도록 여기서 md:mr-[420px]을 직접 붙여준다.
 //   AiPanelProvider 내부라서 useAiPanel을 쓸 수 있게 별도 컴포넌트로 분리.
-function AppShellBody({ children, active }: { children: React.ReactNode; active: "home" | "ai" }) {
+// ✅ 수정(2026-09) — "리브 페이지"(구 /ai 라우트) 완전 삭제로 pathname 기준 active 판정이
+//   더 이상 의미가 없어짐(그 라우트 자체가 없음). 데스크톱 상단 헤더는 항상 "home" 모습.
+function AppShellBody({ children }: { children: React.ReactNode }) {
   const { isOpen } = useAiPanel();
   // ✅ 하단탭바를 동적으로 숨기는 화면(스캔, 리스트 상세, 매장지도 등)에서 main의 고정
   //   여백(pb-16)까지 같이 없애야 그 밑에 빈 공간이 안 남는다.
@@ -24,7 +25,7 @@ function AppShellBody({ children, active }: { children: React.ReactNode; active:
       <div className="fixed inset-x-0 top-0 z-[100] hidden md:block">
         <div className="mx-auto max-w-[1440px] border-b border-border bg-background/95 backdrop-blur">
           <div className="px-8">
-            <HomeAiHeader active={active} variant="fixed-desktop" />
+            <HomeAiHeader active="home" variant="fixed-desktop" />
           </div>
         </div>
       </div>
@@ -48,13 +49,10 @@ function AppShellBody({ children, active }: { children: React.ReactNode; active:
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const active = pathname === "/ai" ? "ai" : "home";
-
   return (
     <AiPanelProvider>
       <BottomBarVisibilityProvider>
-        <AppShellBody active={active}>{children}</AppShellBody>
+        <AppShellBody>{children}</AppShellBody>
       </BottomBarVisibilityProvider>
     </AiPanelProvider>
   );
