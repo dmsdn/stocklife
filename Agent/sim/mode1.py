@@ -281,6 +281,21 @@ def run(n_members: int, n_days: int):
             q_kind[_k] += 1
             q_work += _e
 
+        # 잡음을 곱하기 **전** 값을 붙든다 — 이것이 매장 도면이 정하는 **기하량**이고
+        # (BACKROOM_VERTICAL_SEC 상수이거나 (|x|+|y|)·CELL_METERS/WALK_SPEED),
+        # 작업이 시작되기 전에 알 수 있다. 아래에서 잡음이 곱해지면 tsec 은
+        # **실현값**이 되어 성격이 달라진다 — 리드타임의 구성요소이므로 학습에
+        # 쓰면 커닝이다(person_period._FORBIDDEN 의 travel_sec).
+        #
+        # ⚠ 09-04 신설. 그 전까지는 잡음이 꺼져 있어(v1) 기하량과 실현값이
+        #   **수치로 같았고**, person_period 가 travel_sec 을 그대로 기하량으로
+        #   썼다. v3(이동 잡음)를 켜자 둘이 갈리면서 그쪽 sd=0 가드가 걸렸다 —
+        #   가드가 옳았다. 「같다」가 성립한 이유는 기하가 아니라 **시뮬레이터가
+        #   결정적이라서**였고, 그건 현실에서 성립하지 않는다.
+        #   ⇒ 기하량을 따로 내보내 학습이 **서빙과 같은 것**을 쓰게 한다
+        #     (배포에서는 백엔드 locations 좌표에서 계산한다 — 같은 기하량).
+        tsec_geo = tsec
+
         # v3 축 — 이동 잡음. 기본(sd=0)에서는 `if` 가 거짓이라 **난수를 안 뽑는다.**
         # 로그정규로 곱하는 이유: 이동시간은 음수가 될 수 없고 실제 산포도
         # "평균의 ±몇 %" 형태라, 덧셈 잡음보다 곱셈 잡음이 맞는다.
@@ -305,6 +320,7 @@ def run(n_members: int, n_days: int):
         _dt = datetime.fromtimestamp(_EPOCH0 + off * 86400.0)
         task_meta[task_id] = {"sku": sku, "queued_off": off, "kind": kind,
                               "wait": wait, "travel": tsec, "handling": handling,
+                              "travel_geo": tsec_geo,     # 잡음 전 = 기하량(위 참조)
                               "hour": _dt.hour, "dow": _dt.weekday(),
                               "qlen": len(pending), "l2": l2_by_sku.get(sku, ""),
                               "q_vert": q_kind["VERTICAL"], "q_horiz": q_kind["HORIZONTAL"],
@@ -543,7 +559,8 @@ def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, member
                           m["qlen"], m["q_vert"], m["q_horiz"], m["q_floor"],
                           round(m["q_work"], 1), m["l2"],
                           round(m["wait"], 1), round(m["travel"], 1),
-                          round(m["handling"], 1), dur, ev, reason, true_lead))
+                          round(m["handling"], 1), dur, ev, reason, true_lead,
+                          round(m["travel_geo"], 1)))
     _write_csv_gz(os.path.join(OUT_DIR, "lead_times.csv.gz"),
                   # X 후보(예측 시점에 아는 것):
                   #   path_type · hour · dow · l2
@@ -552,10 +569,14 @@ def _write_outputs(purchases, shelf_ev, consumer_ev, censored, task_meta, member
                   #   q_work_sec                큐에 쌓인 **예상 작업량**(초, 기댓값)
                   # y: (duration_sec, event) — 생존분석의 (기간, 사건) 쌍
                   # 진단 전용(학습 금지): wait/travel/handling_sec · true_lead_sec
+                  #   travel_geo_sec 는 **금지가 아니다** — 잡음 전 기하량이라
+                  #   작업 전에 알 수 있다. person_period.travel_lookup 이 이 칸을
+                  #   읽어 log_travel 을 만든다(그 파일의 sd=0 가드가 증명한다).
                   ["task_id", "sku_id", "path_type", "hour", "dow", "qlen",
                    "q_vertical", "q_horizontal", "q_floor", "q_work_sec", "l2",
                    "wait_sec", "travel_sec", "handling_sec",
-                   "duration_sec", "event", "censor_reason", "true_lead_sec"], lead_rows)
+                   "duration_sec", "event", "censor_reason", "true_lead_sec",
+                   "travel_geo_sec"], lead_rows)
     _write_demo_slice(purchases, shelf_ev, consumer_ev, members, snap_ts, pending_skus)
 
 

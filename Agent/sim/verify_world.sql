@@ -24,13 +24,14 @@ UNION ALL SELECT 2,'모든 베이가 6단','0',
  CAST((SELECT COUNT(*) FROM (SELECT zone_id,rack_no,bay_no FROM locations
         GROUP BY zone_id,rack_no,bay_no HAVING COUNT(*)<>6) t) AS CHAR),
  IF((SELECT COUNT(*) FROM (SELECT zone_id,rack_no,bay_no FROM locations
+      WHERE tier_role<>'FACILITY'                       -- 09-03: 시설 행은 6단이 아니다
       GROUP BY zone_id,rack_no,bay_no HAVING COUNT(*)<>6) t)=0,'PASS','FAIL')
 
 -- L1~L3=PICK, L4~L6=BULK 규칙 위반 (판매층 기준. B1은 전부 BULK)
 UNION ALL SELECT 3,'단↔tier_role 규칙 위반','0',
- CAST((SELECT COUNT(*) FROM locations WHERE floor_no>0
+ CAST((SELECT COUNT(*) FROM locations WHERE floor_no>0 AND tier_role<>'FACILITY'
         AND tier_role <> IF(level_no<=3,'PICK','BULK')) AS CHAR),
- IF((SELECT COUNT(*) FROM locations WHERE floor_no>0
+ IF((SELECT COUNT(*) FROM locations WHERE floor_no>0 AND tier_role<>'FACILITY'
       AND tier_role <> IF(level_no<=3,'PICK','BULK'))=0,'PASS','FAIL')
 
 -- 상품은 자기 소분류의 존에만 있어야 한다. 어긋나면 "우유 사러 3층" 같은 안내가 나간다.
