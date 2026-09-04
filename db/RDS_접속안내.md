@@ -16,16 +16,16 @@
 
 ---
 
-## 1. 선행 — 내 IP 를 열어 달라고 한다 (이걸 안 하면 아무것도 안 된다)
+##  만일 — 집에서 작업하고 싶다면...
 
 보안그룹이 **등록된 IP 만** 3306 을 통과시킨다. 등록 안 된 상태로 붙으면
 에러가 아니라 **아무 반응 없이 멈췄다가 timeout** 이라, 암호가 틀린 줄 알고
 한참 헤매게 된다.
 
 ```
-① 내 공인 IP 확인   https://checkip.amazonaws.com  (브라우저로 열면 IP 만 뜬다)
-② 이정기에게 전달   "제 IP 는 xxx.xxx.xxx.xxx 입니다"
-③ 등록됐다는 답을 받고 나서 아래로
+① 작업 할 곳 IP 확인   https://checkip.amazonaws.com  (브라우저로 열면 IP 만 뜬다)
+② RDS 인스턴스에서 보안규칙에 들어가서 본인 아이피 등록 (클로드에게 물어보면 친절히 알려줌)
+③ 귀찮으면 ljk에게 아이피 알려주시면 깨어있는 한 바로 등록해드립디ㅏ...
 ```
 
 ⚠ **집·카페 IP 는 며칠 지나면 바뀐다**(ISP 재할당). 어제 되던 게 오늘 안 되면
@@ -33,61 +33,51 @@
 
 ---
 
-## 2. `application.yml` 에 프로필 추가
+## 2. `application.yml` 을 RDS 로
 
-`Backend/src/main/resources/application.yml` **맨 아래**에 아래를 통째로 붙인다.
+`Backend/src/main/resources/application.yml` 의 `datasource` 블록을 이렇게 바꾼다.
+**로컬 블록은 지우지 말고 주석으로 남긴다** — 되돌릴 때 두 줄 맞바꾸면 끝이다.
 
 ```yaml
----
 spring:
-  config:
-    activate:
-      on-profile: rds
   datasource:
     url: jdbc:mysql://storeflow-db.cveoe0ya0b0h.ap-northeast-2.rds.amazonaws.com:3306/storeflow_db
     username: admin
     password: <팀 채팅으로 받은 암호>
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # ── 로컬 docker (되돌릴 때 위와 맞바꾼다) ──
+  # datasource:
+  #   url: jdbc:mysql://localhost:3307/storeflow_db
+  #   username: root
+  #   password: 1234
+  #   driver-class-name: com.mysql.cj.jdbc.Driver
 ```
 
-맨 앞의 `---` 세 글자를 빠뜨리지 않는다. YAML 에서 저게 **문서 구분자**라,
-없으면 위쪽 로컬 설정을 덮어써서 **로컬로 돌릴 방법이 없어진다.**
-
-### 왜 url 을 갈아 끼우지 않고 프로필로 가르나
-
-한 줄만 고치면 되는데 굳이 이렇게 하는 이유가 있다.
-
-> url 을 손으로 갈아 끼우면 **되돌리는 것을 잊는다.**
-> 그러면 로컬인 줄 알고 공용 DB 를 보게 되고, 내 테스트가 남의 화면에 나타난다.
-
-프로필은 **끄면 저절로 로컬**이라 「되돌리기」라는 단계 자체가 없다.
+⚠ `url` 에 `useSSL=false` 를 붙이지 않는다. 안 적는 것이 기본값(`PREFERRED`)이고
+그게 맞다 — 자세한 건 §6 의 `Public Key Retrieval` 줄.
 
 ---
 
 ## 3. 실행
 
-| | |
-|---|---|
-| 로컬 docker (기본) | `gradlew bootRun` — 아무것도 안 붙인다 |
-| **공용 RDS** | 아래 |
-
-```bash
-# git bash / mac
-SPRING_PROFILES_ACTIVE=rds ./gradlew bootRun
-```
-
-```bat
-REM 윈도우 cmd
-set SPRING_PROFILES_ACTIVE=rds && gradlew bootRun
-```
-
-IntelliJ 는 `Run > Edit Configurations > Active profiles` 에 `rds` 를 적는다.
-
-**뜰 때 로그에서 이 줄을 확인한다** — 프로필이 안 먹었는데 로컬로 잘 도는 것을
-"RDS 붙었다"고 착각하는 일이 제일 흔하다.
+평소대로 돌리면 된다. 붙는 곳이 파일에 박혀 있으니 붙일 게 없다.
 
 ```
-The following 1 profile is active: "rds"
+gradlew bootRun
+```
+
+**뜰 때 로그에서 이 줄을 본다** — 이게 안 보이면 아직 로컬을 보고 있는 것이다.
+
+```
+HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@...
+Started StoreflowBackendApplication in 4.5 seconds
+```
+
+확실히 하려면 아무 조회나 한 번 던져 본다. RDS 라면 12개가 온다.
+
+```
+curl http://localhost:8080/api/products/categories
 ```
 
 ---
