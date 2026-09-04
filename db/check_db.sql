@@ -67,7 +67,12 @@ SELECT 'schema',10, '칸 cart_group.status',      (SELECT COUNT(*) FROM informat
 SELECT 'schema',11, '칸 orders.discount_amount', (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='orders' AND column_name='discount_amount'), 1, 'migration_schema_align_0904.sql' UNION ALL
 SELECT 'schema',12, '칸 map_cells.facility_kind',(SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='map_cells' AND column_name='facility_kind'), 1, 'migration_map_cells_facility_0903.sql' UNION ALL
 SELECT 'schema',13, '칸 map_cells.kind',         (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='map_cells' AND column_name='kind'), 1, 'migration_map_cells_kind_0902.sql' UNION ALL
-SELECT 'schema',14, '칸 cart_item.session_id',   (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cart_item' AND column_name='session_id'), 1, 'Migration_guest_cart_v1.sql';
+SELECT 'schema',14, '칸 cart_item.session_id',   (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cart_item' AND column_name='session_id'), 1, 'Migration_guest_cart_v1.sql' UNION ALL
+-- 09-04 밤. 새 RDS 에 이게 없어서 **로그인이 500** 이었다. 여러 절 ALTER 가
+-- 통째로 죽어서 안 생긴 칸이다(상세는 migration_schema_align_0904.sql 의 C절).
+-- ⚠ 그날 이 검사기는 26/26 초록이었다 — 이 칸을 안 보고 있었기 때문이다.
+--   검사기가 고른 목록의 바깥은 검사되지 않는다.
+SELECT 'schema',15, '칸 consumer.point_earned_total', (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='consumer' AND column_name='point_earned_total'), 1, 'migration_schema_align_0904.sql';
 
 -- ── ② 데이터 — 「종류가 들어와 있나」 ────────────────────────────────────────
 INSERT INTO _chk
