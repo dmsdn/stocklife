@@ -63,6 +63,7 @@ def _find_root(start: str) -> str:
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+PARAMS_OVERRIDE = os.path.join(_HERE, "params_override.py")
 _ROOT = _find_root(_HERE)
 sys.path.insert(0, os.path.join(_ROOT, "Agent"))
 from app.env import use_utf8_stdout                       # noqa: E402
@@ -145,6 +146,15 @@ SNAP_FILES = [
     (ARTIFACTS, "availability_model.joblib"),
     (ARTIFACTS, "repurchase_model.joblib"),
     (ARTIFACTS, "preference_model.npz"),
+    # ⚠ 09-04 추가 — 출하 설명서도 모델과 **한 몸으로** 뜨고 되돌린다.
+    #   빠져 있었을 때 무슨 일이 났나: v3/v4 를 돌린 뒤 `--restore` 가 .joblib 은
+    #   v1 로 되돌렸는데 _ship.txt 는 마지막 학습이 쓴 그대로 남았다. 그래서
+    #   `availability_ship.txt` 가 「학습/검증 1,034,420 / 345,929 · Brier 0.04132」
+    #   라고 적혀 있는데 옆의 모델은 「1,036,707 / 346,817 · 0.04056」짜리였다.
+    #   **설명서가 모델에 대해 거짓말을 한다** — 그것도 `/health` 와 문서가 읽는 값이다.
+    #   모델과 그 설명이 갈리면, 갈렸다는 사실 자체가 아무 데도 안 남는다.
+    (ARTIFACTS, "availability_ship.txt"),
+    (ARTIFACTS, "repurchase_ship.txt"),
 ]
 
 
@@ -200,13 +210,37 @@ def _write_params(overrides: dict) -> None:
             f.write(f"{k} = {v!r}\n")
 
 
+# 자식 프로세스의 stdout 을 UTF-8 로 강제한다 (09-04).
+#
+# [무슨 일이 있었나] `--verify-v1` 이 20분을 돌고 **마지막 요약 print 한 줄에서**
+#   죽었다. `UnicodeEncodeError: 'cp949' ... '—'` — 줄표 하나였다.
+#   DES 는 완주했고 산출물 6종도 다 썼는데, 요약을 찍다 터져 종료코드가 1 이 되고
+#   _run_stage 가 통째로 실패 판정했다. **일은 다 끝났는데 결과를 못 받았다.**
+#
+# [왜 부모의 use_utf8_stdout() 으로는 안 되나] 그건 **이 프로세스의** sys.stdout 을
+#   다시 감쌀 뿐이다. 자식은 별개 파이썬이라 자기 인코딩을 콘솔 코드페이지에서
+#   새로 정한다(윈도우 한국어 = cp949). 부모가 무엇을 했든 자식은 모른다.
+#
+# [왜 자식마다 고치지 않고 여기서 막나] 자식 여섯 중 **하나도** 그 호출이 없었다
+#   (mode1 · person_period · hazard_ship · repurchase_period · repurchase_ship ·
+#    preference_ship). 여섯 곳에 같은 줄을 넣는 것은 규칙이고, 규칙은 **일곱 번째
+#   단계를 추가할 때** 깨진다. 환경변수로 막으면 나중에 붙는 단계도 자동으로 덮인다
+#   (`_find_root` 와 같은 계열 — 경계를 메모가 아니라 구조로).
+#
+#   ⚠ mode1 에 `app.env` 를 import 시키는 길도 있었지만 안 골랐다. mode1 은
+#     **시뮬레이터**이고 헌법 3 이 「ML 과 코드 경로 완전 분리」를 요구한다.
+#     print 한 줄 때문에 생성기를 하네스에 묶을 이유가 없다.
+#     (mode2 는 백엔드로 밀어 넣는 구동자라 이미 `app.env` 를 쓴다 — 성격이 다르다.)
+_CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+
+
 def _run_stage(name: str, cwd: str, cmd: list, desc: str, dry: bool) -> float:
     print(f"\n── [{name}] {desc}")
     print(f"   $ {' '.join(os.path.basename(c) for c in cmd)}   (cwd={os.path.basename(cwd)})")
     if dry:
         return 0.0
     t0 = time.time()
-    r = subprocess.run(cmd, cwd=cwd)
+    r = subprocess.run(cmd, cwd=cwd, env=_CHILD_ENV)
     dt = time.time() - t0
     if r.returncode != 0:
         # 중간에 죽으면 **덮어쓰기 파일을 반드시 지운다** — 남으면 다음 실행이
@@ -312,6 +346,26 @@ def main() -> int:
             print(f"      {v['왜']}\n")
         print("  단계:", " → ".join(s[0] for s in STAGES))
         return 0
+    # ⚠ 09-04 — 지난 실행이 **강제 종료**됐는지 입구에서 본다.
+    #
+    # 아래 `_write_params({})` 는 try/finally 안에 있어 예외·서브프로세스 실패는
+    # 다 덮는다. 그런데 **부모가 SIGKILL 로 죽으면 finally 가 안 돈다.**
+    # 실제로 09-04 에 v4 실행을 중단시키자 `NIGHT_RESTOCK = True` 가 남았고,
+    # `sim/out/mode1/` 은 v4 세계인 채였다 — 그 상태에서 누가 mode1 을 직접
+    # 돌리거나 검사기를 돌리면 **v1 이라 믿으면서 v4 를 본다.**
+    #
+    # 종료 시 정리는 최선노력이고, **입구에서의 감지는 보장된다.** 그래서
+    # 규율을 후자로 옮긴다(§10 안전 규율 ①을 코드로).
+    # `--restore` 는 이 검사를 건너뛴다 — 그게 바로 수습 명령이기 때문이다.
+    if not a.restore and os.path.exists(PARAMS_OVERRIDE):
+        with open(PARAMS_OVERRIDE, encoding="utf-8") as f:
+            left = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
+        print("❌ 지난 실행이 깨끗이 끝나지 않았다 — params_override.py 가 남아 있다.")
+        print("   남은 상수:", "; ".join(left) or "(없음)")
+        print("   → sim/out/mode1/ 이 그 변종 세계일 가능성이 높다.")
+        print("   수습:  python sim/rebuild_world.py --restore")
+        return 1
+
     if a.restore:
         restore()
         return 0
@@ -333,12 +387,28 @@ def main() -> int:
     if not a.dry:
         _write_params(v["params"])
     timings = {}
+    ok = False
     try:
         for name, cwd, cmd, desc in stages:
             timings[name] = round(_run_stage(name, cwd, cmd, desc, a.dry), 1)
+        ok = True
     finally:
         if not a.dry:
             _write_params({})          # 성공이든 실패든 상수는 원상복귀
+            # ⚠ 09-04 — 상수만 되돌리면 **변종 세계가 남는다.**
+            #   snapshot()·restore() 는 이 블록 **뒤**에 있으므로, 중간 단계가
+            #   실패하면 `sim/out/mode1/` 은 그 버전의 세계인 채로 방치된다.
+            #   그리고 params_override 는 방금 지워졌으므로 위의 입구 감지도
+            #   **안 걸린다** — 다음 사람은 v1 이라 믿으며 변종을 읽는다.
+            #   실제로 09-04 에 v3 이 pp 에서 죽은 뒤 그 세계가 남았고,
+            #   나는 그것을 v1 로 알고 통계를 쟀다(다행히 그 분석에는 v3 이
+            #   맞는 자료였지만, 맞은 것은 운이다).
+            #   ⇒ 실패하면 성공 경로와 **같은 상태**로 되돌린다.
+            if not ok and os.path.isdir(os.path.join(WORLDS, "v1")):
+                print()
+                print("  실패했으므로 표준 경로를 v1 로 되돌린다"
+                      " — 변종 세계를 남기지 않는다")
+                restore()
 
     if a.dry:
         return 0

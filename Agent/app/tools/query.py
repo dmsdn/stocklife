@@ -304,6 +304,48 @@ def _get_inventory(sku_id: int) -> dict:
     }
 
 
+def _with_names(rows: list, key: str = "sku_id") -> list:
+    """sku 만 든 줄들에 상품명을 붙인다 — **묶음 조회 한 번**으로.
+
+    [무엇을 푸는가 — 09-04 에 시연에서 났다]
+      "내 구매내역 알려줘" 에 에이전트가 이렇게 답했다:
+
+        "sku 210622 3개, 212102 1개, 210420 3개 …"
+
+      LLM 이 이름을 안 쓴 게 아니라 **이름을 받은 적이 없다.**
+      `sot_client.get_purchase_history` 는 `{sku_id, qty, purchased_at}` 만
+      돌려준다. 프롬프트로는 못 고친다 — 없는 사실을 지어내라는 말이 된다.
+
+      ⚠ 바로 아래 `_get_wishlist` 는 이미 이름을 붙이고 있었고 독스트링에
+        *"상품명이 없으면 LLM이 sku 번호만 보고 말하게 되므로"* 라고 적혀
+        있었다. **진단은 있었는데 한 창구에만 적용돼 있었다.**
+
+    [왜 도구층인가 — sot_client 가 아니라]
+      ① `sot_client` 는 함수마다 mock/실물 두 갈래라 고칠 자리가 배가 된다.
+      ② `infer.py` 의 소비주기 추정도 같은 이력을 쓰는데 **거기엔 이름이
+         필요 없다** — 사람이 읽는 곳에서만 값을 치른다.
+      ③ `_get_wishlist` 가 이미 이 층에서 한다. 같은 일은 같은 층에.
+
+    [왜 줄마다 get_product 가 아닌가]
+      `_get_wishlist` 는 줄마다 부른다. 이력은 59줄이 예사라 그러면
+      59 × 왕복 20ms = 1.2초다. 묶음 창구가 이미 있다(`/api/products/by-skus`).
+
+    [없는 상품]  단종·삭제로 빠질 수 있다. 그 줄은 `name=None` 이 되는데,
+      `speech_check` 의 `placeholder` 규칙이 "None" 이 발화에 나가면 잡는다.
+    """
+    ids = sorted({r[key] for r in rows
+                  if isinstance(r, dict) and r.get(key) is not None})
+    if not ids:
+        return rows
+    # 한 번의 묶음 조회 → {sku: 이름} 사전. dict 컴프리헨션.
+    names = {p.get("sku_id"): p.get("name")
+             for p in (sot_client.get_products_by_skus(ids) or [])}
+    # dict(r, name=...) = r 을 복사하면서 name 을 얹는다. 원본을 안 건드린다
+    # (같은 리스트를 infer 가 물고 있을 수 있다).
+    return [dict(r, name=names.get(r.get(key))) if isinstance(r, dict) else r
+            for r in rows]
+
+
 def _get_purchase_history(member_id: int) -> dict:
     """구매 이력. 최근 것이 판단에 중요하므로 **뒤에서** 자른다.
 
@@ -313,7 +355,8 @@ def _get_purchase_history(member_id: int) -> dict:
     """
     rows = sot_client.get_purchase_history(member_id)
     total = len(rows)
-    recent = rows[-MAX_HISTORY_ROWS:]
+    # ⚠ 자른 **뒤에** 이름을 붙인다 — 보내지도 않을 줄까지 조회하면 낭비다.
+    recent = _with_names(rows[-MAX_HISTORY_ROWS:])
     out = {"member_id": member_id, "total_rows": total,
            "truncated": total > len(recent), "purchases": recent}
     # ⚠ **방향을 결과에 싣는다** — 08-28 발견. 도구 설명문은 "시간순으로
@@ -334,7 +377,10 @@ def _get_purchase_history(member_id: int) -> dict:
         out["read_as"] = (
             "구매 목록은 **과거→최근 순**입니다. 마지막 항목이 가장 최근이고 "
             "첫 항목이 가장 오래된 것입니다. '지난번에 산 것'을 물으면 "
-            "**마지막 항목**을 말하세요.")
+            "**마지막 항목**을 말하세요. "
+            # 09-04: 이름을 붙여 줘도 번호를 읽는 일이 있어 결과에서 못박는다.
+            #   sku 는 우리 내부 번호다 — 손님은 그 번호로 아무것도 못 한다.
+            "상품은 반드시 **name**(상품명)으로 말하고 sku 번호는 말하지 마세요.")
     return out
 
 
@@ -362,8 +408,14 @@ def _get_change_events(sku_ids=None, within_hours: int = 24) -> dict:
     """최근 변화 이벤트. 최신이 중요하므로 뒤에서 자른다(이력과 같은 이유)."""
     rows = sot_client.get_change_events(sku_ids=sku_ids, within_hours=within_hours)
     total = len(rows)
-    recent = rows[-MAX_CHANGE_EVENTS:]
-    return {"total_rows": total, "truncated": total > len(recent), "events": recent}
+    # ⚠ 이름을 붙인다 — 여기가 **킬링 장면 1**("물티슈 지금 있습니다")의 원료다.
+    #   이름이 없으면 "sku 210622 들어왔습니다" 가 나간다(09-04 구매이력과 같은 부류).
+    recent = _with_names(rows[-MAX_CHANGE_EVENTS:])
+    out = {"total_rows": total, "truncated": total > len(recent), "events": recent}
+    if recent:
+        out["read_as"] = ("상품은 **name**(상품명)으로 말하고 sku 번호는 "
+                          "말하지 마세요.")
+    return out
 
 
 # ── 조회 +3 (2026-08-21 ai-server 인수) ─────────────────────────────────────

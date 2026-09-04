@@ -51,9 +51,75 @@ ZONE_BY_COLOR = {
         (0.83, 0.81, 0.91): ("E", "잡화·가방")},
 }
 
-# 회색 계열 = 시설(계산대·푸드코트·화장실·에스컬레이터·행사매대). 상품은 없지만
-# **통행 불가**라 동선 솔버가 피해 다녀야 한다 — map_cells.passable=FALSE로 나간다.
+# 회색 계열 = 시설(계산대·푸드코트·화장실·에스컬레이터·행사매대). 상품은 없다.
 FACILITY_FILLS = {(0.6, 0.6, 0.6), (0.85, 0.85, 0.85)}
+
+# ── 시설의 정체 (09-03) ──────────────────────────────────────────────────────
+# PDF 의 시설 글자는 폰트가 CID 인코딩이라 pymupdf 로 읽으면 깨진다("›¬ Á‹").
+# 그래서 사각형은 색으로 뽑고 **이름은 도면을 눈으로 대조해 여기 손으로 적는다**
+# (층·격자 좌표·크기가 키 — 도면이 바뀌어 사각형이 움직이면 키가 안 맞아 아래
+# assert 가 멈추므로, 이름이 조용히 엉뚱한 블록에 붙는 일은 없다).
+# [왜 필요한가] 09-02 시연 점검에서 실사용 발화 65건 중 시설 질문 10건(화장실·계산대·
+# 엘리베이터·카트·주차)이 전부 「범위 밖」이었다 — 세계에 시설 이름이 없어서다.
+# [통행] 옛 규칙은 시설 전부 통행 불가였다. 실제로는 사람이 화장실·에스컬레이터·
+# 엘리베이터에 **들어가고**, 행사장·푸드코트·시식 코너를 **가로지른다.** 동선 계산에서
+# 모든 영역이 출발·도착점이 될 수 있어야 하므로(사용자 결정 09-03) 이름 있는 시설은
+# 통행 가능으로 두고, 이름 없는 구조물(벽·백룸 추정)만 막는다.
+FACILITY_KIND_BY_RECT = {
+    # 1층
+    (1, 0, 60, 7, 15):  "STRUCTURE",       # 좌하단 벽체 블록 — 도면에 글자 없음
+    (1, 10, 70, 1, 3):  "ENTRANCE",        # 「입구」 화살표 자리
+    (1, 15, 68, 2, 7):  "CHECKOUT",        # 계산대 왼쪽 기둥(게이트)
+    (1, 16, 68, 2, 6):  "CHECKOUT",        # 〃
+    (1, 17, 68, 21, 4): "CHECKOUT",        # 「계산대 / SCAN」
+    (1, 26, 27, 8, 10): "EVENT",           # 「행사 상품」(D 옆)
+    (1, 39, 72, 9, 2):  "CUSTOMER_SERVICE",# 「고객센터」
+    (1, 48, 72, 6, 2):  "ATM",             # 「ATM」
+    (1, 54, 70, 10, 4): "BAKERY",          # 「베이커리」
+    (1, 64, 70, 19, 4): "FOODCOURT",       # 「푸드코트」
+    (1, 65, 29, 18, 14): "EVENT",          # 「행사 상품」(H 아래 큰 블록)
+    (1, 85, 0, 10, 26): "STRUCTURE",       # 우상단 벽체 블록 — 글자 없음
+    (1, 89, 29, 6, 4):  "ELEVATOR",
+    (1, 89, 33, 6, 4):  "RESTROOM_M",
+    (1, 89, 40, 6, 4):  "RESTROOM_F",
+    (1, 91, 51, 2, 18): "ESCALATOR",       # 「↑ 2, 3F」
+    (1, 92, 36, 3, 3):  "TRASH",
+    (1, 93, 51, 2, 18): "ESCALATOR",
+    # 2층
+    (2, 0, 63, 13, 7):  "OPTICAL",         # 「안경 / 보청기 센터」
+    (2, 0, 70, 13, 5):  "PHARMACY",        # 「약국」
+    (2, 17, 63, 62, 12): "TASTING",        # 「시식 코너」
+    (2, 72, 24, 7, 18): "EVENT",
+    (2, 84, 0, 11, 24): "EVENT",
+    (2, 89, 29, 6, 4):  "ELEVATOR",
+    (2, 89, 33, 6, 4):  "RESTROOM_M",
+    (2, 89, 40, 6, 4):  "RESTROOM_F",
+    (2, 91, 51, 2, 18): "ESCALATOR",
+    (2, 92, 36, 3, 3):  "TRASH",
+    (2, 93, 51, 2, 18): "ESCALATOR",
+    # 3층
+    (3, 0, 51, 9, 10):  "AS_CENTER",       # 「A / S 센터」
+    (3, 0, 61, 38, 14): "EXPERIENCE",      # 「가전 체험존」
+    (3, 38, 61, 44, 14): "LOUNGE",         # 「휴게 라운지」
+    (3, 89, 29, 6, 4):  "ELEVATOR",
+    (3, 89, 33, 6, 4):  "RESTROOM_M",
+    (3, 89, 40, 6, 4):  "RESTROOM_F",
+    (3, 91, 51, 2, 18): "ESCALATOR",
+    (3, 92, 36, 3, 3):  "TRASH",
+    (3, 93, 51, 2, 18): "ESCALATOR",
+}
+# 종류 → 안내판 글자(에이전트가 손님에게 말하는 이름)
+FACILITY_LABELS = {
+    "ENTRANCE": "입구", "CHECKOUT": "계산대", "EVENT": "행사 상품 매대",
+    "CUSTOMER_SERVICE": "고객센터", "ATM": "ATM", "BAKERY": "베이커리",
+    "FOODCOURT": "푸드코트", "ELEVATOR": "엘리베이터", "RESTROOM_M": "남자 화장실",
+    "RESTROOM_F": "여자 화장실", "TRASH": "휴지통", "ESCALATOR": "에스컬레이터",
+    "OPTICAL": "안경·보청기 센터", "PHARMACY": "약국", "TASTING": "시식 코너",
+    "AS_CENTER": "A/S 센터", "EXPERIENCE": "가전 체험존", "LOUNGE": "휴게 라운지",
+    "STRUCTURE": "구조물",
+}
+# 통행 불가로 남기는 종류 — 이름 없는 벽체뿐.
+FACILITY_BLOCKED = {"STRUCTURE"}
 IGNORE_FILLS = {(1.0, 1.0, 1.0), (0.0, 0.0, 0.0), (0.4, 0.4, 0.4)}
 
 # 매장 내부 영역(PDF 좌표). 바깥 테두리와 상단 층수 배너를 제외한 실제 매장 바닥.
@@ -138,9 +204,12 @@ def extract():
                     continue
                 if (x1 - x0) * (y1 - y0) > 0.8 * (INTERIOR[2] - INTERIOR[0]) * (INTERIOR[3] - INTERIOR[1]):
                     continue                      # 바닥 전체를 덮는 배경 사각형
-                facilities.append((floor,
-                                   round((x0 - INTERIOR[0]) / GRID), round((y0 - INTERIOR[1]) / GRID),
-                                   round((x1 - x0) / GRID), round((y1 - y0) / GRID)))
+                rect_key = (floor,
+                            round((x0 - INTERIOR[0]) / GRID), round((y0 - INTERIOR[1]) / GRID),
+                            round((x1 - x0) / GRID), round((y1 - y0) / GRID))
+                # 이름표가 없는 사각형은 도면이 바뀐 것이다 — 조용히 무명으로 두지 않는다.
+                assert rect_key in FACILITY_KIND_BY_RECT, f"이름 없는 시설 사각형: {rect_key} — FACILITY_KIND_BY_RECT 에 추가"
+                facilities.append(rect_key + (FACILITY_KIND_BY_RECT[rect_key],))
                 continue
             # ── 랙: 존 색으로 식별
             if fill not in zmap or rect.width * rect.height < 150:
@@ -185,11 +254,19 @@ def write(racks, facilities):
             for _c, (zl, label) in sorted(ZONE_BY_COLOR[fl].items(), key=lambda kv: kv[1][0]):
                 f.write(f"    ({fl}, {zl!r}): {label!r},\n")
         f.write("}\n\n")
-        f.write("# (floor, gx, gy, w, h) — 통행 불가 시설(계산대·푸드코트·에스컬레이터·행사매대 등)\n")
+        f.write("# (floor, gx, gy, w, h, kind) — 시설 블록. kind 는 FACILITY_LABELS 의 키 (09-03: 이름 추가)\n")
         f.write("FACILITIES = [\n")
         for t in sorted(set(facilities)):
-            f.write(f"    ({t[0]}, {t[1]}, {t[2]}, {t[3]}, {t[4]}),\n")
+            f.write(f"    ({t[0]}, {t[1]}, {t[2]}, {t[3]}, {t[4]}, {t[5]!r}),\n")
         f.write("]\n\n")
+        f.write("# 시설 종류 → 안내판 글자 (에이전트·프론트가 같은 말을 쓴다)\n")
+        f.write("FACILITY_LABELS = {\n")
+        for k, v in FACILITY_LABELS.items():
+            f.write(f"    {k!r}: {v!r},\n")
+        f.write("}\n\n")
+        f.write("# 통행 불가로 남기는 시설 종류 — 이름 없는 벽체뿐. 화장실·에스컬레이터·엘리베이터·\n"
+                "# 행사장·푸드코트 등 이름 있는 시설은 들어가거나 가로지를 수 있다 (09-03 결정).\n")
+        f.write(f"FACILITY_BLOCKED = {sorted(FACILITY_BLOCKED)!r}\n\n")
         f.write(f"assert len(BAYS) == {len(racks)}, len(BAYS)\n")
 
 

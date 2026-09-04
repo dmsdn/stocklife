@@ -38,10 +38,19 @@ def shift_to_open(epoch: float) -> float:
     """
     dt = datetime.fromtimestamp(epoch)
     # v4 축 — 야간 보충을 켜면 영업시간이라는 벽 자체가 없다(DES설계 §10.1).
-    # ⚠ 앞의 `dt` 계산은 그대로 두고 여기서 되돌린다 — 위쪽에 두면 dt 가 없어
-    #   다른 분기가 깨진다. 난수는 어느 쪽 경로에서도 안 뽑으므로 안전하다.
+    #
+    # ⚠ 09-04 고침: `return float(t)` 였다. 인자 이름은 `t` 가 아니라 `epoch` 다
+    #   (아래 마지막 줄도 `return epoch`). `NameError: name 't' is not defined`.
+    #   08-28 에 쓰고 **오늘까지 한 번도 실행된 적이 없는 줄**이었다 —
+    #   `NIGHT_RESTOCK` 을 참으로 놓은 적이 없으니 이 분기에 들어갈 일이 없었고,
+    #   `--verify-v1` 은 훅이 **꺼진** 상태만 검사하므로 원리적으로 못 잡는다.
+    #   축 훅 넷이 다 이 상태였을 수 있다는 뜻이라, v2~v5 를 실제로 한 번씩
+    #   켜 보는 것이 검증의 일부다(오늘 v2·v5 는 통과, v3 은 pp 에서 별건).
+    #
+    # 위치는 그대로 둔다(`dt` 계산 뒤). 그 한 줄이 버려지지만 난수를 안 뽑으므로
+    # 결정성에 영향이 없고, 옮기면 diff 가 커져 원저자 의도와 멀어진다.
     if getattr(P, "NIGHT_RESTOCK", False):
-        return float(t)
+        return float(epoch)
     if dt.hour >= P.HOUR_CLOSE:
         nxt = (dt + timedelta(days=1)).replace(hour=P.HOUR_OPEN, minute=0, second=0, microsecond=0)
         return nxt.timestamp()
