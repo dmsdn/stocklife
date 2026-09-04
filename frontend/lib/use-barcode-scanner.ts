@@ -30,9 +30,15 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
   //   동작합니다 — 그래도 카메라 API(getUserMedia) 자체가 없는 아주 오래된 브라우저 대비용으로
   //   플래그는 남겨뒀습니다.
   const [supported] = useState(true);
+  // ✅ console.warn을 잠깐 바꿔치기했다가 스캐너가 꺼지면 원래대로 되돌리기 위한 참조.
+  const originalWarnRef = useRef<typeof console.warn | null>(null);
 
   const stop = () => {
     readerRef.current?.reset();
+    if (originalWarnRef.current) {
+      console.warn = originalWarnRef.current;
+      originalWarnRef.current = null;
+    }
   };
 
   const start = async () => {
@@ -63,6 +69,24 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
       }
     };
 
+    // ✅ 신규 — "카메라 열면 콘솔에 ChecksumException 경고가 계속 뜸" 원인: @zxing/library
+    //   내부(MultiFormatReader.decodeInternal)가 바코드 일부만 보이거나 흔들려서 체크섬이
+    //   안 맞는(=아주 흔한, 정상적인) 프레임마다 console.warn을 직접 호출합니다. 이 경고를
+    //   끄는 옵션이 라이브러리에 따로 없어서, 스캐너가 켜져 있는 동안만 이 특정 문구의
+    //   console.warn을 걸러내고(그 외 경고는 그대로), stop()에서 원래 console.warn으로
+    //   되돌립니다. 실제 동작(카메라 자체)엔 원래도 영향이 없었던 경고고, "요청 실패
+    //   500"으로 보였던 건 이거랑은 별개로 바코드 조회 API 쪽 문제라 거긴 따로
+    //   고쳤습니다(lookupByCode의 에러 메시지를 그대로 보여주도록).
+    if (!originalWarnRef.current) {
+      originalWarnRef.current = console.warn;
+      console.warn = (...args: unknown[]) => {
+        if (typeof args[0] === "string" && args[0].includes("MultiFormatReader: non-ReaderException")) {
+          return;
+        }
+        originalWarnRef.current?.(...args);
+      };
+    }
+
     try {
       // ✅ undefined = 카메라 기기 자동 선택. deviceId를 직접 안 넘기고 후면 카메라를
       //   요청하려면 아래처럼 constraints를 넘기는 대신, 대부분의 폰에서는 기본 카메라가
@@ -80,6 +104,7 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
         await readerRef.current.decodeFromConstraints({ video: true }, videoRef.current, onFrame);
       } catch {
         setPermission("denied");
+        stop();
       }
     }
   };

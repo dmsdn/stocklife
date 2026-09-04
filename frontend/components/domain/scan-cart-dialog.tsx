@@ -81,7 +81,14 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
               ))}
             </div>
 
-            <div className="flex items-center justify-between border-t border-border pt-3 text-base font-semibold">
+            {/* ✅ 신규(요청) — 결제 금액 위 적립 예정 포인트 안내(스캔 화면 하단과 동일하게
+                2% 예상 적립). */}
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>적립 예정 포인트</span>
+              <span>{Math.floor(total * 0.02).toLocaleString()}P</span>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between border-t border-border pt-3 text-base font-semibold">
               <span>총 합계</span>
               <span>{total.toLocaleString()}원</span>
             </div>

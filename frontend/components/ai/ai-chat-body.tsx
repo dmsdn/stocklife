@@ -1,7 +1,10 @@
 // components/ai/ai-chat-body.tsx
 // ✅ 마이크 버튼 — 실제 navigator.mediaDevices.getUserMedia로 브라우저 권한 요청, 허용하면
 //   MediaRecorder로 실제 녹음 시작(빨간 점+타이머), 다시 누르면 종료.
-// ⚠ 녹음한 음성을 텍스트로 바꿔주는 서버(STT)가 없어서, 지금은 "음성 메모"로 첨부만 됩니다.
+// ✅ 09-03: 별도 STT 서버 없이 브라우저 내장 Web Speech API(SpeechRecognition)로 녹음과
+//   동시에 실시간 음성 인식을 돌려서, 인식된 텍스트를 입력창(message)에 그대로 채워준다.
+//   지원 안 하는 브라우저(예: 구형 Firefox)에서는 recognitionRef가 null로 남고, 기존처럼
+//   "음성 메모" 오디오 첨부만 되는 방식으로 자연스럽게 폴백된다.
 
 "use client";
 
@@ -150,6 +153,14 @@ export function AiChatBody({
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
+  // ✅ Web Speech API 인식기 — SpeechRecognition은 표준 타입 정의가 없어 any로 다룬다.
+  const recognitionRef = useRef<any>(null);
+  // ✅ 신규 — 녹음 중 실제 마이크 소리 크기(0~1)를 재서 파형 애니메이션에 씀.
+  //   Web Audio API의 AnalyserNode로 실시간 볼륨을 읽어옴(별도 라이브러리 불필요).
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const levelAnimationRef = useRef<number | null>(null);
+  const [audioLevels, setAudioLevels] = useState<number[]>([0.2, 0.2, 0.2, 0.2, 0.2]);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -333,11 +344,11 @@ export function AiChatBody({
       setAttachOpen(false);
     };
 
-  const handleAttachList = (groupId: number, title: string) => {
+  const handleAttachList = (id: number, title: string, kind: "list" | "receipt") => {
     setAttachments((prev) => [
       ...prev,
       {
-        label: `리스트: ${title}`,
+        label: kind === "receipt" ? `영수증: ${title}` : `리스트: ${title}`,
         kind: "list",
       },
     ]);
@@ -359,8 +370,16 @@ export function AiChatBody({
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
+      // ✅ 수정(요청) — "마이크를 사용할 수 없어요"만 뜨면 브라우저 자체 지원 문제처럼
+      //   보이지만, 실제로는 대부분 이 경우예요: getUserMedia는 "보안 컨텍스트"(https 또는
+      //   localhost)에서만 존재합니다. http://IP주소:3000 같은 주소로 접속하면(배포 전
+      //   같은 와이파이에서 테스트할 때 흔함) 모바일 크롬은 사이트 설정에서 마이크를
+      //   "허용"으로 보여줘도 이 API 자체가 아예 없어서 이 메시지가 뜹니다 — 배포해서
+      //   https 도메인으로 열면 사라집니다(카메라 때와 동일한 원인).
       setMicError(
-        "이 브라우저에서는 마이크를 사용할 수 없어요."
+        window.isSecureContext
+          ? "이 브라우저에서는 마이크를 사용할 수 없어요."
+          : "이 주소는 보안 연결(https)이 아니라서 마이크를 쓸 수 없어요."
       );
       return;
     }
@@ -384,12 +403,58 @@ export function AiChatBody({
       const recorder = new MediaRecorder(stream);
       const chunks: BlobPart[] = [];
 
+      // ✅ 신규 — 실시간 파형 애니메이션용 볼륨 분석. AnalyserNode로 짧은 주기마다
+      //   실제 마이크 입력 크기를 읽어서 막대 5개 높이에 반영한다.
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 32;
+        source.connect(analyser);
+        audioContextRef.current = audioContext;
+        analyserRef.current = analyser;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          analyser.getByteFrequencyData(dataArray);
+          // 5개 막대 — 주파수 대역을 5구간으로 나눠 평균내서 각 막대 높이로 사용
+          const bucketSize = Math.floor(dataArray.length / 5) || 1;
+          const levels = Array.from({ length: 5 }, (_, i) => {
+            const slice = dataArray.slice(i * bucketSize, (i + 1) * bucketSize);
+            const avg = slice.reduce((s, v) => s + v, 0) / (slice.length || 1);
+            return Math.min(1, Math.max(0.15, avg / 160));
+          });
+          setAudioLevels(levels);
+          levelAnimationRef.current = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch {
+        // 분석 실패해도 녹음/인식 자체엔 지장 없음 — 파형만 안 움직임
+      }
+
       recorder.ondataavailable = (e) => {
         chunks.push(e.data);
       };
 
       recorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
+
+        // ✅ 녹음이 끝나면 파형 분석도 같이 정리.
+        if (levelAnimationRef.current) {
+          cancelAnimationFrame(levelAnimationRef.current);
+          levelAnimationRef.current = null;
+        }
+        audioContextRef.current?.close().catch(() => {});
+        audioContextRef.current = null;
+        analyserRef.current = null;
+        setAudioLevels([0.2, 0.2, 0.2, 0.2, 0.2]);
+
+        // ✅ 녹음이 끝나면 음성 인식기도 같이 멈춘다.
+        if (recognitionRef.current) {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+          recognitionRef.current = null;
+        }
 
         if (recordTimerRef.current) {
           clearInterval(recordTimerRef.current);
@@ -425,6 +490,49 @@ export function AiChatBody({
         () => setRecordSeconds((s) => s + 1),
         1000
       );
+
+      // ✅ Web Speech API로 실시간 음성 인식 — 지원하는 브라우저(Chrome/Edge/삼성인터넷 등)면
+      //   녹음과 동시에 돌려서 인식된 문장을 입력창에 채운다. 서버/API 키 불필요.
+      const SpeechRecognitionCtor =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+      if (SpeechRecognitionCtor) {
+        try {
+          const recognition = new SpeechRecognitionCtor();
+          recognition.lang = "ko-KR";
+          recognition.continuous = true;
+          recognition.interimResults = true;
+
+          recognition.onresult = (event: any) => {
+            let transcript = "";
+            for (let i = 0; i < event.results.length; i++) {
+              transcript += event.results[i][0].transcript;
+            }
+            setMessage(transcript);
+          };
+
+          // ✅ 인식기가 (녹음은 계속 켜져 있는데) 무음 등으로 스스로 멈추는 경우가 있어,
+          //   아직 녹음 중이면 재시작해서 계속 듣게 한다.
+          recognition.onend = () => {
+            if (mediaRecorderRef.current?.state === "recording") {
+              try {
+                recognition.start();
+              } catch {
+                // 이미 시작된 상태 등 — 무시
+              }
+            }
+          };
+
+          recognition.onerror = () => {
+            // 음성 인식 실패는 조용히 무시 — 녹음(음성 메모)은 별개로 계속 진행됨
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+        } catch {
+          recognitionRef.current = null;
+        }
+      }
     } catch {
       setMicError(
         "마이크 권한이 거부됐어요. 브라우저 설정에서 허용해주세요."
@@ -633,7 +741,13 @@ export function AiChatBody({
           </div>
         )}
 
-        <div className="flex min-w-0 items-center gap-2 rounded-full border border-[#F4F4F4] bg-white p-2">
+        {/* ✅ 수정(요청) — 높이 60, 뒤에 옅은 그림자를 줘서 살짝 떠 있는 느낌으로.
+            ✅ 수정(요청 2번) — 녹음 중엔 "녹음 중... N초" 고정 문구로 텍스트 입력칸
+            자체를 가려버려서, 실시간으로 인식되고 있는 자막(message, Web Speech API가
+            채워줌)이 안 보였음. 이제 녹음 중에도 이 자리에 실제 인식된 텍스트를 그대로
+            보여줌(아직 아무 말도 안 했으면 안내 문구). 빨간 점 대신 실제 마이크 소리
+            크기에 반응하는 막대 5개(파형)로 "듣고 있다"는 걸 보여줌. */}
+        <div className="flex h-[60px] min-w-0 items-center gap-2 rounded-full border border-[#F4F4F4] bg-white p-2 shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
           <button
             type="button"
             onClick={() => setAttachOpen((v) => !v)}
@@ -644,11 +758,21 @@ export function AiChatBody({
           </button>
 
           {recording ? (
-            <span className="flex min-w-0 flex-1 items-center gap-2 text-sm text-danger">
-              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-danger" />
-
-              <span className="truncate">
-                녹음 중... {recordSeconds}초
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+              {/* ✅ 신규 — 파형 애니메이션. audioLevels(0~1) 5개 값을 막대 높이로 매핑,
+                  requestAnimationFrame으로 매 프레임 갱신되니 실제 목소리 크기에 따라
+                  실시간으로 들쭉날쭉 움직임. */}
+              <span className="flex h-4 shrink-0 items-end gap-[3px]" aria-hidden="true">
+                {audioLevels.map((level, i) => (
+                  <span
+                    key={i}
+                    className="w-[3px] rounded-full bg-danger transition-[height] duration-75"
+                    style={{ height: `${Math.round(level * 100)}%` }}
+                  />
+                ))}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-foreground">
+                {message.trim() ? message : "듣고 있어요..."}
               </span>
             </span>
           ) : (

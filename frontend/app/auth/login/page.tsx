@@ -80,7 +80,15 @@ function LoginPageInner() {
               className="h-10 rounded-none border-0 border-b-2 border-border bg-transparent px-0 py-0 text-sm focus-visible:border-brand"
             />
             <div className="relative mt-[37px]">
+              {/* ✅ 수정(요청) — 눈 아이콘을 눌러도 비밀번호가 안 보이던 버그. type을
+                  password↔text로 바꾸는 것 자체는 맞는 코드인데, 일부 base-ui Input
+                  구현체가 이미 마운트된 input의 type 속성 변경을 못 따라가는 경우가
+                  있어서(내부적으로 값은 그대로 유지한 채 표시 방식만 바꾸는 처리가 없어
+                  이전 type을 그대로 렌더링), key를 showPassword에 연결해 type이 바뀔
+                  때마다 input을 통째로 새로 그리게 강제함 — 이러면 항상 최신 type으로
+                  다시 그려지는 게 보장됨. */}
               <Input
+                key={showPassword ? "text" : "password"}
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
                 name="password"
@@ -125,13 +133,18 @@ function LoginPageInner() {
             {submitting ? "로그인 중..." : "로그인하기"}
           </Button>
 
-          <div className="mt-[26px] flex items-center justify-center gap-3 text-xs text-muted-foreground">
-            <Link href="/auth/reset-password">비밀번호 재설정</Link>
-            <span aria-hidden className="text-border">|</span>
-            <Link href="/auth/signup/terms" className="font-semibold text-foreground">
-              회원가입
-            </Link>
-          </div>
+          {/* ✅ 수정(요청) — "비밀번호 재설정 | 회원가입"으로 나뉘어 있던 걸, 비밀번호
+              재설정은 없애고(위 폼 옆에 이미 있음) "계정이 없으신가요?"(회색) + "회원가입"
+              하나로 합침. 배경 없는 지금 스타일은 그대로 두고, "로그인하기" 버튼처럼 가로
+              전체를 채우는 큰 탭 영역으로 만들어서 어디를 눌러도 회원가입으로 가게 함.
+              가운데 구분선(|)도 없앰. */}
+          <Link
+            href="/auth/signup/terms"
+            className="mt-[26px] flex h-12 w-full items-center justify-center gap-1.5 text-sm"
+          >
+            <span className="text-muted-foreground">계정이 없으신가요?</span>
+            <span className="font-semibold text-main">회원가입</span>
+          </Link>
         </div>
       </div>
     </div>

@@ -51,11 +51,14 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        // ✅ 수정(2026-09) — z-50이 하단탭바(BottomTabBar, z-[100])보다 낮아서, 이 Dialog를
-        //   쓰는 모든 모달(매대 상품 목록 등)이 하단탭바 "뒤"에 깔려 보이던 문제. 하단탭바보다
-        //   위로 올림.
-        "fixed inset-0 isolate z-[105] bg-black/20 duration-100",
-        "supports-backdrop-filter:backdrop-blur-sm",
+        // ✅ 수정(2026-09) — "주변이 흐려지는 게 구역별로 나뉘어 보임" 원인: 하단탭바가
+        //   자기 자신에게도 backdrop-blur-2xl(진한 블러)을 걸고 있는데, 모달이 열리면 이
+        //   오버레이(backdrop-blur-sm, 옅은 블러)가 그 위에 또 겹쳐져서 "하단탭바가 있는
+        //   자리만 이중으로 블러 처리된 사각형"처럼 도드라져 보였음. 오버레이 블러를
+        //   더 진하게 올려서 그 차이를 눈에 덜 띄게 하고, 검은 톤도 살짝 더 깔았습니다
+        //   (요청: "검은 배경도 살짝").
+        "fixed inset-0 isolate z-[105] bg-black/35 duration-100",
+        "supports-backdrop-filter:backdrop-blur-md",
         "data-open:animate-in data-open:fade-in-0",
         "data-closed:animate-out data-closed:fade-out-0",
         className

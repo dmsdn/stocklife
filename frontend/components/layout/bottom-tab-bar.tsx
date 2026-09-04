@@ -14,9 +14,14 @@
 //   2) 리브 버튼 위 안내 말풍선(요청 6번) — "liv에게 물어보세요", 처음 방문 때만(한 번
 //      닫으면 localStorage에 저장돼 다시 안 뜸) 둥둥 뜨는 애니메이션 + 아래쪽으로 옅은
 //      그림자. X로 닫음.
+// ✅ 수정(2026-09, 2차) — 스크롤 방향에 따라 하단바를 숨김/표시(요청: "스크롤하면 위로
+//   올라가는 버튼 나올 때 하단바는 내려가고, 위로 스크롤하면 다시 나오게"). 스크롤을
+//   내리는(아래로) 동안엔 하단바를 화면 밖으로 슬라이드시켜 숨기고, 위로 스크롤하면
+//   다시 올라오게 함 — hidden(페이지 전체가 아예 하단바를 안 쓰는 경우, 예: 스캔/매장지도)
+//   과는 별개의, 스크롤에 반응하는 일시적인 숨김이라 로컬 state로 처리.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   RiHome5Line,
   RiHome5Fill,
@@ -63,11 +68,37 @@ export function BottomTabBar() {
     window.localStorage.setItem(LIV_HINT_DISMISSED_KEY, "1");
   };
 
+  // ✅ 신규 — 스크롤 방향 감지. 아래로 스크롤하면 hiddenByScroll=true(내려감), 위로
+  //   스크롤하면 다시 false(올라옴). 맨 위 근처(작은 값)에서는 살짝만 움직여도 안
+  //   숨기게 임계값(threshold)을 둠 — 그래야 페이지 맨 위에서 바로 사라지는 어색함이 없음.
+  const [hiddenByScroll, setHiddenByScroll] = useState(false);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    lastScrollY.current = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const diff = y - lastScrollY.current;
+      if (y < 80) {
+        setHiddenByScroll(false);
+      } else if (diff > 4) {
+        setHiddenByScroll(true);
+      } else if (diff < -4) {
+        setHiddenByScroll(false);
+      }
+      lastScrollY.current = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   if (hidden) return null;
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-[100] flex items-center justify-center gap-2 px-4 pb-[calc(1.75rem+env(safe-area-inset-bottom))] md:hidden"
+      className={`fixed inset-x-0 bottom-0 z-[100] flex items-center justify-center gap-2 px-4 pb-[calc(1.75rem+env(safe-area-inset-bottom))] transition-transform duration-200 md:hidden ${
+        hiddenByScroll ? "translate-y-[calc(100%+2rem)]" : "translate-y-0"
+      }`}
       aria-label="하단 메뉴"
     >
       {/* 메인 캡슐 — 홈/스캔/저장/마이. 흰색 20% 투명 배경 + 보더는 100% 불투명, 흐림은

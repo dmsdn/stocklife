@@ -11,6 +11,9 @@ const KEY = "storeflow_last_guest_checkout";
 export interface CheckoutSummary {
   totalAmount: number;
   itemCount: number;
+  /** ✅ 신규 — true면 "비회원이라 서버에 안 남음"이 아니라 "회원인데 서버 결제 API가
+   *  실패해서 로컬로만 완료 처리함"이라는 뜻. 완료 화면 문구를 다르게 보여줘야 함. */
+  serverFailed?: boolean;
 }
 
 export function writeLastCheckout(summary: CheckoutSummary) {

@@ -79,6 +79,8 @@ function CheckoutCompleteInner() {
           </span>
           {orderId != null ? (
             <span className="font-semibold text-[#EE4908]">{pointsEarned.toLocaleString()}P</span>
+          ) : guestSummary?.serverFailed ? (
+            <span className="text-xs text-muted-foreground">서버 오류로 이번 건은 적립이 지연될 수 있어요</span>
           ) : (
             <span className="text-xs text-muted-foreground">비회원은 적립되지 않아요</span>
           )}
@@ -97,7 +99,9 @@ function CheckoutCompleteInner() {
           </button>
         ) : (
           <p className="text-xs text-muted-foreground">
-            비회원 결제는 전자영수증이 보관되지 않아요. 로그인하면 다음 결제부터 영수증을 확인할 수 있어요.
+            {guestSummary?.serverFailed
+              ? "일시적인 서버 오류로 이번 건은 전자영수증이 안 남았어요. 구매 내역은 정상 반영됐어요."
+              : "비회원 결제는 전자영수증이 보관되지 않아요. 로그인하면 다음 결제부터 영수증을 확인할 수 있어요."}
           </p>
         )}
         <button

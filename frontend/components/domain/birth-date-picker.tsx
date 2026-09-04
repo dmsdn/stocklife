@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 
 const ITEM_HEIGHT = 36;
 const VISIBLE_ITEMS = 3;
@@ -593,20 +594,21 @@ export function BirthDatePicker({
           </DialogHeader>
 
           {wheelRows}
-
-          <DialogFooter className="mt-2 -mx-5 -mb-6 rounded-b-sm px-5 py-4">
-            <Button
-              type="button"
-              className="h-11 w-full rounded-[8px]"
-              onClick={
-                handleConfirm
-              }
-            >
-              선택하기
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ✅ 수정(요청) — "선택하기" 확정 버튼을 모달 밖 화면 하단(h-60, 텍스트 폭 맞춤)으로. */}
+      {open && (
+        <StickyBottomBar elevated>
+          <Button
+            type="button"
+            className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
+            onClick={handleConfirm}
+          >
+            선택하기
+          </Button>
+        </StickyBottomBar>
+      )}
     </>
   );
 }

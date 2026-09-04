@@ -22,6 +22,7 @@ import { formatRelativeTime, formatShoppingDate } from "@/lib/format-time";
 import { searchChatMessages, highlightMatch, type ChatSearchResult } from "@/lib/chat-search";
 import { readCartGroups, loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
+import { SplitBottomBar } from "@/components/domain/split-bottom-bar";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
 
 interface ChatSession {
@@ -242,23 +243,25 @@ function SavedPageInner() {
                   />
                 </div>
               </div>
-
-              <div className="mt-2 flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowNewGroupInput(false);
-                    setNewGroupDate("");
-                    setNewGroupTitle("");
-                  }}
-                >
-                  취소
-                </Button>
-                <Button className="flex-1" onClick={handleCreateGroup}>추가</Button>
-              </div>
             </DialogContent>
           </Dialog>
+
+          {/* ✅ 수정(요청) — 취소/추가 버튼을 모달 밖으로 빼서, 하나의 알약 안에서
+              나뉘는 형태(SplitBottomBar)로 화면 하단에 고정. */}
+          {showNewGroupInput && (
+            <SplitBottomBar
+              leftLabel="취소"
+              onLeft={() => {
+                setShowNewGroupInput(false);
+                setNewGroupDate("");
+                setNewGroupTitle("");
+              }}
+              leftTone="muted"
+              rightLabel="추가"
+              onRight={handleCreateGroup}
+              rightTone="main"
+            />
+          )}
 
           {filteredGroups.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">

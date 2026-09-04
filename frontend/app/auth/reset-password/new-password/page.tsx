@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import { resetPassword } from "@/lib/auth";
 
 const underlineInput =
@@ -90,11 +91,20 @@ function ResetPasswordNewPasswordInner() {
             <DialogTitle>비밀번호가 재설정됐어요</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">새 비밀번호로 다시 로그인해주세요.</p>
-          <Button className="w-full" onClick={() => router.push("/auth/login")}>
-            로그인하러 가기
-          </Button>
         </DialogContent>
       </Dialog>
+
+      {/* ✅ 수정(요청) — 확인 버튼을 모달 밖 화면 하단(h-60, 텍스트 폭 맞춤)으로. */}
+      {completeOpen && (
+        <StickyBottomBar>
+          <Button
+            className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
+            onClick={() => router.push("/auth/login")}
+          >
+            로그인하러 가기
+          </Button>
+        </StickyBottomBar>
+      )}
     </div>
   );
 }

@@ -17,6 +17,10 @@ interface GroupPickerDialogProps {
   onClose: () => void;
   onSelect: (groupId: number) => void;
   onGroupsChange: () => void;
+  /** ✅ 신규(요청) — "리스트 없이 장보기". 넘기면 목록 맨 아래에 이 옵션이 뜨고,
+   *  누르면 리스트를 고르지 않고 바로 스캔을 시작합니다(내부적으로는 이름 없는
+   *  임시 리스트 하나를 만들어서 담습니다 — 나중에 "내 리스트"에서 이름을 정할 수 있음). */
+  onStartWithoutList?: () => void;
 }
 
 export function GroupPickerDialog({
@@ -26,6 +30,7 @@ export function GroupPickerDialog({
   onClose,
   onSelect,
   onGroupsChange,
+  onStartWithoutList,
 }: GroupPickerDialogProps) {
   const [showNewInput, setShowNewInput] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -91,6 +96,16 @@ export function GroupPickerDialog({
           <Button variant="outline" className="w-full" onClick={() => setShowNewInput(true)}>
             + 새 리스트 만들기
           </Button>
+        )}
+
+        {onStartWithoutList && (
+          <button
+            type="button"
+            onClick={onStartWithoutList}
+            className="w-full text-center text-sm text-muted-foreground underline underline-offset-2"
+          >
+            리스트 없이 시작하기
+          </button>
         )}
       </DialogContent>
     </Dialog>

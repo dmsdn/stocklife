@@ -5,12 +5,11 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { RiArrowLeftSLine, RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine } from "@remixicon/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine } from "@remixicon/react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
-import { ProductDetailDialog } from "@/components/domain/product-detail-dialog";
+import { ScrollToTopButton, FloatingBackButton } from "@/components/domain/scroll-to-top-button";
 import { LocationMapDialog } from "@/components/domain/location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
@@ -43,6 +42,7 @@ interface Product {
 }
 
 function SearchPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [keyword, setKeyword] = useState("");
@@ -59,7 +59,6 @@ function SearchPageInner() {
 
   const [savePickerProduct, setSavePickerProduct] = useState<Product | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-  const [detailProductId, setDetailProductId] = useState<number | null>(null);
 
   // ✅ 상품 목록 카드에 매대 위치 표시 + 클릭 시 지도로 보기
   const [productLocations, setProductLocations] = useState<Map<number, InventoryItem>>(new Map());
@@ -84,8 +83,14 @@ function SearchPageInner() {
   }, []);
 
   useEffect(() => {
+    // ✅ 수정(요청) — 상품 상세가 모달→페이지(/product/[skuId])로 바뀌면서, 예전처럼
+    //   이 검색 화면이 ?productId=로 모달을 대신 열어줄 필요가 없어짐 — 그 링크로 들어오면
+    //   그냥 상세 페이지로 보내줌(혹시 남아있는 옛 링크 대비).
     const fromQuery = searchParams.get("productId");
-    if (fromQuery) setDetailProductId(Number(fromQuery));
+    if (fromQuery) {
+      router.replace(`/product/${fromQuery}`);
+      return;
+    }
 
     // ✅ 홈 화면 "최근 검색어" 칩에서 ?keyword=로 들어오면 바로 그 검색어로 실행
     const keywordFromQuery = searchParams.get("keyword");
@@ -130,6 +135,33 @@ function SearchPageInner() {
       return matchesStatus && matchesPriceMin;
     });
   }, [products, filters]);
+
+  // ✅ 신규(요청) — "상품 목록을 너무 한 번에 다 불러오느라 오래 걸리는 것 같다"에 대한
+  //   대응: 데이터 자체는 한 번에 받아오지만(백엔드가 이미 그렇게 응답), 화면에 그리는
+  //   건 처음 20개만 하고 나머지는 스크롤해서 아래쪽이 보일 때 그때그때 늘림 — DOM
+  //   노드 수를 줄여서 초기 렌더링 체감 속도를 높임(진짜 "다음 페이지 요청"이 아니라
+  //   이미 받은 데이터를 늦게 그리는 것뿐이라 백엔드 변경 없이 바로 적용됨).
+  const [visibleCount, setVisibleCount] = useState(20);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [results]);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((v) => v + 20);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visibleCount, results.length]);
 
   // ✅ 화면에 보이는 상품들의 매대 위치를 한 번에 조회 (배치 API 재사용)
   useEffect(() => {
@@ -228,10 +260,8 @@ function SearchPageInner() {
 
   return (
     <div className="mx-auto max-w-md p-4 md:max-w-5xl md:p-8">
-      <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3">
-        <Link href="/">
-          <RiArrowLeftSLine size={24} />
-        </Link>
+      <FloatingBackButton onClick={() => router.push("/")} />
+      <form onSubmit={handleSearch} className="relative mb-4 flex items-center gap-3 pl-12">
         <div className="flex flex-1 items-center gap-2 rounded-sm border border-border px-3 py-2 text-sm">
           <RiSearchLine size={24} className="text-muted-foreground" />
           <input
@@ -289,12 +319,62 @@ function SearchPageInner() {
         </button>
       </div>
 
+      {/* ✅ 신규(요청) — 선택된 필터를 칩(작은 버튼)으로 나열, 각각 X로 개별 해제 가능. */}
+      {(filters.categories.length > 0 || filters.statuses.length > 0 || priceActive) && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+          {filters.categories.map((c) => (
+            <button
+              key={`cat-${c}`}
+              type="button"
+              onClick={() => {
+                const next = { ...filters, categories: filters.categories.filter((x) => x !== c) };
+                setFilters(next);
+                runSearch(keyword);
+              }}
+              className="flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 py-1 text-primary"
+            >
+              {c}
+              <RiCloseLine size={16} />
+            </button>
+          ))}
+          {filters.statuses.map((s) => (
+            <button
+              key={`status-${s}`}
+              type="button"
+              onClick={() => {
+                const next = { ...filters, statuses: filters.statuses.filter((x) => x !== s) };
+                setFilters(next);
+                runSearch(keyword);
+              }}
+              className="flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 py-1 text-primary"
+            >
+              {s}
+              <RiCloseLine size={16} />
+            </button>
+          ))}
+          {priceActive && (
+            <button
+              type="button"
+              onClick={() => {
+                const next = { ...filters, priceRange: [PRICE_MIN, PRICE_MAX] as [number, number] };
+                setFilters(next);
+                runSearch(keyword);
+              }}
+              className="flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 py-1 text-primary"
+            >
+              {filters.priceRange[0].toLocaleString()}원~{filters.priceRange[1].toLocaleString()}원
+              <RiCloseLine size={16} />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="mb-2 flex items-center justify-between text-sm">
         <span>{loading ? "불러오는 중..." : `${results.length}개 결과`}</span>
       </div>
 
       <div className="divide-y divide-border md:grid md:grid-cols-3 md:gap-x-6 md:divide-y-0 lg:grid-cols-4">
-        {results.map((product) => {
+        {results.slice(0, visibleCount).map((product) => {
           const discountPercent =
             product.onPromo && product.priceKrw > 0
               ? Math.round((product.discountKrw / product.priceKrw) * 100)
@@ -304,8 +384,8 @@ function SearchPageInner() {
             <div
               role="button"
               tabIndex={0}
-              onClick={() => setDetailProductId(product.skuId)}
-              onKeyDown={(e) => e.key === "Enter" && setDetailProductId(product.skuId)}
+              onClick={() => router.push(`/product/${product.skuId}`)}
+              onKeyDown={(e) => e.key === "Enter" && router.push(`/product/${product.skuId}`)}
               className="flex flex-1 cursor-pointer gap-3 text-left"
             >
               {/* ✅ 수정 — 목업 "IMG" 텍스트 박스 대신 실제 상품 이미지(imageUrl), 크기도
@@ -372,6 +452,14 @@ function SearchPageInner() {
         })}
       </div>
 
+      {/* ✅ 신규(요청) — 결과가 많을 때 한 번에 다 그리지 않고, 스크롤로 이 지점이
+          보이면 그때 더 렌더링(20개씩 늘림). IntersectionObserver로 감지. */}
+      {visibleCount < results.length && (
+        <div ref={loadMoreRef} className="py-4 text-center text-xs text-muted-foreground">
+          더 불러오는 중...
+        </div>
+      )}
+
       {!loading && results.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">검색 결과가 없어요.</p>
       )}
@@ -390,7 +478,6 @@ function SearchPageInner() {
       )}
 
       <SaveToListDialog open={!!savePickerProduct} onClose={() => setSavePickerProduct(null)} onSelect={handleSaveSelect} />
-      <ProductDetailDialog productId={detailProductId} onClose={() => setDetailProductId(null)} />
 
       {locationMapSku !== null && productLocations.has(locationMapSku) && (
         <LocationMapDialog
@@ -403,6 +490,8 @@ function SearchPageInner() {
           price={results.find((p) => p.skuId === locationMapSku)?.finalPriceKrw ?? 0}
         />
       )}
+
+      <ScrollToTopButton />
     </div>
   );
 }

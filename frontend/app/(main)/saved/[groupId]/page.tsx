@@ -168,7 +168,7 @@ export default function SavedGroupDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-8 pt-5 sm:max-w-xl md:max-w-2xl md:px-8 md:pt-8 lg:max-w-3xl">
-      {/* 상단 헤더 — 타이틀+날짜(좌) / 스캔 아이콘+"장보러 가기"(우, "장보기 시작" 겸용) */}
+      {/* 상단 헤더 — 타이틀+날짜만(요청: "장보러 가기"는 아래 버튼 줄로 이동) */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -197,17 +197,6 @@ export default function SavedGroupDetailPage() {
             />
           </div>
         </div>
-
-        {!completed && (
-          <button
-            type="button"
-            onClick={() => router.push(`/scan?group=${groupId}`)}
-            className="mt-0.5 flex shrink-0 items-center gap-1 text-sm font-medium text-foreground"
-          >
-            <RiQrScanLine size={18} />
-            장보러 가기
-          </button>
-        )}
       </div>
 
       {completed && (
@@ -310,10 +299,21 @@ export default function SavedGroupDetailPage() {
         </button>
       )}
 
-      {/* ✅ 수정(요청) — 예전엔 전역 하단탭바처럼 화면에 고정된(fixed) "동선/리브" 알약형
-          바였는데, 진짜 하단탭바처럼 보여서 혼동을 줬음(이 화면은 전역 하단탭바를 이미
-          숨기고 있어서 더더욱). 페이지 흐름 안의 평범한 버튼 줄로 바꿈(고정 없음). */}
+      {/* ✅ 수정(요청) — 리브는 다시 우측 하단 원형 고정 버튼으로(홈 하단탭바 리브 버튼과
+          같은 스타일). 이 줄엔 "동선"과 "장보러 가기"만 나란히(요청대로 서로 자리를
+          바꿔서 장보러 가기가 왼쪽, 동선이 오른쪽). */}
       <div className="mt-4 flex items-center gap-2">
+        {!completed && (
+          <button
+            type="button"
+            onClick={() => router.push(`/scan?group=${groupId}`)}
+            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border text-sm font-medium"
+          >
+            <RiQrScanLine size={20} />
+            장보러 가기
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => setRouteOpen(true)}
@@ -322,16 +322,18 @@ export default function SavedGroupDetailPage() {
           <RiMapLine size={20} />
           동선
         </button>
-
-        <button
-          type="button"
-          onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
-          className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border text-sm font-medium"
-        >
-          <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
-          {linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
-        </button>
       </div>
+
+      {/* ✅ 리브 — 화면 우측 하단에 떠 있는 원형 버튼(홈 하단탭바와 동일 스타일). */}
+      <button
+        type="button"
+        onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
+        aria-label={linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
+        className="fixed bottom-6 right-4 z-40 flex h-16 w-16 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/80 text-xs shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-2xl"
+      >
+        <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+        리브
+      </button>
 
       <StoreMapDialog
         open={routeOpen}
