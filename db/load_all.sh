@@ -50,25 +50,9 @@ step() {  # step "설명" 파일
   if [ ! -f "$2" ]; then echo "  ⚠ 없음(건너뜀): $2"; return; fi
   printf "  %-52s" "$1"
   t0=$(date +%s)
-  raw=$(run < "$2" 2>&1 | grep -viE "Using a password")
+  out=$(run < "$2" 2>&1 | grep -viE "Using a password" | head -3)
   echo " $(( $(date +%s) - t0 ))초"
-  # ⚠ 오류는 **한 줄도 자르지 않는다** (09-04 밤에 이것 때문에 물렸다).
-  #   첫 판은 출력을 `head -3` 했다. 그런데 Migration_guest_cart_v1 의 열째 줄이
-  #   `Duplicate column name 'point_balance'` 였고, 그 ALTER 가 통째로 죽으면서
-  #   같은 구문의 `point_earned_total` 이 안 생겼다. 그 칸이 없으면 **로그인이 500** 이다.
-  #
-  #   > 여러 절이 붙은 ALTER 는 통째로 하나의 구문이다. 앞 절이 「이미 있음」이면
-  #   > 정말 필요했던 뒤 절까지 같이 안 된다. --force 는 그걸 넘기고 다음으로 간다.
-  #
-  #   오류를 잘라 보여 주는 적재기는 **--force 의 위험을 그대로 두고 증거만 없앤다.**
-  errs=$(printf '%s
-' "$raw" | grep -E "^ERROR" || true)
-  rest=$(printf '%s
-' "$raw" | grep -vE "^ERROR" | grep -v '^[[:space:]]*$' | head -3)
-  [ -n "$errs" ] && printf '%s
-' "$errs" | sed 's/^/      /'
-  [ -n "$rest" ] && printf '%s
-' "$rest" | sed 's/^/      /'
+  [ -n "$out" ] && echo "$out" | sed 's/^/      /'
   return 0
 }
 

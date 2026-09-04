@@ -109,34 +109,10 @@ CREATE TABLE IF NOT EXISTS price_histories (
   KEY idx_price_hist_sku (sku_id, effective_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-SELECT '-- C. 여러 절 ALTER 가 통째로 죽어서 안 생긴 것 (09-04 밤 발견) --' AS '';
-
--- ⚠ 이건 「한쪽 DB 가 낡아서」가 아니라 **DDL 작성 방식 때문에** 안 생긴 칸이다.
---
---   backend_own_tables_current.sql:23  consumer 를 만들 때 point_balance 만 넣는다
---   Migration_guest_cart_v1.sql:70~72  ALTER TABLE consumer
---                                        ADD point_balance      <- 이미 있다 -> ERROR 1060
---                                        ADD point_earned_total <- 같은 구문이라 같이 죽는다
---   seed/04_demo_accounts.sql:38~40    똑같은 두 줄짜리 ALTER -> 똑같이 죽는다
---
---   **여러 절이 붙은 ALTER 는 통째로 하나의 구문이다.** 앞 절이 「이미 있음」이면
---   정말 필요했던 뒤 절까지 같이 안 된다. --force 는 그걸 넘기고 다음 파일로 간다.
---
---   기존 DB 에서는 안 터졌다 — 그때는 point_balance 가 아직 없어서 두 절이 다
---   성공했기 때문이다. **같은 파일이 새 DB 에서만 다르게 돈다.**
---
--- [안 고치면]  Consumer 엔티티가 @Column(name="point_earned_total", nullable=false)
---   로 이 칸을 읽는다. 없으면 consumer 를 건드리는 모든 질의가 SQL 오류다 —
---   **로그인부터 500.** 09-04 에 새 RDS 가 정확히 이 상태였다.
---
--- 아래 _add_col 은 칸을 **하나씩** 검사해서 더하므로 이 실패 방식에 면역이다.
-CALL _add_col('consumer', 'point_earned_total',
-  'point_earned_total INT NOT NULL DEFAULT 0 AFTER point_balance');
-
 DROP PROCEDURE IF EXISTS _add_col;
 
 -- ── 검산 ────────────────────────────────────────────────────────────────────
-SELECT '── 검산 (7/7 이어야 한다) ──' AS '';
+SELECT '── 검산 (6/6 이어야 한다) ──' AS '';
 SELECT
   (SELECT COUNT(*) FROM information_schema.columns
     WHERE table_schema=DATABASE() AND table_name='cart_group' AND column_name='status')
@@ -150,6 +126,4 @@ SELECT
     WHERE table_schema=DATABASE() AND table_name='point_transaction')
 + (SELECT COUNT(*) FROM information_schema.tables
     WHERE table_schema=DATABASE() AND table_name='price_histories')
-+ (SELECT COUNT(*) FROM information_schema.columns
-    WHERE table_schema=DATABASE() AND table_name='consumer' AND column_name='point_earned_total')
-  AS `충족(7이면 정합)`;
+  AS `충족(6이면 정합)`;
