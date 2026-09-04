@@ -11,6 +11,7 @@
 import { useRouter } from "next/navigation";
 import { RiArrowLeftLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 
 export function ProfileStep({
   title,
@@ -32,7 +33,7 @@ export function ProfileStep({
   const router = useRouter();
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-dvh flex-col pb-[140px]">
       {onBack && (
         <div className="flex h-8 items-center">
           <button
@@ -58,15 +59,17 @@ export function ProfileStep({
         <div className="mt-[43px] space-y-[11px]">{children}</div>
       </div>
 
-      <div className="mt-auto pb-[42px] pt-10">
+      {/* ✅ 수정(2026-09) — mt-auto(문서 흐름 안 맨 아래) 대신 화면에 진짜 고정(StickyBottomBar).
+          키보드가 올라와도 그 위에 계속 붙어있음. */}
+      <StickyBottomBar>
         <Button
-          className="h-[60px] w-full rounded-full"
+          className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
           disabled={nextDisabled}
           onClick={onNext}
         >
           {nextLabel}
         </Button>
-      </div>
+      </StickyBottomBar>
     </div>
   );
 }

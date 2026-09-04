@@ -8,9 +8,11 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 
 import { toBackendPhone, sendSignupCode, verifySignupCode, checkRegistrationStatus } from "@/lib/auth";
 import { writeSignupDraft } from "@/lib/signup-draft";
+import { ApiError } from "@/lib/api-client";
 
 const PHONE_LENGTH = 11;
 
@@ -70,8 +72,13 @@ export default function SignupPage() {
       setCodeSent(true);
       setCode("");
       setStage("code");
-    } catch {
-      setSendCodeError("인증번호 발송에 실패했어요. 전화번호를 확인해주세요.");
+    } catch (e) {
+      // ✅ 수정(2026-09) — 무조건 "전화번호를 확인해주세요"만 보여주고 있었음. 실제로는
+      //   전화번호가 문제가 아니라 SMS 발송 자체(외부 문자 API 키/설정, 요금제, 서버가
+      //   그 서비스에 못 나가는 네트워크 환경 등)가 원인인 경우가 많은데, 그러면 이
+      //   문구는 오히려 원인을 잘못 짚게 만듭니다. apiFetch가 실제 백엔드 에러 메시지를
+      //   읽어오면 그걸 그대로 보여줌.
+      setSendCodeError(e instanceof ApiError ? e.message : "인증번호 발송에 실패했어요. 전화번호를 확인해주세요.");
     } finally {
       setSendingCode(false);
     }
@@ -105,7 +112,7 @@ export default function SignupPage() {
     (stage === "password" && !passwordStepValid);
 
   return (
-    <div className="flex min-h-full flex-col pt-[87px]">
+    <div className="flex min-h-dvh flex-col pb-[140px] pt-[87px]">
       <h1 className="text-2xl font-bold leading-8">
         본인인증 및 로그인을 위한
         <br />
@@ -209,17 +216,17 @@ export default function SignupPage() {
       </div>
 
       {stage !== "phone" && (
-        <div className="mt-auto pb-[42px] pt-10">
+        <StickyBottomBar>
           <Button
             type="button"
             variant="secondary"
-            className="h-[60px] w-full rounded-full"
+            className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
             disabled={bottomButtonDisabled}
             onClick={handleBottomButton}
           >
             {verifying ? "확인 중..." : "다음"}
           </Button>
-        </div>
+        </StickyBottomBar>
       )}
     </div>
   );

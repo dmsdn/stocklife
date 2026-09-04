@@ -1,23 +1,18 @@
 // app/(main)/store-map/page.tsx
 // ✅ 홈 화면 "매장 지도" 카드에서 연결되는 매장 둘러보기 페이지. 특정 리스트의
-//   동선(StoreMapDialog)과는 별개로, 그냥 매장을 층별로 둘러보다가 아무 매대나 눌러서
-//   그 안에 어떤 상품이 있는지 보는 용도. 지도/매대 클릭/상품 조회 로직은 전부 이미 있던
-//   components/domain/store-map.tsx + lib/location-products.ts 그대로 재사용.
-// ✅ 실제 DB 연동 완료 — 백엔드 매대 데이터(GET /api/map/floors/{floorNo}의 locations)가
-//   채워져서, 프론트 전용 목업 구역(lib/browse-map-zones.ts, 점선 테두리 박스 + 목업 카탈로그)은
-//   더 이상 필요 없어져 제거했습니다. 이제 지도 위 매대 칸을 누르면 항상 실제
-//   GET /api/locations/{locationId}/products 결과만 보여줍니다.
-// ✅ 다이얼로그 제목도 목업 zone.label 대신, 눌린 매대의 실제 zoneId를 GET /api/map/floors/{floorNo}
-//   응답에서 사람이 읽는 이름으로 바꿔주는 getZoneName()을 사용합니다.
+//   동선(StoreMapDialog)과는 별개로, 그냥 매장을 색깔별 구역으로 둘러보는 용도.
+// ✅ 수정(2026-09) — 매대 칸 하나하나에 격자 박스를 그려서 누르게 하던 방식(개별
+//   locationId 클릭 + 별도 모달로 상품 목록)을 없앴습니다. 실제 매장 이미지 위에 작은
+//   박스가 잔뜩 겹쳐 보여서 지저분했고("이상한 박스"), 매대 시드 데이터가 없으면 아예
+//   안 눌리기도 했습니다. 이제 색칠된 구역(zone) 전체를 누르면 그 구역이 어떤
+//   카테고리인지만 지도 위에 핀처럼 뜹니다(StoreMap 내부에서 처리, 외부 모달 없음).
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RiArrowLeftSLine } from "@remixicon/react";
 import { StoreMap, type MapPin } from "@/components/domain/store-map";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { FLOOR_MAPS, getFloorLocations, getZoneName } from "@/lib/map-config";
-import { fetchProductsAtLocation, type LocationProduct } from "@/lib/location-products";
+import { FLOOR_MAPS } from "@/lib/map-config";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 import { loadCartGroups, readCartGroups } from "@/lib/cart-storage";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
@@ -27,10 +22,8 @@ export default function StoreMapPage() {
   const [floorNo, setFloorNo] = useState(FLOOR_MAPS[0]?.floorNo ?? 1);
   const openAiChat = useOpenAiChat();
 
-  // ✅ 신규 — "실제 제품 좌표로 모아보기": 내가 담아둔(전체 리스트) 상품들을 실제
-  //   재고 위치(x,y)로 지도 위에 핀으로 표시. 예전엔 이 페이지가 pins={[]}로 고정돼
-  //   있어서 지도에 핀이 아예 안 뜨는 상태였다 — 매대 클릭 기능만 있고 "내 상품 모아보기"는
-  //   연결이 안 돼 있었던 것. 특정 리스트 동선(StoreMapDialog)과 달리 여기는 "둘러보기"라
+  // ✅ "실제 제품 좌표로 모아보기": 내가 담아둔(전체 리스트) 상품들을 실제 재고 위치(x,y)로
+  //   지도 위에 핀으로 표시. 특정 리스트 동선(StoreMapDialog)과 달리 여기는 "둘러보기"라
   //   경로는 안 그리고 핀만 표시한다(로그인 회원 전용 리스트라 비회원은 항상 빈 배열).
   const [pinsByFloor, setPinsByFloor] = useState<Map<number, MapPin[]>>(new Map());
 
@@ -79,34 +72,8 @@ export default function StoreMapPage() {
     return () => setBottomBarHidden(false);
   }, [setBottomBarHidden]);
 
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
-  const [locationProducts, setLocationProducts] = useState<LocationProduct[] | null>(null);
-  const [locationError, setLocationError] = useState(false);
-  // ✅ 신규 — 개별 매대(locationId) 대신 구역 전체를 눌렀을 때(onZoneClick). 이 구역엔
-  //   특정 locationId가 없어서 상품 목록 API를 부를 수 없고, 구역 이름만 보여줌.
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-
-  const handleLocationClick = (locationId: string) => {
-    setSelectedLocationId(locationId);
-    setLocationProducts(null);
-    setLocationError(false);
-    fetchProductsAtLocation(locationId)
-      .then(setLocationProducts)
-      .catch(() => setLocationError(true));
-  };
-
-  const closeDialog = () => setSelectedLocationId(null);
-
-  // ✅ 다이얼로그 제목용 — 눌린 매대(locationId)의 실제 zoneId를 찾아 사람이 읽을 이름으로 변환
-  const selectedLocation = selectedLocationId
-    ? getFloorLocations(floorNo).find((loc) => loc.locationId === selectedLocationId)
-    : undefined;
-  const selectedZoneName = selectedLocation ? getZoneName(floorNo, selectedLocation.zoneId) : null;
-
   return (
-    // ✅ 수정(2026-09) — 이 화면은 하단탭바를 항상 숨기는데(setBottomBarHidden(true)),
-    //   그와 별개로 이 래퍼가 자체적으로 pb-8을 주고 있어서 지도 아래에 안 쓰는 여백이
-    //   남아있었다. 그 여백을 없애고, 지도 자체 높이도 고정 70vh(다른 화면과 공용)
+    // ✅ 이 화면은 하단탭바를 항상 숨기는데, 지도 자체 높이도 고정 70vh(다른 화면과 공용)
     //   대신 이 화면 전용으로 뷰포트 끝까지 채우도록 늘림.
     <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col md:max-w-2xl">
       <div className="flex items-center gap-2 px-4 py-3">
@@ -120,57 +87,16 @@ export default function StoreMapPage() {
         floorNo={floorNo}
         pins={floorPins}
         routeOrder={floorRouteOrder}
-        onLocationClick={handleLocationClick}
-        onZoneClick={setSelectedZoneId}
+        showZones
         onFloorChange={setFloorNo}
         onLivClick={() => openAiChat()}
         heightClassName="h-[calc(100dvh-8rem)]"
       />
 
       <p className="px-4 pt-2 text-xs text-muted-foreground">
-        지도 위 칸을 누르면 그 매대에 실제로 진열된 상품을 볼 수 있어요.
+        색칠된 구역을 누르면 어떤 카테고리인지 볼 수 있어요.
         {floorPins.length > 0 && " 담아둔 상품은 실제 위치에 핀으로 표시돼요."}
       </p>
-
-      {/* 매대를 눌렀을 때 그 안의 상품 목록 (실제 DB) */}
-      <Dialog open={selectedLocationId !== null} onOpenChange={(v) => !v && closeDialog()}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedZoneName ?? "매대 상품 목록"}</DialogTitle>
-          </DialogHeader>
-
-          {locationError ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">상품 목록을 불러오지 못했어요.</p>
-          ) : locationProducts === null ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">불러오는 중...</p>
-          ) : locationProducts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">이 매대엔 등록된 상품이 없어요.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {locationProducts.map((p) => (
-                <li key={p.skuId} className="flex items-center justify-between gap-3 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">재고 {p.stock}개</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-semibold">{p.price.toLocaleString()}원</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ✅ 신규 — 구역 전체를 눌렀을 때(개별 매대 좌표 시드가 없어도 항상 반응함).
-          이 구역엔 특정 locationId가 없어서 상품 목록은 못 불러오고 구역 이름만 보여줌. */}
-      <Dialog open={selectedZoneId !== null} onOpenChange={(v) => !v && setSelectedZoneId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedZoneId ? (getZoneName(floorNo, selectedZoneId) ?? "구역 정보") : ""}</DialogTitle>
-          </DialogHeader>
-          <p className="py-2 text-sm text-muted-foreground">이 구역에 진열된 상품을 둘러보세요.</p>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

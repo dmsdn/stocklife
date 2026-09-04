@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TermsModal } from "@/components/domain/terms-modal";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import { writeSignupDraft } from "@/lib/signup-draft";
 
 export default function SignupTermsPage() {
@@ -84,7 +85,7 @@ export default function SignupTermsPage() {
   ];
 
   return (
-    <div className="flex min-h-full flex-col pt-[85px]">
+    <div className="flex min-h-dvh flex-col pb-[140px] pt-[85px]">
       <h1 className="text-2xl font-bold leading-8">
         <span className="font-black">STOCK LIFE</span> 서비스 이용약관에
         <br />
@@ -110,11 +111,11 @@ export default function SignupTermsPage() {
         </div>
       </div>
 
-      <div className="mt-auto pb-[42px] pt-10">
-        <Button className="h-[60px] w-full rounded-full" disabled={!requiredMet} onClick={handleNext}>
+      <StickyBottomBar>
+        <Button className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]" disabled={!requiredMet} onClick={handleNext}>
           동의하고 가입하기
         </Button>
-      </div>
+      </StickyBottomBar>
     </div>
   );
 }

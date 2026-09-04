@@ -50,7 +50,7 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
             <button
               type="button"
               onClick={onClose}
-              className="mt-4 flex h-[60px] w-full items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground"
+              className="mt-4 flex h-[60px] w-fit mx-auto px-5 items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground"
             >
               닫기
             </button>
@@ -90,7 +90,7 @@ export function ScanCartDialog({ open, onClose, groupId, onCheckedOut }: ScanCar
               type="button"
               disabled={checkingOut}
               onClick={handleCheckout}
-              className="flex h-[60px] w-full items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground disabled:opacity-50"
+              className="flex h-[60px] w-fit mx-auto px-5 items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground disabled:opacity-50"
             >
               {checkingOut ? "처리 중..." : "결제하기"}
             </button>

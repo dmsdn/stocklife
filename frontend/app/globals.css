@@ -209,8 +209,12 @@
   --primary-foreground: var(--gray-0);
 
   /* "중요 버튼"(꽉 찬 배경의 default/secondary 버튼) 전용 색. 마찬가지로 검정. */
-  --brand: var(--gray-950);
-  --brand-foreground: var(--gray-0);
+  /* ✅ 수정(2026-09) — "브랜드 강조색"이 실제로는 계속 흑백(gray-950) 그대로 남아있었음.
+     초기에는 포인트 컬러를 정하기 전이라 임시로 흑백을 넣어뒀던 자리인데, 그 뒤로
+     --main(#ee4908, 실제 브랜드 오렌지)이 생기고 나서도 이 값을 안 바꿔서, 로그인/회원가입
+     버튼들이 Figma(오렌지)와 다르게 계속 검정으로 보이고 있었습니다. --main과 동일하게 맞춤. */
+  --brand: var(--main);
+  --brand-foreground: var(--main-foreground);
 
   /* 보조 버튼/배경 */
   --secondary: var(--gray-400);

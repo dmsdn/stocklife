@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import {
   Dialog,
   DialogContent,
@@ -143,7 +144,7 @@ export default function SignupProfilePage() {
   };
 
   return (
-    <div className="flex min-h-full flex-col pt-[87px]">
+    <div className="flex min-h-dvh flex-col pb-[180px] pt-[87px]">
       <h1 className="text-2xl font-bold leading-8">
         서비스 이용을 위한 추가 정보를
         <br />
@@ -156,25 +157,29 @@ export default function SignupProfilePage() {
         </p>
       )}
 
-      <div className="mt-auto space-y-2 pb-[42px] pt-10">
-        <Button
-          type="button"
-          onClick={handleStart}
-          disabled={submitting}
-          className="h-12 w-full rounded-sm"
-        >
-          다음
-        </Button>
+      <StickyBottomBar>
+        <div className="space-y-2 rounded-sm shadow-[0_-2px_20px_rgba(0,0,0,0.1)]">
+          <Button
+            type="button"
+            onClick={handleStart}
+            disabled={submitting}
+            className="h-12 w-full rounded-sm"
+          >
+            다음
+          </Button>
 
-        <button
-          type="button"
-          onClick={handleSkipAll}
-          disabled={submitting}
-          className="flex h-12 w-full items-center justify-center rounded-sm border border-border text-sm text-muted-foreground transition hover:bg-muted disabled:opacity-50"
-        >
-          바로 가입하기
-        </button>
-      </div>
+          {/* ✅ 수정(2026-09) — "본인인증"/"확인하고 가입하기"와 같은 형식으로: radius 8px,
+              연한 주황 테두리, 메인 주황 글씨, 흰 배경(예전엔 회색 테두리+회색 글씨였음). */}
+          <button
+            type="button"
+            onClick={handleSkipAll}
+            disabled={submitting}
+            className="flex h-12 w-full items-center justify-center rounded-sm border border-[#ffcbb9] bg-white text-sm text-main transition hover:bg-[#fff0eb] disabled:opacity-50"
+          >
+            바로 가입하기
+          </button>
+        </div>
+      </StickyBottomBar>
 
       <Dialog
         open={showSkipDialog}

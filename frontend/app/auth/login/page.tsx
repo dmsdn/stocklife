@@ -58,11 +58,11 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="grid min-h-full md:grid-cols-2">
+    <div className="grid min-h-dvh md:grid-cols-2">
       {/* TODO: 데스크톱 좌측 패널 — 내용 미정 */}
       <div className="hidden bg-muted md:block" />
 
-      <div className="flex min-h-full justify-center px-5 md:items-center md:px-12">
+      <div className="flex min-h-dvh justify-center px-5 md:items-center md:px-12">
         <div className="w-full max-w-sm">
           <div className="flex flex-col items-center pt-[180px] md:pt-0">
             <img src="/icons/logo-shopping.svg" alt="STOCK LIFE" className="h-[50px] w-auto" />

@@ -13,7 +13,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StoreMap, type MapPin } from "./store-map";
 import { readCartGroups, loadCartGroups, type CartGroup } from "@/lib/cart-storage";
-import { fetchProductsAtLocation, type LocationProduct } from "@/lib/location-products";
 import { getRoute, type RouteResult, type RouteStop } from "@/lib/navigation";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 import { FLOOR_MAPS } from "@/lib/map-config";
@@ -40,20 +39,6 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
     setBottomBarHidden(open);
     return () => setBottomBarHidden(false);
   }, [open, setBottomBarHidden]);
-
-  // ✅ 매대 클릭으로 연 상품 목록
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
-  const [locationProducts, setLocationProducts] = useState<LocationProduct[] | null>(null);
-  const [locationError, setLocationError] = useState(false);
-
-  const handleLocationClick = (locationId: string) => {
-    setSelectedLocationId(locationId);
-    setLocationProducts(null);
-    setLocationError(false);
-    fetchProductsAtLocation(locationId)
-      .then(setLocationProducts)
-      .catch(() => setLocationError(true));
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -128,11 +113,11 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
   const remainingItems = (group?.products ?? []).filter((p) => !collectedIds.has(p.id));
 
   // ✅ 각 leg의 마지막 좌표(목적지)에 핀을 놓고, 그 좌표가 있는 층을 핀에 같이 기록.
-  //   방문 순서(routeOrder)는 leg 배열 순서 그대로(agent가 이미 순서까지 정해줌).
-  const { pinsByFloor, routeOrder, pathByFloor } = useMemo(() => {
+  //   방문 순서(routeOrder)는 leg 배열 순서 그대로(agent가 이미 순서까지 정해줌) — 핀 위
+  //   번호로만 표시하고, 경로선은 더 이상 안 그립니다(요청: "이상한 선 다 빼").
+  const { pinsByFloor, routeOrder } = useMemo(() => {
     const pByFloor = new Map<number, MapPin[]>();
     const order: number[] = [];
-    const pathMap = new Map<number, { x: number; y: number }[]>();
 
     if (route) {
       for (const leg of route.legs) {
@@ -150,13 +135,9 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
         };
         pByFloor.set(dest.floorNo, [...(pByFloor.get(dest.floorNo) ?? []), pin]);
         order.push(pin.id);
-
-        for (const point of leg.path) {
-          pathMap.set(point.floorNo, [...(pathMap.get(point.floorNo) ?? []), { x: point.x, y: point.y }]);
-        }
       }
     }
-    return { pinsByFloor: pByFloor, routeOrder: order, pathByFloor: pathMap };
+    return { pinsByFloor: pByFloor, routeOrder: order };
   }, [route, remainingItems]);
 
   // ✅ 층 선택은 동선이 실제로 여러 층에 걸쳐 있을 때만 보이던 걸(경로 계산 실패하면
@@ -182,8 +163,6 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
               floorNo={floorNo}
               pins={pinsByFloor.get(floorNo) ?? []}
               routeOrder={routeOrder}
-              precomputedPath={pathByFloor.get(floorNo) ?? []}
-              onLocationClick={handleLocationClick}
               onFloorChange={hasMultipleFloors ? setFloorNo : undefined}
               onLivClick={() => openAiChat(group ? `"${group.title}" 리스트 동선 관련해서 물어볼게` : undefined, groupId)}
             />
@@ -194,35 +173,6 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
           </>
         )}
       </DialogContent>
-
-      {/* ✅ 매대 칸을 눌렀을 때 그 안의 상품 목록 */}
-      <Dialog open={selectedLocationId !== null} onOpenChange={(v) => !v && setSelectedLocationId(null)}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>매대 상품 목록</DialogTitle>
-          </DialogHeader>
-
-          {locationError ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">상품 목록을 불러오지 못했어요.</p>
-          ) : locationProducts === null ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">불러오는 중...</p>
-          ) : locationProducts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">이 매대엔 등록된 상품이 없어요.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {locationProducts.map((p) => (
-                <li key={p.skuId} className="flex items-center justify-between gap-3 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">재고 {p.stock}개</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-semibold">{p.price.toLocaleString()}원</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </DialogContent>
-      </Dialog>
     </Dialog>
   );
 }

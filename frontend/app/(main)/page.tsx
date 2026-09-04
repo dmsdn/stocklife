@@ -485,7 +485,7 @@ export default function HomePage() {
               ✅ 수정 — main에 좌우 padding이 없어져서 이미지는 그냥 두면 화면 끝까지
               자연스럽게 붙음(-mx-3 필요 없음). 제목/캡션 텍스트에만 px-3. 라운드 제거(요청
               4·5번)도 유지. */}
-
+          {loggedIn ? (
             <section className="mt-[30px]">
               <h2 className="px-[20px] text-lg font-semibold">매장 운영 시간</h2>
               <p className="px-[20px] mt-1 text-sm text-content-tertiary">영업중 · 11:00 마감</p>
@@ -498,6 +498,7 @@ export default function HomePage() {
                 <img src="/store-hours/hours.png" alt="매장 운영 시간 안내" className="w-full object-cover" />
               </button>
             </section>
+          ) : null}
         </main>
 
         <Footer paddingClassName="px-3 md:px-8" />

@@ -8,8 +8,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { getFloorMap, fetchRealFloorMap, getFloorLocations, getZoneRegions, FLOOR_MAPS } from "@/lib/map-config";
-import { findPath, type GridPoint } from "@/lib/pathfinding";
+import { getFloorMap, fetchRealFloorMap, getZoneRegions, getZoneName, FLOOR_MAPS } from "@/lib/map-config";
+import type { GridPoint } from "@/lib/pathfinding";
 
 export interface MapPin {
   id: number;
@@ -26,20 +26,17 @@ export interface StoreMapProps {
   floorNo: number;
   pins: MapPin[];
   routeOrder: number[];
-  /** ✅ 매대(위치) 박스를 클릭 가능하게 표시하고 싶을 때 전달 — 아무 매대나 눌러서
-   *  그 안의 상품 목록을 보는 "매장 둘러보기" 기능용. 안 넘기면 기존처럼 핀만 보여줌. */
-  onLocationClick?: (locationId: string) => void;
-  /** ✅ 신규 — 개별 매대 좌표(locations) 시드가 비어있어도 항상 누를 수 있는 "구역 전체"
-   *  큰 클릭 영역(lib/map-config.ts의 getZoneRegions)을 깔고 싶을 때 전달. */
-  onZoneClick?: (zoneId: string) => void;
+  /** ✅ 수정(2026-09) — 매대 칸 하나하나에 박스를 그려서 누르게 하던 기능은 없앴습니다
+   *  (실제 매장 이미지 위에 격자 박스가 겹쳐 보여서 지저분했음). 이제 구역 단위로만
+   *  누를 수 있고(showZones), 결과도 외부 모달 대신 지도 위에 핀처럼 뜹니다. */
+  showZones?: boolean;
   /** ✅ 신규 — 넘기면 우측 하단에 층 선택 알약(3F/2F/1F 세로 스택)을 띄움.
    *  안 넘기면(단일 층 동선 등) 표시 안 함. */
   onFloorChange?: (floorNo: number) => void;
   /** ✅ 신규 — 넘기면 하단 중앙에 리브 원형 버튼을 띄움(눌리면 AI챗 오픈 등). */
   onLivClick?: () => void;
-  /** ✅ 신규 — 실제 백엔드 동선 API(getRoute)가 이미 계산해준 경로를 그대로 그리고 싶을 때
-   *  전달. 넘기면 이 안에서 A*를 다시 계산하지 않고 이 좌표를 그대로 씀(현재 층에 해당하는
-   *  좌표만 걸러서 넘겨주면 됨). 안 넘기면 기존처럼 로컬 A*로 계산(매장 둘러보기 등). */
+  /** ✅ 참고용으로만 남겨둠 — 더 이상 이 컴포넌트 안에서 경로선을 그리지 않습니다(요청:
+   *  "동선 볼 때 들어가있는 이상한 선 다 빼"). 방문 순서는 핀 위 번호로만 표시. */
   precomputedPath?: GridPoint[];
   /** ✅ 신규 — 지도 영역 높이 클래스. 기본은 기존과 동일한 70vh(리스트 동선 다이얼로그 등).
    *  화면 전체를 지도로 쓰는 "매장 지도 둘러보기" 페이지처럼 더 넓게 쓰고 싶을 때 오버라이드. */
@@ -54,11 +51,14 @@ function dist(a: React.Touch, b: React.Touch) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onZoneClick, onFloorChange, onLivClick, precomputedPath, heightClassName }: StoreMapProps) {
+export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName }: StoreMapProps) {
   const config = getFloorMap(floorNo);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [activePinId, setActivePinId] = useState<number | null>(null);
+  // ✅ 신규 — 구역을 누르면 그 구역 이름을 상품 핀과 같은 스타일의 작은 팝업으로 보여줌
+  //   (요청: "누르면 화면 위로 핀처럼 무슨 구역 정도만"). 외부 모달 없이 지도 안에서 처리.
+  const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   // ✅ 실제 GET /api/map/floors/{floorNo} 로딩 완료 후 재계산되도록 트리거용 상태
   const [realMapReady, setRealMapReady] = useState(false);
 
@@ -84,19 +84,6 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onZoneCli
       top,
     };
   };
-
-  // 방문 순서대로, 각 구간을 A*로 이어서 통로만 따라가는 전체 경로 좌표 만들기
-  // ✅ precomputedPath가 있으면(실제 백엔드 agent가 계산해준 경로) 그걸 그대로 쓰고,
-  //   없을 때만(매장 둘러보기 등 동선이 필요 없는 화면) 로컬 A*로 대체 계산.
-  let fullPath: GridPoint[] = precomputedPath ?? [];
-  if (!precomputedPath) {
-    const routePins = routeOrder.map((id) => pins.find((p) => p.id === id)).filter((p): p is MapPin => !!p);
-    for (let i = 0; i < routePins.length - 1; i++) {
-      const segment = findPath(floorNo, { x: routePins[i].x, y: routePins[i].y }, { x: routePins[i + 1].x, y: routePins[i + 1].y });
-      fullPath = fullPath.length ? [...fullPath, ...segment.slice(1)] : segment;
-    }
-  }
-  const pathPoints = fullPath.map((p) => { const { left, top } = toPercent(p.x, p.y); return `${left},${top}`; }).join(" ");
 
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
@@ -151,59 +138,39 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onZoneCli
           {/* TODO: public/maps/floor-1.png 없으면 이 자리는 회색 배경으로만 보입니다 */}
           <Image src={config.image} alt={`매장 ${floorNo}층 지도`} fill className="object-contain" unoptimized />
 
-          {fullPath.length > 1 && (
-            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polyline
-                points={pathPoints}
-                fill="none"
-                stroke="var(--route)"
-                strokeWidth="0.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="2 1.3"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
-          )}
-
-          {onZoneClick &&
+          {/* ✅ 수정(2026-09) — 매대 칸마다 있던 격자 박스, 동선 경로선을 전부 없앴습니다
+              (요청: "이상한 박스, 선 다 빼"). 구역은 여전히 누를 수 있지만(showZones) 평소엔
+              완전히 안 보이고, 누르면 그 구역 위에 상품 핀과 같은 스타일의 작은 팝업만 뜹니다. */}
+          {showZones &&
             getZoneRegions(floorNo).map((z) => {
               const p1 = toPercent(z.x1, z.y1);
               const p2 = toPercent(z.x2, z.y2);
+              const centerLeft = (p1.left + p2.left) / 2;
+              const centerTop = (p1.top + p2.top) / 2;
+              const isActive = activeZoneId === z.zoneId;
               return (
-                <button
-                  key={z.zoneId}
-                  type="button"
-                  onClick={() => onZoneClick(z.zoneId)}
-                  aria-label={`${z.zoneId} 구역 정보`}
-                  className="absolute bg-transparent transition-colors hover:bg-foreground/10"
-                  style={{
-                    left: `${p1.left}%`,
-                    top: `${p1.top}%`,
-                    width: `${p2.left - p1.left}%`,
-                    height: `${p2.top - p1.top}%`,
-                  }}
-                />
-              );
-            })}
-
-          {onLocationClick &&
-            getFloorLocations(floorNo).map((loc) => {
-              const { left, top } = toPercent(loc.x, loc.y);
-              return (
-                <button
-                  key={loc.locationId}
-                  type="button"
-                  onClick={() => onLocationClick(loc.locationId)}
-                  aria-label={`매대 ${loc.locationId} 상품 보기`}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-[2px] border border-foreground/15 bg-foreground/5 hover:bg-foreground/15"
-                  style={{
-                    left: `${left}%`,
-                    top: `${top}%`,
-                    width: `${(1 / config.gridWidth) * 100}%`,
-                    height: `${(1 / config.gridHeight) * 100}%`,
-                  }}
-                />
+                <div key={z.zoneId}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveZoneId(isActive ? null : z.zoneId)}
+                    aria-label={`${getZoneName(floorNo, z.zoneId) ?? z.zoneId} 구역 정보`}
+                    className="absolute bg-transparent"
+                    style={{
+                      left: `${p1.left}%`,
+                      top: `${p1.top}%`,
+                      width: `${p2.left - p1.left}%`,
+                      height: `${p2.top - p1.top}%`,
+                    }}
+                  />
+                  {isActive && (
+                    <div
+                      className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full border border-[#F4F4F4] bg-white px-3 py-1.5 text-sm font-medium shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
+                      style={{ left: `${centerLeft}%`, top: `${centerTop}%`, transform: `translate(-50%, calc(-100% - 8px)) scale(${1 / zoom})`, transformOrigin: "bottom center" }}
+                    >
+                      {getZoneName(floorNo, z.zoneId) ?? z.zoneId}
+                    </div>
+                  )}
+                </div>
               );
             })}
 
@@ -288,7 +255,7 @@ export function StoreMap({ floorNo, pins, routeOrder, onLocationClick, onZoneCli
 
       <p className="px-4 pb-4 text-xs text-muted-foreground">
         손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.
-        {onLocationClick && " 매대 칸을 누르면 그 안의 상품 목록을 볼 수 있어요."}
+        {showZones && " 색칠된 구역을 누르면 어떤 카테고리인지 볼 수 있어요."}
       </p>
     </div>
   );

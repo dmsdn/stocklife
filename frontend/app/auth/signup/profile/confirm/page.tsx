@@ -148,7 +148,7 @@ export default function SignupConfirmPage() {
 
         {error && <p className="mt-4 text-xs text-danger">{error}</p>}
 
-        <Button className="mt-6 h-[60px] w-full rounded-full" disabled={submitting} onClick={handleConfirm}>
+        <Button className="mt-6 flex mx-auto h-[60px] w-fit px-5 rounded-full" disabled={submitting} onClick={handleConfirm}>
           {submitting ? "가입 처리 중..." : "확인하고 가입하기"}
         </Button>
       </div>
