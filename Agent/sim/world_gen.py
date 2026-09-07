@@ -49,7 +49,7 @@ sys.path.insert(0, _HERE)                                   # sim/ 자신 (map_l
 # 죽는다 — 원인에서 먼 자리라 더 찾기 어렵다. 그래서 미리 걷어낸다.
 sys.modules.pop("catalog", None)
 
-from map_layout import (BAYS, FACILITIES, FLOOR_W, FLOOR_H, BAY_CELLS,   # noqa: E402
+from map_layout import (BAYS, FACILITIES, FACILITY_BLOCKED, FACILITY_LABELS, FLOOR_W, FLOOR_H, BAY_CELLS,   # noqa: E402
                         ZONE_LABELS)
 from taxonomy import TAXONOMY                                          # noqa: E402
 import catalog as cat                                                  # noqa: E402
@@ -78,6 +78,10 @@ def gen_zones():
         floor, letter = int(z[1]), z[3]
         rows.append((z, floor, f"{ZONE_LABELS[(floor, letter)]} 구역", "SALES"))
     rows.append(("B1-W", 0, "지하 중앙창고", "BACKROOM"))
+    # 09-03: 층마다 시설 존 하나('F1-X') — 시설 위치 행(gen_locations)의 FK 자리.
+    #   판매 존 글자 A~H 와 겹치지 않게 X. zone_type 은 새 ENUM 값 FACILITY.
+    for f in sorted({fl for fl, *_ in FACILITIES}):
+        rows.append((f"F{f}-X", f, "시설 구역", "FACILITY"))
     return rows
 
 
@@ -116,6 +120,37 @@ def gen_locations():
             for lv in range(1, 7):
                 rows.append((f"B1-W-R{rno:02d}-B{bno:02d}-L{lv}", "B1-W", rno, bno, lv,
                              "BULK", 0, rno * 3, bno * 3))
+    rows.extend(gen_facility_locations())
+    return rows
+
+
+def gen_facility_locations():
+    """시설 블록마다 위치 행 하나 — 시설을 `locations` 의 1급 시민으로 (09-03 결정).
+
+    [왜] 09-03 새벽 판은 시설을 좌표로만 다뤘다(map_cells.facility_kind + A* 좌표 목적지).
+      그러면 동선 도구의 정지점 목록에 상품과 시설을 **섞을 수 없다** — "화장실 들렀다가
+      계란, 마지막에 계산대"가 도구 두 번의 우회였다. id 가 있으면 백엔드 `resolveStop`
+      의 locationId 갈래가 그대로 시설을 받고, 출발·도착점 재설정도 id 하나로 된다.
+    [모양] location_id = 'F1-X-RESTROOM_M-1' (VARCHAR 24 안, 최장 'F1-X-CUSTOMER_SERVICE-1' 23자)
+      zone = 층 시설 존 'F1-X' · rack_no 0 · bay_no = 같은 층 같은 종류의 순번 · level_no 0
+      tier_role = 'FACILITY' (ENUM 확장) · x,y = 블록 중심 칸.
+      블록은 직사각형이라 중심이 블록 안이고, 이름 있는 시설은 통행 가능이라 A* 가 도착한다.
+    [빠지는 것] STRUCTURE(이름 없는 벽체) — 통행 불가라 목적지가 될 수 없다.
+    [순번이 흔들리지 않게] 같은 층·같은 종류 안에서 (y, x) 순 — FACILITIES 가 정렬돼 있어
+      재생성해도 같은 블록에 같은 번호가 붙는다(위치 id 는 이벤트 로그에 영구히 남는다).
+    """
+    rows = []
+    seq, bay = {}, {}
+    for f, x, y, w, h, fk in sorted(FACILITIES, key=lambda t: (t[0], t[5], t[2], t[1])):
+        if fk in FACILITY_BLOCKED:
+            continue
+        seq[(f, fk)] = seq.get((f, fk), 0) + 1        # id 의 꼬리 번호 — 같은 층·같은 종류 안 순번
+        bay[f] = bay.get(f, 0) + 1                    # bay_no — 층(존) 안에서 유일해야 한다:
+        n = seq[(f, fk)]                              #   계약 #16 「같은 (zone,rack,bay) 는 같은 좌표」
+        lid = f"F{f}-X-{fk}-{n}"
+        assert len(lid) <= 24, lid
+        cx, cy = x + w // 2, y + h // 2
+        rows.append((lid, f"F{f}-X", 0, bay[f], 0, "FACILITY", f, cx, cy))
     return rows
 
 
@@ -143,10 +178,19 @@ def gen_map_cells():
             for dy in range(BAY_CELLS):
                 blocked[f].add((x + dx, y + dy))
                 shelf_zone[(f, x + dx, y + dy)] = f"F{f}-{zl}"
-    for f, x, y, w, h in FACILITIES:
+    # ── 시설 (09-03: 이름과 통행) ─────────────────────────────────────────────
+    # 옛 규칙: 시설은 전부 통행 불가. 새 규칙: 이름 있는 시설(화장실·엘리베이터·
+    # 에스컬레이터·행사장·푸드코트·계산대…)은 **들어가거나 가로지를 수 있다** —
+    # 동선 계산에서 어느 영역이든 출발·도착점이 될 수 있어야 한다(사용자 결정).
+    # 막는 것은 이름 없는 벽체(STRUCTURE)뿐. 종류는 facility_kind 칸으로 나간다 —
+    # 에이전트의 find_facility 와 프론트 도면이 같은 이름을 쓰게 하려고.
+    facility_kind = {}                    # (f, x, y) → 'RESTROOM_M' 등
+    for f, x, y, w, h, fk in FACILITIES:
         for dx in range(w):
             for dy in range(h):
-                blocked[f].add((x + dx, y + dy))
+                facility_kind[(f, x + dx, y + dy)] = fk
+                if fk in FACILITY_BLOCKED:
+                    blocked[f].add((x + dx, y + dy))
     transit = {}
     for tid, cells in TRANSIT.items():
         for (x, y) in cells:
@@ -161,15 +205,17 @@ def gen_map_cells():
                 # 수직동선 칸은 시설과 겹쳐도 통행 가능해야 층 이동이 성립한다
                 passable = 1 if (tid or (x, y) not in blocked[f]) else 0
                 zone = shelf_zone.get((f, x, y))
+                fk = facility_kind.get((f, x, y))
                 if tid:
                     kind = "TRANSIT"
                 elif zone:
                     kind = "SHELF"
-                elif (x, y) in blocked[f]:
-                    kind = "FACILITY"
+                elif fk:
+                    kind = "FACILITY"     # 통행 가능해도 정체는 시설이다 — 색과 이름은 여기서 갈린다
                 else:
                     kind = "AISLE"
-                rows.append((f, x, y, passable, tid, kind, zone if kind == "SHELF" else None))
+                rows.append((f, x, y, passable, tid, kind, zone if kind == "SHELF" else None,
+                             fk if kind in ("FACILITY", "TRANSIT") else None))
     return rows
 
 
@@ -260,9 +306,9 @@ def write_sql(zones, locations, cells, stocks, configs):
               locations,
               lambda r: f"({q(r[0])},{q(r[1])},{r[2]},{r[3]},{r[4]},{q(r[5])},{r[6]},{r[7]},{r[8]})")
         f.write("\n")
-        batch(f, "map_cells", "floor_no, x, y, passable, transit_id, kind, shelf_zone", cells,
+        batch(f, "map_cells", "floor_no, x, y, passable, transit_id, kind, shelf_zone, facility_kind", cells,
               lambda r: f"({r[0]},{r[1]},{r[2]},{r[3]},{q(r[4]) if r[4] else 'NULL'},"
-                        f"{q(r[5])},{q(r[6]) if r[6] else 'NULL'})", 1000)
+                        f"{q(r[5])},{q(r[6]) if r[6] else 'NULL'},{q(r[7]) if r[7] else 'NULL'})", 1000)
         f.write("\n")
         batch(f, "stocks", "sku_id, location_id, qty", stocks,
               lambda r: f"({r[0]},{q(r[1])},{r[2]})", 1000)
