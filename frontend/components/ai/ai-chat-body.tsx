@@ -44,6 +44,8 @@ import {
 import { getClientId } from "@/lib/client-id";
 import { PROACTIVE_EVENT } from "@/lib/realtime";
 import { AttachListPickerDialog } from "@/components/domain/attach-list-picker-dialog";
+import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
+import { addProductToCartGroup, loadCartGroups } from "@/lib/cart-storage";
 import { usePermissionStatus } from "@/lib/use-permission-status";
 import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
@@ -88,6 +90,22 @@ function extractSkuIds(actions: Record<string, unknown>[] | undefined): number[]
       const value = action[key];
       if (typeof value === "number") ids.add(value);
       else if (Array.isArray(value)) value.forEach((v) => typeof v === "number" && ids.add(v));
+    }
+  }
+  return Array.from(ids);
+}
+
+// ✅ 신규(요청 4번) — 리브가 "리스트"(장바구니 그룹)를 언급했을 때도 카드로 보여주기 위해
+//   actions에서 그룹 id를 뽑음. skuId와 마찬가지로 실제 키 이름이 확정 안 돼있어서
+//   흔히 쓰일 법한 이름들을 방어적으로 훑음.
+const GROUP_KEY_CANDIDATES = ["groupId", "group_id", "cartGroupId", "cart_group_id", "listId", "list_id"];
+function extractGroupIds(actions: Record<string, unknown>[] | undefined): number[] {
+  if (!actions) return [];
+  const ids = new Set<number>();
+  for (const action of actions) {
+    for (const key of GROUP_KEY_CANDIDATES) {
+      const value = action[key];
+      if (typeof value === "number") ids.add(value);
     }
   }
   return Array.from(ids);
@@ -156,16 +174,22 @@ interface MentionedProduct {
   name: string;
   priceKrw: number;
   imageUrl: string | null;
+  categoryL1?: string | null;
 }
 
 // ✅ 신규(요청) — 리브가 언급한 상품을 목록으로 보여주는 미니 카드. skuId 배열을 받아서
 //   배치 조회(/api/products/by-skus) 한 번으로 채웁니다.
-function MentionedProducts({ skuIds }: { skuIds: number[] }) {
+// ✅ 수정(요청 4번) — 카드를 보기만 하고 끝나지 않고, 카드에서 바로 "담기"까지 할 수
+//   있어야 함. 이 대화가 특정 리스트에 연결돼 있으면(groupId) 그 리스트에 바로 담고,
+//   아니면 기존에 쓰던 SaveToListDialog(리스트 선택 모달)를 띄웁니다.
+function MentionedProducts({ skuIds, groupId }: { skuIds: number[]; groupId?: number | null }) {
   const [products, setProducts] = useState<MentionedProduct[]>([]);
+  const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [saveTarget, setSaveTarget] = useState<MentionedProduct | null>(null);
 
   useEffect(() => {
     if (skuIds.length === 0) return;
-    apiFetch<{ skuId: number; name: string; priceKrw: number; imageUrl: string | null }[]>(
+    apiFetch<{ skuId: number; name: string; priceKrw: number; imageUrl: string | null; categoryL1?: string | null }[]>(
       `/api/products/by-skus?skuIds=${skuIds.join(",")}`,
       { auth: false }
     )
@@ -178,19 +202,115 @@ function MentionedProducts({ skuIds }: { skuIds: number[] }) {
 
   if (products.length === 0) return null;
 
+  const addToGroup = async (p: MentionedProduct, targetGroupId: number) => {
+    await addProductToCartGroup(targetGroupId, {
+      id: p.skuId,
+      name: p.name,
+      price: p.priceKrw,
+      category: p.categoryL1 ?? undefined,
+      image: p.imageUrl ?? undefined,
+    });
+    setAddedIds((prev) => new Set(prev).add(p.skuId));
+  };
+
+  const handleAddClick = (p: MentionedProduct) => {
+    if (groupId) {
+      void addToGroup(p, groupId);
+    } else {
+      setSaveTarget(p);
+    }
+  };
+
   return (
-    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-      {products.map((p) => (
+    <>
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+        {products.map((p) => {
+          const added = addedIds.has(p.skuId);
+          return (
+            <div key={p.skuId} className="flex w-32 shrink-0 flex-col rounded-md border border-[#F4F4F4] p-2">
+              <a href={`/product/${p.skuId}`} className="block">
+                <div className="aspect-square w-full overflow-hidden rounded-sm bg-muted">
+                  {p.imageUrl && <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />}
+                </div>
+                <p className="mt-1.5 truncate text-xs">{p.name}</p>
+                <p className="text-xs font-semibold">{p.priceKrw.toLocaleString()}원</p>
+              </a>
+              {/* ✅ 신규(요청 4번) — 카드에서 바로 담기 */}
+              <button
+                type="button"
+                onClick={() => handleAddClick(p)}
+                disabled={added}
+                className={`mt-1.5 flex h-7 items-center justify-center gap-1 rounded-full text-[11px] font-medium ${
+                  added ? "bg-muted text-muted-foreground" : "bg-brand text-white"
+                }`}
+              >
+                {added ? (
+                  "담았어요"
+                ) : (
+                  <>
+                    <RiAddLine size={12} />
+                    담기
+                  </>
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <SaveToListDialog
+        open={!!saveTarget}
+        onClose={() => setSaveTarget(null)}
+        onSelect={(groupIds) => {
+          if (saveTarget) {
+            const target = saveTarget;
+            Promise.all(groupIds.map((gid) => addToGroup(target, gid))).catch(() => {});
+          }
+          setSaveTarget(null);
+        }}
+      />
+    </>
+  );
+}
+
+interface MentionedList {
+  id: number;
+  title: string;
+  count: number;
+}
+
+// ✅ 신규(요청 4번) — 리브가 리스트(장바구니 그룹)를 언급했을 때도 카드로. 이미 갖고
+//   있는 lib/cart-storage.ts의 목록 조회(loadCartGroups)에서 해당 id만 골라서 보여줌 —
+//   별도 API 호출 없음.
+function MentionedLists({ groupIds }: { groupIds: number[] }) {
+  const [lists, setLists] = useState<MentionedList[]>([]);
+
+  useEffect(() => {
+    if (groupIds.length === 0) return;
+    loadCartGroups()
+      .then((groups) =>
+        setLists(
+          groups
+            .filter((g) => groupIds.includes(g.id))
+            .map((g) => ({ id: g.id, title: g.title, count: g.products.length }))
+        )
+      )
+      .catch(() => setLists([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupIds.join(",")]);
+
+  if (lists.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex flex-col gap-1.5">
+      {lists.map((l) => (
         <a
-          key={p.skuId}
-          href={`/product/${p.skuId}`}
-          className="flex w-32 shrink-0 flex-col rounded-md border border-[#F4F4F4] p-2"
+          key={l.id}
+          href={`/saved/${l.id}`}
+          className="flex items-center justify-between gap-2 rounded-md border border-[#F4F4F4] px-3 py-2"
         >
-          <div className="aspect-square w-full overflow-hidden rounded-sm bg-muted">
-            {p.imageUrl && <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />}
-          </div>
-          <p className="mt-1.5 truncate text-xs">{p.name}</p>
-          <p className="text-xs font-semibold">{p.priceKrw.toLocaleString()}원</p>
+          <span className="min-w-0 truncate text-xs font-medium">{l.title}</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">{l.count}개</span>
         </a>
       ))}
     </div>
@@ -229,6 +349,8 @@ interface ChatTurn {
    *  실제로 어떤 모양인지 계약이 확정 안 돼있어서(백엔드 주석 참고), 흔한 키 이름들
    *  (skuId/sku_id/productId 등)을 방어적으로 훑어서 뽑아냄 — 없으면 그냥 빈 배열. */
   mentionedSkuIds?: number[];
+  /** ✅ 신규(요청 4번) — 이 응답에서 언급된 리스트(장바구니 그룹) id 목록. */
+  mentionedGroupIds?: number[];
   /** ✅ 신규(09-03 요청 ③) — 에이전트가 먼저 건넨 말(sender=AI_PROACTIVE). 같은 회색
    *  말풍선이면 "묻지 않았는데 먼저 말을 걸었다"가 안 보여서, 표식을 달아 구분함(호박색
    *  카드 + "먼저 알려드려요" 라벨) — 이력을 불러올 때도, 지금 막 도착했을 때도 둘 다. */
@@ -435,6 +557,7 @@ export function AiChatBody({
           content: res.reply,
           createdAt: new Date().toISOString(),
           mentionedSkuIds: extractSkuIds(res.actions),
+          mentionedGroupIds: extractGroupIds(res.actions),
         },
       ]);
     } catch {
@@ -894,7 +1017,12 @@ export function AiChatBody({
 
                       {/* ✅ 신규(요청) — 리브가 언급한 상품 목록 카드 */}
                       {!isUser && turn.mentionedSkuIds && turn.mentionedSkuIds.length > 0 && (
-                        <MentionedProducts skuIds={turn.mentionedSkuIds} />
+                        <MentionedProducts skuIds={turn.mentionedSkuIds} groupId={groupId} />
+                      )}
+
+                      {/* ✅ 신규(요청 4번) — 리브가 언급한 리스트 카드 */}
+                      {!isUser && turn.mentionedGroupIds && turn.mentionedGroupIds.length > 0 && (
+                        <MentionedLists groupIds={turn.mentionedGroupIds} />
                       )}
 
                       {/* ✅ 신규(요청) — 리브 답변을 누르면(말풍선 자체 말고, 답변 아래 이 버튼)

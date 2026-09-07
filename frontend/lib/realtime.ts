@@ -7,9 +7,15 @@
 //   AiChatBody가 그걸 받아 바로 붙이고(요청 ③), 닫혀 있으면 헤더 배지가 셉니다(요청 ②).
 //   EventSource는 커스텀 헤더를 못 붙여서(Authorization 등), sessionId만으로 구독합니다
 //   (백엔드 설계가 원래 그렇게 돼 있음 — chat_session이 회원/게스트 둘 다 커버).
+// ✅ 수정(요청 — "계속 같은 알림을 보내는 것 같다") — 원인: 브라우저 EventSource는 연결이
+//   끊기면 스스로 재접속하는데(예: 세션 재확인·탭 포커스 전환 등으로 이 훅이 다시 실행될
+//   때), 재접속 시점에 백엔드가 "최근 메시지"를 다시 흘려보내는 SSE 구현이면 같은
+//   messageId가 두 번 이상 onMessage로 들어올 수 있습니다. 여기서 한 번 본 메시지는
+//   (messageId 기준, 없으면 content+createdAt 기준) 다시 처리하지 않도록 걸러서, 이
+//   훅을 쓰는 쪽(배지 카운트·알림함 저장·채팅 말풍선) 전부가 한 번만 반영되게 합니다.
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { API_BASE_URL } from "./api-client";
 import { getOrCreateSessionId, SESSION_CHANGED_EVENT } from "./session";
 
@@ -22,7 +28,15 @@ export interface ProactiveMessage {
 
 export const PROACTIVE_EVENT = "storeflow:proactive";
 
+function dedupeKey(m: ProactiveMessage): string {
+  return m.messageId != null ? `id:${m.messageId}` : `c:${m.content}|${m.createdAt ?? ""}`;
+}
+
 export function useProactiveStream(onMessage: (m: ProactiveMessage) => void) {
+  // ✅ 이 컴포넌트(앱 셸)가 떠 있는 동안 계속 유지 — 재연결이 여러 번 일어나도 한 번
+  //   본 메시지는 계속 기억함. 너무 커지지 않게 최근 200개까지만.
+  const seenRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     let es: EventSource | null = null;
     let closed = false;
@@ -39,6 +53,15 @@ export function useProactiveStream(onMessage: (m: ProactiveMessage) => void) {
         try {
           const data = JSON.parse((ev as MessageEvent).data) as ProactiveMessage;
           if (data.sender !== "AI_PROACTIVE") return; // 내가 물어본 답은 /api/chat 응답으로 이미 그렸음
+
+          const key = dedupeKey(data);
+          if (seenRef.current.has(key)) return; // ✅ 재연결로 같은 메시지가 다시 와도 무시
+          seenRef.current.add(key);
+          if (seenRef.current.size > 200) {
+            const first = seenRef.current.values().next().value;
+            if (first) seenRef.current.delete(first);
+          }
+
           onMessage(data);
           window.dispatchEvent(new CustomEvent(PROACTIVE_EVENT, { detail: data }));
         } catch {

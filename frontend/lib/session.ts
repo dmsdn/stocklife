@@ -11,6 +11,10 @@ const SESSION_KEY = "storeflow_active_session_id";
 export const SESSION_CHANGED_EVENT = "storeflow:session-changed";
 
 function writeSessionId(sessionId: string) {
+  // ✅ 수정(요청 — 중복 알림 원인 조사) — 실제로 값이 안 바뀌었는데도(예: ai-chat-body.tsx가
+  //   매 로드마다 setActiveSessionId(sessionIdOverride)를 다시 부름) 이벤트를 계속 쏘면
+  //   lib/realtime.ts가 불필요하게 재연결을 시도합니다. 값이 실제로 바뀔 때만 쏨.
+  if (window.localStorage.getItem(SESSION_KEY) === sessionId) return;
   window.localStorage.setItem(SESSION_KEY, sessionId);
   window.dispatchEvent(new CustomEvent(SESSION_CHANGED_EVENT, { detail: sessionId }));
 }

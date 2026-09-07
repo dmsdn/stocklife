@@ -384,28 +384,33 @@ export default function SavedGroupDetailPage() {
 
       {/* ✅ 수정(요청) — "동선"이 목록 아래 콘텐츠 흐름 안에 있어서 목록이 길면 스크롤해야
           보였음. 하단탭바처럼 항상 화면 아래 고정되게 StickyBottomBar로 감싸고, 리브
-          버튼도 같은 줄에 둬서(따로 떠 있던 원형 버튼과 겹치지 않게) 정리. */}
-      <StickyBottomBar>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRouteOpen(true)}
-            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background text-sm font-medium shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
-          >
-            <RiMapLine size={20} />
-            동선
-          </button>
-          <button
-            type="button"
-            onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
-            aria-label={linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
-            className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/80 text-[10px] shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-2xl"
-          >
-            <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
-            리브
-          </button>
-        </div>
-      </StickyBottomBar>
+          버튼도 같은 줄에 둬서(따로 떠 있던 원형 버튼과 겹치지 않게) 정리.
+          ✅ 수정(요청) — 이 바(z-[110])가 동선 모달(StoreMapDialog, 기본 Dialog z-105)보다
+          z-index가 더 높아서, 동선을 눌러 모달을 열어도 이 바가 모달 위에 그대로 떠
+          보였음 — 모달이 열려있는 동안(routeOpen)은 이 바 자체를 숨김. */}
+      {!routeOpen && (
+        <StickyBottomBar>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRouteOpen(true)}
+              className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background text-sm font-medium shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
+            >
+              <RiMapLine size={20} />
+              동선
+            </button>
+            <button
+              type="button"
+              onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
+              aria-label={linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
+              className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/80 text-[10px] shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-2xl"
+            >
+              <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+              리브
+            </button>
+          </div>
+        </StickyBottomBar>
+      )}
 
       <StoreMapDialog
         open={routeOpen}

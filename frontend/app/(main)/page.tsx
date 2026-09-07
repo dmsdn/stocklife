@@ -255,10 +255,11 @@ export default function HomePage() {
             // ✅ 쇼핑 중(스캔 세션 있음)일 때만 "방문해주셔서 감사합니다" 카드,
             //   평소(세션 없음)엔 "다음 방문 날짜" 카드 — 예전엔 이 둘이 뒤바뀌어 있었음.
             <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-white p-5">
-              <p className="text-17 font-medium">{shoppingSession ? "STOCK LIFE 매장에 방문해주셔서 감사합니다." : "다음 방문 날짜는 9월 9일이에요." }</p>
+              <p className="text-17 font-medium">{shoppingSession ? "STOCK LIFE 매장에 방문해주셔서 감사합니다." : ""}</p>
               <p className="mt-1 text-sm text-content-tertiary">{shoppingSession ? "영업중 · 11:00 마감" : ""}</p>
               {!shoppingSession ? (
                 <>
+                  <p className="mt-1 text-17 font-medium">다음 방문 날짜는 9월 9일이에요.</p>
                   <p className="mt-1 text-sm text-[#555]">9월 9일 운영시간</p>
                   <p className="text-sm text-[#555]">오전 10시 - 오후 11시</p>
                 </>
@@ -358,7 +359,7 @@ export default function HomePage() {
               <img
                 src="/banners/promo-points.png"
                 alt=""
-                className="absolute bottom-0 right-4 h-[75px] w-auto object-contain object-bottom"
+                className="absolute bottom-0 right-4 h-[100px] w-[100px] object-contain object-bottom"
               />
             </section>
           ) : (
@@ -373,7 +374,7 @@ export default function HomePage() {
               <img
                 src="/banners/promo-list.png"
                 alt=""
-                className="absolute -bottom-2 -right-2 h-[110px] w-auto object-contain"
+                className="absolute -bottom-2 -right-2 h-[100px] w-[100px] object-contain"
               />
             </button>
           )}

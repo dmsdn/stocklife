@@ -13,10 +13,13 @@ interface PromoBannerProps {
   title: string;
   subtitle: string;
   imageSrc: string | StaticImageData;
-  /** 그래픽 영역이 배너 전체 폭에서 차지하는 비율 (0~1) */
-  imageWidthRatio: number;
-  /** 그래픽 영역이 배너 전체 높이에서 차지하는 비율 (0~1). 1이면 배너 상하 끝까지 꽉 채움 */
+  /** 그래픽 영역이 배너 전체 폭에서 차지하는 비율 (0~1). imageSize를 주면 무시됨. */
+  imageWidthRatio?: number;
+  /** 그래픽 영역이 배너 전체 높이에서 차지하는 비율 (0~1). imageSize를 주면 무시됨. */
   imageHeightRatio?: number;
+  /** ✅ 신규(요청) — 배너 폭에 비례하는 대신 고정 px 크기(정사각형). 지정하면
+   *  imageWidthRatio/imageHeightRatio보다 우선. */
+  imageSize?: number;
   className?: string;
 }
 
@@ -27,6 +30,7 @@ export function PromoBanner({
   imageSrc,
   imageWidthRatio,
   imageHeightRatio = 1,
+  imageSize,
   className = "",
 }: PromoBannerProps) {
   return (
@@ -44,10 +48,14 @@ export function PromoBanner({
         </p>
       </div>
 
-      {/* 그래픽 영역 — 배너 폭 대비 비율로 크기 고정, 하단 정렬 */}
+      {/* 그래픽 영역 — imageSize가 있으면 고정 px(정사각형), 없으면 예전처럼 배너 폭 대비 비율 */}
       <div
         className="relative h-full shrink-0 self-end"
-        style={{ width: `${imageWidthRatio * 100}%`, height: `${imageHeightRatio * 100}%` }}
+        style={
+          imageSize != null
+            ? { width: `${imageSize}px`, height: `${imageSize}px` }
+            : { width: `${(imageWidthRatio ?? 0) * 100}%`, height: `${imageHeightRatio * 100}%` }
+        }
       >
         <Image src={imageSrc} alt="" fill className="object-contain object-bottom" sizes="(max-width: 768px) 40vw, 200px" />
       </div>

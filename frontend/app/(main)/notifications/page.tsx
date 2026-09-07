@@ -97,10 +97,34 @@ const MOCK_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
+import { readProactiveNotifications, markProactiveNotificationRead, type ProactiveNotificationRecord } from "@/lib/proactive-notifications";
+
+function toAppNotification(n: ProactiveNotificationRecord): AppNotification {
+  return {
+    id: n.id,
+    type: "리브",
+    title: "리브가 먼저 알려드려요",
+    message: n.content,
+    createdAt: n.createdAt,
+    read: n.read,
+  };
+}
+
 export default function NotificationsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("전체");
   const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
+  // ✅ 신규(요청 2번) — 자발형 메시지는 백엔드 알림 API가 아니라 로컬 저장소
+  //   (lib/proactive-notifications.ts, lib/realtime.ts가 실시간으로 채움)에 있어서 따로
+  //   불러와 합칩니다. 이 화면이 열려있는 동안 새로 도착해도(storeflow:proactive-
+  //   notifications-changed) 바로 반영되게 이벤트도 구독.
+  const [proactiveNotifications, setProactiveNotifications] = useState<ProactiveNotificationRecord[]>([]);
+  useEffect(() => {
+    const load = () => setProactiveNotifications(readProactiveNotifications());
+    load();
+    window.addEventListener("storeflow:proactive-notifications-changed", load);
+    return () => window.removeEventListener("storeflow:proactive-notifications-changed", load);
+  }, []);
 
   // ✅ 실제 GET /api/notifications 연동. 백엔드 응답 필드명(notificationId, linkUrl)이
   //   프론트가 쓰는 형태(id, href)랑 달라서 매핑해서 씁니다.
@@ -125,14 +149,23 @@ export default function NotificationsPage() {
       .catch(() => {});
   }, []);
 
+  // ✅ 백엔드/목업 알림 + 로컬 자발형 알림을 합쳐서 최신순으로.
+  const allNotifications = [...notifications, ...proactiveNotifications.map(toAppNotification)].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
   const handleClick = (item: AppNotification) => {
-    setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
-    // ✅ 실제 읽음 처리 API — 백엔드 없으면 조용히 실패(화면 상태는 이미 반영됨)
-    apiFetch(`/api/notifications/${item.id}/read`, { method: "PATCH" }).catch(() => {});
+    if (item.id.startsWith("px-")) {
+      markProactiveNotificationRead(item.id);
+    } else {
+      setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
+      // ✅ 실제 읽음 처리 API — 백엔드 없으면 조용히 실패(화면 상태는 이미 반영됨)
+      apiFetch(`/api/notifications/${item.id}/read`, { method: "PATCH" }).catch(() => {});
+    }
     if (item.href) router.push(item.href);
   };
 
-  const filtered = notifications.filter((n) => tab === "전체" || n.type === tab);
+  const filtered = allNotifications.filter((n) => tab === "전체" || n.type === tab);
 
   return (
     // ✅ 다른 서브페이지들과 동일한 폭/여백(mx-auto max-w-lg ... md:p-8)으로 통일
