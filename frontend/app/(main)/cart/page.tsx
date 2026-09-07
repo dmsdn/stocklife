@@ -16,7 +16,7 @@ import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { LoginRequiredDialog } from "@/components/domain/login-required-dialog";
 import { ProductLocationDialog } from "@/components/domain/product-location-dialog";
 import { trackConsumerEvent } from "@/lib/consumer-events";
-import { apiFetch, isLoggedIn } from "@/lib/api-client";
+import { apiFetch, isLoggedIn, resolveImageUrl } from "@/lib/api-client";
 import { readCartGroups, updateCartGroups } from "@/lib/cart-storage";
 import { fetchCoupons, type Coupon } from "@/lib/coupons-mock";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
@@ -76,7 +76,7 @@ export default function CartPage() {
           )
       );
       const productMap: Record<number, ProductDetail> = {};
-      details.forEach((d) => { if (d) productMap[d.skuId] = d; });
+      details.forEach((d) => { if (d) productMap[d.skuId] = { ...d, imageUrl: resolveImageUrl(d.imageUrl) ?? null }; });
       setProducts(productMap);
     } catch {
       setItems([]);

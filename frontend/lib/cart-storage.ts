@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch, isLoggedIn } from "./api-client";
+import { apiFetch, isLoggedIn, resolveImageUrl } from "./api-client";
 
 export interface CartProduct {
   id: number; // skuId
@@ -143,7 +143,7 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
         price: p?.priceKrw ?? 0,
         quantity: i.quantity,
         checked: i.checked,
-        image: p?.imageUrl ?? undefined,
+        image: resolveImageUrl(p?.imageUrl) ?? undefined,
       };
     }),
   }));
@@ -222,7 +222,7 @@ export async function addProductToCartGroup(
       if (existing) {
         return { ...group, products: group.products.map((item) => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) };
       }
-      return { ...group, products: [...group.products, { id: product.id, name: product.name, category: product.category ?? "상품", price: product.price, quantity: 1, checked: true, image: product.image }] };
+      return { ...group, products: [...group.products, { id: product.id, name: product.name, category: product.category ?? "상품", price: product.price, quantity: 1, checked: true, image: resolveImageUrl(product.image) }] };
     });
     window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
     return next;

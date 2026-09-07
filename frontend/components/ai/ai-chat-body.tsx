@@ -21,19 +21,28 @@ async function sendPhotoSearch(file: File): Promise<PhotoSearchResult | null> {
   try {
     const form = new FormData();
     form.append("photo", file);
-    const res = await fetch("/api/ai/photo-search", { method: "POST", body: form });
-    if (!res.ok) return null;
-    return await res.json();
+    // ✅ 수정(2026-09) — fetch("/api/ai/photo-search", ...)는 상대경로라 브라우저가
+    //   지금 열려있는 프론트 개발서버(3000) 기준으로 해석해서, 백엔드(8080)까지
+    //   도달하지 못하고 항상 404였습니다(에러 없이 조용히 null 반환이라 안 띄었음).
+    //   같은 파일의 다른 API 호출들처럼 apiFetch를 써서 API_BASE_URL(8080)이 붙게
+    //   함 — FormData 바디일 땐 apiFetch가 Content-Type을 직접 안 정해서(브라우저가
+    //   멀티파트 경계값 자동 부여) 파일 업로드도 그대로 됩니다.
+    return await apiFetch<PhotoSearchResult>("/api/ai/photo-search", {
+      method: "POST",
+      body: form,
+    });
   } catch {
     return null;
   }
 }
-import { apiFetch, getAccessToken } from "@/lib/api-client";
+import { apiFetch, getAccessToken, resolveImageUrl } from "@/lib/api-client";
 import {
-  getOrCreateSessionId,
   setActiveSessionId,
+  withValidSession,
+  startNewSession,
 } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
+import { PROACTIVE_EVENT } from "@/lib/realtime";
 import { AttachListPickerDialog } from "@/components/domain/attach-list-picker-dialog";
 import { usePermissionStatus } from "@/lib/use-permission-status";
 import { PermissionRequestDialog } from "@/components/domain/permission-request-dialog";
@@ -50,19 +59,157 @@ async function uploadChatAttachment(
   file: File
 ): Promise<number | null> {
   try {
-    const sessionId = await getOrCreateSessionId();
     const type = kind === "document" ? "DOCUMENT" : kind === "receipt" ? "RECEIPT" : "IMAGE";
     const form = new FormData();
     form.append("file", file);
 
-    const res = await apiFetch<{ attachmentId: number }>(
-      `/api/chat/sessions/${sessionId}/attachments?type=${type}`,
-      { method: "POST", body: form, headers: chatAttachmentHeaders() }
+    const res = await withValidSession(undefined, (sessionId) =>
+      apiFetch<{ attachmentId: number }>(
+        `/api/chat/sessions/${sessionId}/attachments?type=${type}`,
+        { method: "POST", body: form, headers: chatAttachmentHeaders() }
+      )
     );
     return res.attachmentId;
   } catch {
     return null;
   }
+}
+
+// ✅ 신규(요청) — 리브 응답에 딸려오는 actions(POST /api/chat)에서 상품 카드로
+//   보여줄 skuId를 뽑아냅니다. 백엔드 ChatResponse.actions가 정해진 스키마 없는
+//   Map<String,Object>라서(백엔드 주석 참고), 흔히 쓰일 법한 키 이름들을 훑어서
+//   방어적으로 찾습니다 — 못 찾으면 그냥 빈 배열(상품 카드 없이 텍스트만).
+const SKU_KEY_CANDIDATES = ["skuId", "sku_id", "productId", "product_id"];
+function extractSkuIds(actions: Record<string, unknown>[] | undefined): number[] {
+  if (!actions) return [];
+  const ids = new Set<number>();
+  for (const action of actions) {
+    for (const key of SKU_KEY_CANDIDATES) {
+      const value = action[key];
+      if (typeof value === "number") ids.add(value);
+      else if (Array.isArray(value)) value.forEach((v) => typeof v === "number" && ids.add(v));
+    }
+  }
+  return Array.from(ids);
+}
+
+// ✅ 신규(요청) — 리브 답변에 마크다운 지원. package.json을 확인할 수 없어서(업로드된
+//   zip에 소스만 있고 package.json/node_modules가 없음) react-markdown 같은 외부
+//   패키지가 실제로 설치돼 있는지 알 수 없었습니다 — 새 의존성을 추가했다가 설치가 안
+//   돼있으면 빌드가 깨지니, 외부 패키지 없이 순수 React로 흔히 쓰이는 문법만(굵게,
+//   글머리 기호/번호 목록, 문단)을 가볍게 지원합니다. 기존 말풍선(<p> 하나짜리) 모양은
+//   그대로 두고, 안쪽 내용만 이걸로 바꿔서 말풍선 모양 자체는 안 바뀝니다.
+function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>;
+    }
+    return <span key={`${keyPrefix}-${i}`}>{part}</span>;
+  });
+}
+
+function MarkdownText({ text }: { text: string }) {
+  const blocks = text.split(/\n{2,}/);
+  return (
+    <>
+      {blocks.map((block, bi) => {
+        const lines = block.split("\n").filter((l) => l.trim() !== "");
+        const isBulletList = lines.length > 0 && lines.every((l) => /^[-•]\s/.test(l.trim()));
+        const isNumberedList = lines.length > 0 && lines.every((l) => /^\d+\.\s/.test(l.trim()));
+
+        if (isBulletList) {
+          return (
+            <ul key={bi} className="list-disc space-y-0.5 pl-4">
+              {lines.map((l, li) => (
+                <li key={li}>{renderInlineMarkdown(l.trim().replace(/^[-•]\s/, ""), `${bi}-${li}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (isNumberedList) {
+          return (
+            <ol key={bi} className="list-decimal space-y-0.5 pl-4">
+              {lines.map((l, li) => (
+                <li key={li}>{renderInlineMarkdown(l.trim().replace(/^\d+\.\s/, ""), `${bi}-${li}`)}</li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={bi} className={bi > 0 ? "mt-2" : undefined}>
+            {lines.map((l, li) => (
+              <span key={li}>
+                {li > 0 && <br />}
+                {renderInlineMarkdown(l, `${bi}-${li}`)}
+              </span>
+            ))}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+
+interface MentionedProduct {
+  skuId: number;
+  name: string;
+  priceKrw: number;
+  imageUrl: string | null;
+}
+
+// ✅ 신규(요청) — 리브가 언급한 상품을 목록으로 보여주는 미니 카드. skuId 배열을 받아서
+//   배치 조회(/api/products/by-skus) 한 번으로 채웁니다.
+function MentionedProducts({ skuIds }: { skuIds: number[] }) {
+  const [products, setProducts] = useState<MentionedProduct[]>([]);
+
+  useEffect(() => {
+    if (skuIds.length === 0) return;
+    apiFetch<{ skuId: number; name: string; priceKrw: number; imageUrl: string | null }[]>(
+      `/api/products/by-skus?skuIds=${skuIds.join(",")}`,
+      { auth: false }
+    )
+      .then((list) =>
+        setProducts(list.map((p) => ({ ...p, imageUrl: resolveImageUrl(p.imageUrl) ?? null })))
+      )
+      .catch(() => setProducts([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skuIds.join(",")]);
+
+  if (products.length === 0) return null;
+
+  return (
+    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+      {products.map((p) => (
+        <a
+          key={p.skuId}
+          href={`/product/${p.skuId}`}
+          className="flex w-32 shrink-0 flex-col rounded-md border border-[#F4F4F4] p-2"
+        >
+          <div className="aspect-square w-full overflow-hidden rounded-sm bg-muted">
+            {p.imageUrl && <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />}
+          </div>
+          <p className="mt-1.5 truncate text-xs">{p.name}</p>
+          <p className="text-xs font-semibold">{p.priceKrw.toLocaleString()}원</p>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// ✅ 신규(요청) — 대화 하나하나 누르면/호버하면 뜨는 보낸 시각. 오늘이면 시:분만,
+//   아니면 날짜도 같이.
+function formatMessageTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  const time = date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return time;
+  return `${date.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })} ${time}`;
 }
 
 interface ChatTurn {
@@ -75,6 +222,17 @@ interface ChatTurn {
    *  "다시 보내기" 버튼을 보여주는 용도 — 답변 실패는 별도 assistant 말풍선 대신
    *  이 플래그로 표시해서, 나중에 같은 메시지를 재전송할 수 있게 함. */
   failed?: boolean;
+  /** ✅ 신규(요청) — 보낸/받은 시각. 눌렀을 때(또는 호버) 표시용. 백엔드가 이미
+   *  ChatMessageResponse.createdAt으로 내려주는데 그동안 안 쓰고 버려지고 있었음. */
+  createdAt?: string;
+  /** ✅ 신규(요청) — 이 응답에서 언급된 상품(skuId) 목록. POST /api/chat의 actions가
+   *  실제로 어떤 모양인지 계약이 확정 안 돼있어서(백엔드 주석 참고), 흔한 키 이름들
+   *  (skuId/sku_id/productId 등)을 방어적으로 훑어서 뽑아냄 — 없으면 그냥 빈 배열. */
+  mentionedSkuIds?: number[];
+  /** ✅ 신규(09-03 요청 ③) — 에이전트가 먼저 건넨 말(sender=AI_PROACTIVE). 같은 회색
+   *  말풍선이면 "묻지 않았는데 먼저 말을 걸었다"가 안 보여서, 표식을 달아 구분함(호박색
+   *  카드 + "먼저 알려드려요" 라벨) — 이력을 불러올 때도, 지금 막 도착했을 때도 둘 다. */
+  proactive?: boolean;
 }
 
 interface Attachment {
@@ -131,7 +289,7 @@ export function AiChatBody({
   highlightMessageId: highlightMessageIdProp,
   onSessionReady,
 }: AiChatBodyProps) {
-  const { groupId } = useAiPanel();
+  const { groupId, openSession } = useAiPanel();
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(
     highlightMessageIdProp ?? null
   );
@@ -139,6 +297,8 @@ export function AiChatBody({
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  // ✅ 신규(요청) — 대화 하나하나 누르면(모바일) / 마우스 올리면(데스크톱) 보낸 시각 표시.
+  const [shownTimeIndex, setShownTimeIndex] = useState<number | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [listPickerOpen, setListPickerOpen] = useState(false);
@@ -176,13 +336,16 @@ export function AiChatBody({
           setActiveSessionId(sessionIdOverride);
         }
 
-        const sessionId = await getOrCreateSessionId(groupId);
-        onSessionReady?.(sessionId);
-
-        const messages = await apiFetch<
-          { messageId: number; sender: string; content: string }[]
-        >(`/api/chat/sessions/${sessionId}/messages`, {
-          headers: chatHeaders(),
+        // ✅ 수정(2026-09) — 리브가 계속 답을 못 받아오던 원인: localStorage에 남아있던
+        //   세션 id가 백엔드에서 이미 없어졌는데(개발 DB 리셋 등), 그걸 확인 없이 계속
+        //   재사용해서 이 조회가 매번 404였음(화면은 그냥 빈 대화창으로만 보임). 404면
+        //   그 세션을 버리고 새 세션으로 한 번 더 시도.
+        const messages = await withValidSession(groupId, async (sessionId) => {
+          onSessionReady?.(sessionId);
+          return apiFetch<{ messageId: number; sender: string; content: string; createdAt?: string }[]>(
+            `/api/chat/sessions/${sessionId}/messages`,
+            { headers: chatHeaders() }
+          );
         });
 
         setTurns(
@@ -190,6 +353,8 @@ export function AiChatBody({
             role: m.sender === "USER" ? "user" : "assistant",
             content: m.content,
             messageId: m.messageId,
+            createdAt: m.createdAt,
+            proactive: m.sender === "AI_PROACTIVE",
           }))
         );
       } catch {
@@ -212,6 +377,23 @@ export function AiChatBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, turns]);
 
+  // ✅ 신규(09-03 요청 ③) — 패널이 열려 있는 동안 도착한 자발형 말풍선을 새로고침 없이
+  //   바로 붙임(lib/realtime.ts가 window 커스텀 이벤트로 흘려줌). 이 컴포넌트 자체가
+  //   패널이 열려 있을 때만 마운트되니, 리스너가 붙어있다는 것 자체가 "지금 보고 있다"는
+  //   뜻이라 패널 열림 여부를 따로 체크할 필요가 없음.
+  useEffect(() => {
+    const onProactive = (e: Event) => {
+      const data = (e as CustomEvent<{ messageId?: number; content: string; createdAt?: string }>).detail;
+      if (!data?.content) return;
+      setTurns((prev) => [
+        ...prev,
+        { role: "assistant", content: data.content, messageId: data.messageId, createdAt: data.createdAt ?? new Date().toISOString(), proactive: true },
+      ]);
+    };
+    window.addEventListener(PROACTIVE_EVENT, onProactive);
+    return () => window.removeEventListener(PROACTIVE_EVENT, onProactive);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (recordTimerRef.current) {
@@ -222,23 +404,25 @@ export function AiChatBody({
 
   // ✅ 실제로 백엔드에 보내는 부분만 분리 — 처음 보낼 때도, 실패 후 "다시 보내기"할 때도
   //   이 함수 하나만 씀(유저 말풍선을 새로 추가하느냐만 다름).
+  // ✅ 수정(2026-09) — 여기도 위와 같은 이유로 withValidSession으로 감쌈. 안 그러면
+  //   무효한 세션 id로 계속 보내다가 매번 실패해서 "리브가 답을 안 준다"로 보였음.
   const sendToBackend = async (content: string, attachmentIds: number[], turnIndex: number) => {
     setSending(true);
     try {
-      const sessionId = await getOrCreateSessionId(groupId);
-
-      const res = await apiFetch<{
-        reply: string;
-        actions: Record<string, unknown>[];
-      }>("/api/chat", {
-        method: "POST",
-        headers: chatHeaders(),
-        body: JSON.stringify({
-          sessionId,
-          message: content,
-          attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
-        }),
-      });
+      const res = await withValidSession(groupId, (sessionId) =>
+        apiFetch<{
+          reply: string;
+          actions: Record<string, unknown>[];
+        }>("/api/chat", {
+          method: "POST",
+          headers: chatHeaders(),
+          body: JSON.stringify({
+            sessionId,
+            message: content,
+            attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+          }),
+        })
+      );
 
       if (res.actions?.length) {
         console.log("agent actions", res.actions);
@@ -249,6 +433,8 @@ export function AiChatBody({
         {
           role: "assistant",
           content: res.reply,
+          createdAt: new Date().toISOString(),
+          mentionedSkuIds: extractSkuIds(res.actions),
         },
       ]);
     } catch {
@@ -277,6 +463,7 @@ export function AiChatBody({
       {
         role: "user",
         content,
+        createdAt: new Date().toISOString(),
       },
     ]);
 
@@ -293,6 +480,20 @@ export function AiChatBody({
     if (!turn || turn.role !== "user") return;
     setTurns((prev) => prev.map((t, i) => (i === turnIndex ? { ...t, failed: false } : t)));
     void sendToBackend(turn.content, [], turnIndex);
+  };
+
+  // ✅ 신규(요청) — 리브 답변 아래 "이 답변으로 새 대화 시작"을 누르면 새 세션을 만들고,
+  //   그 답변을 인용한 문구를 입력창에 채워둠(바로 전송은 안 함 — 사용자가 확인/수정
+  //   후 보내게). 리스트와 연결된 세션과는 별개로, 이 새 대화는 리스트에 안 묶임.
+  const handleStartFromReply = async (content: string) => {
+    const quoted = content.length > 60 ? `${content.slice(0, 60)}...` : content;
+    try {
+      const newSessionId = await startNewSession();
+      openSession(newSessionId);
+      setMessage(`"${quoted}"에 대해 더 물어볼게: `);
+    } catch {
+      // 실패해도 조용히 무시 — 지금 대화는 그대로 유지됨
+    }
   };
 
   const handleFileSelected =
@@ -641,44 +842,104 @@ export function AiChatBody({
               </div>
             </>
           ) : (
-            turns.map((turn, i) => (
-              <div
-                key={i}
-                id={turn.messageId ? `chat-msg-${turn.messageId}` : undefined}
-                className={
-                  turn.role === "user"
-                    ? "text-right"
-                    : "text-left"
-                }
-              >
-                <p
-                  className={
-                    turn.role === "user"
-                      ? `inline-block max-w-full rounded-md px-4 py-2.5 text-sm break-words transition-colors duration-500 ${
-                          turn.messageId === highlightedMessageId ? "bg-foreground/20" : "bg-muted"
-                        }`
-                      : `text-sm break-words rounded-md transition-colors duration-500 ${
-                          turn.messageId === highlightedMessageId ? "bg-foreground/10 px-2 py-1 -mx-2" : ""
-                        }`
-                  }
+            turns.map((turn, i) => {
+              const isUser = turn.role === "user";
+              const showTime = shownTimeIndex === i;
+              const toggleTime = () => setShownTimeIndex((prev) => (prev === i ? null : i));
+              return (
+                <div
+                  key={i}
+                  id={turn.messageId ? `chat-msg-${turn.messageId}` : undefined}
+                  className={`group ${isUser ? "text-right" : "text-left"}`}
                 >
-                  {turn.content}
-                </p>
+                  <div className={`flex items-start gap-2 ${isUser ? "flex-row-reverse" : ""}`}>
+                    {/* ✅ 신규(요청) — 리브 메시지 옆에 liv-full 아이콘 */}
+                    {!isUser && (
+                      <img src="/icons/liv-full.svg" alt="" className="mt-0.5 h-6 w-6 shrink-0" />
+                    )}
 
-                {/* ✅ 신규 — 실패한 유저 메시지엔 "다시 보내기" 버튼 */}
-                {turn.role === "user" && turn.failed && (
-                  <button
-                    type="button"
-                    onClick={() => handleResend(i)}
-                    disabled={sending}
-                    className="mt-1 flex items-center gap-1 text-xs text-danger disabled:opacity-50"
-                  >
-                    <RiErrorWarningLine size={14} />
-                    답변을 가져오지 못했어요 · 다시 보내기
-                  </button>
-                )}
-              </div>
-            ))
+                    <div className="min-w-0 flex-1">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={toggleTime}
+                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && toggleTime()}
+                        className={
+                          isUser
+                            ? `inline-block max-w-full cursor-pointer rounded-md px-4 py-2.5 text-sm break-words transition-colors duration-500 ${
+                                turn.messageId === highlightedMessageId ? "bg-foreground/20" : "bg-muted"
+                              }`
+                            : turn.proactive
+                            ? // ✅ 신규(09-03 요청 ③) — 같은 회색 말풍선이면 "묻지 않았는데
+                              //   먼저 말을 걸었다"가 안 보여서, 호박색 카드로 구분.
+                              `inline-block max-w-full cursor-pointer rounded-md border px-3 py-2.5 text-sm break-words transition-colors duration-500 ${
+                                turn.messageId === highlightedMessageId
+                                  ? "border-amber-400 bg-amber-100"
+                                  : "border-amber-300 bg-amber-50"
+                              }`
+                            : `inline-block max-w-full cursor-pointer text-sm break-words rounded-md transition-colors duration-500 ${
+                                turn.messageId === highlightedMessageId ? "bg-foreground/10 px-2 py-1 -mx-2" : ""
+                              }`
+                        }
+                      >
+                        {/* ✅ 신규(09-03 요청 ③) — 자발형 말풍선 라벨. 이력을 불러올 때도,
+                            지금 막 도착했을 때도 둘 다 뜸(turn.proactive가 두 경로 다 채움). */}
+                        {!isUser && turn.proactive && (
+                          <p className="mb-1 text-xs font-semibold text-amber-700">먼저 알려드려요</p>
+                        )}
+                        {/* ✅ 신규(요청) — 말풍선 모양(위 컨테이너의 배경/모서리)은 그대로 두고,
+                            안쪽 내용만 유저는 그대로, 리브는 마크다운으로 */}
+                        {isUser ? turn.content : <MarkdownText text={turn.content} />}
+                      </div>
+
+                      {/* ✅ 신규(요청) — 리브가 언급한 상품 목록 카드 */}
+                      {!isUser && turn.mentionedSkuIds && turn.mentionedSkuIds.length > 0 && (
+                        <MentionedProducts skuIds={turn.mentionedSkuIds} />
+                      )}
+
+                      {/* ✅ 신규(요청) — 리브 답변을 누르면(말풍선 자체 말고, 답변 아래 이 버튼)
+                          그 내용을 인용해서 새 대화를 시작할 수 있게. 호버 시에만 보여서
+                          평소엔 답변만 깔끔하게 보임(모바일은 늘 보임). */}
+                      {!isUser && (
+                        <button
+                          type="button"
+                          onClick={() => handleStartFromReply(turn.content)}
+                          className="mt-1 flex items-center gap-1 text-xs text-muted-foreground opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
+                        >
+                          <RiAddLine size={13} />
+                          이 답변으로 새 대화 시작
+                        </button>
+                      )}
+
+                      {/* ✅ 신규 — 실패한 유저 메시지엔 "다시 보내기" 버튼 */}
+                      {isUser && turn.failed && (
+                        <button
+                          type="button"
+                          onClick={() => handleResend(i)}
+                          disabled={sending}
+                          className="mt-1 flex items-center gap-1 text-xs text-danger disabled:opacity-50"
+                        >
+                          <RiErrorWarningLine size={14} />
+                          답변을 가져오지 못했어요 · 다시 보내기
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ✅ 신규(요청) — 말풍선을 누르거나(모바일) 마우스를 올리면(데스크톱)
+                      보낸/받은 시각 표시 */}
+                  {turn.createdAt && (
+                    <p
+                      className={`mt-1 text-[11px] text-muted-foreground transition-opacity ${
+                        showTime ? "opacity-100" : "opacity-0 md:group-hover:opacity-100"
+                      } ${isUser ? "text-right" : "pl-8 text-left"}`}
+                    >
+                      {formatMessageTime(turn.createdAt)}
+                    </p>
+                  )}
+                </div>
+              );
+            })
           )}
 
           {sending && (

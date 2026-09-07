@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RiArrowLeftSLine, RiSettings3Line, RiNotification4Line, RiGiftLine, RiBox3Line } from "@remixicon/react";
+import { RiArrowLeftSLine, RiSettings3Line, RiMegaphoneLine, RiVipDiamondLine, RiShoppingCart2Line } from "@remixicon/react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
 
-type NotificationType = "공지" | "혜택" | "주문";
+type NotificationType = "공지" | "혜택" | "주문" | "리브";
 type Tab = "전체" | NotificationType;
 
 interface AppNotification {
@@ -20,23 +20,35 @@ interface AppNotification {
   href?: string;
 }
 
-const TABS: Tab[] = ["전체", "공지", "혜택", "주문"];
+const TABS: Tab[] = ["전체", "공지", "혜택", "주문", "리브"];
 
 // ⚠ 백엔드에서 아직 아무도 createNotification()을 안 불러서(주문완료/프로모션 등 알림을
 //   실제로 만드는 로직 자체가 없음), type에 어떤 문자열이 들어올지 확정된 게 없습니다.
-//   일단 상식적인 값(GENERAL/PROMO/ORDER)으로 가정해서 매핑해뒀고, 실제 값 확인되면
-//   이 매핑만 고치면 됩니다. "전체" 탭은 이 매핑이랑 무관하게 항상 정상 동작합니다.
+//   일단 상식적인 값(GENERAL/PROMO/ORDER/AI_CHAT)으로 가정해서 매핑해뒀고, 실제 값
+//   확인되면 이 매핑만 고치면 됩니다. "전체" 탭은 이 매핑이랑 무관하게 항상 정상 동작합니다.
 function mapBackendType(type: string): NotificationType {
   if (type === "PROMO" || type === "BENEFIT") return "혜택";
   if (type === "ORDER") return "주문";
+  if (type === "AI_CHAT" || type === "AI" || type === "CHAT") return "리브";
   return "공지";
 }
 
-const TYPE_ICON: Record<NotificationType, typeof RiNotification4Line> = {
-  공지: RiNotification4Line,
-  혜택: RiGiftLine,
-  주문: RiBox3Line,
+// ✅ 수정(요청) — 아이콘 지정: 주문=shopping-cart-2-line, 공지=megaphone-line,
+//   혜택=vip-diamond-line. 리브는 remixicon이 아니라 프로젝트 자체 아이콘(liv-line.svg)이라
+//   TYPE_ICON 맵이 아니라 렌더링 쪽에서 따로 분기합니다(아래 NotificationIcon).
+const TYPE_ICON: Record<Exclude<NotificationType, "리브">, typeof RiMegaphoneLine> = {
+  공지: RiMegaphoneLine,
+  혜택: RiVipDiamondLine,
+  주문: RiShoppingCart2Line,
 };
+
+function NotificationIcon({ type }: { type: NotificationType }) {
+  if (type === "리브") {
+    return <img src="/icons/liv-line.svg" alt="" className="mt-0.5 h-6 w-6 shrink-0" />;
+  }
+  const Icon = TYPE_ICON[type];
+  return <Icon size={24} className="mt-0.5 shrink-0 text-muted-foreground" />;
+}
 
 // 알림 생성 시각을 현재 시점 기준 상대 시간으로 표시
 function timeAgo(iso: string): string {
@@ -74,6 +86,14 @@ const MOCK_NOTIFICATIONS: AppNotification[] = [
     message: "8월 20일 새벽 서비스 점검이 예정되어 있어요.",
     createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
     read: true,
+  },
+  {
+    id: "4",
+    type: "리브",
+    title: "리브가 답변을 보냈어요",
+    message: "\"이번 주 장보기\" 리스트에 계란과 삼겹살을 담아드렸어요.",
+    createdAt: new Date(Date.now() - 20 * 60000).toISOString(),
+    read: false,
   },
 ];
 
@@ -150,7 +170,6 @@ export default function NotificationsPage() {
       ) : (
         <div className="divide-y divide-border">
           {filtered.map((item) => {
-            const Icon = TYPE_ICON[item.type];
             return (
               <button
                 key={item.id}
@@ -158,7 +177,7 @@ export default function NotificationsPage() {
                 onClick={() => handleClick(item)}
                 className="flex w-full items-start gap-3 py-4 text-left"
               >
-                <Icon size={24} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <NotificationIcon type={item.type} />
                 <div className="min-w-0 flex-1">
                   <div className="mb-0.5 flex items-center gap-1.5">
                     {!item.read && <span className="h-1.5 w-1.5 shrink-0 rounded-sm bg-primary" />}

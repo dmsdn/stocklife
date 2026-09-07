@@ -52,7 +52,7 @@ export function BottomTabBar() {
   const pathname = usePathname();
   const { hidden } = useBottomBarVisibility();
   // ✅ 리브는 더 이상 /ai로 이동하지 않고, 아래에서 올라오는 바텀시트(AiMobileSheet)를 엶.
-  const { isOpen: aiOpen, open: openAiPanel } = useAiPanel();
+  const { isOpen: aiOpen, open: openAiPanel, unread: proactiveUnread } = useAiPanel();
 
   const isActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(`${href}/`));
@@ -158,7 +158,7 @@ export function BottomTabBar() {
             if (showHint) dismissHint();
             openAiPanel();
           }}
-          className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+          className="relative flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
         >
           <img
             src={aiOpen ? "/icons/liv-full.svg" : "/icons/liv-line.svg"}
@@ -169,6 +169,16 @@ export function BottomTabBar() {
           <span className={aiOpen ? "text-foreground" : "text-muted-foreground"}>
             {AI_ITEM.label}
           </span>
+          {/* ✅ 신규(09-03 요청 ②) — 모바일에서는 이 리브 버튼이 패널을 여는 주된
+              통로라, 헤더 AI 아이콘과 별개로 여기도 배지가 있어야 실제로 보임. */}
+          {proactiveUnread > 0 && (
+            <span
+              aria-label={`AI가 먼저 알린 메시지 ${proactiveUnread}개`}
+              className="absolute right-2 top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-semibold leading-none text-primary-foreground"
+            >
+              {proactiveUnread > 9 ? "9+" : proactiveUnread}
+            </span>
+          )}
         </button>
       </div>
     </nav>

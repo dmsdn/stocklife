@@ -1,6 +1,7 @@
 import { RiArrowRightSLine, RiCloseLine } from "@remixicon/react";
 
 import type { CartGroup } from "@/lib/cart-storage";
+import { isGroupCompleted } from "@/lib/completed-groups";
 import type { RecommendedProduct } from "@/lib/home-data";
 
 type CartPickerProps = {
@@ -24,6 +25,12 @@ export function CartPicker({
   error,
 }: CartPickerProps) {
   if (!open || !selectedProduct) return null;
+
+  // ✅ 수정(요청) — 결제 완료(COMPLETED)된 리스트는 더 이상 담을 수 없게 잠겨있으므로
+  //   "담기" 대상 목록에서는 숨김.
+  const selectableGroups = cartGroups.filter(
+    (group) => group.status !== "COMPLETED" && !isGroupCompleted(group.id)
+  );
 
   return (
     <div className="fixed inset-0 z-[120]">
@@ -58,7 +65,7 @@ export function CartPicker({
           {error && (
             <p className="rounded-sm bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
           )}
-          {cartGroups.map((group) => (
+          {selectableGroups.map((group) => (
             <button
               key={group.id}
               type="button"

@@ -8,7 +8,7 @@ import {
   formatPrice,
   type HomeProduct,
 } from "@/lib/home-data";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { SectionTitle } from "./section-title";
 
 interface PopularityItem {
@@ -40,7 +40,7 @@ export function Discover({
             name: p.productName,
             category: "",
             price: 0,
-            image: p.imageUrl ?? "",
+            image: resolveImageUrl(p.imageUrl) ?? "",
           }))
         );
       })

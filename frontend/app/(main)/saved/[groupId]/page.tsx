@@ -12,13 +12,14 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { RiMapLine, RiQrScanLine, RiDeleteBin6Line, RiArrowRightSLine, RiCloseLine } from "@remixicon/react";
+import { RiMapLine, RiDeleteBin6Line, RiArrowRightSLine, RiCloseLine, RiMoreLine, RiCheckLine } from "@remixicon/react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { ProductLocationDialog } from "@/components/domain/product-location-dialog";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import {readCartGroups, loadCartGroups,updateCartGroups, updateCartGroupInfo, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup,} from "@/lib/cart-storage";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
@@ -53,6 +54,12 @@ export default function SavedGroupDetailPage() {
   //   백엔드 group_id 컬럼은 추가돼있는데, 세션 목록 응답에 groupId를 내려주는지는
   //   아직 확인 전이라 실패하면 그냥 "새로 물어보기"로 폴백합니다.
   const [linkedSessionId, setLinkedSessionId] = useState<string | null>(null);
+
+  // ✅ 신규(요청) — 헤더 오른쪽 점 3개 메뉴: 이름 변경 + 장보러 가기(하단 버튼 줄에서
+  //   이쪽으로 옮김). 이름 변경은 제목 자리에서 바로 인라인으로.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   // ✅ 상품별 매대 위치("444 >" 자리) — 배치 조회 1번으로 화면에 보이는 skuId 전부 받아옴
   const [locationBySkuId, setLocationBySkuId] = useState<Map<number, string>>(new Map());
@@ -154,6 +161,15 @@ export default function SavedGroupDetailPage() {
     syncRemoveFromServerCart(group?.products.find((p) => p.id === productId)?.cartItemId);
   };
 
+  const commitTitle = () => {
+    const next = titleDraft.trim();
+    setRenaming(false);
+    if (!next || next === group?.title) return;
+    updateCartGroupInfo(groupId, { title: next }).then((groups) =>
+      setGroup(groups.find((g) => g.id === groupId) ?? null)
+    );
+  };
+
   if (!group) {
     return (
       <div className="mx-auto max-w-lg p-4 sm:max-w-xl">
@@ -168,11 +184,26 @@ export default function SavedGroupDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-8 pt-5 sm:max-w-xl md:max-w-2xl md:px-8 md:pt-8 lg:max-w-3xl">
-      {/* 상단 헤더 — 타이틀+날짜만(요청: "장보러 가기"는 아래 버튼 줄로 이동) */}
+      {/* 상단 헤더 — 타이틀+날짜 좌측, 점 3개 메뉴(이름 변경/장보러 가기) 우측 */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-xl font-bold">{group.title}</h1>
+            {renaming ? (
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && commitTitle()}
+                  className="min-w-0 flex-1 rounded-none border-0 border-b-2 border-border bg-transparent text-xl font-bold outline-none focus-visible:border-brand"
+                />
+                <button type="button" onClick={commitTitle} aria-label="이름 변경 완료" className="shrink-0 text-muted-foreground">
+                  <RiCheckLine size={20} />
+                </button>
+              </div>
+            ) : (
+              <h1 className="truncate text-xl font-bold">{group.title}</h1>
+            )}
             {completed && (
               <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 결제 완료
@@ -196,6 +227,54 @@ export default function SavedGroupDetailPage() {
               disablePast
             />
           </div>
+        </div>
+
+        {/* ✅ 신규(요청) — 점 3개: 이름 변경 + 장보러 가기(하단 버튼 줄에서 옮김) */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="리스트 메뉴"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+          >
+            <RiMoreLine size={20} />
+          </button>
+
+          {menuOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="메뉴 닫기"
+                className="fixed inset-0 z-10 cursor-default"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div className="absolute right-0 top-10 z-20 w-40 overflow-hidden rounded-sm border border-border bg-background shadow-[0_4px_20px_rgba(0,0,0,0.12)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitleDraft(group.title);
+                    setRenaming(true);
+                    setMenuOpen(false);
+                  }}
+                  className="block w-full px-4 py-3 text-left text-sm hover:bg-muted"
+                >
+                  이름 변경
+                </button>
+                {!completed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      router.push(`/scan?group=${groupId}`);
+                    }}
+                    className="block w-full px-4 py-3 text-left text-sm hover:bg-muted"
+                  >
+                    장보러 가기
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -299,41 +378,34 @@ export default function SavedGroupDetailPage() {
         </button>
       )}
 
-      {/* ✅ 수정(요청) — 리브는 다시 우측 하단 원형 고정 버튼으로(홈 하단탭바 리브 버튼과
-          같은 스타일). 이 줄엔 "동선"과 "장보러 가기"만 나란히(요청대로 서로 자리를
-          바꿔서 장보러 가기가 왼쪽, 동선이 오른쪽). */}
-      <div className="mt-4 flex items-center gap-2">
-        {!completed && (
+      {/* ✅ "동선"/리브 버튼은 화면 하단에 고정(StickyBottomBar, 아래 참고)되도록 옮겨서
+          여기 있던 인라인 버튼은 제거. 목록 마지막 항목과 하단 고정바 사이 여백만 확보. */}
+      <div className="h-24" />
+
+      {/* ✅ 수정(요청) — "동선"이 목록 아래 콘텐츠 흐름 안에 있어서 목록이 길면 스크롤해야
+          보였음. 하단탭바처럼 항상 화면 아래 고정되게 StickyBottomBar로 감싸고, 리브
+          버튼도 같은 줄에 둬서(따로 떠 있던 원형 버튼과 겹치지 않게) 정리. */}
+      <StickyBottomBar>
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => router.push(`/scan?group=${groupId}`)}
-            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border text-sm font-medium"
+            onClick={() => setRouteOpen(true)}
+            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background text-sm font-medium shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
           >
-            <RiQrScanLine size={20} />
-            장보러 가기
+            <RiMapLine size={20} />
+            동선
           </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setRouteOpen(true)}
-          className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border text-sm font-medium"
-        >
-          <RiMapLine size={20} />
-          동선
-        </button>
-      </div>
-
-      {/* ✅ 리브 — 화면 우측 하단에 떠 있는 원형 버튼(홈 하단탭바와 동일 스타일). */}
-      <button
-        type="button"
-        onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
-        aria-label={linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
-        className="fixed bottom-6 right-4 z-40 flex h-16 w-16 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/80 text-xs shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-2xl"
-      >
-        <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
-        리브
-      </button>
+          <button
+            type="button"
+            onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
+            aria-label={linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
+            className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/80 text-[10px] shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-2xl"
+          >
+            <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+            리브
+          </button>
+        </div>
+      </StickyBottomBar>
 
       <StoreMapDialog
         open={routeOpen}
