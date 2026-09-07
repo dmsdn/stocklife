@@ -167,8 +167,7 @@ export function StoreMapDialog({ open, onClose, groupId, collectedIds }: StoreMa
               onLivClick={() => openAiChat(group ? `"${group.title}" 리스트 동선 관련해서 물어볼게` : undefined, groupId)}
             />
             <p className="p-4 pt-2 text-xs text-muted-foreground">
-              아직 안 담은 상품 {remainingItems.length}개 기준으로 동선을 계산했어요(1층 입구에서 출발). 스캔해서
-              담으면 그 핀은 동선에서 빠집니다.
+              안 담은 상품 {remainingItems.length}개 기준 동선이에요.
             </p>
           </>
         )}

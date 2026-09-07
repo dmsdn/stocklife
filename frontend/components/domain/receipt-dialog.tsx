@@ -41,7 +41,7 @@ export function ReceiptDialog({
 
             <div className="flex justify-between text-muted-foreground">
               <span>주문번호</span>
-              <span>#{order.orderId}</span>
+              <span>#{Math.abs(order.orderId)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
               <span>결제상태</span>

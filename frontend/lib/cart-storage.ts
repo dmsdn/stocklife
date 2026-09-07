@@ -59,53 +59,30 @@ const CART_STORAGE_KEY = "storeflow_cart_groups";
 const MEMBER_CACHE_KEY = "storeflow_member_cart_cache";
 const MIGRATION_ATTEMPTED_KEY = "storeflow_cart_migration_attempted";
 
-const INITIAL_CART_GROUPS: CartGroup[] = [
-  {
-    id: 1,
-    title: "이번 주 장보기",
-    description: "일주일 식재료",
-    createdAt: "오늘",
-    shoppingDate: null,
-    updatedAt: null,
-    store: "스토어플로우 마트",
-    products: [],
-  },
-  {
-    id: 2,
-    title: "생활용품",
-    description: "집에 필요한 생활용품",
-    createdAt: "오늘",
-    shoppingDate: null,
-    updatedAt: null,
-    store: "스토어플로우 마트",
-    products: [],
-  },
-  {
-    id: 3,
-    title: "주말 장보기",
-    description: "이번 주말에 필요한 상품",
-    createdAt: "오늘",
-    shoppingDate: null,
-    updatedAt: null,
-    store: "스토어플로우 마트",
-    products: [],
-  },
-];
-
+// ⚠ 수정(2026-09) — 예전엔 여기 "이번 주 장보기"/"생활용품"/"주말 장보기" 데모 리스트 3개를
+//   두고, localStorage가 비어있으면(=첫 방문) 자동으로 심어뒀습니다. 그런데 이 함수가 홈
+//   화면 등 거의 모든 화면에서 호출되다 보니, 비회원으로 앱을 열기만 해도 조용히 심어졌고,
+//   나중에 로그인하면 그 데모 리스트 3개가 /api/cart/migrate로 그대로 회원 DB에 실제
+//   CartGroup으로 승계돼버렸습니다 — "직접 추가하지 않은 리스트가 계속 생긴다"의 원인.
+//   이제 비회원은 아무것도 안 만든 상태(빈 배열)로 시작합니다.
 function canUseStorage() { return typeof window !== "undefined"; }
 
+// ⚠ 위 버그가 고쳐지기 전에 이미 브라우저에 심어진 적 있는 사용자 대비 — 상품이 하나도
+// 없는 빈 리스트는 사용자가 직접 만든 게 아닐 가능성이 높아 승계 대상에서 제외한다.
+// (사용자가 정말로 빈 리스트를 만들었다가 로그인하는 극히 드문 경우는 다시 만들면 됨)
+function stripUntouchedGroups(groups: CartGroup[]): CartGroup[] {
+  return groups.filter((g) => g.products.length > 0);
+}
+
 function readGuestGroups(): CartGroup[] {
-  if (!canUseStorage()) return INITIAL_CART_GROUPS;
+  if (!canUseStorage()) return [];
   try {
     const stored = window.localStorage.getItem(CART_STORAGE_KEY);
-    if (!stored) {
-      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(INITIAL_CART_GROUPS));
-      return INITIAL_CART_GROUPS;
-    }
+    if (!stored) return [];
     const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : INITIAL_CART_GROUPS;
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return INITIAL_CART_GROUPS;
+    return [];
   }
 }
 
@@ -134,9 +111,16 @@ export function writeCartGroups(groups: CartGroup[]) {
 
 async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<CartGroup[]> {
   const skuIds = [...new Set(serverGroups.flatMap((g) => g.items.map((i) => i.skuId)))];
-  const details = await Promise.all(
-    skuIds.map((skuId) => apiFetch<ProductDetail>(`/api/products/${skuId}`, { auth: false }).catch(() => null))
-  );
+  // ⚠ 수정(2026-09) — skuId마다 GET /api/products/{skuId}를 따로 호출(N+1)하던 걸,
+  //   이미 있던 배치 조회 API(GET /api/products/by-skus)로 교체. 리스트에 상품이
+  //   20개면 예전엔 요청이 20번 나갔는데 이제 1번이면 됨 — "DB가 느리게 불러와지는" 것처럼
+  //   보이던 주요 원인 중 하나(product-location.ts의 재고 배치 조회와 동일한 패턴).
+  const details =
+    skuIds.length > 0
+      ? await apiFetch<ProductDetail[]>(`/api/products/by-skus?skuIds=${skuIds.join(",")}`, { auth: false }).catch(
+          () => [] as ProductDetail[]
+        )
+      : [];
   const productMap = new Map<number, ProductDetail>();
   details.forEach((p) => p && productMap.set(p.skuId, p));
 
@@ -176,8 +160,9 @@ export async function loadCartGroups(): Promise<CartGroup[]> {
     if (raw) {
       window.sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "1");
       try {
-        const guestGroups = JSON.parse(raw);
-        if (Array.isArray(guestGroups) && guestGroups.length > 0) {
+        const parsedRaw = JSON.parse(raw);
+        const guestGroups = stripUntouchedGroups(Array.isArray(parsedRaw) ? parsedRaw : []);
+        if (guestGroups.length > 0) {
           await apiFetch("/api/cart/migrate", { method: "POST", body: JSON.stringify({ groups: guestGroups }) });
         }
         window.localStorage.removeItem(CART_STORAGE_KEY);
@@ -203,7 +188,8 @@ export async function migrateGuestCartToAccount(): Promise<CartGroup[]> {
   window.sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "1");
 
   const raw = window.localStorage.getItem(CART_STORAGE_KEY);
-  const guestGroups: CartGroup[] = raw ? JSON.parse(raw) : [];
+  const parsedRaw = raw ? JSON.parse(raw) : [];
+  const guestGroups: CartGroup[] = stripUntouchedGroups(Array.isArray(parsedRaw) ? parsedRaw : []);
 
   if (guestGroups.length > 0) {
     await apiFetch("/api/cart/migrate", {
@@ -247,6 +233,19 @@ export async function addProductToCartGroup(
     body: JSON.stringify({ skuId: product.id, quantity: 1 }),
   });
   return loadCartGroups();
+}
+
+const QUICK_CART_TITLE = "빠른 장보기";
+
+// ✅ 신규 — "리스트 없이 시작하기"를 누를 때마다 새 그룹을 만들면, 예전 게스트 데모 리스트
+//   버그와 똑같은 문제(직접 안 만든 리스트가 계속 쌓임)가 생긴다. 이미 만들어둔(아직 결제 안
+//   끝난) "빠른 장보기" 그룹이 있으면 그걸 재사용하고, 없을 때만 하나 만든다. 리스트를
+//   선택하지 않고 바로 스캔하려는 경우에도 이 함수로 뒤에서 조용히 그룹을 마련한다.
+export async function getOrCreateQuickCartGroup(): Promise<CartGroup> {
+  const groups = await loadCartGroups();
+  const existing = groups.find((g) => g.title === QUICK_CART_TITLE && g.status !== "COMPLETED");
+  if (existing) return existing;
+  return createCartGroup(QUICK_CART_TITLE);
 }
 
 export async function createCartGroup(title: string, shoppingDate?: string | null): Promise<CartGroup> {

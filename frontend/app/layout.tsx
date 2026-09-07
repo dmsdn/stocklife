@@ -12,7 +12,7 @@ const pretendard = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "StoreFlow AI",
+  title: "STOCKLIFE",
   description: "창고형 마트 AI 쇼핑 도우미",
 };
 

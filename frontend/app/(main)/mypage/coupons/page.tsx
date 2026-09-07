@@ -12,7 +12,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCoupon3Line } from "@remixicon/react";
+import { RiArrowRightSLine, RiCoupon3Line } from "@remixicon/react";
+import { SubpageHeader } from "@/components/domain/subpage-header";
 import { fetchCoupons, type Coupon } from "@/lib/coupons-mock";
 
 export default function CouponsPage() {
@@ -29,74 +30,64 @@ export default function CouponsPage() {
   const availableCount = coupons.filter((c) => c.usable).length;
 
   return (
-    <main className="min-h-screen bg-background pb-24">
-      <header className="sticky top-0 z-20 flex h-14 items-center border-b border-border bg-background px-4">
-        <Link href="/mypage" className="flex h-10 w-10 items-center justify-center rounded-full" aria-label="뒤로가기">
-          <RiArrowLeftSLine size={20} />
-        </Link>
-        <h1 className="flex-1 text-center text-base font-semibold">쿠폰</h1>
-        <div className="w-10" />
-      </header>
+    <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-3xl md:p-8">
+      <SubpageHeader title="쿠폰" />
 
-      <section className="border-b border-border px-4 py-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
-            <RiCoupon3Line size={20} />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">사용 가능한 쿠폰</p>
-            <p className="mt-0.5 text-xl font-bold">
-              {availableCount}
-              <span className="ml-1 text-sm font-medium">장</span>
-            </p>
-          </div>
+      <div className="flex items-center gap-3 rounded-sm border border-border p-4">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+          <RiCoupon3Line size={20} />
         </div>
-      </section>
+        <div>
+          <p className="text-xs text-muted-foreground">사용 가능한 쿠폰</p>
+          <p className="mt-0.5 text-xl font-bold">
+            {availableCount}
+            <span className="ml-1 text-sm font-medium">장</span>
+          </p>
+        </div>
+      </div>
 
-      <section className="px-4 pt-5">
-        <h2 className="text-base font-semibold">내 쿠폰</h2>
+      <h2 className="mt-6 text-base font-semibold">내 쿠폰</h2>
 
-        {coupons.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">보유한 쿠폰이 없어요.</p>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {coupons.map((coupon) => {
-              const expiry = new Date(coupon.validUntil).toLocaleDateString("ko-KR");
-              const statusText =
-                coupon.status === "AVAILABLE" ? "사용 가능" : coupon.status === "USED" ? "사용 완료" : "기간 만료";
+      {loaded && coupons.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">보유한 쿠폰이 없어요.</p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {coupons.map((coupon) => {
+            const expiry = new Date(coupon.validUntil).toLocaleDateString("ko-KR");
+            const statusText =
+              coupon.status === "AVAILABLE" ? "사용 가능" : coupon.status === "USED" ? "사용 완료" : "기간 만료";
 
-              return (
-                <div
-                  key={coupon.consumerCouponId}
-                  className={`flex overflow-hidden rounded-sm border border-border ${coupon.usable ? "" : "opacity-50"}`}
-                >
-                  <div className="flex w-16 shrink-0 items-center justify-center bg-foreground text-background">
-                    <RiCoupon3Line size={22} />
-                  </div>
-                  <div className="flex-1 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-semibold">{coupon.title}</h3>
-                        <p className="mt-1 text-xs text-muted-foreground">{coupon.description}</p>
-                        <p className="mt-3 text-md text-muted-foreground">
-                          {expiry}까지 · {statusText}
-                        </p>
-                      </div>
-
-                      {coupon.usable && (
-                        <Link href="/cart" className="shrink-0 flex items-center gap-0.5 text-xs font-medium">
-                          장바구니에서 사용
-                          <RiArrowRightSLine size={16} />
-                        </Link>
-                      )}
+            return (
+              <div
+                key={coupon.consumerCouponId}
+                className={`flex overflow-hidden rounded-sm border border-border ${coupon.usable ? "" : "opacity-50"}`}
+              >
+                <div className="flex w-16 shrink-0 items-center justify-center bg-foreground text-background">
+                  <RiCoupon3Line size={22} />
+                </div>
+                <div className="flex-1 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold">{coupon.title}</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">{coupon.description}</p>
+                      <p className="mt-3 text-md text-muted-foreground">
+                        {expiry}까지 · {statusText}
+                      </p>
                     </div>
+
+                    {coupon.usable && (
+                      <Link href="/cart" className="shrink-0 flex items-center gap-0.5 text-xs font-medium">
+                        장바구니에서 사용
+                        <RiArrowRightSLine size={16} />
+                      </Link>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-    </main>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

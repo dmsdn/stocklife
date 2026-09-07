@@ -46,6 +46,7 @@ import {
   readCartGroups,
   loadCartGroups,
   createCartGroup,
+  getOrCreateQuickCartGroup,
   syncUpdateServerCart,
   type CartGroup,
 } from "@/lib/cart-storage";
@@ -267,12 +268,21 @@ function ScanPageInner() {
   const lookupByCode = async (code: string) => {
     if (!code.trim()) return;
 
-    if (!groupId) {
-      setError("담을 리스트를 준비하는 중이에요. 잠시 후 다시 스캔해주세요.");
-      return;
-    }
-
-    if (groupCompleted) {
+    // ✅ 수정(2026-09) — 리스트를 고르지 않고 바로 스캔하면 예전엔 "담을 리스트를
+    //   준비하는 중이에요"만 뜨고 계속 막혀있었다. "리스트 없이 시작하기"를 누른 것과
+    //   똑같이, 뒤에서 조용히 기본 그룹을 마련해서 바로 담아준다 — 별도 안내나 대기 없음.
+    let currentGroupId = groupId;
+    if (!currentGroupId) {
+      try {
+        const quick = await getOrCreateQuickCartGroup();
+        currentGroupId = quick.id;
+        setGroupId(quick.id);
+        setGroups((prev) => (prev.some((g) => g.id === quick.id) ? prev : [...prev, quick]));
+      } catch {
+        setError("담을 리스트를 준비하지 못했어요. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+    } else if (groupCompleted) {
       setError("이미 결제 완료된 리스트예요. 다른 리스트를 선택해주세요.");
       return;
     }
@@ -311,7 +321,7 @@ function ScanPageInner() {
       }
 
       // ✅ 조회되자마자 바로 1개 담기 — 팝업 없이 목록에만 반영됩니다.
-      await addProductToCartGroup(groupId, {
+      await addProductToCartGroup(currentGroupId, {
         id: found.skuId,
         name: found.name,
         category: found.categoryL1 ?? "",
@@ -325,7 +335,7 @@ function ScanPageInner() {
         const next = new Set(prev);
         next.delete(found.skuId);
         next.add(found.skuId);
-        writeShoppingSession({ groupId, scannedSkuIds: [...next] });
+        writeShoppingSession({ groupId: currentGroupId, scannedSkuIds: [...next] });
         return next;
       });
       refreshGroups();
@@ -805,12 +815,11 @@ function ScanPageInner() {
         }}
         onGroupsChange={refreshGroups}
         onStartWithoutList={async () => {
-          // ✅ "리스트 없이 시작하기" — 실제로는 데이터 구조상 여전히 그룹이 하나
-          //   필요해서, 눈에 안 띄는 임시 리스트를 만들어서 담습니다. "빠른 장보기"라는
-          //   이름을 붙여두고, 다 담고 나면 상세 화면에서 이름을 바꾸거나 그대로 둬도 됨.
-          const created = await createCartGroup("빠른 장보기");
-          setGroups((prev) => [...prev, created]);
-          setGroupId(created.id);
+          // ✅ 수정(2026-09) — 누를 때마다 새로 만들지 않고, 아직 결제 안 끝난 "빠른 장보기"
+          //   그룹이 있으면 그걸 재사용(중복 생성 방지).
+          const group = await getOrCreateQuickCartGroup();
+          setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [...prev, group]));
+          setGroupId(group.id);
           setEntryPickerOpen(false);
         }}
       />
