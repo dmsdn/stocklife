@@ -152,38 +152,39 @@ export default function SignupProfilePage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col pb-[140px] pt-[87px]">
-      {/* ✅ 수정(요청) — 참고 이미지(Frame_115)대로: "만나서 반갑습니다 / {이름}님." 두
-          줄을 가운데 정렬, 안내문구는 그 아래 바짝(mt-2), "바로 가입하기" 버튼도 안내문구
-          바로 아래(mt-4)로 붙임 — 예전엔 이 인사말/이름/설명이 아예 없었고 "바로
-          가입하기"도 하단 고정바 안에 "다음"과 같이 끼어 있었음. 이제 "다음"만 하단에
-          고정되고, "바로 가입하기"는 본문 흐름 안에 있음. */}
-      <h1 className="text-center text-2xl font-bold leading-8">
-        만나서 반갑습니다
-        <br />
-        {name ?? "회원"}님.
-      </h1>
+    <div className="flex min-h-dvh flex-col pb-[140px]">
+      {/* ✅ 수정(요청) — "만나서 반갑습니다" → "환영합니다"로 변경, 인사말/안내문구/
+          "바로 가입하기" 버튼을 화면 세로 가운데로 배치(예전엔 pt-[87px]로 상단에
+          고정돼 있었음) — flex-1 + justify-center로 하단 고정 버튼 영역을 제외한
+          나머지 공간의 정중앙에 오도록. */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6">
+        <h1 className="text-center text-2xl font-bold leading-8">
+          환영합니다
+          <br />
+          {name ?? "회원"}님.
+        </h1>
 
-      <p className="mt-2 text-center text-xs leading-[18px] text-muted-foreground">
-        더 나은 서비스 이용을 위해 추가 정보를 입력해주세요
-      </p>
-
-      {/* ✅ 수정(2026-09) — "본인인증"/"확인하고 가입하기"와 같은 형식: radius 8px,
-          연한 주황 테두리, 메인 주황 글씨, 흰 배경. */}
-      <button
-        type="button"
-        onClick={handleSkipAll}
-        disabled={submitting}
-        className="mt-4 flex h-12 w-full items-center justify-center rounded-sm border border-[#ffcbb9] bg-white text-sm text-main transition hover:bg-[#fff0eb] disabled:opacity-50"
-      >
-        바로 가입하기
-      </button>
-
-      {error && (
-        <p className="mt-4 text-xs text-danger">
-          {error}
+        <p className="mt-2 text-center text-xs leading-[18px] text-muted-foreground">
+          더 나은 서비스 이용을 위해 추가 정보를 입력해주세요
         </p>
-      )}
+
+        {/* ✅ 수정(2026-09) — "본인인증"/"확인하고 가입하기"와 같은 형식: radius 8px,
+            연한 주황 테두리, 메인 주황 글씨, 흰 배경. */}
+        <button
+          type="button"
+          onClick={handleSkipAll}
+          disabled={submitting}
+          className="mt-4 flex h-12 w-full items-center justify-center rounded-sm border border-[#ffcbb9] bg-white text-sm text-main transition hover:bg-[#fff0eb] disabled:opacity-50"
+        >
+          바로 가입하기
+        </button>
+
+        {error && (
+          <p className="mt-4 text-xs text-danger">
+            {error}
+          </p>
+        )}
+      </div>
 
       {/* ✅ 수정 — "다음"은 이 흐름의 다른 화면들과 똑같이 하단 고정 원형 알약 버튼
           하나만. 누르면 곧장 추가 정보 입력(생년월일 단계)으로 이동합니다.

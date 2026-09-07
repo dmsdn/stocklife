@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RiArrowLeftSLine } from "@remixicon/react";
 import { ProfileStep, ProfileChoice } from "@/components/domain/profile-step";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { getMyProfile, updateMyProfile } from "@/lib/consumer-api";
 
 const OPTIONS = [
@@ -21,6 +22,14 @@ export default function AccountGenderPage() {
   const [alreadySet, setAlreadySet] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // ✅ 신규(요청) — "이미 입력해서 수정 불가" 화면은 ProfileStep을 안 거치고 바로
+  //   리턴돼서 그쪽의 하단바 숨김이 안 걸렸음. 이 페이지 자체에서도 한 번 더 숨김.
+  const { setHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setHidden(true);
+    return () => setHidden(false);
+  }, [setHidden]);
 
   useEffect(() => {
     getMyProfile()
@@ -43,12 +52,12 @@ export default function AccountGenderPage() {
   };
 
   if (loading) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>;
+    return <p className="px-6 py-10 text-center text-sm text-muted-foreground">불러오는 중...</p>;
   }
 
   if (alreadySet) {
     return (
-      <div className="py-10 text-center">
+      <div className="px-6 py-10 text-center">
         <p className="text-sm text-muted-foreground">성별은 한 번 입력하면 수정할 수 없어요.</p>
         <button type="button" onClick={() => router.back()} className="mt-4 mx-auto flex items-center justify-center gap-1 text-sm">
           <RiArrowLeftSLine size={24} />

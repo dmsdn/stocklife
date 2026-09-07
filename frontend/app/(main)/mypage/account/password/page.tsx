@@ -1,11 +1,22 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { Button } from "@/components/ui/button";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 // ✅ 로그인 상태에서 바로 바꾸는 API는 없고, 전화번호 인증 기반 재설정(OTP) API만 있어서
 //   기존 비밀번호 재설정 화면으로 연결했습니다 — 실제로 동작하는 진짜 기능입니다.
 // ✅ 수정(요청) — 버튼을 회원가입 흐름과 같은 좌우 텍스트 폭 맞춤 h-60 원형 알약으로.
 export default function AccountPasswordPage() {
+  // ✅ 신규(요청) — 다른 정보 수정 화면들과 마찬가지로 하단 탭바 숨김.
+  const { setHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setHidden(true);
+    return () => setHidden(false);
+  }, [setHidden]);
+
   return (
     <div className="mx-auto max-w-lg p-4 sm:max-w-xl md:max-w-2xl md:p-8">
       <SubpageHeader title="비밀번호 변경" />

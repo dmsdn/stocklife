@@ -11,6 +11,7 @@ import { RiArrowLeftLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { getMyProfile, updateMyProfile } from "@/lib/consumer-api";
 
 const underlineInput =
@@ -21,6 +22,13 @@ export default function AccountNamePage() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // ✅ 신규(요청) — 정보 수정 화면은 하단 탭바 숨김.
+  const { setHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setHidden(true);
+    return () => setHidden(false);
+  }, [setHidden]);
 
   useEffect(() => {
     getMyProfile()
@@ -40,7 +48,7 @@ export default function AccountNamePage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col pb-[140px] pt-[59px]">
+    <div className="flex min-h-dvh flex-col px-6 pb-[140px] pt-[59px]">
       <div className="flex h-8 items-center">
         <button
           type="button"

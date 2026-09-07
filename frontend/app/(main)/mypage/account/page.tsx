@@ -82,7 +82,10 @@ export default function AccountPage() {
 
         <Link href="/mypage/account/password" className="flex items-center justify-between py-3 text-sm">
           <span>비밀번호 변경</span>
-          <RiArrowRightSLine size={24} className="text-muted-foreground" />
+          <span className="flex items-center gap-1 text-muted-foreground">
+            *********
+            <RiArrowRightSLine size={24} />
+          </span>
         </Link>
 
         {/* 성별 — 값 있으면 텍스트만, 없으면 입력하러 가는 링크 */}

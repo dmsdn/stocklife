@@ -6,7 +6,7 @@
 //   하단 중앙 리브 버튼(있으면), 핀 팝업을 흰 카드+실제 상품 이미지로.
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { getFloorMap, fetchRealFloorMap, getZoneRegions, getZoneName, FLOOR_MAPS } from "@/lib/map-config";
 import type { GridPoint } from "@/lib/pathfinding";
@@ -41,6 +41,9 @@ export interface StoreMapProps {
   /** ✅ 신규 — 지도 영역 높이 클래스. 기본은 기존과 동일한 70vh(리스트 동선 다이얼로그 등).
    *  화면 전체를 지도로 쓰는 "매장 지도 둘러보기" 페이지처럼 더 넓게 쓰고 싶을 때 오버라이드. */
   heightClassName?: string;
+  /** ✅ 신규 — 지도 아래 안내 문구("손가락으로 확대·이동…")를 숨김. 화면을 스크롤 없이
+   *  꽉 채워야 하는 페이지(매장 지도 둘러보기)에서 사용. */
+  hideHelpText?: boolean;
 }
 
 const MIN_ZOOM = 1;
@@ -51,7 +54,7 @@ function dist(a: React.Touch, b: React.Touch) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName }: StoreMapProps) {
+export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName, hideHelpText }: StoreMapProps) {
   const config = getFloorMap(floorNo);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -59,6 +62,10 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
   // ✅ 신규 — 구역을 누르면 그 구역 이름을 상품 핀과 같은 스타일의 작은 팝업으로 보여줌
   //   (요청: "누르면 화면 위로 핀처럼 무슨 구역 정도만"). 외부 모달 없이 지도 안에서 처리.
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
+  // ✅ 수정 — 팝업이 구역 사각형의 중심점(고정 좌표)이 아니라, 사용자가 실제로 누른 화면
+  //   위치 바로 위에 뜨도록. 같은 zoneId가 여러 조각으로 나뉜 구역(F1-H 등)도 누른 조각
+  //   바로 위에 뜬다. (계산 방식은 아래 handleZoneClick 참고)
+  const [activeZonePos, setActiveZonePos] = useState<{ left: number; top: number } | null>(null);
   // ✅ 실제 GET /api/map/floors/{floorNo} 로딩 완료 후 재계산되도록 트리거용 상태
   const [realMapReady, setRealMapReady] = useState(false);
 
@@ -69,19 +76,59 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   const pinchRef = useRef<{ startDist: number; startZoom: number } | null>(null);
 
+  // ✅ 신규 — "좌표가 화면이랑 안 맞는다" 버그의 진짜 원인: 지도 박스는 세로로 긴 모바일
+  //   비율인데 실제 이미지 비율은 그거랑 달라서, object-contain으로 표시하면 위/아래에
+  //   레터박스 여백이 생긴다. 그런데 좌표(%) 계산은 "이미지가 박스를 꽉 채운다"고 가정하고
+  //   있었어서, 실제 이미지 위치와 어긋났다(이미지 중심에서 멀수록, 특히 위쪽일수록 더 크게
+  //   어긋남 — 실제로 겪으신 증상과 일치). 박스 실측 크기를 추적해서 이미지가 지금 이 박스
+  //   안에서 실제로 어디에 얼마 크기로 떠 있는지 계산하고, 아래 toPercent가 그 영역
+  //   기준으로 %를 계산하게 고친다. 구역 박스·핀·클릭 판정·팝업이 전부 toPercent를
+  //   거쳐가므로 이거 하나로 다 같이 맞아떨어진다.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerSize({ width: el.clientWidth, height: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const imgRect = useMemo(() => {
+    const imgW = config?.imageWidth ?? 0;
+    const imgH = config?.imageHeight ?? 0;
+    if (!imgW || !imgH || !containerSize.width || !containerSize.height) {
+      return { offsetLeftPercent: 0, offsetTopPercent: 0, widthPercent: 100, heightPercent: 100 };
+    }
+    const scale = Math.min(containerSize.width / imgW, containerSize.height / imgH);
+    const widthPercent = ((imgW * scale) / containerSize.width) * 100;
+    const heightPercent = ((imgH * scale) / containerSize.height) * 100;
+    return {
+      offsetLeftPercent: (100 - widthPercent) / 2,
+      offsetTopPercent: (100 - heightPercent) / 2,
+      widthPercent,
+      heightPercent,
+    };
+  }, [config?.imageWidth, config?.imageHeight, containerSize.width, containerSize.height]);
+
   if (!config) {
     return <p className="p-4 text-center text-sm text-muted-foreground">{floorNo}층 지도가 아직 등록되지 않았어요.</p>;
   }
 
   // ✅ legacyTopOffsetPercent 보정 — 기존 좌표(잘리기 전 이미지 기준)를 새(크롭된) 이미지에
-  //   맞게 재투영. x축(가로)은 안 잘렸으니 그대로, y축만 보정.
+  //   맞게 재투영(x축은 안 잘렸으니 그대로, y축만). 그다음 imgRect로 "이미지 기준 %"를
+  //   "박스(container) 기준 %"로 다시 변환한다(레터박스 오프셋 반영).
   const toPercent = (x: number, y: number) => {
-    const rawTop = (y / config.gridHeight) * 100;
+    const rawLeftOfImage = (x / config.gridWidth) * 100;
+    const rawTopOfImage = (y / config.gridHeight) * 100;
     const offset = config.legacyTopOffsetPercent ?? 0;
-    const top = offset > 0 ? ((rawTop - offset) / (100 - offset)) * 100 : rawTop;
+    const topOfImage = offset > 0 ? ((rawTopOfImage - offset) / (100 - offset)) * 100 : rawTopOfImage;
     return {
-      left: (x / config.gridWidth) * 100,
-      top,
+      left: imgRect.offsetLeftPercent + (rawLeftOfImage / 100) * imgRect.widthPercent,
+      top: imgRect.offsetTopPercent + (topOfImage / 100) * imgRect.heightPercent,
     };
   };
 
@@ -116,11 +163,45 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
   };
   const handleTouchEnd = () => { pinchRef.current = null; };
 
+  // ✅ 수정 — pan/zoom을 직접 역산하던 방식은 계산이 조금이라도 어긋나면(예: transform
+  //   합성 순서) 오차가 누적돼 "누른 자리보다 왼쪽 위로" 뜨는 문제가 있었다. 대신 브라우저가
+  //   이미 pan/zoom을 다 반영해서 계산해준 "그 버튼 자신의 실제 화면 위치"
+  //   (e.currentTarget.getBoundingClientRect())를 그대로 쓴다. 클릭 지점이 그 버튼 박스
+  //   안에서 몇 % 지점인지만 구해서, 그 버튼이 원래 가진 좌표(region의 %) 범위에 그대로
+  //   대응시키면 pan/zoom 수식을 직접 계산할 필요가 아예 없어 오차가 생길 수 없다.
+  const handleZoneClick = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    zoneId: string,
+    isActive: boolean,
+    region: { x1: number; y1: number; x2: number; y2: number }
+  ) => {
+    if (isActive) {
+      setActiveZoneId(null);
+      setActiveZonePos(null);
+      return;
+    }
+    const btnRect = e.currentTarget.getBoundingClientRect();
+    if (btnRect.width > 0 && btnRect.height > 0) {
+      const fracX = (e.clientX - btnRect.left) / btnRect.width;
+      const fracY = (e.clientY - btnRect.top) / btnRect.height;
+      const p1 = toPercent(region.x1, region.y1);
+      const p2 = toPercent(region.x2, region.y2);
+      setActiveZonePos({
+        left: p1.left + fracX * (p2.left - p1.left),
+        top: p1.top + fracY * (p2.top - p1.top),
+      });
+    } else {
+      setActiveZonePos(null);
+    }
+    setActiveZoneId(zoneId);
+  };
+
   const activePin = pins.find((p) => p.id === activePinId);
 
   return (
     <div className="space-y-2">
       <div
+        ref={containerRef}
         className={`relative w-full touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
@@ -140,39 +221,50 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
 
           {/* ✅ 수정(2026-09) — 매대 칸마다 있던 격자 박스, 동선 경로선을 전부 없앴습니다
               (요청: "이상한 박스, 선 다 빼"). 구역은 여전히 누를 수 있지만(showZones) 평소엔
-              완전히 안 보이고, 누르면 그 구역 위에 상품 핀과 같은 스타일의 작은 팝업만 뜹니다. */}
+              완전히 안 보이고, 누르면 실제로 누른 자리 바로 위에 상품 핀과 같은 스타일의 작은
+              팝업만 뜹니다. */}
           {showZones &&
-            getZoneRegions(floorNo).map((z) => {
+            getZoneRegions(floorNo).map((z, idx) => {
+              // ⚠ 같은 zoneId가 여러 사각형 조각(L자 모양 등)으로 나뉠 수 있어서 zoneId만으론
+              //   key가 중복된다(React가 같은 zoneId를 가진 두 번째 조각을 별개 엘리먼트로
+              //   인식 못 해 클릭이 안 먹히거나 엉뚱한 조각이 반응하는 버그로 이어짐) — idx까지
+              //   합쳐서 유일한 key를 만든다.
               const p1 = toPercent(z.x1, z.y1);
               const p2 = toPercent(z.x2, z.y2);
-              const centerLeft = (p1.left + p2.left) / 2;
-              const centerTop = (p1.top + p2.top) / 2;
               const isActive = activeZoneId === z.zoneId;
               return (
-                <div key={z.zoneId}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveZoneId(isActive ? null : z.zoneId)}
-                    aria-label={`${getZoneName(floorNo, z.zoneId) ?? z.zoneId} 구역 정보`}
-                    className="absolute bg-transparent"
-                    style={{
-                      left: `${p1.left}%`,
-                      top: `${p1.top}%`,
-                      width: `${p2.left - p1.left}%`,
-                      height: `${p2.top - p1.top}%`,
-                    }}
-                  />
-                  {isActive && (
-                    <div
-                      className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full border border-[#F4F4F4] bg-white px-3 py-1.5 text-sm font-medium shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
-                      style={{ left: `${centerLeft}%`, top: `${centerTop}%`, transform: `translate(-50%, calc(-100% - 8px)) scale(${1 / zoom})`, transformOrigin: "bottom center" }}
-                    >
-                      {getZoneName(floorNo, z.zoneId) ?? z.zoneId}
-                    </div>
-                  )}
-                </div>
+                <button
+                  key={`${z.zoneId}-${idx}`}
+                  type="button"
+                  onClick={(e) => handleZoneClick(e, z.zoneId, isActive, z)}
+                  aria-label={`${getZoneName(floorNo, z.zoneId) ?? z.zoneId} 구역 정보`}
+                  className="absolute bg-transparent"
+                  style={{
+                    left: `${p1.left}%`,
+                    top: `${p1.top}%`,
+                    width: `${p2.left - p1.left}%`,
+                    height: `${p2.top - p1.top}%`,
+                  }}
+                />
               );
             })}
+
+          {/* ✅ 구역 이름 팝업 — 조각별 중심점이 아니라, 실제로 누른 지점(activeZonePos) 바로
+              위에 하나만 뜬다. 같은 zoneId 조각이 여러 개여도 팝업은 항상 하나.
+              ✅ 수정 — 폰트 확대(text-lg) + 높이 60px 고정(flex로 세로 중앙 정렬). */}
+          {showZones && activeZoneId && activeZonePos && (
+            <div
+              className="pointer-events-none absolute flex h-[60px] -translate-x-1/2 -translate-y-full items-center whitespace-nowrap rounded-full border border-[#F4F4F4] bg-white px-5 text-lg font-medium shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
+              style={{
+                left: `${activeZonePos.left}%`,
+                top: `${activeZonePos.top}%`,
+                transform: `translate(-50%, calc(-100% - 8px)) scale(${1 / zoom})`,
+                transformOrigin: "bottom center",
+              }}
+            >
+              {getZoneName(floorNo, activeZoneId) ?? activeZoneId}
+            </div>
+          )}
 
           {pins.map((pin) => {
             const { left, top } = toPercent(pin.x, pin.y);
@@ -253,10 +345,12 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
         )}
       </div>
 
-      <p className="px-4 pb-4 text-xs text-muted-foreground">
-        손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.
-        {showZones && " 색칠된 구역을 누르면 어떤 카테고리인지 볼 수 있어요."}
-      </p>
+      {!hideHelpText && (
+        <p className="px-4 pb-4 text-xs text-muted-foreground">
+          손가락으로 확대·이동하거나 마우스 휠로 확대할 수 있어요. 핀을 누르면 상품 정보가 떠요.
+          {showZones && " 색칠된 구역을 누르면 어떤 카테고리인지 볼 수 있어요."}
+        </p>
+      )}
     </div>
   );
 }
