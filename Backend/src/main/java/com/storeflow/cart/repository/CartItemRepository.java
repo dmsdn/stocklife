@@ -18,8 +18,8 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
     );
 
     /**
-     * 과거 DB에 중복 행이 남아 있어도 서비스에서 병합할 수 있도록 전체 행을 조회한다.
-     * 정상 DB에서는 UNIQUE(cart_group_id, sku_id) 때문에 결과가 0~1건이다.
+     * 과거 DB에 중복 행이 남아 있어도 서비스에서 병합할 수 있도록
+     * 동일 그룹 + 동일 SKU의 모든 행을 조회한다.
      */
     List<CartItem> findAllByCartGroupIdAndSkuIdOrderByCartItemIdAsc(
             Long cartGroupId,
@@ -67,6 +67,10 @@ public interface CartItemRepository extends JpaRepository<CartItem, Long> {
             @Param("consumerId") Long consumerId
     );
 
+    /**
+     * 특정 SKU를 장바구니에 담고 있는 모든 회원 ID 조회.
+     * InventoryService의 재고/알림 처리에서 사용한다.
+     */
     @Query("""
         select distinct cg.consumerId
         from CartItem ci, CartGroup cg

@@ -616,7 +616,7 @@ export default function App() {
                         }}
                         title="frontend에서 로그인한 계정을 따라갑니다"
                     >
-                        👤 {loggedInPhone ? `손님 캐릭터(${loggedInPhone.slice(-4)})` : '기본 캐릭터(비로그인)'}
+                        👤 {loggedInPhone ? `손님 캐릭터(${loggedInPhone.slice(-4)})` : '기본 캐릭터(0001)'}
                     </span>
 
                     {viewFloor !== playerFloor && (
