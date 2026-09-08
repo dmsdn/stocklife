@@ -5,6 +5,8 @@ import com.storeflow.cart.entity.CartGroup;
 import com.storeflow.cart.entity.CartItem;
 import com.storeflow.cart.repository.CartGroupRepository;
 import com.storeflow.cart.repository.CartItemRepository;
+import com.storeflow.inventory.entity.Location;
+import com.storeflow.inventory.repository.StockRepository;
 import com.storeflow.product.entity.Product;
 import com.storeflow.product.repository.ProductRepository;
 import org.springframework.stereotype.Service;
@@ -21,13 +23,40 @@ public class CartService {
     private final CartItemRepository cartItemRepository;
     private final CartGroupRepository cartGroupRepository;
     private final ProductRepository productRepository;
+    private final StockRepository stockRepository;
 
     public CartService(CartItemRepository cartItemRepository,
             CartGroupRepository cartGroupRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            StockRepository stockRepository) {
         this.cartItemRepository = cartItemRepository;
         this.cartGroupRepository = cartGroupRepository;
         this.productRepository = productRepository;
+        this.stockRepository = stockRepository;
+    }
+
+    /**
+     * 09-08 재고 초과 담기 방지.
+     *
+     * 그동안 장바구니에는 재고 검증이 전혀 없었다. 그래서 수량 버튼을 계속 누르면
+     * 매대에 31개뿐인 삼겹살을 141개까지 담을 수 있었고, 결제 단계에 가서야 재고 부족으로
+     * 막히거나 아예 안 막혔다. 담는 시점에 거르는 것이 맞다.
+     *
+     * 상한은 PICK(진열대) 재고다. BULK(그 위 예비 재고)는 손님이 직접 집는 자리가 아니므로
+     * 세지 않는다. 이 규칙은 시뮬레이션 쪽 "담기" 버튼의 캡과도 같은 기준이다.
+     *
+     * 초과하면 IllegalStateException 을 던진다. GlobalExceptionHandler 가 이걸
+     * 409 Conflict 와 {"message": "..."} 형태로 바꿔주므로 프론트가 그 문구를 그대로
+     * 화면에 띄울 수 있다.
+     */
+    private void requireWithinPickStock(Integer skuId, int requestedTotalQty) {
+        if (requestedTotalQty <= 0) return;
+        long available = stockRepository.sumPickQtyBySkuId(skuId, Location.TierRole.PICK);
+        if (requestedTotalQty > available) {
+            throw new IllegalStateException(
+                    "진열대에 있는 수량보다 많이 담을 수 없습니다. 현재 남은 수량은 "
+                            + available + "개입니다.");
+        }
     }
 
     /** 기존 내부 API/AI 기능 호환용: 기본 장바구니에 담는다. */
@@ -211,8 +240,11 @@ public class CartService {
     }
 
     private void applyUpdate(CartItem cartItem, UpdateCartItemRequest request) {
-        if (request.getQuantity() != null)
+        if (request.getQuantity() != null) {
+            // 모바일 장바구니의 + 버튼이 지나가는 경로. 여기가 비어 있어서 141개까지 올라갔다.
+            requireWithinPickStock(cartItem.getSkuId(), request.getQuantity());
             cartItem.changeQuantity(request.getQuantity());
+        }
         if (request.getChecked() != null)
             cartItem.toggleChecked(request.getChecked());
     }
@@ -237,6 +269,15 @@ public class CartService {
             AddCartItemRequest request
     ) {
         requireOwnedGroup(consumerId, groupId);
+
+        // 이미 담겨 있던 수량에 이번에 담는 수량을 더한 "최종 수량"으로 검사한다.
+        // 1개씩 여러 번 눌러서 상한을 넘기는 경우까지 막으려면 최종 수량 기준이어야 한다.
+        int addQty = request.getQuantity() == null ? 1 : request.getQuantity();
+        int alreadyInCart = cartItemRepository
+                .findByCartGroupIdAndSkuId(groupId, request.getSkuId())
+                .map(CartItem::getQuantity)
+                .orElse(0);
+        requireWithinPickStock(request.getSkuId(), alreadyInCart + addQty);
 
         CartItem item = cartItemRepository
                 .findByCartGroupIdAndSkuId(
