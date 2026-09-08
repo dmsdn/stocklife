@@ -29,6 +29,7 @@ import {
 } from './api/shoppingList';
 import { runTrip, type TransferMethod } from './game/trip';
 import { escalatorRoute, floorLabel } from './game/floorGraph';
+import { fetchCartRoute, pathPointsOnFloor, type CartRoute } from './api/route';
 import type { FloorData, LocationInfo, FacilityInfo, GridPoint, ProductInfo, CartItem } from './game/types';
 
 interface TransferPrompt {
@@ -73,6 +74,10 @@ export default function App() {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [purchased, setPurchased] = useState<CartItem[]>([]);
     const [cartGroupOpen, setCartGroupOpen] = useState(false);
+    // 리스트에서 "이 리스트로 길찾기"를 누르면 백엔드가 계산해준 전체 경로(층 이동 포함)를
+    // 여기 담아두고, 층을 넘겨볼 때마다 그 층에 해당하는 구간만 필터링해서 다시 그린다.
+    const [activeRoute, setActiveRoute] = useState<CartRoute | null>(null);
+    const [routeLoadingGroupId, setRouteLoadingGroupId] = useState<number | null>(null);
     const [checkoutTargetOpen, setCheckoutTargetOpen] = useState(false);
     // 담을 리스트 선택 — null이면 예전처럼 "기본 장바구니"에 담긴다(하위 호환 기본값).
     const [cartGroups, setCartGroups] = useState<CartGroupOption[]>([]);
@@ -251,6 +256,113 @@ export default function App() {
 
     const handlePlayerArrive = useCallback((point: GridPoint) => {
         setPlayerCell(point);
+    }, []);
+
+    // 지금 보고 있는 층(viewFloor)에 해당하는 구간만 뽑아 캔버스에 그린다.
+    // 해당 층에 지나가는 구간이 없으면(다른 층에서만 도는 리스트) 선을 지운다.
+    const drawRouteForFloor = useCallback((route: CartRoute, floor: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const points = pathPointsOnFloor(route.path, floor);
+        if (points.length === 0) {
+            canvas.clearRoute();
+            return;
+        }
+        const stops = route.stops.filter((s) => s.floor === floor).map((s) => ({ x: s.x, y: s.y }));
+        canvas.drawRoute(points, stops);
+    }, []);
+
+    // 층을 넘겨보는 동안에는(loadFloor가 이전 선을 지운다) 항상 그 층의 구간으로 다시 그려준다.
+    useEffect(() => {
+        if (!activeRoute) return;
+        drawRouteForFloor(activeRoute, viewFloor);
+    }, [activeRoute, viewFloor, drawRouteForFloor]);
+
+    // "리스트 → 이 리스트로 길찾기" 클릭 시: 백엔드에 최적 동선을 요청해서 화면에 안내선으로 그린다.
+    // (캐릭터를 움직이지 않는다 — 쇼핑목록의 "순서대로 안내 시작"과 달리 눈으로 보는 용도.)
+    //
+    // ⚠ /api/navigation/route는 stops 배열을 "받은 순서 그대로" 잇기만 하고 방문 순서를
+    // 스스로 최적화하지 않는다(오른쪽 웹 화면의 StoreMapDialog도 같은 이유로 클라이언트에서
+    // 미리 순서를 정해서 보낸다). 카트에 담긴 순서를 그대로 보내면 매대를 왔다갔다 지그재그로
+    // 도는 경로가 나오므로, 여기서도 먼저 각 상품 위치를 조회해 가까운 매대부터 방문하도록
+    // 순서를 정해서 보낸다 — 완벽한 최적해(TSP)는 아니지만 담긴 순서 그대로보다 훨씬 낫다.
+    const handleShowCartRoute = useCallback(
+        async (groupId: number, items: { skuId: number; name: string }[]) => {
+            if (!playerCell) {
+                setStatusMessage('캐릭터 위치를 아직 확인하지 못했습니다.');
+                setTimeout(() => setStatusMessage(''), 2500);
+                return;
+            }
+            if (items.length === 0) return;
+
+            setRouteLoadingGroupId(groupId);
+            try {
+                // 최근접 이웃(nearest-neighbor) 방문 순서 계산 — 같은 층을 먼저 다 돌고
+                // 나서 다른 층으로 넘어가도록, 층이 다르면 큰 페널티를 더한다.
+                const withLoc = await Promise.all(
+                    items.map(async (it) => ({ item: it, loc: await resolveProductLocation(it.skuId) }))
+                );
+                const found = withLoc.filter(
+                    (v): v is { item: typeof v.item; loc: NonNullable<typeof v.loc> } => v.loc !== null
+                );
+                const notFound = withLoc.filter((v) => v.loc === null).map((v) => v.item);
+
+                const FLOOR_PENALTY = 1000;
+                let cursor = { floor: playerFloor, x: playerCell.x, y: playerCell.y };
+                const pool = [...found];
+                const ordered: typeof items = [];
+                while (pool.length > 0) {
+                    let bestIdx = 0;
+                    let bestDist = Infinity;
+                    pool.forEach((v, i) => {
+                        const floorPenalty = v.loc.floorNo === cursor.floor ? 0 : FLOOR_PENALTY;
+                        const dist = floorPenalty + Math.abs(v.loc.x - cursor.x) + Math.abs(v.loc.y - cursor.y);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestIdx = i;
+                        }
+                    });
+                    const [picked] = pool.splice(bestIdx, 1);
+                    ordered.push(picked.item);
+                    cursor = { floor: picked.loc.floorNo, x: picked.loc.x, y: picked.loc.y };
+                }
+                // 위치를 못 찾은 상품(품절 등)은 끝에 그대로 붙인다 — 백엔드가 UNRESOLVED로 표시해준다.
+                ordered.push(...notFound);
+
+                const route = await fetchCartRoute({
+                    floor: playerFloor,
+                    x: playerCell.x,
+                    y: playerCell.y,
+                    items: ordered,
+                });
+                setActiveRoute(route);
+                setCartGroupOpen(false);
+
+                const startFloor = route.path[0]?.floor ?? playerFloor;
+                if (startFloor !== viewFloor) {
+                    await handleFloorSwitch(startFloor);
+                }
+                drawRouteForFloor(route, startFloor);
+                setStatusMessage(
+                    route.unresolvedCount > 0
+                        ? `🧭 동선 안내: ${route.stops.length}개 매대 · 총 ${route.totalDistance}칸 (${route.unresolvedCount}개는 위치를 찾지 못함)`
+                        : `🧭 동선 안내: ${route.stops.length}개 매대 · 총 ${route.totalDistance}칸`
+                );
+            } catch (err) {
+                console.error('[handleShowCartRoute] 동선 조회 실패', err);
+                setStatusMessage(err instanceof Error ? err.message : '동선을 불러오지 못했습니다.');
+                setTimeout(() => setStatusMessage(''), 3500);
+            } finally {
+                setRouteLoadingGroupId(null);
+            }
+        },
+        [playerFloor, playerCell, viewFloor, handleFloorSwitch, drawRouteForFloor]
+    );
+
+    const handleClearRoute = useCallback(() => {
+        setActiveRoute(null);
+        canvasRef.current?.clearRoute();
+        setStatusMessage('');
     }, []);
 
     const handleTileClick = useCallback(
@@ -679,6 +791,23 @@ export default function App() {
                         </div>
                     )}
                     {statusMessage && <div style={{ fontSize: 12, color: '#22c55e' }}>{statusMessage}</div>}
+                    {activeRoute && (
+                        <button
+                            onClick={handleClearRoute}
+                            style={{
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                border: '1px solid #3a3f4b',
+                                background: '#1e2128',
+                                color: '#60a5fa',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            🧭 동선 지우기
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -776,6 +905,8 @@ export default function App() {
                         setSelectedGroupId(groupId);
                     }}
                     onClose={() => setCartGroupOpen(false)}
+                    onShowRoute={handleShowCartRoute}
+                    routeLoadingGroupId={routeLoadingGroupId}
                 />
             )}
 
