@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 
 interface Props {
     /** frontend(Next.js) 개발 서버 주소. .env에서 VITE_FRONTEND_URL로 오버라이드 가능 */
@@ -6,23 +6,37 @@ interface Props {
     width?: number;
 }
 
+/**
+ * App.tsx가 이 패널을 통해 오른쪽 웹 화면(iframe)에 신호를 보낼 때 쓰는 창구.
+ * 데이터는 실어 보내지 않고 "바뀌었다"는 사실만 알린다 — 받는 쪽이 DB에서 다시 읽으면
+ * 양쪽 값이 어긋날 일이 없기 때문이다.
+ */
+export interface FrontendPanelHandle {
+    /** 시뮬레이션 캐릭터가 장바구니를 건드렸을 때 오른쪽 웹 화면도 다시 읽게 한다. */
+    notifyCartChanged: () => void;
+}
+
 // 시뮬레이션 화면 오른쪽에 frontend(Next.js) 웹 UI를 iframe으로 붙이는 패널.
-// - 상태 동기화(장바구니/주문/경로)는 이 iframe과 직접 하지 않고, 백엔드 API + SSE를 통해서 한다.
-// - 여기서는 "화면 클릭 → frontend 라우팅 이동" 같은 순수 UI 트리거만 postMessage로 보낸다.
-export default function FrontendPanel({
-                                          src = import.meta.env.VITE_FRONTEND_URL ?? 'http://localhost:3000',
-                                          width = 420,
-                                      }: Props) {
+// 양쪽 화면의 장바구니가 새로고침 없이 서로 따라오도록, 아래 두 방향의 알림을 주고받는다.
+//   웹 화면 -> 시뮬레이션 : { source: 'storeflow-frontend',   type: 'CART_CHANGED' }  (App.tsx가 수신)
+//   시뮬레이션 -> 웹 화면 : { source: 'storeflow-simulation', type: 'CART_CHANGED' }  (여기서 발신)
+const FrontendPanel = forwardRef<FrontendPanelHandle, Props>(function FrontendPanel({
+    src = import.meta.env.VITE_FRONTEND_URL ?? 'http://localhost:3000',
+    width = 420,
+}, ref) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
-    // 나중에 App.tsx에서 이 함수를 밖으로 꺼내 쓸 수 있게, ref를 통해 postMessage를 보내는
-    // 헬퍼는 여기서는 최소한만 두고, 실제 이벤트 브리지는 다음 단계(2번)에서 붙인다.
+    // targetOrigin에 iframe src를 그대로 넣는다. '*'로 열어두면 이 메시지가 어떤 창에서든
+    // 읽힐 수 있으므로, 우리가 직접 지정한 프론트엔드 주소로만 가도록 좁혀둔다.
     const postToFrontend = (message: unknown) => {
         iframeRef.current?.contentWindow?.postMessage(message, src);
     };
 
-    // 개발 중 확인용: 필요 없으면 지워도 됨.
-    void postToFrontend;
+    useImperativeHandle(ref, () => ({
+        notifyCartChanged: () => {
+            postToFrontend({ source: 'storeflow-simulation', type: 'CART_CHANGED' });
+        },
+    }));
 
     return (
         <div
@@ -39,11 +53,13 @@ export default function FrontendPanel({
                 title="frontend"
                 src={src}
                 style={{ width: '100%', height: '100%', border: 'none' }}
-                // 결제/스캔·AI 챗봇 음성입력(STT) 등에서 카메라·마이크·클립보드가 필요할 수 있어 넉넉히 허용.
+                // 결제/스캔, AI 챗봇 음성입력(STT) 등에서 카메라와 마이크, 클립보드가 필요할 수 있어 넉넉히 허용.
                 // ⚠ microphone이 빠져있으면 iframe 안(프론트엔드)에서 getUserMedia가 브라우저 프롬프트도
                 //   뜨기 전에 Permissions Policy 단계에서 막혀서, 사이트 설정에 잡히지도 않은 채 "거부됨"처럼 보인다.
                 allow="camera; microphone; clipboard-read; clipboard-write"
             />
         </div>
     );
-}
+});
+
+export default FrontendPanel;
