@@ -24,13 +24,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RiArrowDownSLine, RiMenuLine, RiPencilLine, RiCheckLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiMenuLine, RiPencilLine, RiCheckLine, RiLink } from "@remixicon/react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
+import { Dialog, DialogOverlay, DialogPortal, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useAiPanel } from "./ai-panel-context";
 import { useBottomBarVisibility } from "./bottom-bar-visibility-context";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { apiFetch } from "@/lib/api-client";
+import { loadCartGroups } from "@/lib/cart-storage";
 import { AiChatBody } from "@/components/ai/ai-chat-body";
 import { SessionListDrawer } from "@/components/ai/session-list-drawer";
 
@@ -74,6 +77,9 @@ export function AiMobileSheet() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
+  // ✅ 신규(요청) — 리스트에서 시작한 대화인데 "이 리스트와 연결됨" 표시가 없어서
+  //   안 보이던 문제. 세션 상세(groupId 포함)를 받아서 그 리스트 이름을 같이 보여줌.
+  const [linkedGroupTitle, setLinkedGroupTitle] = useState<string | null>(null);
 
   useEffect(() => {
     setActiveSessionId(sessionId);
@@ -82,11 +88,24 @@ export function AiMobileSheet() {
   useEffect(() => {
     if (!activeSessionId) {
       setServerTitle(null);
+      setLinkedGroupTitle(null);
       return;
     }
-    apiFetch<{ title: string | null }>(`/api/chat/sessions/${activeSessionId}`)
-      .then((s) => setServerTitle(s.title))
-      .catch(() => setServerTitle(null));
+    apiFetch<{ title: string | null; groupId?: number | null }>(`/api/chat/sessions/${activeSessionId}`)
+      .then((s) => {
+        setServerTitle(s.title);
+        if (s.groupId) {
+          loadCartGroups()
+            .then((groups) => setLinkedGroupTitle(groups.find((g) => g.id === s.groupId)?.title ?? null))
+            .catch(() => setLinkedGroupTitle(null));
+        } else {
+          setLinkedGroupTitle(null);
+        }
+      })
+      .catch(() => {
+        setServerTitle(null);
+        setLinkedGroupTitle(null);
+      });
   }, [activeSessionId]);
 
   const displayTitle = activeSessionId ? serverTitle ?? "새로운 대화" : "새로운 대화";
@@ -191,34 +210,16 @@ export function AiMobileSheet() {
               <RiMenuLine size={20} />
             </button>
 
-            {/* ✅ 수정 — 고정 문구 "리브에게 물어보기" 대신 실제 대화 이름. 눌러서 인라인 수정. */}
-            {editingTitle ? (
-              <div className="flex min-w-0 flex-1 items-center gap-1">
-                <input
-                  autoFocus
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitTitle();
-                    if (e.key === "Escape") setEditingTitle(false);
-                  }}
-                  className="h-8 min-w-0 flex-1 rounded-sm border border-border bg-background px-2 text-center text-sm outline-none"
-                />
-                <button type="button" onClick={commitTitle} disabled={renaming} aria-label="이름 저장" className="shrink-0 text-primary disabled:opacity-50">
-                  <RiCheckLine size={18} />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={startEditTitle}
-                className="flex min-w-0 flex-1 items-center justify-center gap-1 text-sm font-semibold disabled:opacity-60"
-                disabled={!activeSessionId}
-              >
-                <span className="truncate">{displayTitle}</span>
-                {activeSessionId && <RiPencilLine size={13} className="shrink-0 text-muted-foreground" />}
-              </button>
-            )}
+            {/* ✅ 수정(요청) — 이름 수정은 헤더 인라인 입력 대신 모달로(아래 Dialog 참고). */}
+            <button
+              type="button"
+              onClick={startEditTitle}
+              className="flex min-w-0 flex-1 items-center justify-center gap-1 text-sm font-semibold disabled:opacity-60"
+              disabled={!activeSessionId}
+            >
+              <span className="truncate">{displayTitle}</span>
+              {activeSessionId && <RiPencilLine size={13} className="shrink-0 text-muted-foreground" />}
+            </button>
 
             <DialogPrimitive.Close
               aria-label="닫기"
@@ -227,6 +228,17 @@ export function AiMobileSheet() {
               <RiArrowDownSLine size={22} />
             </DialogPrimitive.Close>
           </div>
+
+          {/* ✅ 신규(요청) — 이 대화가 특정 리스트와 연결돼 있으면 표시(예전엔 표시가
+              전혀 없어서 연결됐는지 알 방법이 없었음). */}
+          {linkedGroupTitle && (
+            <div className="flex shrink-0 justify-center border-b border-border px-4 py-1.5">
+              <span className="flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                <RiLink size={12} />
+                {linkedGroupTitle} 리스트와 연결됨
+              </span>
+            </div>
+          )}
 
           <div className="min-h-0 flex-1">
             <AiChatBody
@@ -243,6 +255,39 @@ export function AiMobileSheet() {
             currentSessionId={activeSessionId}
             onSelect={(id) => openSession(id)}
           />
+
+          {/* ✅ 신규(요청) — 이름 수정을 인라인 대신 모달로. 이미 열려있는 바텀시트(z-150)
+              위에 떠야 해서, DialogContent(기본 z-105) 대신 오버레이/팝업 z를 직접
+              z-[160]대로 올려서 구성. */}
+          <Dialog open={editingTitle} onOpenChange={(v) => !v && setEditingTitle(false)}>
+            <DialogPortal>
+              <DialogOverlay className="z-[160]" />
+              <DialogPrimitive.Popup
+                data-slot="dialog-content"
+                className="fixed left-1/2 top-1/2 z-[161] grid w-[calc(100%-40px)] max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 rounded-sm bg-popover px-5 py-8 text-sm text-popover-foreground outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+              >
+                <DialogHeader>
+                  <DialogTitle>대화 이름 변경</DialogTitle>
+                </DialogHeader>
+                <Input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && commitTitle()}
+                  placeholder="대화 이름"
+                />
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setEditingTitle(false)}>
+                    취소
+                  </Button>
+                  <Button onClick={commitTitle} disabled={renaming}>
+                    <RiCheckLine size={16} />
+                    저장
+                  </Button>
+                </DialogFooter>
+              </DialogPrimitive.Popup>
+            </DialogPortal>
+          </Dialog>
         </DialogPrimitive.Popup>
       </DialogPortal>
     </Dialog>

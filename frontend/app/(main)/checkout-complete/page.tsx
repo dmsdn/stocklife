@@ -13,10 +13,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiCheckboxCircleFill, RiCoinLine, RiBillLine, RiHome5Line } from "@remixicon/react";
+import { RiCheckboxCircleFill, RiCoinLine, RiBillLine } from "@remixicon/react";
 import { apiFetch, isLoggedIn } from "@/lib/api-client";
 import { readLastCheckout } from "@/lib/checkout-summary";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
+import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 
 interface OrderDetail {
   orderId: number;
@@ -52,7 +53,7 @@ function CheckoutCompleteInner() {
   const pointsEarned = order?.pointsEarned ?? 0;
 
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col items-center justify-center gap-6 px-6 text-center md:max-w-xl">
+    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col items-center justify-center gap-6 px-6 pb-[140px] text-center md:max-w-xl">
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success">
         <RiCheckboxCircleFill size={40} />
       </div>
@@ -87,17 +88,8 @@ function CheckoutCompleteInner() {
         </div>
       </div>
 
-      <div className="flex w-full flex-col gap-2">
-        {orderId != null ? (
-          <button
-            type="button"
-            onClick={() => router.push(`/mypage/receipts/${orderId}`)}
-            className="flex h-[52px] w-full items-center justify-center gap-1.5 rounded-full bg-brand text-base font-medium text-brand-foreground"
-          >
-            <RiBillLine size={18} />
-            전자영수증 보기
-          </button>
-        ) : (
+      <div className="w-full">
+        {orderId == null && (
           <p className="text-xs text-muted-foreground">
             {guestSummary?.serverFailed
               ? "일시적인 서버 오류로 이번 건은 전자영수증이 안 남았어요. 구매 내역은 정상 반영됐어요."
@@ -107,12 +99,24 @@ function CheckoutCompleteInner() {
         <button
           type="button"
           onClick={() => router.push("/")}
-          className="flex h-[52px] w-full items-center justify-center gap-1.5 rounded-full border border-border text-base font-medium"
+          className="mt-4 text-sm text-muted-foreground underline underline-offset-2"
         >
-          <RiHome5Line size={18} />
           홈으로
         </button>
       </div>
+
+      {orderId != null && (
+        <StickyBottomBar>
+          <button
+            type="button"
+            onClick={() => router.push(`/mypage/receipts/${orderId}`)}
+            className="mx-auto flex h-[60px] w-fit items-center justify-center gap-1.5 rounded-full bg-brand px-5 text-base font-medium text-brand-foreground shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
+          >
+            <RiBillLine size={18} />
+            전자영수증 보기
+          </button>
+        </StickyBottomBar>
+      )}
     </div>
   );
 }

@@ -13,8 +13,7 @@ export function HomePaymentBanner() {
         title="앱으로 결제하면 포인트 두 배"
         subtitle="포인트를 적립할수록 더 많은 혜택이 있어요!"
         imageSrc="/banners/promo-points.png"
-        imageWidthRatio={110 / 360}
-        imageHeightRatio={1}
+        imageSize={100}
       />
     </section>
   );

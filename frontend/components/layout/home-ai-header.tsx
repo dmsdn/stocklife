@@ -25,7 +25,7 @@ interface HomeAiHeaderProps {
 
 export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, variant = "inline" }: HomeAiHeaderProps) {
   const unreadCount = useUnreadNotificationCount();
-  const { toggle: toggleAiPanel } = useAiPanel();
+  const { toggle: toggleAiPanel, unread: proactiveUnread } = useAiPanel();
 
   const handleAiClick = () => {
     if (onAiChat) {
@@ -55,7 +55,7 @@ export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, vari
           type="button"
           onClick={handleAiClick}
           aria-label="AI Chat 열기"
-          className="shrink-0 transition-opacity hover:opacity-70"
+          className="relative shrink-0 transition-opacity hover:opacity-70"
         >
           <Image
             src="/icons/logo-ai.svg"
@@ -65,6 +65,17 @@ export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, vari
             priority
             className="h-10 w-auto md:h-8"
           />
+          {/* ✅ 신규(09-03 요청 ②) — 에이전트가 먼저 말을 걸었는데 패널이 닫혀 있으면 여기 뜸.
+              알림 종의 배지(useUnreadNotificationCount)와는 완전히 다른 카운트라 겹쳐 보이지
+              않게 위치를 다르게(-right-1/-top-1, 알림 종 배지보다 조금 작게). */}
+          {proactiveUnread > 0 && (
+            <span
+              aria-label={`AI가 먼저 알린 메시지 ${proactiveUnread}개`}
+              className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-0.5 text-[10px] font-semibold leading-none text-primary-foreground"
+            >
+              {proactiveUnread > 9 ? "9+" : proactiveUnread}
+            </span>
+          )}
         </button>
       </div>
 

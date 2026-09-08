@@ -12,9 +12,10 @@ import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { LocationMapDialog } from "@/components/domain/location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { getAlternatives, compareProducts, type AlternativeProduct, type PopularityItem } from "@/lib/ai-proxy";
 import { addRecentView } from "@/lib/recent-views";
+import { trackConsumerEvent } from "@/lib/consumer-events";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 interface ProductDetail {
@@ -68,8 +69,13 @@ export default function ProductDetailPage() {
     setImageError(false);
     apiFetch<ProductDetail>(`/api/products/${productId}`, { auth: false })
       .then((p) => {
-        setProduct(p);
-        addRecentView({ skuId: p.skuId, name: p.name, price: p.finalPriceKrw, imageUrl: p.imageUrl });
+        const resolved = { ...p, imageUrl: resolveImageUrl(p.imageUrl) ?? null };
+        setProduct(resolved);
+        addRecentView({ skuId: resolved.skuId, name: resolved.name, price: resolved.finalPriceKrw, imageUrl: resolved.imageUrl });
+        // ✅ 신규(09-03 요청 ⑤) — 상세를 열어 본 것이 VIEW. 같은 카테고리 상품을 번갈아
+        //   여는 것이 망설임 감시자(진입 브리핑·재고 전환과 같은 방식으로 백엔드가 반응)의
+        //   재료인데, 전에는 어디서도 VIEW를 안 보내고 있었음.
+        trackConsumerEvent({ event_type: "VIEW", sku_id: resolved.skuId });
       })
       .catch(() => setProduct(null))
       .finally(() => setLoading(false));

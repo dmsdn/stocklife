@@ -15,8 +15,7 @@ export function HomeLoginBanner() {
           title="장보기 리스트, 간편하게 만들어보세요"
           subtitle="리브에게 물어보고 3초 만에 리스트 완성!"
           imageSrc="/banners/promo-list.png"
-          imageWidthRatio={132 / 360}
-          imageHeightRatio={97 / 141}
+          imageSize={100}
         />
       </Link>
     </section>

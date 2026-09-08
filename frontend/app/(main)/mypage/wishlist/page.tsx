@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RiArrowLeftSLine, RiDeleteBin6Line } from "@remixicon/react";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 
 interface WishlistItem {
   skuId: number;
@@ -21,7 +21,7 @@ export default function WishlistPage() {
 
   useEffect(() => {
     apiFetch<WishlistItem[]>("/api/wishlist")
-      .then(setItems)
+      .then((list) => setItems(list.map((i) => ({ ...i, imageUrl: resolveImageUrl(i.imageUrl) ?? null }))))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, []);

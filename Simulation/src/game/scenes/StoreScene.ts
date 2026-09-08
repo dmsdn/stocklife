@@ -81,6 +81,7 @@ const DEPTH_LABEL = 30;
 // 보이던 문제 — 존 이름표보다 위(DEPTH_LABEL보다 큰 값)로 올려서 항상 위에 그려지게 한다.
 const DEPTH_FACILITY = 35;
 const DEPTH_PATH = 40;
+const DEPTH_ROUTE = 41; // 추천 동선은 걷기 경로(DEPTH_PATH)보다 위, NPC/플레이어보다는 아래
 const DEPTH_NPC = 900;
 const DEPTH_PLAYER = 1000;
 
@@ -212,6 +213,10 @@ export default class StoreScene extends Phaser.Scene {
   private playerLabel!: Phaser.GameObjects.Text; // 09-03: 플레이어 머리 위 이름표(휴대폰 뒷번호/비로그인 표시)
   private playerGrid: GridPoint = { x: 2, y: 2 };
   private pathGraphics!: Phaser.GameObjects.Graphics;
+  // 캐릭터가 실제로 걷는 pathGraphics(초록, walkTo마다 clear됨)와 별개 레이어.
+  // "장바구니 추천 동선"은 캐릭터를 움직이지 않고 화면에 안내선만 계속 띄워두는 용도라
+  // walkTo/advancePath가 pathGraphics를 지울 때 같이 지워지면 안 되어 분리했다.
+  private routeGraphics!: Phaser.GameObjects.Graphics;
   private floorTileLayer?: Phaser.GameObjects.Graphics;
   private shelfLayer!: Phaser.GameObjects.Container;
   private labelLayer!: Phaser.GameObjects.Container;
@@ -313,6 +318,8 @@ export default class StoreScene extends Phaser.Scene {
 
     this.pathGraphics = this.add.graphics();
     this.pathGraphics.setDepth(DEPTH_PATH);
+    this.routeGraphics = this.add.graphics();
+    this.routeGraphics.setDepth(DEPTH_ROUTE);
     this.player = this.buildPlayer();
     this.placePlayerAt(this.findEntranceCell());
     this.spawnNpcs(NPC_COUNT);
@@ -493,6 +500,7 @@ export default class StoreScene extends Phaser.Scene {
     }
     this.setPlayerVisible(!opts?.hidePlayer);
     this.pathGraphics.clear();
+    this.routeGraphics.clear(); // 이전 층에서 그려둔 추천 동선은 층이 바뀌면 좌표가 무의미해지므로 같이 지운다
     this.currentPath = [];
     this.moving = false;
     this.spawnNpcs(NPC_COUNT);
@@ -533,6 +541,40 @@ export default class StoreScene extends Phaser.Scene {
 
   teleportTo(cell: GridPoint) {
     this.placePlayerAt(cell);
+  }
+
+  /**
+   * 장바구니 동선 안내 — 백엔드(navigation.CartRouteService)가 DB map_cells 기반 A*로
+   * 이미 계산해준 실제 경로 좌표(현재 층 구간만 필터링된 것)를 받아서 그대로 선으로 그린다.
+   * 프론트에서 경로를 다시 계산하지 않는다 — 캐릭터를 걷게 하지도 않고 안내선만 표시한다.
+   * stops는 그 중 "몇 번째로 들르는 매대인지" 표시할 지점들(옵션).
+   */
+  drawRoute(pathPoints: GridPoint[], stops: GridPoint[] = []) {
+    this.routeGraphics.clear();
+    if (pathPoints.length < 2) return;
+    this.drawRouteLine(pathPoints, stops);
+  }
+
+  clearRoute() {
+    this.routeGraphics.clear();
+  }
+
+  private drawRouteLine(path: GridPoint[], stops: GridPoint[]) {
+    this.routeGraphics.lineStyle(4, 0x3b82f6, 0.85);
+    this.routeGraphics.beginPath();
+    path.forEach((p, i) => {
+      const px = p.x * TILE + TILE / 2;
+      const py = p.y * TILE + TILE / 2;
+      if (i === 0) this.routeGraphics.moveTo(px, py);
+      else this.routeGraphics.lineTo(px, py);
+    });
+    this.routeGraphics.strokePath();
+
+    // 각 방문 지점(몇 번째로 들를지)에 번호 원을 찍어준다.
+    this.routeGraphics.fillStyle(0x3b82f6, 1);
+    stops.forEach((p) => {
+      this.routeGraphics.fillCircle(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, 7);
+    });
   }
 
   getPlayerGrid(): GridPoint {
@@ -694,8 +736,8 @@ export default class StoreScene extends Phaser.Scene {
         const key = `${cell.x},${cell.y}`;
         if (nearest && !this.locationByCell.has(key)) this.locationByCell.set(key, nearest);
         const rect = this.add.rectangle(
-          cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
-          TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
+            cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
+            TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
         this.shelfLayer.add(rect);
       }
     } else if (occupiedCells.length > 0) {

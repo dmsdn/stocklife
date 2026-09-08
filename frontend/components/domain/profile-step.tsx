@@ -66,7 +66,7 @@ export function ProfileStep({
           </p>
         )}
 
-        <div className="mt-[43px] space-y-[11px]">{children}</div>
+        <div className="mt-[53px] space-y-[11px]">{children}</div>
       </div>
 
       {/* ✅ 수정(2026-09) — mt-auto(문서 흐름 안 맨 아래) 대신 화면에 진짜 고정(StickyBottomBar).
