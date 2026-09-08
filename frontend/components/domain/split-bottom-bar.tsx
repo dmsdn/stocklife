@@ -24,9 +24,7 @@ interface SplitBottomBarProps {
 const toneClass: Record<NonNullable<SplitBottomBarProps["leftTone"]>, string> = {
   muted: "text-muted-foreground",
   danger: "text-danger",
-  // ✅ 수정(요청) — 그냥 주황 글씨(text-main)만으로는 흰 배경 위에서 잘 안 보인다는
-  //   피드백으로, 주황 바탕 + 흰 글씨로 변경(취소|추가처럼 확정 액션 쪽에 씀).
-  main: "bg-main text-white",
+  main: "text-main",
 };
 
 export function SplitBottomBar({

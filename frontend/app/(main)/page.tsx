@@ -33,7 +33,7 @@ import { getMyProfile } from "@/lib/consumer-api";
 import { getClientId } from "@/lib/client-id";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notifications";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
-import { getCategoryColor } from "@/lib/category-colors";
+import { getCategoryColor, buildCategoryPalette } from "@/lib/category-colors";
 import { CartPicker } from "@/components/home/cart-picker";
 import { Footer } from "@/components/layout/footer";
 import type { DashboardChatSession } from "@/components/home/home-dashboard";
@@ -255,8 +255,8 @@ export default function HomePage() {
             // ✅ 쇼핑 중(스캔 세션 있음)일 때만 "방문해주셔서 감사합니다" 카드,
             //   평소(세션 없음)엔 "다음 방문 날짜" 카드 — 예전엔 이 둘이 뒤바뀌어 있었음.
             <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-white p-5">
-              <p className="text-17 font-medium">{shoppingSession ? "STOCK LIFE 매장에 방문해주셔서 감사합니다." : "이번주 장보기"}</p>
-              <p className="mt-1 text-sm text-content-tertiary">영업중 · 11:00 마감</p>
+              <p className="text-17 font-medium">{shoppingSession ? "STOCK LIFE 매장에 방문해주셔서 감사합니다." : ""}</p>
+              <p className="mt-1 text-sm text-content-tertiary">{shoppingSession ? "영업중 · 11:00 마감" : ""}</p>
               {!shoppingSession ? (
                 <>
                   <p className="mt-1 text-17 font-medium">다음 방문 날짜는 9월 9일이에요.</p>
@@ -359,7 +359,7 @@ export default function HomePage() {
               <img
                 src="/banners/promo-points.png"
                 alt=""
-                className="absolute bottom-0 right-4 h-[75px] w-auto object-contain object-bottom"
+                className="absolute bottom-0 right-4 h-[100px] w-[100px] object-contain object-bottom"
               />
             </section>
           ) : (
@@ -374,7 +374,7 @@ export default function HomePage() {
               <img
                 src="/banners/promo-list.png"
                 alt=""
-                className="absolute -bottom-2 -right-2 h-[110px] w-auto object-contain"
+                className="absolute -bottom-2 -right-2 h-[100px] w-[100px] object-contain"
               />
             </button>
           )}
@@ -401,8 +401,11 @@ export default function HomePage() {
                 const total = sorted.reduce((s, d) => s + d.totalSpentKrw, 0);
                 const top = sorted.slice(0, 3);
                 const restAmount = sorted.slice(3).reduce((s, d) => s + d.totalSpentKrw, 0);
+                // ✅ 수정(2026-09) — 해시 기반 색상이 카테고리끼리 너무 비슷하게 나오던
+                //   문제 수정: 지금 화면에 나온 카테고리들만 균등 분산 팔레트로.
+                const palette = buildCategoryPalette(top.map((d) => d.categoryL1));
                 const rows: { label: string; amount: number; color: string }[] = [
-                  ...top.map((d) => ({ label: d.categoryL1, amount: d.totalSpentKrw, color: getCategoryColor(d.categoryL1) })),
+                  ...top.map((d) => ({ label: d.categoryL1, amount: d.totalSpentKrw, color: getCategoryColor(d.categoryL1, 45, palette) })),
                   ...(restAmount > 0 ? [{ label: "그 외", amount: restAmount, color: "#ddd" }] : []),
                 ];
                 return (

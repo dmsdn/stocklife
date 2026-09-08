@@ -47,7 +47,20 @@ function resolveApiBaseUrl(): string {
   return "http://localhost:8080"; // 서버사이드 렌더링 시점 폴백
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
+
+// ✅ 신규(2026-09) — 상품 이미지 URL 문제 발견: DB의 image_url 컬럼이 "/img/211590.webp"처럼
+//   상대경로로 들어있는데, <img src={product.imageUrl}>로 그대로 렌더링하면 브라우저가 이걸
+//   "지금 열려있는 페이지 주소" 기준으로 해석합니다 — 즉 프론트 개발서버(3000) 기준
+//   localhost:3000/img/211590.webp 로 요청이 가버려서 항상 404였습니다(이미지는 백엔드
+//   8080의 정적 리소스로 서빙되고 있음). photo-search 버그와 똑같은 패턴 — 상대경로가
+//   엉뚱한 origin으로 해석되는 문제. 이미 http(s):// 나 data: 로 시작하는 절대경로(외부
+//   CDN 등)는 그대로 두고, "/"로 시작하는 상대경로만 API_BASE_URL을 붙여줍니다.
+export function resolveImageUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  if (/^(https?:)?\/\//.test(url) || url.startsWith("data:")) return url;
+  return `${API_BASE_URL}${url.startsWith("/") ? url : `/${url}`}`;
+}
 
 const ACCESS_TOKEN_KEY = "storeflow_access_token";
 const REFRESH_TOKEN_KEY = "storeflow_refresh_token";

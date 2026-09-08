@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api-client";
-import { getCategoryColor } from "@/lib/category-colors";
+import { getCategoryColor, buildCategoryPalette } from "@/lib/category-colors";
 import { Card } from "@/components/ui/card";
 
 interface CategorySpending {
@@ -38,9 +38,13 @@ export function HomeSpendingAnalysis() {
   const restTotal = sorted.slice(3).reduce((sum, [, v]) => sum + v, 0);
   const total = sorted.reduce((sum, [, v]) => sum + v, 0);
   const topCategoryLabel = sorted[0]?.[0] ?? "";
+  // ✅ 수정(2026-09) — 카테고리 이름 해시만으로 색을 뽑으면 두 카테고리가 우연히
+  //   가까운 hue를 받아 구분이 안 갈 수 있었음. 이 카드에 실제로 나온 이름들만 넘겨서
+  //   서로 최대한 떨어진 색이 나오게(lib/category-colors.ts 참고).
+  const palette = buildCategoryPalette(top.map(([label]) => label));
 
   const segments: { label: string; value: number; color: string }[] = [
-    ...top.map(([label, value]) => ({ label, value, color: getCategoryColor(label) })),
+    ...top.map(([label, value]) => ({ label, value, color: getCategoryColor(label, 45, palette) })),
     ...(restTotal > 0 ? [{ label: "그 외", value: restTotal, color: "var(--muted)" }] : []),
   ];
 

@@ -77,18 +77,31 @@ export function SaveToListDialog({ open, onClose, onSelect }: SaveToListDialogPr
 
           <div className="space-y-1">
             {groups.map((group) => (
-              <button
+              <div
                 key={group.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => toggle(group.id)}
-                className="flex w-full items-center justify-between rounded-sm px-3 py-3 text-left text-sm hover:bg-muted"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggle(group.id);
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center justify-between rounded-sm px-3 py-3 text-left text-sm hover:bg-muted"
               >
                 <span className="flex items-center gap-2">
-                  <Checkbox checked={checkedIds.has(group.id)} onChange={() => toggle(group.id)} />
+                  {/* ✅ 체크박스 자체도 role="button"이라(components/ui/checkbox.tsx),
+                      클릭이 이 줄의 onClick까지 버블링되면 토글이 두 번(체크박스 자기
+                      클릭 + 줄 onClick) 일어나서 상태가 그대로인 것처럼 보임 —
+                      stopPropagation으로 막음. */}
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <Checkbox checked={checkedIds.has(group.id)} onChange={() => toggle(group.id)} variant="brand" />
+                  </span>
                   {group.title}
                 </span>
                 <span className="text-xs text-muted-foreground">{group.products.length}개</span>
-              </button>
+              </div>
             ))}
           </div>
 

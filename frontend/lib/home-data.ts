@@ -1,4 +1,4 @@
-import { apiFetch, isLoggedIn } from "./api-client";
+import { apiFetch, isLoggedIn, resolveImageUrl } from "./api-client";
 import { MOCK_PRODUCTS, getFinalPrice, type MockProduct } from "./mock-products";
 
 export type HomeProduct = {
@@ -49,7 +49,7 @@ function mockToRecommended(p: MockProduct): RecommendedProduct {
     name: p.name,
     category: p.category,
     price: getFinalPrice(p),
-    image: p.imageUrl ?? "",
+    image: resolveImageUrl(p.imageUrl) ?? "",
     reason: `${p.category} 카테고리 인기 상품이에요.`,
     badge: p.discountPercent > 0 ? "할인 중" : "추천",
   };
@@ -65,7 +65,7 @@ function mockToDiscovered(p: MockProduct): DiscoveredProduct {
     originalPrice: p.price,
     discount: `${p.discountPercent}%`,
     reason: `정가보다 ${(p.price - finalPrice).toLocaleString()}원 저렴해요.`,
-    image: p.imageUrl ?? "",
+    image: resolveImageUrl(p.imageUrl) ?? "",
   };
 }
 
@@ -79,7 +79,7 @@ export async function fetchRecommendedProducts(): Promise<RecommendedProduct[]> 
       name: p.name,
       category: p.categoryL1,
       price: p.finalPriceKrw,
-      image: p.imageUrl ?? "",
+      image: resolveImageUrl(p.imageUrl) ?? "",
       reason: `${p.categoryL1} 카테고리 인기 상품이에요.`,
       badge: p.onPromo ? "할인 중" : "추천",
     }));
@@ -102,7 +102,7 @@ export async function fetchDiscoveredProducts(): Promise<DiscoveredProduct[]> {
       discount:
         p.priceKrw > 0 ? `${Math.round(((p.priceKrw - p.finalPriceKrw) / p.priceKrw) * 100)}%` : "0%",
       reason: `정가보다 ${(p.priceKrw - p.finalPriceKrw).toLocaleString()}원 저렴해요.`,
-      image: p.imageUrl ?? "",
+      image: resolveImageUrl(p.imageUrl) ?? "",
     }));
   } catch {
     return MOCK_PRODUCTS.filter((p) => p.discountPercent > 0).slice(0, 6).map(mockToDiscovered);
@@ -136,7 +136,7 @@ export async function fetchFrequentProducts(): Promise<HomeProduct[]> {
           name: d.name,
           category: d.categoryL1,
           price: d.finalPriceKrw,
-          image: d.imageUrl ?? "",
+          image: resolveImageUrl(d.imageUrl) ?? "",
         };
       })
       .filter((p): p is HomeProduct => p !== null);
@@ -155,7 +155,7 @@ export async function fetchPopularProducts(): Promise<HomeProduct[]> {
       name: p.name,
       category: p.categoryL1,
       price: p.finalPriceKrw,
-      image: p.imageUrl ?? "",
+      image: resolveImageUrl(p.imageUrl) ?? "",
     }));
   } catch {
     return MOCK_PRODUCTS.slice(0, 8).map((p) => ({
@@ -163,7 +163,7 @@ export async function fetchPopularProducts(): Promise<HomeProduct[]> {
       name: p.name,
       category: p.category,
       price: getFinalPrice(p),
-      image: p.imageUrl ?? "",
+      image: resolveImageUrl(p.imageUrl) ?? "",
     }));
   }
 }

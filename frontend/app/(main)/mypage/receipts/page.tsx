@@ -21,6 +21,8 @@ interface Order {
   items: { skuId: number; productName: string; priceKrw: number; quantity: number }[];
   orderedAt?: string;
   paymentMethod?: string;
+  pointsUsed?: number;
+  pointsEarned?: number;
 }
 
 const ALL_MONTHS = "전체";
@@ -33,7 +35,16 @@ function buildDummyOrders(): Order[] {
   const mk = (offsetDays: number, id: number, amount: number, items: Order["items"]): Order => {
     const d = new Date(now);
     d.setDate(d.getDate() - offsetDays);
-    return { orderId: -id, totalAmount: amount, status: "PAID", orderedAt: d.toISOString(), paymentMethod: "카드결제", items };
+    return {
+      orderId: -id,
+      totalAmount: amount,
+      status: "PAID",
+      orderedAt: d.toISOString(),
+      paymentMethod: "카드결제",
+      pointsUsed: 0,
+      pointsEarned: Math.floor(amount * 0.02),
+      items,
+    };
   };
   return [
     mk(2, 1, 24800, [

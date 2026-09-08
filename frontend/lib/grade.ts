@@ -25,8 +25,8 @@ export function calculateGrade(accumulatedPoints: number): GradeTier {
 // ✅ 신규 — 등급별 포인트 바 색상(요청 2번, 직접 지정한 색상 코드 그대로).
 export const GRADE_COLORS: Record<GradeTier["key"], string> = {
   BASIC: "#87D78A",
-  BRONZE: "#C1C4CA",
-  SILVER: "#D99368",
+  BRONZE: "#D99368",
+  SILVER: "#C1C4CA",
   GOLD: "#F7E259",
 };
 

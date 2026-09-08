@@ -38,7 +38,8 @@ import { Input } from "@/components/ui/input";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
-import { apiFetch, isLoggedIn, ApiError } from "@/lib/api-client";
+import { apiFetch, isLoggedIn, ApiError, resolveImageUrl } from "@/lib/api-client";
+import { trackConsumerEvent } from "@/lib/consumer-events";
 import { writeLastCheckout } from "@/lib/checkout-summary";
 import {
   addProductToCartGroup,
@@ -227,6 +228,10 @@ function ScanPageInner() {
     const current = groups.find((g) => g.id === groupId)?.products.find((p) => p.id === skuId);
     if (!current) return;
 
+    // ✅ 신규(09-03 요청 ④) — 스캔 취소(카트에서 빼기)도 행동 신호. 같은 카테고리를
+    //   담았다 뺐다 반복하는 것이 망설임 감시의 재료라 SCAN_ADD와 짝을 맞춰 보냄.
+    trackConsumerEvent({ event_type: "SCAN_REMOVE", sku_id: skuId });
+
     const nextQty = current.quantity - quantity;
 
     updateCartGroups((gs) =>
@@ -298,6 +303,11 @@ function ScanPageInner() {
         categoryL1?: string;
         imageUrl?: string | null;
         discontinued?: boolean;
+        // ✅ 신규(09-03 요청 ④) — 백엔드가 PICK 매대 위치를 같이 줌(요청②) — SCAN_ADD의
+        //   위치 앵커. 아직 이 값을 안 내려주는 상품/백엔드 버전이면 undefined로 와서
+        //   아래에서 자동으로 VIEW로 대체 전송됨(에러 아님).
+        pickLocationId?: string | null;
+        pickFloorNo?: number | null;
       }>(`/api/products/barcode/${code.trim()}`, { auth: false });
 
       // ✅ "몇 개 뺄지" 골라서 무장해둔 상태(pendingAction)에서 그 상품 바코드를 다시
@@ -326,7 +336,7 @@ function ScanPageInner() {
         name: found.name,
         category: found.categoryL1 ?? "",
         price: found.finalPriceKrw ?? found.priceKrw,
-        image: found.imageUrl ?? undefined,
+        image: resolveImageUrl(found.imageUrl) ?? undefined,
       });
 
       // ✅ Set은 삽입 순서를 유지합니다 — delete 후 다시 add해서 "방금 스캔한 상품"이
@@ -338,6 +348,17 @@ function ScanPageInner() {
         writeShoppingSession({ groupId: currentGroupId, scannedSkuIds: [...next] });
         return next;
       });
+      // ✅ 신규(09-03 요청 ④) — 행동 신호. 이 한 줄이 없으면 에이전트는 손님이 매장에
+      //   들어온 것도, 어디 서 있는지도 모릅니다(진입 브리핑·위치 안내·망설임 개입이 전부
+      //   이 이벤트에서 깨어남). 세션 id는 채팅과 같은 값이라(getOrCreateSessionId) 브리핑이
+      //   지금 대화에 붙습니다. 위치가 없으면(pickLocationId 없음) location_id 없이 안 보내고
+      //   VIEW로 남김 — 백엔드가 SCAN_ADD는 locationId 필수라 없이 보내면 에러가 날 수 있음.
+      if (found.pickLocationId) {
+        trackConsumerEvent({ event_type: "SCAN_ADD", sku_id: found.skuId, location_id: found.pickLocationId });
+      } else {
+        trackConsumerEvent({ event_type: "VIEW", sku_id: found.skuId });
+      }
+
       refreshGroups();
     } catch (e) {
       // ✅ 수정(2026-09) — 무조건 "상품을 찾을 수 없어요"만 보여주고 있었는데, 실제로는
@@ -743,6 +764,13 @@ function ScanPageInner() {
             </button>
           </div>
         )}
+
+        {/* ✅ 수정(요청) — 목록이 접혀있을 때(max-h-48) 이 아래로 결제 푸터가 바로
+            붙어버려서 화면 하단에 빈 여백이 남았음. 목록을 펼치면(listExpanded, flex-1)
+            그 자체가 남는 공간을 다 차지해서 푸터가 화면 맨 아래에 붙는 것처럼, 접혀있을
+            때도 이 스페이서가 flex-1로 남는 공간을 대신 떠맡아서 항상 푸터가 맨 아래에
+            붙게 함. */}
+        {!listExpanded && <div className="flex-1" />}
 
         {/* ✅ 결제 — 전역 하단탭바 대신 이 화면 내내 여기 고정.
             ✅ 수정(요청) — 패딩/간격을 줄여서 전체 높이를 더 컴팩트하게. 적립 포인트

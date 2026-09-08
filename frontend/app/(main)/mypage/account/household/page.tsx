@@ -23,7 +23,7 @@ function QuestionBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-10 space-y-[11px]">
+    <div className="mt-10 space-y-[21px]">
       <h1 className="text-2xl font-bold leading-8">{title}</h1>
       <div className="space-y-2">{children}</div>
     </div>
