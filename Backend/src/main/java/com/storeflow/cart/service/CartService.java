@@ -231,22 +231,34 @@ public class CartService {
     }
 
     @Transactional
-    public CartItemResponse addItemToGroup(Long consumerId, Long groupId, AddCartItemRequest request) {
-        CartGroup group = requireOwnedGroup(consumerId, groupId);
-        requireNotCompleted(group);
-        LocalDateTime now = LocalDateTime.now();
-        CartItem existing = findAndMergeDuplicateItems(groupId, request.getSkuId());
-        CartItem item;
-        if (existing != null) {
-            existing.increaseQuantity(request.getQuantity());
-            existing.markScanned(now);
-            item = existing;
-        } else {
-            CartItem created = cartItemRepository.save(
-                    new CartItem(groupId, request.getSkuId(), request.getQuantity()));
-            created.markScanned(now);
-            item = created;
-        }
+    public CartItemResponse addItemToGroup(
+            Long consumerId,
+            Long groupId,
+            AddCartItemRequest request
+    ) {
+        requireOwnedGroup(consumerId, groupId);
+
+        CartItem item = cartItemRepository
+                .findByCartGroupIdAndSkuId(
+                        groupId,
+                        request.getSkuId()
+                )
+                .map(existing -> {
+                    existing.increaseQuantity(
+                            request.getQuantity()
+                    );
+                    return existing;
+                })
+                .orElseGet(() ->
+                        cartItemRepository.save(
+                                new CartItem(
+                                        groupId,
+                                        request.getSkuId(),
+                                        request.getQuantity()
+                                )
+                        )
+                );
+
         return new CartItemResponse(item);
     }
 
