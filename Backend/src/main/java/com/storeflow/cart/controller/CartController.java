@@ -1,6 +1,7 @@
 package com.storeflow.cart.controller;
 
 import com.storeflow.cart.dto.*;
+import com.storeflow.cart.service.CartRouteService;
 import com.storeflow.cart.service.CartService;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
 import jakarta.validation.Valid;
@@ -14,11 +15,30 @@ import java.util.List;
 @RequestMapping("/api/cart")
 public class CartController {
     private final CartService cartService;
+    private final CartRouteService cartRouteService;
     private final ConsumerJwtUtil jwtUtil;
 
-    public CartController(CartService cartService, ConsumerJwtUtil jwtUtil) {
+    public CartController(CartService cartService, CartRouteService cartRouteService, ConsumerJwtUtil jwtUtil) {
         this.cartService = cartService;
+        this.cartRouteService = cartRouteService;
         this.jwtUtil = jwtUtil;
+    }
+
+    /**
+     * 장바구니(체크된 항목)에 담긴 상품들을 가장 효율적인 순서로 담기 위한 동선.
+     * startX/startY/startFloor는 시뮬레이션 화면 속 캐릭터의 현재 위치 — 생략하면 1층 (0,0)에서
+     * 출발한다고 가정한다. 프론트는 이 응답의 stops를 순서대로 이어 A*로 선을 그린다.
+     */
+    @GetMapping("/groups/{groupId}/route")
+    public ResponseEntity<CartRouteResponse> getGroupRoute(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "1") int startFloor,
+            @RequestParam(defaultValue = "0") int startX,
+            @RequestParam(defaultValue = "0") int startY
+    ) {
+        return ResponseEntity.ok(cartRouteService.getRoute(
+                requireConsumerId(authorization), groupId, startFloor, startX, startY));
     }
 
     @GetMapping

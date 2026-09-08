@@ -81,6 +81,7 @@ const DEPTH_LABEL = 30;
 // 보이던 문제 — 존 이름표보다 위(DEPTH_LABEL보다 큰 값)로 올려서 항상 위에 그려지게 한다.
 const DEPTH_FACILITY = 35;
 const DEPTH_PATH = 40;
+const DEPTH_ROUTE = 41; // 추천 동선은 걷기 경로(DEPTH_PATH)보다 위, NPC/플레이어보다는 아래
 const DEPTH_NPC = 900;
 const DEPTH_PLAYER = 1000;
 
@@ -212,6 +213,10 @@ export default class StoreScene extends Phaser.Scene {
   private playerLabel!: Phaser.GameObjects.Text; // 09-03: 플레이어 머리 위 이름표(휴대폰 뒷번호/비로그인 표시)
   private playerGrid: GridPoint = { x: 2, y: 2 };
   private pathGraphics!: Phaser.GameObjects.Graphics;
+  // 캐릭터가 실제로 걷는 pathGraphics(초록, walkTo마다 clear됨)와 별개 레이어.
+  // "장바구니 추천 동선"은 캐릭터를 움직이지 않고 화면에 안내선만 계속 띄워두는 용도라
+  // walkTo/advancePath가 pathGraphics를 지울 때 같이 지워지면 안 되어 분리했다.
+  private routeGraphics!: Phaser.GameObjects.Graphics;
   private floorTileLayer?: Phaser.GameObjects.Graphics;
   private shelfLayer!: Phaser.GameObjects.Container;
   private labelLayer!: Phaser.GameObjects.Container;
@@ -310,6 +315,8 @@ export default class StoreScene extends Phaser.Scene {
 
     this.pathGraphics = this.add.graphics();
     this.pathGraphics.setDepth(DEPTH_PATH);
+    this.routeGraphics = this.add.graphics();
+    this.routeGraphics.setDepth(DEPTH_ROUTE);
     this.player = this.buildPlayer();
     this.placePlayerAt(this.findEntranceCell());
     this.spawnNpcs(NPC_COUNT);
@@ -479,6 +486,7 @@ export default class StoreScene extends Phaser.Scene {
     }
     this.setPlayerVisible(!opts?.hidePlayer);
     this.pathGraphics.clear();
+    this.routeGraphics.clear(); // 이전 층에서 그려둔 추천 동선은 층이 바뀌면 좌표가 무의미해지므로 같이 지운다
     this.currentPath = [];
     this.moving = false;
     this.spawnNpcs(NPC_COUNT);
@@ -519,6 +527,67 @@ export default class StoreScene extends Phaser.Scene {
 
   teleportTo(cell: GridPoint) {
     this.placePlayerAt(cell);
+  }
+
+  /**
+   * 장바구니 동선 안내 — 백엔드가 정해준 방문 순서(waypoints)를 받아서, 구간마다
+   * findPath(A*)를 이어붙여 하나의 선으로 그린다. 캐릭터를 실제로 걷게 하지는 않고
+   * (walkTo와 달리) 화면에 안내선만 표시한다.
+   *
+   * 각 waypoint는 매대 칸(통행 불가) 좌표일 수 있으므로 걷기 목적지 계산과 똑같이
+   * nearestWalkableTo로 "그 매대 바로 앞" 통로 칸을 실제 목표로 삼는다.
+   *
+   * 반환값: 전 구간을 다 연결할 수 있었으면 true. 하나라도 경로가 끊겨 있으면(고립된
+   * 매대 등) false를 반환하고, 그래도 이어붙일 수 있었던 구간까지는 그려서 보여준다.
+   */
+  drawRoute(waypoints: GridPoint[]): boolean {
+    this.routeGraphics.clear();
+    if (waypoints.length === 0) return true;
+
+    let fullyConnected = true;
+    let cursor: GridPoint = this.playerGrid;
+    const fullPath: GridPoint[] = [cursor];
+    const stopMarkers: GridPoint[] = [];
+
+    for (const raw of waypoints) {
+      const goal = this.grid.nearestWalkableTo(raw) ?? raw;
+      const segment = findPath(this.grid, cursor, goal);
+      if (segment.length === 0) {
+        fullyConnected = false;
+        continue; // 이 구간만 건너뛰고 나머지는 계속 이어본다
+      }
+      // segment[0]은 cursor와 같은 칸이므로 이어붙일 때 중복 제거.
+      fullPath.push(...segment.slice(1));
+      stopMarkers.push(goal);
+      cursor = goal;
+    }
+
+    if (fullPath.length > 1) {
+      this.drawRouteLine(fullPath, stopMarkers);
+    }
+    return fullyConnected;
+  }
+
+  clearRoute() {
+    this.routeGraphics.clear();
+  }
+
+  private drawRouteLine(path: GridPoint[], stops: GridPoint[]) {
+    this.routeGraphics.lineStyle(4, 0x3b82f6, 0.85);
+    this.routeGraphics.beginPath();
+    path.forEach((p, i) => {
+      const px = p.x * TILE + TILE / 2;
+      const py = p.y * TILE + TILE / 2;
+      if (i === 0) this.routeGraphics.moveTo(px, py);
+      else this.routeGraphics.lineTo(px, py);
+    });
+    this.routeGraphics.strokePath();
+
+    // 각 방문 지점(몇 번째로 들를지)에 번호 원을 찍어준다.
+    this.routeGraphics.fillStyle(0x3b82f6, 1);
+    stops.forEach((p) => {
+      this.routeGraphics.fillCircle(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, 7);
+    });
   }
 
   getPlayerGrid(): GridPoint {
@@ -680,8 +749,8 @@ export default class StoreScene extends Phaser.Scene {
         const key = `${cell.x},${cell.y}`;
         if (nearest && !this.locationByCell.has(key)) this.locationByCell.set(key, nearest);
         const rect = this.add.rectangle(
-          cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
-          TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
+            cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
+            TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
         this.shelfLayer.add(rect);
       }
     } else if (occupiedCells.length > 0) {
