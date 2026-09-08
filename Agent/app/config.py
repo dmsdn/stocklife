@@ -237,3 +237,9 @@ WATCH_SESSION_TTL_SEC = 1800      # 30분 무소식 세션은 잊는다 — 상�
 # 데모에서 사진 기능을 쓸 때만 켠다. 환경변수로도 켤 수 있게 해 두어
 # 같은 코드로 두 가지 서버를 띄울 수 있다.
 LOAD_PHOTO_ENCODER = os.environ.get("LOAD_PHOTO_ENCODER", "0") == "1"
+
+# 사진 추론의 장치 선택. auto는 기존 동작, cpu는 별도 학습 중인 GPU를 사용하지 않는다.
+# 환경값을 명시하면 가용 메모리를 보고 임의로 학습 프로세스를 중단할 이유가 없다.
+PHOTO_DEVICE = os.environ.get("PHOTO_DEVICE", "auto").lower()
+if PHOTO_DEVICE not in {"auto", "cpu", "cuda"}:
+    raise ValueError("PHOTO_DEVICE는 auto/cpu/cuda 중 하나여야 합니다.")
