@@ -11,7 +11,7 @@ import java.util.*;
 @Service
 public class CartRouteService {
 
-    private static final String DEFAULT_GROUP_TITLE = "기본 장바구니";
+    private static final String DEFAULT_GROUP_TITLE = "빠른 장보기";
 
     // 층 이동 비용.
     // 일반 셀 1칸 이동보다 엘리베이터/에스컬레이터 이동을 비싸게 본다.
