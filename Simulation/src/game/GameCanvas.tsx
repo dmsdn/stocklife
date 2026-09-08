@@ -13,8 +13,9 @@ export interface GameCanvasHandle {
     loadFloor: (floorData: FloorData, opts?: { startCell?: GridPoint; hidePlayer?: boolean }) => void;
     walkTo: (goal: GridPoint, onArrive?: (success: boolean) => void) => void;
     teleportTo: (cell: GridPoint) => void;
-    // 장바구니 추천 동선을 파란 선으로 표시/제거한다. drawRoute는 전 구간이 다 이어졌으면 true.
-    drawRoute: (waypoints: GridPoint[]) => boolean;
+    // 장바구니 추천 동선을 파란 선으로 표시/제거한다.
+    // 백엔드가 이미 계산해 준 실제 경로 좌표(현재 층 구간만)를 그대로 그린다.
+    drawRoute: (pathPoints: GridPoint[], stops?: GridPoint[]) => void;
     clearRoute: () => void;
     setControlsEnabled: (enabled: boolean) => void;
     setPlayerVisible: (visible: boolean) => void;
@@ -144,9 +145,9 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
             const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
             scene?.teleportTo(cell);
         },
-        drawRoute: (waypoints) => {
+        drawRoute: (pathPoints, stops) => {
             const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
-            return scene?.drawRoute(waypoints) ?? false;
+            scene?.drawRoute(pathPoints, stops);
         },
         clearRoute: () => {
             const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;

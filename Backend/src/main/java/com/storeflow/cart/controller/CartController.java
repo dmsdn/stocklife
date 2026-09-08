@@ -1,7 +1,6 @@
 package com.storeflow.cart.controller;
 
 import com.storeflow.cart.dto.*;
-import com.storeflow.cart.service.CartRouteService;
 import com.storeflow.cart.service.CartService;
 import com.storeflow.global.jwt.ConsumerJwtUtil;
 import jakarta.validation.Valid;
@@ -15,31 +14,21 @@ import java.util.List;
 @RequestMapping("/api/cart")
 public class CartController {
     private final CartService cartService;
-    private final CartRouteService cartRouteService;
     private final ConsumerJwtUtil jwtUtil;
 
-    public CartController(CartService cartService, CartRouteService cartRouteService, ConsumerJwtUtil jwtUtil) {
+    public CartController(CartService cartService, ConsumerJwtUtil jwtUtil) {
         this.cartService = cartService;
-        this.cartRouteService = cartRouteService;
         this.jwtUtil = jwtUtil;
     }
 
     /**
-     * 장바구니(체크된 항목)에 담긴 상품들을 가장 효율적인 순서로 담기 위한 동선.
-     * startX/startY/startFloor는 시뮬레이션 화면 속 캐릭터의 현재 위치 — 생략하면 1층 (0,0)에서
-     * 출발한다고 가정한다. 프론트는 이 응답의 stops를 순서대로 이어 A*로 선을 그린다.
+     * 09-08: 장바구니 동선 기능은 이미 com.storeflow.navigation 패키지에
+     * (NavigationController: POST /api/navigation/cart-route) DB map_cells 기반
+     * 실제 A* + 층간 이동 + Held-Karp TSP로 구현되어 있었다. 여기에 같은 이름
+     * (CartRouteService)으로 별도 구현을 또 추가했다가 스프링 빈 이름 충돌로
+     * bootRun이 죽는 사고가 있었음 — 제거하고 기존 것을 그대로 쓴다.
+     * 프론트는 api/route.ts에서 POST /api/navigation/cart-route를 호출한다.
      */
-    @GetMapping("/groups/{groupId}/route")
-    public ResponseEntity<CartRouteResponse> getGroupRoute(
-            @RequestHeader("Authorization") String authorization,
-            @PathVariable Long groupId,
-            @RequestParam(defaultValue = "1") int startFloor,
-            @RequestParam(defaultValue = "0") int startX,
-            @RequestParam(defaultValue = "0") int startY
-    ) {
-        return ResponseEntity.ok(cartRouteService.getRoute(
-                requireConsumerId(authorization), groupId, startFloor, startX, startY));
-    }
 
     @GetMapping
     public ResponseEntity<List<CartItemResponse>> getCart(@RequestHeader("Authorization") String authorization) {

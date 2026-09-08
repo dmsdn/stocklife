@@ -530,42 +530,15 @@ export default class StoreScene extends Phaser.Scene {
   }
 
   /**
-   * 장바구니 동선 안내 — 백엔드가 정해준 방문 순서(waypoints)를 받아서, 구간마다
-   * findPath(A*)를 이어붙여 하나의 선으로 그린다. 캐릭터를 실제로 걷게 하지는 않고
-   * (walkTo와 달리) 화면에 안내선만 표시한다.
-   *
-   * 각 waypoint는 매대 칸(통행 불가) 좌표일 수 있으므로 걷기 목적지 계산과 똑같이
-   * nearestWalkableTo로 "그 매대 바로 앞" 통로 칸을 실제 목표로 삼는다.
-   *
-   * 반환값: 전 구간을 다 연결할 수 있었으면 true. 하나라도 경로가 끊겨 있으면(고립된
-   * 매대 등) false를 반환하고, 그래도 이어붙일 수 있었던 구간까지는 그려서 보여준다.
+   * 장바구니 동선 안내 — 백엔드(navigation.CartRouteService)가 DB map_cells 기반 A*로
+   * 이미 계산해준 실제 경로 좌표(현재 층 구간만 필터링된 것)를 받아서 그대로 선으로 그린다.
+   * 프론트에서 경로를 다시 계산하지 않는다 — 캐릭터를 걷게 하지도 않고 안내선만 표시한다.
+   * stops는 그 중 "몇 번째로 들르는 매대인지" 표시할 지점들(옵션).
    */
-  drawRoute(waypoints: GridPoint[]): boolean {
+  drawRoute(pathPoints: GridPoint[], stops: GridPoint[] = []) {
     this.routeGraphics.clear();
-    if (waypoints.length === 0) return true;
-
-    let fullyConnected = true;
-    let cursor: GridPoint = this.playerGrid;
-    const fullPath: GridPoint[] = [cursor];
-    const stopMarkers: GridPoint[] = [];
-
-    for (const raw of waypoints) {
-      const goal = this.grid.nearestWalkableTo(raw) ?? raw;
-      const segment = findPath(this.grid, cursor, goal);
-      if (segment.length === 0) {
-        fullyConnected = false;
-        continue; // 이 구간만 건너뛰고 나머지는 계속 이어본다
-      }
-      // segment[0]은 cursor와 같은 칸이므로 이어붙일 때 중복 제거.
-      fullPath.push(...segment.slice(1));
-      stopMarkers.push(goal);
-      cursor = goal;
-    }
-
-    if (fullPath.length > 1) {
-      this.drawRouteLine(fullPath, stopMarkers);
-    }
-    return fullyConnected;
+    if (pathPoints.length < 2) return;
+    this.drawRouteLine(pathPoints, stops);
   }
 
   clearRoute() {

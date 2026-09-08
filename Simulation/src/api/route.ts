@@ -1,49 +1,55 @@
-// 백엔드 GET /api/cart/groups/{groupId}/route 연동.
-// 백엔드는 "몇 번째로 어느 매대를 들를지"만 정해주고(TSP 근사), 실제 통행 가능 경로는
-// 프론트가 astar.ts의 Grid/findPath로 이어붙인다(StoreScene.drawRoute 참고).
+// 백엔드 POST /api/navigation/cart-route 연동.
+// (09-08: com.storeflow.navigation.service.CartRouteService — DB map_cells 기반 실제 A*,
+// 층간 이동(엘리베이터/에스컬레이터), Held-Karp TSP로 이미 구현되어 있던 것을 그대로 사용한다.
+// 여기서 다시 경로를 계산하지 않는다 — 백엔드가 준 path를 그대로 그리기만 하면 된다.)
 
 export interface RouteStop {
-    order: number;
     skuId: number;
-    productName: string;
+    name: string;
     locationId: string;
-    floorNo: number;
+    floor: number;
+    x: number;
+    y: number;
+}
+
+export interface RoutePathPoint {
+    floor: number;
     x: number;
     y: number;
 }
 
 export interface CartRoute {
+    cartGroupId: number;
+    totalDistance: number;
     stops: RouteStop[];
-    totalDistanceCells: number;
-    multiFloor: boolean;
+    path: RoutePathPoint[]; // 층 이동 구간까지 포함된 전체 경로. 화면엔 현재 층에 해당하는 구간만 필터링해서 그린다.
 }
 
 interface FetchCartRouteArgs {
-    groupId: number;
     token: string; // Authorization 헤더에 실을 JWT(Bearer 없이)
-    startFloor?: number;
-    startX?: number;
-    startY?: number;
+    floor: number; // 캐릭터가 지금 있는 층
+    x: number;
+    y: number;
+    groupId?: number; // 생략하면 백엔드가 "기본 장바구니"를 사용
 }
 
-export async function fetchCartRoute({
-                                         groupId,
-                                         token,
-                                         startFloor,
-                                         startX,
-                                         startY,
-                                     }: FetchCartRouteArgs): Promise<CartRoute> {
-    const params = new URLSearchParams();
-    if (startFloor !== undefined) params.set('startFloor', String(startFloor));
-    if (startX !== undefined) params.set('startX', String(startX));
-    if (startY !== undefined) params.set('startY', String(startY));
-
-    const qs = params.toString();
-    const res = await fetch(`/api/cart/groups/${groupId}/route${qs ? `?${qs}` : ''}`, {
-        headers: { Authorization: `Bearer ${token}` },
+export async function fetchCartRoute({ token, floor, x, y, groupId }: FetchCartRouteArgs): Promise<CartRoute> {
+    const res = await fetch('/api/navigation/cart-route', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ floor, x, y, groupId: groupId ?? null }),
     });
     if (!res.ok) {
-        throw new Error(`동선 조회 실패: ${res.status}`);
+        const text = await res.text().catch(() => '');
+        throw new Error(`동선 조회 실패(${res.status}): ${text}`);
     }
     return res.json();
+}
+
+/** path 전체 중 지금 로드된 층(currentFloor)에 해당하는 연속 구간만 뽑아낸다. */
+export function pathPointsOnFloor(path: RoutePathPoint[], currentFloor: number): { x: number; y: number }[] {
+    return path.filter((p) => p.floor === currentFloor).map((p) => ({ x: p.x, y: p.y }));
 }
