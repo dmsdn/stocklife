@@ -14,8 +14,9 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RiCheckboxCircleFill, RiCoinLine, RiBillLine } from "@remixicon/react";
-import { apiFetch, isLoggedIn } from "@/lib/api-client";
-import { readLastCheckout } from "@/lib/checkout-summary";
+import { apiFetch } from "@/lib/api-client";
+import {StoreMapDialog} from "@/components/domain/store-map-dialog";
+import {readShoppingSession} from "@/lib/shopping-session";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 
@@ -39,7 +40,9 @@ function CheckoutCompleteInner() {
   }, [setBottomBarHidden]);
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
-  const [guestSummary] = useState(() => (orderId == null ? readLastCheckout() : null));
+  const [journey,setJourney] = useState<ReturnType<typeof readShoppingSession>>(null);
+  const [routeOpen,setRouteOpen] = useState(false);
+  useEffect(()=>{setJourney(readShoppingSession());},[]);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
@@ -49,7 +52,7 @@ function CheckoutCompleteInner() {
       .catch(() => setLoadError(true));
   }, [orderId]);
 
-  const totalAmount = order?.totalAmount ?? guestSummary?.totalAmount ?? 0;
+  const totalAmount = order?.totalAmount ?? 0;
   const pointsEarned = order?.pointsEarned ?? 0;
 
   return (
@@ -59,12 +62,12 @@ function CheckoutCompleteInner() {
       </div>
 
       <div>
-        <p className="text-lg font-semibold">결제가 완료됐어요</p>
+        <p className="text-lg font-semibold">{order?.status === "PAID"?"결제가 완료됐어요":loadError||!orderId?"결제 결과를 확인해 주세요":"결제 결과를 확인하고 있어요"}</p>
         {orderId != null && !loadError && (
           <p className="mt-1 text-sm text-muted-foreground">주문 #{orderId}</p>
         )}
         {loadError && (
-          <p className="mt-1 text-sm text-muted-foreground">결제는 완료됐지만 상세 조회에 실패했어요.</p>
+          <p className="mt-1 text-sm text-muted-foreground">주문 조회에 실패했어요. 구매 내역에서 확인해 주세요.</p>
         )}
       </div>
 
@@ -80,20 +83,20 @@ function CheckoutCompleteInner() {
           </span>
           {orderId != null ? (
             <span className="font-semibold text-[#EE4908]">{pointsEarned.toLocaleString()}P</span>
-          ) : guestSummary?.serverFailed ? (
-            <span className="text-xs text-muted-foreground">서버 오류로 이번 건은 적립이 지연될 수 있어요</span>
           ) : (
-            <span className="text-xs text-muted-foreground">비회원은 적립되지 않아요</span>
+            <span className="text-xs text-muted-foreground">확인된 주문이 없어요</span>
           )}
         </div>
       </div>
 
+      {order?.status === "PAID" && journey?.paid && journey.orderId===orderId && <>
+        <button className="w-full rounded-full bg-orange-600 px-5 py-4 font-semibold text-white" onClick={()=>setRouteOpen(true)}>출구까지 길찾기</button>
+        <StoreMapDialog open={routeOpen} onClose={()=>setRouteOpen(false)} groupId={journey.groupId} collectedIds={new Set(journey.scannedSkuIds)}/>
+      </>}
       <div className="w-full">
         {orderId == null && (
           <p className="text-xs text-muted-foreground">
-            {guestSummary?.serverFailed
-              ? "일시적인 서버 오류로 이번 건은 전자영수증이 안 남았어요. 구매 내역은 정상 반영됐어요."
-              : "비회원 결제는 전자영수증이 보관되지 않아요. 로그인하면 다음 결제부터 영수증을 확인할 수 있어요."}
+            확인된 결제 내역이 없어요. 장보기 화면에서 결제 결과를 확인해 주세요.
           </p>
         )}
         <button

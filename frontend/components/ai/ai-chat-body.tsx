@@ -9,37 +9,69 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine } from "@remixicon/react";
+import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine, RiCornerDownLeftLine } from "@remixicon/react";
 
 // ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
 //   비슷한 상품을 찾아옵니다.
 interface PhotoSearchResult {
+  tier?: "confident" | "category" | "unsure";
+  categoryL2?: string;
   productName?: string;
+  message?: string;
+  error?: string;
   results?: { skuId: number; productName: string }[];
 }
-async function sendPhotoSearch(file: File): Promise<PhotoSearchResult | null> {
+
+// 09-04: 폰 사진은 3~8MB 다. 백엔드 multipart 기본 상한이 1MB 라 그대로 보내면 413 이고,
+//   더 나쁜 것은 **그 413 이 브라우저에 안 보인다**는 점이다 — 스프링이 CORS 필터보다
+//   먼저 끊어서 응답에 CORS 헤더가 없고, 브라우저는 상태 코드 없이 net::ERR_FAILED 만 준다.
+//   ⇒ 보내기 전에 우리가 줄인다. 손해가 없다: 서버 인코더(SigLIP2)가 어차피 384px 로
+//     잘라 쓰므로 1280px 이상은 전송량만 늘리고 정확도에 기여하지 않는다.
+//     실측 3000×4000 2.67MB → 960×1280 118KB (22.6배).
+const PHOTO_MAX_BYTES = 900_000;
+const PHOTO_MAX_EDGE = 1280;
+/** 사진 검색에 보낼 작은 파일을 만든다.
+ * 원본 폰 사진은 multipart 한도를 넘기므로 긴 변과 JPEG 품질을 단계적으로 줄인다.
+ * 축소 실패 때 큰 원본을 조용히 보내지 않고 원인을 전달한다. 원본 파일은 수정하지 않는다. */
+async function shrinkIfNeeded(file: File): Promise<File> {
+  if (file.size <= PHOTO_MAX_BYTES) return file;
+  let bmp: ImageBitmap;
+  try { bmp = await createImageBitmap(file); }
+  catch { throw new Error("이 사진 형식을 읽을 수 없어요. JPG·PNG 사진으로 다시 선택해 주세요."); }
   try {
-    const form = new FormData();
-    form.append("photo", file);
-    // ✅ 수정(2026-09) — fetch("/api/ai/photo-search", ...)는 상대경로라 브라우저가
-    //   지금 열려있는 프론트 개발서버(3000) 기준으로 해석해서, 백엔드(8080)까지
-    //   도달하지 못하고 항상 404였습니다(에러 없이 조용히 null 반환이라 안 띄었음).
-    //   같은 파일의 다른 API 호출들처럼 apiFetch를 써서 API_BASE_URL(8080)이 붙게
-    //   함 — FormData 바디일 땐 apiFetch가 Content-Type을 직접 안 정해서(브라우저가
-    //   멀티파트 경계값 자동 부여) 파일 업로드도 그대로 됩니다.
-    return await apiFetch<PhotoSearchResult>("/api/ai/photo-search", {
-      method: "POST",
-      body: form,
-    });
-  } catch {
-    return null;
-  }
+    for (const edge of [PHOTO_MAX_EDGE, 960, 640]) {
+      const scale = Math.min(1, edge / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bmp.width * scale));
+      canvas.height = Math.max(1, Math.round(bmp.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("사진을 준비하지 못했어요. 다른 사진으로 다시 선택해 주세요.");
+      ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.85, 0.65]) {
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        if (blob && blob.size <= PHOTO_MAX_BYTES)
+          return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+      }
+    }
+    throw new Error("사진 용량을 줄이지 못했어요. 더 작은 사진을 선택해 주세요.");
+  } finally { bmp.close(); }
+}
+
+async function sendPhotoSearch(file: File): Promise<PhotoSearchResult | null> {
+  const form = new FormData();
+  form.append("photo", file);
+  // apiFetch 가 API_BASE_URL 을 붙이고 토큰도 싣는다. FormData 면 Content-Type 을
+  // 스스로 비운다(boundary 는 브라우저 몫 — api-client.ts 주석).
+  return await apiFetch<PhotoSearchResult>("/api/ai/photo-search", {
+    method: "POST",
+    body: form,
+  });
 }
 import { apiFetch, getAccessToken, resolveImageUrl } from "@/lib/api-client";
 import {
   setActiveSessionId,
   withValidSession,
-  startNewSession,
 } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { PROACTIVE_EVENT } from "@/lib/realtime";
@@ -358,6 +390,8 @@ interface ChatTurn {
 }
 
 interface Attachment {
+  /** 배열 위치는 삭제하면 바뀐다. 업로드 완료는 이 파일 고유 ID로 찾아 반영한다. */
+  localId?: string;
   label: string;
   kind:
     | "camera"
@@ -411,7 +445,7 @@ export function AiChatBody({
   highlightMessageId: highlightMessageIdProp,
   onSessionReady,
 }: AiChatBodyProps) {
-  const { groupId, openSession } = useAiPanel();
+  const { groupId } = useAiPanel();
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(
     highlightMessageIdProp ?? null
   );
@@ -574,6 +608,11 @@ export function AiChatBody({
 
     if (!content || sending) return;
 
+    // ✅ 답장 대상이 걸려있으면 인용구를 붙여서 같은 세션에 그대로 보냄(백엔드에 별도
+    //   "답장" 개념은 없어서, 리브가 문맥을 알아볼 수 있게 텍스트로 인용해서 보냄).
+    //   화면엔 사용자가 실제로 타이핑한 content만 말풍선으로 남기고, 인용구는 전송값에만 붙임.
+    const contentToSend = replyTarget ? `"${summarize(replyTarget)}"에 대해 다시 물어볼게: ${content}` : content;
+
     // ✅ 업로드된 첨부(camera/image/document/receipt)의 attachmentId만 모아서 같이 보냄.
     //   아직 업로드 중이거나 실패한 건 제외 — list/voice는 애초에 attachmentId가 없음.
     const attachmentIds = attachments
@@ -592,8 +631,9 @@ export function AiChatBody({
 
     setMessage("");
     setAttachments([]);
+    setReplyTarget(null);
 
-    await sendToBackend(content, attachmentIds, turnIndex);
+    await sendToBackend(contentToSend, attachmentIds, turnIndex);
   };
 
   // ✅ 신규 — 실패한 유저 메시지 다시 보내기. 말풍선을 새로 안 만들고 같은 자리에서 재시도.
@@ -605,18 +645,18 @@ export function AiChatBody({
     void sendToBackend(turn.content, [], turnIndex);
   };
 
-  // ✅ 신규(요청) — 리브 답변 아래 "이 답변으로 새 대화 시작"을 누르면 새 세션을 만들고,
-  //   그 답변을 인용한 문구를 입력창에 채워둠(바로 전송은 안 함 — 사용자가 확인/수정
-  //   후 보내게). 리스트와 연결된 세션과는 별개로, 이 새 대화는 리스트에 안 묶임.
-  const handleStartFromReply = async (content: string) => {
-    const quoted = content.length > 60 ? `${content.slice(0, 60)}...` : content;
-    try {
-      const newSessionId = await startNewSession();
-      openSession(newSessionId);
-      setMessage(`"${quoted}"에 대해 더 물어볼게: `);
-    } catch {
-      // 실패해도 조용히 무시 — 지금 대화는 그대로 유지됨
-    }
+  // ✅ 수정(요청 — "새 대화 시작 말고 같은 세션에서 다시 물을 수 있게, 디코 답장처럼") —
+  //   새 세션을 만들지 않고, 그 답변을 "답장 대상"으로 걸어둔 채 같은 대화에서 계속
+  //   이어갑니다. 입력창 위에 "↩ [요약]" 배너가 뜨고, 그 상태로 보내면 인용구를 붙여서
+  //   같은 세션에 전송(전송 후 배너는 사라짐 — 한 번만 답장 표시).
+  const [replyTarget, setReplyTarget] = useState<string | null>(null);
+  const composerInputRef = useRef<HTMLInputElement>(null);
+
+  const summarize = (content: string) => (content.length > 24 ? `${content.slice(0, 24)}...` : content);
+
+  const handleReplyToMessage = (content: string) => {
+    setReplyTarget(content);
+    composerInputRef.current?.focus();
   };
 
   const handleFileSelected =
@@ -626,11 +666,14 @@ export function AiChatBody({
 
       if (!file) return;
 
-      const attachmentIndex = attachments.length;
+      const localId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // 사진은 검색 API에만 보낸다. 첨부 저장 컨트롤러는 현재 백엔드에서 비활성이다.
+      const prepared = file.type.startsWith("image/") ? shrinkIfNeeded(file) : Promise.resolve(file);
       setAttachments((prev) => [
         ...prev,
         {
           label: file.name,
+          localId,
           kind,
           uploading: kind === "camera" || kind === "image" || kind === "document" || kind === "receipt",
         },
@@ -639,11 +682,11 @@ export function AiChatBody({
       // ✅ 실제 POST /api/chat/sessions/{sessionId}/attachments 업로드 — camera/image/document/
       //   receipt만 백엔드에 대응 타입(IMAGE/DOCUMENT/RECEIPT)이 있어서 업로드 대상.
       //   list/voice는 업로드하지 않음(list는 참조일 뿐이고, voice는 이 API가 지원 안 함).
-      if (kind === "camera" || kind === "image" || kind === "document" || kind === "receipt") {
-        uploadChatAttachment(kind, file).then((attachmentId) => {
+      if (kind === "document" || kind === "receipt") {
+        prepared.then((ready) => uploadChatAttachment(kind, ready)).catch(() => null).then((attachmentId) => {
           setAttachments((prev) =>
             prev.map((a, i) =>
-              i === attachmentIndex
+              a.localId === localId
                 ? attachmentId != null
                   ? { ...a, attachmentId, uploading: false }
                   : { ...a, uploading: false, uploadFailed: true }
@@ -653,15 +696,48 @@ export function AiChatBody({
         });
       }
 
-      // 카메라/이미지는 첨부와 별개로, 실제로 서버에 보내서 비슷한 상품을 찾아옵니다.
+      // 검색이 끝나면 임시 사진 칩을 지운다. 저장되지 않은 attachmentId를 만들지 않는다.
       if (kind === "camera" || kind === "image") {
-        sendPhotoSearch(file).then((result) => {
-          if (!result) return;
-          const found = result.productName ?? result.results?.[0]?.productName;
-          if (found) {
-            setTurns((prev) => [...prev, { role: "assistant", content: `사진에서 "${found}"와(과) 비슷한 상품을 찾았어요.` }]);
-          }
-        });
+        const say = (content: string) =>
+          setTurns((prev) => [...prev, { role: "assistant", content }]);
+        prepared.then(sendPhotoSearch)
+          .then((result) => {
+            // ⚠ 09-04: tier 를 버리면 안 된다. 예전 코드는
+            //   `productName ?? results[0].productName` 로 **확신 등급을 무시하고**
+            //   1등 이름을 단정해 말했다. 서버는 confident 일 때만 productName 을
+            //   내려 주는데(photo_ship.txt 의 「잠금」), 그 설계를 마지막 한 뼘에서
+            //   되돌리는 셈이었다. 사진 자산은 CSLS 허브 보정으로 소분류 정확도를
+            //   59.0%→75.5% 로 끌어올린 물건이다 — 그 사다리를 화면 한 줄이 무너뜨렸다.
+            if (result?.error || (result?.message && !result.results?.length)) {
+              say(result.message || "사진 검색을 사용할 수 없어요. 잠시 뒤 다시 시도해 주세요.");
+              return;
+            }
+            const names = (result?.results ?? []).map((r) => r.productName).filter(Boolean);
+            if (result?.tier === "confident" && result.productName) {
+              say(`사진 속 상품은 「${result.productName}」 같아요.\n\n` + names.slice(0, 3).map((n) => `- ${n}`).join("\n"));
+            } else if (result?.tier === "category" && names.length) {
+              const where = result.categoryL2 ? `${result.categoryL2} 쪽` : "비슷한 종류";
+              say(
+                `정확히 어떤 상품인지는 확신하기 어려운데, ${where}으로 보여요.\n\n` +
+                  names.slice(0, 3).map((n) => `- ${n}`).join("\n") +
+                  `\n\n이 중에 있나요? 이름 일부를 알려주시면 더 정확히 찾아드릴게요.`
+              );
+            } else {
+              // unsure — "매장에 없습니다"라고 말하지 않는다(photo_ship.txt).
+              //   못 알아본 것과 안 파는 것은 다른 말이고, 후자는 거짓이 될 수 있다.
+              say("사진만으로는 어떤 상품인지 알아보기 어려웠어요. 상품 이름이나 브랜드를 알려주시면 찾아드릴게요.");
+            }
+          })
+          .catch((err) => {
+            // ⚠ 예전 코드는 실패를 통째로 삼켰다. 손님 화면에는 첨부 칩만 뜨고
+            //   **아무 일도 안 일어난 것처럼** 보였다 — 404 가 세 판의 점검을 통과한 이유다.
+            const tooBig = (err as { status?: number })?.status === 413;
+            say(
+              tooBig
+                ? "사진 용량이 너무 커서 보내지 못했어요. 조금 작은 사진으로 다시 시도해 주세요."
+                : err instanceof Error && !((err as { status?: number }).status) && /사진|JPG/.test(err.message) ? err.message : "사진을 확인하는 중 문제가 생겼어요. 잠시 뒤에 다시 시도해 주세요."
+            );
+          }).finally(() => setAttachments((prev) => prev.filter((a) => a.localId !== localId)));
       }
 
       e.target.value = "";
@@ -872,7 +948,7 @@ export function AiChatBody({
     {
       icon: RiBillLine,
       label: "전자 영수증",
-      onClick: () => receiptInputRef.current?.click(),
+      onClick: () => { setAttachOpen(false); setTurns((prev) => [...prev, { role: "assistant", content: "전자 영수증 파일 첨부는 아직 지원하지 않아요. 사진 메뉴에서는 상품 사진으로 비슷한 상품을 찾을 수 있어요." }]); },
     },
     {
       icon: RiCameraLine,
@@ -887,7 +963,7 @@ export function AiChatBody({
     {
       icon: RiFileTextLine,
       label: "파일",
-      onClick: () => documentInputRef.current?.click(),
+      onClick: () => { setAttachOpen(false); setTurns((prev) => [...prev, { role: "assistant", content: "일반 파일 첨부는 아직 지원하지 않아요. 상품 이름을 입력하거나 사진 메뉴로 상품을 찾아 주세요." }]); },
     },
     {
       icon: RiListCheck,
@@ -1025,17 +1101,18 @@ export function AiChatBody({
                         <MentionedLists groupIds={turn.mentionedGroupIds} />
                       )}
 
-                      {/* ✅ 신규(요청) — 리브 답변을 누르면(말풍선 자체 말고, 답변 아래 이 버튼)
-                          그 내용을 인용해서 새 대화를 시작할 수 있게. 호버 시에만 보여서
-                          평소엔 답변만 깔끔하게 보임(모바일은 늘 보임). */}
+                      {/* ✅ 수정(요청 — "새 대화 시작 말고 같은 세션에서 다시 물을 수
+                          있게") — 새 세션을 만드는 대신, 이 답변을 답장 대상으로 걸어둠
+                          (디코 답장처럼). 호버 시에만 보여서 평소엔 답변만 깔끔하게 보임
+                          (모바일은 늘 보임). */}
                       {!isUser && (
                         <button
                           type="button"
-                          onClick={() => handleStartFromReply(turn.content)}
+                          onClick={() => handleReplyToMessage(turn.content)}
                           className="mt-1 flex items-center gap-1 text-xs text-muted-foreground opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
                         >
-                          <RiAddLine size={13} />
-                          이 답변으로 새 대화 시작
+                          <RiCornerDownLeftLine size={13} />
+                          {summarize(turn.content)}에 대해 다시 묻기
                         </button>
                       )}
 
@@ -1136,6 +1213,18 @@ export function AiChatBody({
             채워줌)이 안 보였음. 이제 녹음 중에도 이 자리에 실제 인식된 텍스트를 그대로
             보여줌(아직 아무 말도 안 했으면 안내 문구). 빨간 점 대신 실제 마이크 소리
             크기에 반응하는 막대 5개(파형)로 "듣고 있다"는 걸 보여줌. */}
+        {/* ✅ 신규(요청 — "디코에서 답장하는 것처럼") — 답장 대상이 걸려있을 때 입력창
+            바로 위에 뜨는 배너. corner-down-left 화살표 + 짧은 요약, X로 취소 가능. */}
+        {replyTarget && (
+          <div className="mb-1.5 flex items-center gap-1.5 rounded-full border border-[#F4F4F4] bg-white px-3 py-1.5 text-xs text-muted-foreground shadow-[0_2px_10px_rgba(0,0,0,0.06)]">
+            <RiCornerDownLeftLine size={14} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{summarize(replyTarget)}에 대해 다시 묻기</span>
+            <button type="button" onClick={() => setReplyTarget(null)} aria-label="답장 취소" className="shrink-0">
+              <RiCloseLine size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="flex h-[60px] min-w-0 items-center gap-2 rounded-full border border-[#F4F4F4] bg-white p-2 shadow-[0_4px_20px_rgba(0,0,0,0.08)]">
           <button
             type="button"
@@ -1166,6 +1255,7 @@ export function AiChatBody({
             </span>
           ) : (
             <input
+              ref={composerInputRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) =>
