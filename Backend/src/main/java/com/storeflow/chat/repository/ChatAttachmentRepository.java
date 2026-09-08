@@ -15,4 +15,8 @@ public interface ChatAttachmentRepository extends JpaRepository<ChatAttachment, 
 
     /** 업로드했지만 아직 메시지에 안 붙은(전송 전) 첨부 — 소유권 확인 후 연결(attachTo)할 때 조회. */
     List<ChatAttachment> findByChatAttachmentIdInAndChatMessageIdIsNull(List<Long> chatAttachmentIds);
+
+    /** 채팅방 삭제용 — 메시지에 붙었든 안 붙었든 그 세션 소속 첨부를 전부 지운다
+     *  (FK: chat_attachment.chat_session_id -> chat_session). 세션 삭제 전에 먼저 호출한다. */
+    void deleteByChatSessionId(Long chatSessionId);
 }

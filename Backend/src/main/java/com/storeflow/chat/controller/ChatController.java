@@ -152,6 +152,30 @@ public class ChatController {
     }
 
     /**
+     * 채팅방 삭제.
+     *
+     * DELETE /api/chat/sessions/{sessionId}
+     */
+    @DeleteMapping("/sessions/{sessionId}")
+    public ResponseEntity<?> deleteSession(
+            @PathVariable String sessionId,
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-Chat-Client-Id", required = false) String anonymousId) {
+        try {
+            Long consumerId = resolveConsumerIdOrNull(authorization);
+
+            chatService.deleteSession(sessionId, consumerId, anonymousId);
+            return ResponseEntity.noContent().build();
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /**
      * 5-1 + 5-2:
      * 지난 채팅창을 다시 열기 위한 전체 메시지 조회.
      *
