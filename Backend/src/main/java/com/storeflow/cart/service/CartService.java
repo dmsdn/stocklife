@@ -543,10 +543,17 @@ public class CartService {
     ) {
         if (request.getQuantity() != null) {
             // 모바일 장바구니의 + 버튼이 지나가는 경로. 여기가 비어 있어서 141개까지 올라갔다.
-            requireWithinPickStock(
-                    cartItem.getSkuId(),
-                    request.getQuantity()
-            );
+            //
+            // ⚠ "늘리는 경우"에만 막는다. 재고 검증이 없던 시절에 이미 상한을 넘겨 담긴
+            //    항목이 남아 있는데, 줄이는 것까지 막아버리면 사용자가 그 항목을 정리할
+            //    방법이 없어진다(123개를 122개로 줄이는 것도 거부되는 상황).
+            //    같은 값이거나 줄이는 요청은 언제나 허용한다.
+            if (request.getQuantity() > cartItem.getQuantity()) {
+                requireWithinPickStock(
+                        cartItem.getSkuId(),
+                        request.getQuantity()
+                );
+            }
 
             cartItem.changeQuantity(
                     request.getQuantity()
@@ -638,10 +645,9 @@ public class CartService {
         // 이미 담겨 있던 수량에 이번에 담는 수량을 더한 "최종 수량"으로 검사한다.
         // 1개씩 여러 번 눌러서 상한을 넘기는 경우까지 막으려면 최종 수량 기준이어야 한다.
         // 위에서 중복 병합을 마친 existing 을 그대로 쓰므로 조회가 늘지 않는다.
-        int addQty =
-                request.getQuantity() == null
-                        ? 1
-                        : request.getQuantity();
+        // AddCartItemRequest.getQuantity() 는 기본형 int 이고 기본값이 1, @Min(1) 이 걸려 있다.
+        // (UpdateCartItemRequest 쪽만 Integer 라서 null 검사가 필요하다 — 둘을 헷갈리지 말 것)
+        int addQty = request.getQuantity();
 
         int alreadyInCart =
                 existing == null
