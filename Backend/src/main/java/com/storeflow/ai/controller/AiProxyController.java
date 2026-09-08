@@ -20,12 +20,16 @@ import java.util.Map;
 public class AiProxyController {
 
     private final RestTemplate restTemplate;
+    private final com.storeflow.global.jwt.ConsumerJwtUtil jwtUtil;
+    @Value("${internal.service-key}")
+    private String internalKey;
 
     @Value("${agent.base-url}")
     private String agentBaseUrl;
 
-    public AiProxyController(RestTemplate restTemplate) {
+    public AiProxyController(RestTemplate restTemplate, com.storeflow.global.jwt.ConsumerJwtUtil jwtUtil) {
         this.restTemplate = restTemplate;
+        this.jwtUtil = jwtUtil;
     }
 
     @PostMapping("/search")
@@ -33,6 +37,34 @@ public class AiProxyController {
         Object response = restTemplate.postForObject(
                 agentBaseUrl + "/api/ai/search", body, Object.class);
         return ResponseEntity.ok(response);
+    }
+
+    /** 상품 구매 순서는 Agent의 기존 최적화 솔버가 정한다. 이 프록시는 DB를 쓰지 않는다. */
+    @PostMapping("/route-optimize")
+    public ResponseEntity<Object> optimizeRoute(@RequestBody Map<String, Object> body) {
+        Object response = restTemplate.postForObject(
+                agentBaseUrl + "/api/ai/route-optimize", body, Object.class);
+        return ResponseEntity.ok(response);
+    }
+
+    /** 신원은 JWT에서만 읽는다. 클라이언트가 body에 넣은 consumerId는 폐기한다. */
+    @PostMapping("/list-insights")
+    public ResponseEntity<Object> listInsights(@RequestBody Map<String, Object> body,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        Long consumerId = null;
+        if (authorization != null) {
+            if (!authorization.startsWith("Bearer ") || !jwtUtil.validateToken(authorization.substring(7)))
+                return ResponseEntity.status(401).build();
+            consumerId = jwtUtil.getConsumerIdFromToken(authorization.substring(7));
+        }
+        Map<String, Object> safe = new java.util.HashMap<>();
+        safe.put("skuIds", body.get("skuIds"));
+        safe.put("consumerId", consumerId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Internal-Service-Key", internalKey);
+        return ResponseEntity.ok(restTemplate.postForObject(agentBaseUrl + "/api/ai/list-insights",
+                new HttpEntity<>(safe, headers), Object.class));
     }
 
     @GetMapping("/products/{skuId}/alternatives")
