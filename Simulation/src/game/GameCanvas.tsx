@@ -213,6 +213,8 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     // 보임). 고치는 법은 간단하다 — 캔버스의 CSS 크기를 Phaser의 내부 계산에 맡기지 않고
     // "항상 부모 100%"로 못박아버리면, 되먹임 루프 자체가 생길 수가 없다.
     gameRef.current.canvas.style.display = 'block';
+    gameRef.current.canvas.style.position = 'absolute';
+    gameRef.current.canvas.style.inset = '0';
     gameRef.current.canvas.style.width = '100%';
     gameRef.current.canvas.style.height = '100%';
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,7 +228,26 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      gameRef.current?.scale.resize(el.clientWidth, el.clientHeight);
+      const game = gameRef.current;
+      if (!game) return;
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      // 패널이 접히는 도중 등 크기가 0으로 잡히는 순간이 있는데, 그 값을 그대로 넣으면
+      // 캔버스가 0x0이 됐다가 다시 살아나면서 화면이 한 번 깜빡인다.
+      if (w === 0 || h === 0) return;
+      // 크기가 그대로면 아무것도 하지 않는다. 값이 안 바뀌었는데도 resize를 부르면 그게
+      // 다시 레이아웃을 건드려서 ResizeObserver 알림이 연쇄로 발생하고, 브라우저의 무한루프
+      // 방지 장치("ResizeObserver loop completed with undelivered notifications")가 그
+      // 프레임의 알림을 통째로 버린다. 그렇게 알림이 씹히면 캔버스의 CSS 크기(부모 100%)만
+      // 새 값으로 바뀌고 비트맵 크기는 옛날 값에 머물러서, 브라우저가 옛 비트맵을 새 상자에
+      // 늘려 넣느라 매장이 가로로만 눌려 보인다("웹 UI 숨기기를 껐다 켜면 비율이 이상해진다"
+      // 버그의 원인). 같은 값 호출을 걸러내는 이 한 줄이 그 연쇄를 끊는다.
+      if (game.scale.width === w && game.scale.height === h) return;
+      game.scale.resize(w, h);
+      // Phaser는 resize를 처리하면서 캔버스 style.width/height 를 픽셀값으로 덮어쓴다.
+      // 생성 시점에 한 번 넣어둔 '100%'가 그때 지워지므로 여기서 매번 다시 못박아준다.
+      game.canvas.style.width = '100%';
+      game.canvas.style.height = '100%';
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -241,7 +262,7 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
+      <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }} />
       <div
         ref={scrollBarWrapRef}
         style={{
