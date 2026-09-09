@@ -89,6 +89,26 @@ export default function App() {
     const [elevatorPrompt, setElevatorPrompt] =
         useState(false);
 
+    // 상품 위치 핀: Frontend LOCATE_PRODUCT / Simulation 검색의 "위치" 기능에서 공용 사용
+    const [pinnedProduct, setPinnedProduct] = useState<{
+        skuId: number;
+        name: string;
+        floorNo: number;
+        x: number;
+        y: number;
+    } | null>(null);
+
+    // postMessage 리스너가 showProductPin 선언보다 위에 있으므로 ref로 연결
+    const showProductPinRef = useRef<
+        ((info: {
+            skuId: number;
+            name: string;
+            floorNo: number;
+            x: number;
+            y: number;
+        }) => Promise<void>) | null
+    >(null);
+
     const [statusMessage, setStatusMessage] =
         useState<string>('');
 
@@ -505,6 +525,27 @@ export default function App() {
                     setLoggedInPhone(null);
 
                 } else if (
+                    data.type === 'LOCATE_PRODUCT'
+                ) {
+
+                    if (
+                        typeof data.floorNo === 'number' &&
+                        typeof data.x === 'number' &&
+                        typeof data.y === 'number'
+                    ) {
+                        void showProductPinRef.current?.({
+                            skuId: Number(data.skuId) || 0,
+                            name:
+                                typeof data.name === 'string' && data.name
+                                    ? data.name
+                                    : '선택한 상품',
+                            floorNo: data.floorNo,
+                            x: data.x,
+                            y: data.y,
+                        });
+                    }
+
+                } else if (
                     data.type === 'CART_CHANGED'
                 ) {
 
@@ -648,9 +689,118 @@ export default function App() {
 
                 setPlayerCell(point);
 
+                // 핀 목적지에 도착하면 핀 제거 (매대 인접 통로 1칸 오차 허용)
+                setPinnedProduct((prev) => {
+                    if (!prev) return prev;
+
+                    const near =
+                        Math.abs(prev.x - point.x) <= 1 &&
+                        Math.abs(prev.y - point.y) <= 1;
+
+                    if (!near) return prev;
+
+                    canvasRef.current?.clearProductPin();
+                    return null;
+                });
+
             },
             []
         );
+
+
+    // ============================================================
+    // 상품 위치 핀
+    // ============================================================
+
+    const showProductPin =
+        useCallback(
+            async (info: {
+                skuId: number;
+                name: string;
+                floorNo: number;
+                x: number;
+                y: number;
+            }) => {
+
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+
+                if (info.floorNo !== viewFloor) {
+                    const data = await getFloorData(info.floorNo);
+
+                    setViewFloor(info.floorNo);
+                    setViewFloorData(data);
+
+                    canvas.loadFloor(
+                        data,
+                        {
+                            startCell:
+                                info.floorNo === playerFloor
+                                    ? (playerCell ?? undefined)
+                                    : undefined,
+                            hidePlayer:
+                                info.floorNo !== playerFloor,
+                        }
+                    );
+                }
+
+                canvas.showProductPin(
+                    { x: info.x, y: info.y },
+                    info.name
+                );
+
+                setPinnedProduct(info);
+
+                setStatusMessage(
+                    `${info.name} 위치를 표시했습니다. 핀을 누르면 그 매대로 이동합니다.`
+                );
+
+                window.setTimeout(
+                    () => setStatusMessage(''),
+                    3000
+                );
+            },
+            [
+                viewFloor,
+                playerFloor,
+                playerCell,
+                getFloorData,
+            ]
+        );
+
+
+    useEffect(() => {
+        showProductPinRef.current = showProductPin;
+    }, [showProductPin]);
+
+
+    const handleProductPinClick =
+        useCallback(() => {
+
+            if (busy) return;
+
+            const target = pinnedProduct;
+            if (!target) return;
+
+            const cell = {
+                x: target.x,
+                y: target.y,
+            };
+
+            if (target.floorNo === playerFloor) {
+                canvasRef.current?.walkTo(cell);
+            } else {
+                setTransferPrompt({
+                    targetFloor: target.floorNo,
+                    targetCell: cell,
+                });
+            }
+
+        }, [
+            busy,
+            pinnedProduct,
+            playerFloor,
+        ]);
 
 
     // ============================================================
@@ -1887,6 +2037,48 @@ export default function App() {
         );
 
 
+    /**
+     * Simulation 자체 검색의 "위치" 버튼.
+     * 쇼핑목록에는 추가하지 않고 상품 위치 핀만 표시한다.
+     */
+    const handleLocateShoppingItem =
+        useCallback(
+            async (
+                product: ProductSearchResult
+            ) => {
+
+                const loc =
+                    await resolveProductLocation(
+                        product.skuId
+                    );
+
+                if (!loc) {
+                    setStatusMessage(
+                        '이 상품의 매대 위치를 찾을 수 없습니다.'
+                    );
+
+                    window.setTimeout(
+                        () => setStatusMessage(''),
+                        2000
+                    );
+
+                    return;
+                }
+
+                setShoppingListOpen(false);
+
+                await showProductPin({
+                    skuId: product.skuId,
+                    name: product.name,
+                    floorNo: loc.floorNo,
+                    x: loc.x,
+                    y: loc.y,
+                });
+            },
+            [showProductPin]
+        );
+
+
     const handleRemoveShoppingItem =
         useCallback(
             (
@@ -2560,6 +2752,9 @@ export default function App() {
 
                             onLocationInteract:
                             handleLocationInteract,
+
+                            onProductPinClick:
+                            handleProductPinClick,
                         }}
                     />
 
@@ -2825,6 +3020,11 @@ export default function App() {
                     onAdd={
                         handleAddShoppingItem
                     }
+
+                    onLocate={
+                        handleLocateShoppingItem
+                    }
+
                     onRemove={
                         handleRemoveShoppingItem
                     }

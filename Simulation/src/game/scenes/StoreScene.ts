@@ -84,6 +84,11 @@ const DEPTH_PATH = 40;
 const DEPTH_ROUTE = 41; // 추천 동선은 걷기 경로(DEPTH_PATH)보다 위, NPC/플레이어보다는 아래
 const DEPTH_NPC = 900;
 const DEPTH_PLAYER = 1000;
+// 상품 위치 핀은 캐릭터보다도 위에 그린다 — 목적지 표시라 무엇에도 가리면 안 된다.
+const DEPTH_PRODUCT_PIN = 1100;
+// 상품 위치 핀 크기. 지도를 축소해서 봐도 눈에 들어와야 해서 타일보다 크게 잡는다.
+const PIN_HEAD_R = TILE * 0.85;
+const PIN_LABEL_SIZE = 26;
 
 // ── 캐릭터(플레이어/직원 NPC) 스프라이트 애니메이션 설정 ──
 // "빨간모자" 손님 캐릭터(플레이어)와 "로봇" 직원 캐릭터(NPC) 에셋 팩에서, idle/run 상태별로
@@ -203,6 +208,11 @@ export interface StoreSceneEvents {
   // 통로 접근 지점(rack/bay)이고, 같은 rack/bay 안의 여러 단(level)이 이 좌표를 공유하기 때문에
   // 한 번의 상호작용으로 그 매대의 모든 단을 다 받아야 한다.
   onLocationInteract?: (locs: LocationInfo[]) => void;
+  // 09-08 상품 위치 핀을 클릭했을 때. 오른쪽 웹 화면에서 "3층 홈 가전 구역" 같은 위치를
+  // 누르면 그 매대에 핀이 꽂히고, 그 핀을 누르면 이 콜백이 불린다.
+  // 씬이 직접 걷게 하지 않는 이유는 onTileClick 과 같다 — 다른 층이면 이동수단을 골라야 하고,
+  // 그 판단은 App(React)이 한다.
+  onProductPinClick?: (cell: GridPoint) => void;
 }
 
 export default class StoreScene extends Phaser.Scene {
@@ -217,6 +227,9 @@ export default class StoreScene extends Phaser.Scene {
   // "장바구니 추천 동선"은 캐릭터를 움직이지 않고 화면에 안내선만 계속 띄워두는 용도라
   // walkTo/advancePath가 pathGraphics를 지울 때 같이 지워지면 안 되어 분리했다.
   private routeGraphics!: Phaser.GameObjects.Graphics;
+  // 09-08 상품 위치 핀. 한 번에 하나만 띄운다(새로 찍으면 이전 것은 지운다).
+  private productPin?: Phaser.GameObjects.Container;
+  private productPinCell?: GridPoint;
   private floorTileLayer?: Phaser.GameObjects.Graphics;
   private shelfLayer!: Phaser.GameObjects.Container;
   private labelLayer!: Phaser.GameObjects.Container;
@@ -326,6 +339,16 @@ export default class StoreScene extends Phaser.Scene {
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+
+      // 핀을 눌렀으면 그 칸을 클릭한 것으로 치지 않고 핀 클릭으로만 처리한다.
+      // 핀에 setInteractive 를 걸어 처리하지 않는 이유는, Phaser에서 오브젝트 클릭과
+      // 이 전역 pointerdown 이 둘 다 발생해서 "핀 클릭 + 타일 클릭"이 겹치기 때문이다.
+      // 여기서 좌표로 직접 판정하면 순서에 의존하지 않는다.
+      if (this.hitProductPin(pointer.worldX, pointer.worldY)) {
+        if (this.productPinCell) this.events2.onProductPinClick?.(this.productPinCell);
+        return;
+      }
+
       const gx = Math.floor(pointer.worldX / TILE);
       const gy = Math.floor(pointer.worldY / TILE);
       this.handleTileClick(gx, gy);
@@ -501,6 +524,7 @@ export default class StoreScene extends Phaser.Scene {
     this.setPlayerVisible(!opts?.hidePlayer);
     this.pathGraphics.clear();
     this.routeGraphics.clear(); // 이전 층에서 그려둔 추천 동선은 층이 바뀌면 좌표가 무의미해지므로 같이 지운다
+    this.clearProductPin();     // 상품 위치 핀도 같은 이유로 지운다. 다른 층 좌표에 남아 있으면 엉뚱한 자리를 가리킨다
     this.currentPath = [];
     this.moving = false;
     this.spawnNpcs(NPC_COUNT);
@@ -527,16 +551,22 @@ export default class StoreScene extends Phaser.Scene {
   // 뜻이다(안 보이는 충돌구역 등으로 목적지가 고립된 경우) — 호출부가 이걸 "도착했다"로
   // 착각하고 다음 단계로 넘어가면 안 된다(4번 문제와 엮인 2/3번 버그의 원인이었다).
   walkTo(goal: GridPoint, onArrive?: (success: boolean) => void) {
-    const target = this.grid.nearestWalkableTo(goal) ?? goal;
-    const path = findPath(this.grid, this.playerGrid, target);
-    if (path.length === 0) {
-      onArrive?.(false);
+    // 목적지가 매대 칸이면 그 앞 통로 칸으로 대신 간다. 예전에는 바로 옆 8칸만 봐서,
+    // 여러 칸짜리 매대 덩어리의 한가운데를 클릭하면 후보를 못 찾고 막힌 칸을 그대로
+    // 목적지로 써서 경로 탐색이 항상 실패했다(층간 이동 후 "경로를 찾지 못했습니다").
+    // 이제는 반지름을 넓혀가며 후보를 모으고, 실제로 갈 수 있는 곳이 나올 때까지 시도한다.
+    // 가장 가까운 칸이 벽 반대편처럼 갈 수 없는 자리일 수도 있어서 하나만 보면 부족하다.
+    const candidates = this.grid.walkableCellsNear(goal);
+    for (const target of candidates) {
+      const path = findPath(this.grid, this.playerGrid, target);
+      if (path.length === 0) continue;
+      this.currentPath = path.slice(1);
+      this.drawPath(path);
+      this.pendingArriveCallback = () => onArrive?.(true);
+      if (!this.moving) this.advancePath();
       return;
     }
-    this.currentPath = path.slice(1);
-    this.drawPath(path);
-    this.pendingArriveCallback = () => onArrive?.(true);
-    if (!this.moving) this.advancePath();
+    onArrive?.(false);
   }
 
   teleportTo(cell: GridPoint) {
@@ -557,6 +587,104 @@ export default class StoreScene extends Phaser.Scene {
 
   clearRoute() {
     this.routeGraphics.clear();
+  }
+
+  /**
+   * 09-08 상품 위치 핀.
+   *
+   * 오른쪽 웹 화면의 검색 결과에서 가격 밑 위치("3층 홈 가전 구역")를 누르면, 그 상품이
+   * 놓인 매대 칸에 지도 앱에서 보는 물방울 모양 핀을 꽂는다. 핀을 누르면 App(React)이
+   * 확인 창을 띄우고, 확인하면 캐릭터가 그 자리로 간다.
+   *
+   * 한 번에 하나만 띄운다. 새 상품을 누르면 이전 핀은 지운다 — 여러 개가 남아 있으면
+   * 어느 것이 방금 누른 것인지 알 수 없다.
+   */
+  showProductPin(cell: GridPoint, label: string) {
+    this.clearProductPin();
+
+    const cx = cell.x * TILE + TILE / 2;
+    const cy = cell.y * TILE + TILE / 2;
+
+    // 핀 모양: 위쪽 원 + 아래로 뾰족한 삼각형 + 가운데 흰 점.
+    // 좌표는 컨테이너 기준이라 (0,0)이 대상 칸의 중심이고, 핀은 그 위로 떠 있게 그린다.
+    // 크기는 PIN_HEAD_R 하나로 조절한다 — 더 키우거나 줄이려면 이 값만 바꾸면 된다.
+    const HEAD_R = PIN_HEAD_R;
+    const HEAD_Y = -(HEAD_R * 2.1);
+
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(0, TILE * 0.12, HEAD_R * 1.3, HEAD_R * 0.45); // 바닥 그림자
+
+    g.fillStyle(0xffffff, 1);                                    // 흰 테두리(지도 위에서 잘 보이게)
+    g.fillCircle(0, HEAD_Y, HEAD_R + 3);
+    g.fillTriangle(
+        -(HEAD_R + 3) * 0.6, HEAD_Y + (HEAD_R + 3) * 0.75,
+        (HEAD_R + 3) * 0.6, HEAD_Y + (HEAD_R + 3) * 0.75,
+        0, TILE * 0.1,
+    );
+
+    g.fillStyle(0xef4444, 1);
+    g.fillCircle(0, HEAD_Y, HEAD_R);
+    g.fillTriangle(
+        -HEAD_R * 0.6, HEAD_Y + HEAD_R * 0.75,
+        HEAD_R * 0.6, HEAD_Y + HEAD_R * 0.75,
+        0, TILE * 0.02,
+    );
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(0, HEAD_Y, HEAD_R * 0.38);
+
+    const tag = this.add.text(0, HEAD_Y - HEAD_R - PIN_LABEL_SIZE * 0.9, label, {
+      fontSize: `${PIN_LABEL_SIZE}px`,
+      color: '#7f1d1d',
+      backgroundColor: '#fee2e2f2',
+      padding: { x: 8, y: 3 },
+      fontStyle: 'bold',
+    });
+    tag.setOrigin(0.5);
+
+    const pin = this.add.container(cx, cy, [g, tag]);
+    pin.setDepth(DEPTH_PRODUCT_PIN);
+
+    // 눈에 띄게 위아래로 살짝 떠다니게 한다.
+    this.tweens.add({
+      targets: pin,
+      y: cy - TILE * 0.3,
+      duration: 620,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.productPin = pin;
+    this.productPinCell = { x: cell.x, y: cell.y };
+  }
+
+  /**
+   * 핀을 눌렀는지 판정한다.
+   *
+   * Container.getBounds()를 쓰지 않고 대상 칸 좌표에서 직접 계산하는 이유:
+   * 핀은 대상 칸보다 "위에" 떠 있는 그림이라, 화면에서 핀 머리를 눌러도 그 지점의
+   * 격자 좌표는 대상 칸이 아니라 그 위 칸이 된다. 그래서 판정을 안 하면 엉뚱한 칸을
+   * 클릭한 것으로 처리돼 캐릭터가 다른 데로 가버린다(실제로 그렇게 동작했다).
+   * 라벨까지 포함해 넉넉히 잡는다.
+   */
+  private hitProductPin(worldX: number, worldY: number): boolean {
+    if (!this.productPin || !this.productPin.visible || !this.productPinCell) return false;
+    const cx = this.productPinCell.x * TILE + TILE / 2;
+    const cy = this.productPinCell.y * TILE + TILE / 2;
+    const halfW = Math.max(PIN_HEAD_R * 2.2, TILE * 2);
+    const top = cy - (PIN_HEAD_R * 2.1 + PIN_HEAD_R + PIN_LABEL_SIZE * 2);
+    const bottom = cy + TILE * 0.5;
+    return worldX >= cx - halfW && worldX <= cx + halfW && worldY >= top && worldY <= bottom;
+  }
+
+  clearProductPin() {
+    if (this.productPin) {
+      this.tweens.killTweensOf(this.productPin);
+      this.productPin.destroy(true);
+    }
+    this.productPin = undefined;
+    this.productPinCell = undefined;
   }
 
   private drawRouteLine(path: GridPoint[], stops: GridPoint[]) {

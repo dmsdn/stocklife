@@ -7,6 +7,10 @@ interface Props {
   items: ShoppingListItem[];
   navigatingIndex: number | null; // 지금 몇 번째 항목으로 이동 중인지(없으면 null)
   onAdd: (product: ProductSearchResult) => void;
+  // 09-08 검색 결과에서 "위치" 를 누르면 지도에 핀만 꽂는다(목록에 담지는 않는다).
+  // 오른쪽 웹 화면이 같은 신호를 보내주지만, 프론트 수정 없이도 시연할 수 있도록
+  // 시뮬레이션 자체 검색에도 같은 진입점을 둔다.
+  onLocate: (product: ProductSearchResult) => void;
   onRemove: (index: number) => void;
   onMove: (index: number, direction: -1 | 1) => void;
   onNavigate: () => void;
@@ -17,6 +21,7 @@ export default function ShoppingListModal({
   items,
   navigatingIndex,
   onAdd,
+  onLocate,
   onRemove,
   onMove,
   onNavigate,
@@ -96,6 +101,23 @@ export default function ShoppingListModal({
                 <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
                   {p.name} <span style={{ color: '#9ca3af' }}>· {p.price.toLocaleString()}원</span>
                 </div>
+                <button
+                  onClick={() => onLocate(p)}
+                  title="지도에 이 상품 위치를 표시합니다"
+                  style={{
+                    flexShrink: 0,
+                    border: '1px solid #3a3f4b',
+                    background: '#12141a',
+                    color: '#fca5a5',
+                    borderRadius: 4,
+                    padding: '3px 8px',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    marginRight: 4,
+                  }}
+                >
+                  📍 위치
+                </button>
                 <button
                   onClick={() => onAdd(p)}
                   style={{

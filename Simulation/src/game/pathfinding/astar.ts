@@ -39,6 +39,43 @@ export class Grid {
     return !this.blocked.has(key(x, y));
   }
 
+  /**
+   * 목표 칸 주변에서 걸어갈 수 있는 칸들을 가까운 순서로 모은다.
+   *
+   * nearestWalkableTo()가 바로 옆 8칸만 보는 것과 달리, 반지름을 1칸씩 넓혀가며 찾는다.
+   * 매대는 여러 칸에 걸친 덩어리라서 덩어리 한가운데를 클릭하면 8칸이 전부 매대다.
+   * 그때 nearestWalkableTo()는 null을 돌려주고, 호출부가 막힌 칸을 그대로 목적지로 쓰면
+   * A*는 영원히 도달하지 못해 "경로를 찾지 못했습니다"가 된다(층간 이동에서 이 증상이 보였다).
+   *
+   * 여러 개를 돌려주는 이유는, 가장 가까운 칸이 벽 반대편처럼 실제로는 갈 수 없는 자리일
+   * 수 있기 때문이다. 호출부가 앞에서부터 하나씩 경로를 시도해 보면 된다.
+   */
+  walkableCellsNear(target: GridPoint, maxRadius = 6, limit = 8): GridPoint[] {
+    const found: GridPoint[] = [];
+    if (this.isWalkable(target.x, target.y)) found.push({ x: target.x, y: target.y });
+
+    for (let r = 1; r <= maxRadius && found.length < limit; r++) {
+      const ring: GridPoint[] = [];
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          // 지금 반지름의 테두리만 본다(안쪽은 이전 반복에서 이미 검사했다).
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const nx = target.x + dx, ny = target.y + dy;
+          if (this.isWalkable(nx, ny)) ring.push({ x: nx, y: ny });
+        }
+      }
+      // 같은 테두리 안에서는 실제 거리가 짧은 것부터.
+      ring.sort((a, b) =>
+          (Math.abs(a.x - target.x) + Math.abs(a.y - target.y)) -
+          (Math.abs(b.x - target.x) + Math.abs(b.y - target.y)));
+      for (const c of ring) {
+        if (found.length >= limit) break;
+        found.push(c);
+      }
+    }
+    return found;
+  }
+
   // 매대 칸 바로 옆(인접 통로 칸)을 찾는다 — "그 매대 앞에 도착"의 목표 지점 계산용.
   nearestWalkableTo(target: GridPoint): GridPoint | null {
     if (this.isWalkable(target.x, target.y)) return target;
