@@ -409,9 +409,10 @@ function SavedPageInner() {
                       리브에게 물어보기
                     </button>
 
+                    {/* ✅ 수정(요청 — "투명도 10%로, 텍스트 더 크게") */}
                     {completed && !selectMode && (
-                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black">
-                        <span className="text-sm font-semibold text-white">결제완료</span>
+                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/10">
+                        <span className="text-lg font-semibold text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">결제완료</span>
                       </div>
                     )}
                   </div>
@@ -423,12 +424,12 @@ function SavedPageInner() {
                 return (
                   <>
                     {activeGroups.length > 0 && renderGroups(activeGroups)}
+                    {/* ✅ 수정(요청 — "결제 완료 몇 개 이렇게 텍스트로 구분해둔 거 빼") —
+                        아래에 배치하는 순서는 그대로 유지하되, "결제 완료 N" 제목/개수
+                        텍스트는 없앰. 각 카드 자체에 이미 "결제완료" 오버레이가 있어서
+                        구분은 충분함. */}
                     {completedGroups.length > 0 && (
                       <section className={activeGroups.length > 0 ? "mt-8" : ""}>
-                        <div className="mb-3 flex items-center gap-2 px-1">
-                          <h2 className="text-sm font-semibold">결제 완료</h2>
-                          <span className="text-xs text-muted-foreground">{completedGroups.length}</span>
-                        </div>
                         {renderGroups(completedGroups)}
                       </section>
                     )}
