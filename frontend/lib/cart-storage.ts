@@ -1,6 +1,7 @@
 "use client";
 
 import { apiFetch, isLoggedIn, resolveImageUrl } from "./api-client";
+import { notifySimulationCartChanged } from "./simulation-bridge";
 
 export interface CartProduct {
   id: number; // skuId
@@ -232,6 +233,7 @@ export async function addProductToCartGroup(
     method: "POST",
     body: JSON.stringify({ skuId: product.id, quantity: 1 }),
   });
+  notifySimulationCartChanged();
   return loadCartGroups();
 }
 
@@ -272,6 +274,7 @@ export async function createCartGroup(title: string, shoppingDate?: string | nul
     body: JSON.stringify({ title, description: "새 장보기 목록", shoppingDate: shoppingDate ?? null }),
   });
   await loadCartGroups();
+  notifySimulationCartChanged();
   return {
     id: created.cartGroupId,
     title: created.title,
@@ -308,6 +311,7 @@ export async function updateCartGroupInfo(
     method: "PATCH",
     body: JSON.stringify(patch),
   });
+  notifySimulationCartChanged();
   return loadCartGroups();
 }
 
@@ -318,6 +322,7 @@ export async function deleteCartGroup(groupId: number): Promise<CartGroup[]> {
     return next;
   }
   await apiFetch(`/api/cart/groups/${groupId}`, { method: "DELETE" });
+  notifySimulationCartChanged();
   return loadCartGroups();
 }
 
@@ -334,9 +339,47 @@ export async function syncUpdateServerCart(cartItemId: number | undefined, quant
     method: "PATCH",
     body: JSON.stringify({ ...(quantity != null ? { quantity } : {}), ...(checked != null ? { checked } : {}) }),
   });
+  notifySimulationCartChanged();
 }
 
 export async function syncRemoveFromServerCart(cartItemId: number | undefined) {
   if (!isLoggedIn() || cartItemId == null) return;
   await apiFetch(`/api/cart/${cartItemId}`, { method: "DELETE" });
+  notifySimulationCartChanged();
+}
+
+// ✅ 신규 — 스캔 화면에서 다른 리스트로 옮길 때 "이미 찍은 상품을 가져갈지" 선택한 경우용.
+//   지정한 skuId들을 fromGroup에서 toGroup으로 수량 그대로 옮긴다(있는 만큼 addProductToCartGroup을
+//   반복 호출 — 이 함수가 항상 수량 1씩 늘리는 방식이라 그대로 재사용). 옮긴 뒤엔 원래
+//   리스트에서 해당 상품을 완전히 제거한다.
+export async function moveProductsBetweenGroups(
+  fromGroupId: number,
+  toGroupId: number,
+  skuIds: number[]
+): Promise<CartGroup[]> {
+  const fromGroup = readCartGroups().find((g) => g.id === fromGroupId);
+  const toMove = (fromGroup?.products ?? []).filter((p) => skuIds.includes(p.id));
+
+  for (const product of toMove) {
+    for (let i = 0; i < product.quantity; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await addProductToCartGroup(toGroupId, {
+        id: product.id,
+        name: product.name,
+        category: product.category,
+        price: product.price,
+        image: product.image,
+      });
+    }
+    if (isLoggedIn()) {
+      // eslint-disable-next-line no-await-in-loop
+      await syncRemoveFromServerCart(product.cartItemId);
+    }
+  }
+
+  return updateCartGroups((groups) =>
+    groups.map((g) =>
+      g.id !== fromGroupId ? g : { ...g, products: g.products.filter((p) => !skuIds.includes(p.id)) }
+    )
+  );
 }

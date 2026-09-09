@@ -16,12 +16,14 @@ import { RiMapLine, RiDeleteBin6Line, RiArrowRightSLine, RiCloseLine, RiMoreLine
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
+import {ProductInsights, useProductInsights} from "@/components/domain/product-insights";
+import {SHOPPING_CHANGED} from "@/lib/shopping-session";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { ProductLocationDialog } from "@/components/domain/product-location-dialog";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import {readCartGroups, loadCartGroups,updateCartGroups, updateCartGroupInfo, deleteCartGroup, syncUpdateServerCart, syncRemoveFromServerCart, type CartGroup,} from "@/lib/cart-storage";
-import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
+import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 import { apiFetch } from "@/lib/api-client";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
@@ -34,6 +36,12 @@ export default function SavedGroupDetailPage() {
 
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
+  const insights = useProductInsights(group?.products.map(p=>p.id)??[]);
+  useEffect(()=>{
+    const update=()=>loadCartGroups().then(gs=>setGroup(gs.find(g=>g.id===groupId)??null)).catch(()=>{});
+    window.addEventListener(SHOPPING_CHANGED,update);
+    return()=>window.removeEventListener(SHOPPING_CHANGED,update);
+  },[groupId]);
   const openAiChat = useOpenAiChat();
 
   // ✅ 수정(2026-09) — 백엔드에 실제 cart_group.status(ACTIVE|COMPLETED)가 생겨서 이제
@@ -85,7 +93,7 @@ export default function SavedGroupDetailPage() {
         const next = new Map<number, string>();
         map.forEach((items, skuId) => {
           const loc = pickLocation(items);
-          if (loc) next.set(skuId, loc.locationId);
+          if (loc) next.set(skuId, formatLocationLabel(loc.locationId));
         });
         setLocationBySkuId(next);
       })
@@ -315,6 +323,7 @@ export default function SavedGroupDetailPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <p className="line-clamp-2 text-sm leading-5">{product.name}</p>
+                  <ProductInsights item={insights[product.id]}/>
 
                   {!completed && (
                     <button

@@ -14,7 +14,8 @@ import { isLoggedIn } from "./api-client";
 
 export type SimulationAuthMessage =
     | { source: "storeflow-frontend"; type: "LOGIN"; consumerId: number; name: string; phoneNumber: string }
-    | { source: "storeflow-frontend"; type: "LOGOUT" };
+    | { source: "storeflow-frontend"; type: "LOGOUT" }
+    | { source: "storeflow-frontend"; type: "CART_CHANGED" };
 
 function isEmbeddedInIframe(): boolean {
     try {
@@ -69,4 +70,13 @@ export function notifySimulationOfCurrentAuthOnce(): void {
         return;
     }
     void notifySimulationLogin();
+}
+
+/**
+ * 장바구니를 바꾼 직후 호출. 왼쪽 시뮬레이션 화면이 DB에서 장바구니를 다시 읽어
+ * 상단 배지와 결제 대상 목록을 새로고침 없이 갱신한다.
+ * 실패해도 화면 동작에는 영향이 없으므로 await 하지 않아도 된다.
+ */
+export function notifySimulationCartChanged(): void {
+    postToParent({ source: "storeflow-frontend", type: "CART_CHANGED" });
 }

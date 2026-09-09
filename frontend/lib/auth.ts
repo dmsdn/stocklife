@@ -88,7 +88,8 @@ export async function signup(payload: SignupPayload): Promise<void> {
 
 export async function login(
     phoneNumber: string,
-    password: string
+    password: string,
+    keepLoggedIn: boolean = true
 ): Promise<void> {
   // 1. 로그인
   const res = await apiFetch<{
@@ -104,7 +105,7 @@ export async function login(
   });
 
   // 2. JWT 저장
-  setTokens(res.accessToken, res.refreshToken);
+  setTokens(res.accessToken, res.refreshToken, keepLoggedIn);
   resetCartMigrationAttempt();
 
   // 3. 로그인한 사용자 정보 조회

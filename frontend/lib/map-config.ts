@@ -106,6 +106,31 @@ export function getZoneRegions(floorNo: number): ZoneRegion[] {
   return ZONE_REGIONS[floorNo] ?? [];
 }
 
+/** ✅ 신규(요청) — 같은 zoneId가 여러 사각형 조각(L자 모양 등)으로 나뉜 경우, 그 조각들을
+ *  전부 합친 바운딩박스의 중심점 하나를 zoneId마다 계산합니다. 매대 좌표(쌀 아이콘)를
+ *  누른 자리가 아니라 항상 이 고정된 중심에 놓기 위한 용도 — 누른 지점 계산이 확대/축소·
+ *  드래그 상태에 따라 어긋나서 "엉뚱한 자리(왼쪽 위)에 뜨는" 문제 자체를 없앱니다. */
+export function getZoneCenters(floorNo: number): { zoneId: string; x: number; y: number }[] {
+  const regions = getZoneRegions(floorNo);
+  const bounds = new Map<string, { x1: number; y1: number; x2: number; y2: number }>();
+  for (const r of regions) {
+    const cur = bounds.get(r.zoneId);
+    if (!cur) {
+      bounds.set(r.zoneId, { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 });
+    } else {
+      cur.x1 = Math.min(cur.x1, r.x1);
+      cur.y1 = Math.min(cur.y1, r.y1);
+      cur.x2 = Math.max(cur.x2, r.x2);
+      cur.y2 = Math.max(cur.y2, r.y2);
+    }
+  }
+  return Array.from(bounds.entries()).map(([zoneId, b]) => ({
+    zoneId,
+    x: (b.x1 + b.x2) / 2,
+    y: (b.y1 + b.y2) / 2,
+  }));
+}
+
 interface FloorMapApiResponse {
   floorNo: number;
   zones: { zoneId: string; name: string; zoneType: string }[];
@@ -126,8 +151,8 @@ export async function fetchRealFloorMap(floorNo: number): Promise<void> {
   try {
     const res = await apiFetch<FloorMapApiResponse>(`/api/map/floors/${floorNo}`);
     const config = getFloorMap(floorNo);
-    const width = config?.gridWidth ?? Math.max(...res.cells.map((c) => c.x)) + 1;
-    const height = config?.gridHeight ?? Math.max(...res.cells.map((c) => c.y)) + 1;
+    const width = res.cells.length ? Math.max(...res.cells.map((c) => c.x)) + 1 : config?.gridWidth ?? 0;
+    const height = res.cells.length ? Math.max(...res.cells.map((c) => c.y)) + 1 : config?.gridHeight ?? 0;
     const grid: boolean[][] = Array.from({ length: height }, () => Array(width).fill(false));
     for (const cell of res.cells) {
       if (cell.y < height && cell.x < width) grid[cell.y][cell.x] = cell.passable;
@@ -187,4 +212,13 @@ export function getWalkableGrid(floorNo: number): boolean[][] {
     grid.push(row);
   }
   return grid;
+}
+/** DB의 1m 격자 중심을 기존 도면 이미지의 비율 좌표로 바꾼다.
+ * 구역 클릭에 사용하는 24×16 표시 좌표와 구분한다. 도면은 1m=40px,
+ * 크롭 후 원점은 (16px,16px)이며 실제 이미지 크기는 FLOOR_MAPS를 사용한다. */
+export function navigationImagePosition(floorNo: number, x: number, y: number) {
+  const config = getFloorMap(floorNo);
+  if (!config) return null;
+  return {left: (16 + (x + 0.5) * 40) / config.imageWidth,
+    top: (16 + (y + 0.5) * 40) / config.imageHeight};
 }
