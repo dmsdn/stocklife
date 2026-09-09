@@ -1,3 +1,4 @@
+import { getMemberToken } from './api/memberAuth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import GameCanvas, { type GameCanvasHandle } from './game/GameCanvas';
 import FloorDropdown from './components/FloorDropdown';
@@ -215,8 +216,11 @@ export default function App() {
                     consumerId ??
                     getCurrentConsumerId();
 
+                const token = getMemberToken();
+                if (!token) { setCart([]); return; }
                 fetchCartFromDb(id)
                     .then((items) => {
+                        if (getMemberToken() !== token) return;
 
                         setCart((prev) =>
                             items.map((item) => {
@@ -262,10 +266,12 @@ export default function App() {
                     consumerId ??
                     getCurrentConsumerId();
 
+                const token = getMemberToken();
+                if (!token) { setCartGroups([]); return; }
                 fetchCartGroups(id)
-                    .then((groups) =>
-                        setCartGroups(groups)
-                    )
+                    .then((groups) => {
+                        if (getMemberToken() === token) setCartGroups(groups);
+                    })
                     .catch((err) =>
                         console.error(
                             '[DB장바구니] 리스트 목록 조회 실패:',
@@ -310,38 +316,30 @@ export default function App() {
 
 
     useEffect(() => {
-
-        reloadCartFromDb(
-            getCurrentConsumerId()
-        );
-
-        reloadCartGroups(
-            getCurrentConsumerId()
-        );
-
-        const unsubscribe =
-            subscribeCurrentConsumer(
-                (consumerId) => {
-
-                    reloadCartFromDb(
-                        consumerId
-                    );
-
-                    reloadCartGroups(
-                        consumerId
-                    );
-
-                    setSelectedGroupId(null);
-                }
-            );
-
-        return unsubscribe;
-
-    }, [
-        reloadCartFromDb,
-        reloadCartGroups,
-    ]);
-
+        let observedToken = getMemberToken();
+        const reloadIdentity = () => {
+            observedToken = getMemberToken();
+            setCart([]); setCartGroups([]); setSelectedGroupId(null);
+            setCartGroupOpen(false); setCheckoutTargetOpen(false);
+            setActiveRoute(null); canvasRef.current?.clearRoute();
+            if (!observedToken) {
+                setLoggedInName(null); setLoggedInPhone(null);
+                return;
+            }
+            reloadCartFromDb(); reloadCartGroups();
+        };
+        reloadIdentity();
+        const unsubscribe = subscribeCurrentConsumer(reloadIdentity);
+        const checkToken = () => {
+            if (getMemberToken() !== observedToken) reloadIdentity();
+        };
+        window.addEventListener('storage', checkToken);
+        const timer = window.setInterval(checkToken, 1000);
+        return () => {
+            unsubscribe(); window.removeEventListener('storage', checkToken);
+            window.clearInterval(timer);
+        };
+    }, [reloadCartFromDb, reloadCartGroups]);
 
     /**
      * 폴백 동기화.
@@ -467,6 +465,9 @@ export default function App() {
 
         const onMessage =
             (event: MessageEvent) => {
+                const frame = document.querySelector<HTMLIFrameElement>('iframe[title="frontend"]');
+                if (!frame || event.source !== frame.contentWindow ||
+                    event.origin !== new URL(frame.src).origin) return;
 
                 const data =
                     event.data;
@@ -487,7 +488,7 @@ export default function App() {
 
 
                 if (
-                    data.type === 'LOGIN' &&
+                    data.type === 'LOGIN' && getMemberToken() &&
                     typeof data.consumerId ===
                     'number'
                 ) {
@@ -1546,103 +1547,28 @@ export default function App() {
     // 상품 담기
     // ============================================================
 
-    const handleAddToCart =
-        useCallback(
-            (
-                location: LocationInfo,
-                product: ProductInfo
-            ) => {
-
-                if (
-                    product.stock <= 0
-                ) {
-                    return;
-                }
-
-
-                setCart(
-                    (prev) => {
-
-                        const idx =
-                            prev.findIndex(
-                                (it) =>
-                                    it.locationId ===
-                                    location.locationId &&
-                                    it.skuId ===
-                                    product.skuId
-                            );
-
-
-                        if (
-                            idx >= 0
-                        ) {
-
-                            if (
-                                prev[idx].qty >=
-                                product.stock
-                            ) {
-                                return prev;
-                            }
-
-
-                            const next =
-                                [...prev];
-
-
-                            next[idx] = {
-                                ...next[idx],
-
-                                qty:
-                                    next[idx]
-                                        .qty +
-                                    1,
-                            };
-
-
-                            return next;
-                        }
-
-
-                        return [
-                            ...prev,
-
-                            {
-                                ...product,
-
-                                locationId:
-                                location.locationId,
-
-                                qty:
-                                    1,
-                            },
-                        ];
-                    }
-                );
-
-
-                addItemToDbCart(
-                    product.skuId,
-                    1,
-                    selectedGroupId
-                )
-                    .then(() => {
-
-                        frontendPanelRef.current
-                            ?.notifyCartChanged();
-
-                    })
-                    .catch((err) => {
-
-                        console.error(
-                            'DB 장바구니 반영 실패:',
-                            err
-                        );
-                    });
-            },
-
-            [selectedGroupId]
-        );
-
+    const handleAddToCart = useCallback(async (location: LocationInfo, product: ProductInfo) => {
+        const token = getMemberToken();
+        if (!token) { setStatusMessage('오른쪽 앱에서 회원 로그인을 먼저 해주세요.'); return; }
+        if (product.stock <= 0) return;
+        try {
+            await addItemToDbCart(product.skuId, 1, selectedGroupId);
+            if (getMemberToken() !== token) return;
+            const [items, groups] = await Promise.all([
+                fetchCartFromDb(getCurrentConsumerId()), fetchCartGroups(getCurrentConsumerId()),
+            ]);
+            if (getMemberToken() !== token) return;
+            setCart(prev => items.map(item => ({ ...item, locationId:
+                item.skuId === product.skuId ? location.locationId :
+                prev.find(p => p.skuId === item.skuId)?.locationId ?? item.locationId })));
+            setCartGroups(groups);
+            frontendPanelRef.current?.notifyCartChanged();
+            setStatusMessage('회원 장바구니에 반영했습니다.');
+        } catch (error) {
+            if (getMemberToken() !== token) return;
+            setStatusMessage(error instanceof Error ? error.message : '장바구니 반영 실패');
+        }
+    }, [selectedGroupId]);
 
     // ============================================================
     // ★ 재고 채우기 +5

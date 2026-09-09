@@ -104,7 +104,7 @@ def to_consumer_id(member_id: int | None) -> int | None:
 #   `.env`에 `USE_MOCK_SOT=false` 한 줄이면 코드를 안 건드리고 바뀐다.
 #   os.environ을 읽으므로 **env.load_env()가 먼저 돌아야 한다**(입구가 보장).
 USE_MOCK_SOT = os.environ.get("USE_MOCK_SOT", "true").strip().lower() not in ("false", "0", "no")
-BACKEND_BASE_URL = "http://localhost:8080"   # Spring Boot. 팀계약 API 8종의 뿌리
+BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080")   # Spring Boot. 팀계약 API 8종의 뿌리
 # 액션(장바구니 쓰기)용 내부 API 인증키는 여기 두지 않는다 — 비밀값이라
 # 코드가 아니라 .env에서 읽는다(tools/action.py의 INTERNAL_SERVICE_KEY).
 # 코드에 적으면 git에 올라가고, 한 번 커밋되면 이력에서 지워지지 않는다.
