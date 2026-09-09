@@ -20,7 +20,8 @@ function environment(browser = true, mocks = {}) {
     const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
-    vm.runInNewContext(code, { module, exports: module.exports, window, Event, URLSearchParams, console,
+    vm.runInNewContext(code, { module, exports: module.exports, window, Event, URL, URLSearchParams, console,
+      document: {referrer: 'https://simulation.example/simulation/'},
       require: id => id in mocks ? mocks[id] : id.startsWith('@/') ? load(id.slice(2) + '.ts') : require(id),
     }, { filename: file });
     cache.set(file, module.exports);
@@ -59,6 +60,25 @@ test('상품 핀은 높이 레벨을 공유하며 미등록 좌표는 서버 좌
   assert.equal(p.toRackBayKey('F1-G-R01-B01-L6'), 'F1-G-R01-B01');
   const fallback = { floorNo: 2, x: 3, y: 4 };
   assert.equal(p.resolvePinCoord('F2-G-R01-B01-L1', fallback), fallback);
+});
+test('위치 모달은 앱 지도와 시뮬레이션에 같은 상품 좌표를 보낸다', () => {
+  const sent = [];
+  const e = environment(true, {
+    react: {useEffect: f => f()},
+    '@/components/ui/dialog': {}, './store-map': {},
+    '@/lib/simulation-location': {notifySimulationLocation: value => sent.push(value)},
+  });
+  const {LocationMapDialog} = e.load('components/domain/location-map-dialog.tsx');
+  LocationMapDialog({open:true, onClose() {}, skuId:200000, productName:'상품', price:1000, floorNo:3, x:12, y:20});
+  assert.equal(JSON.stringify(sent), JSON.stringify([{skuId:200000,name:'상품',floorNo:3,x:12,y:20}]));
+});
+test('상품 위치 메시지는 실제 부모 origin에만 전달한다', () => {
+  const sent = [], e = environment();
+  e.window.parent = {postMessage: (message, origin) => sent.push({message,origin})};
+  e.window.location = {origin:'https://app.example'};
+  e.load('lib/simulation-location.ts').notifySimulationLocation({skuId:1,name:'상품',floorNo:2,x:3,y:4});
+  assert.equal(sent[0].origin, 'https://simulation.example');
+  assert.equal(sent[0].message.type, 'LOCATE_PRODUCT');
 });
 test('소비 분석은 동일 상품 여러 개 구매 시 품목 줄 수가 아닌 총수량으로 평균을 낸다', () => {
   const { computeSpendingMetrics } = environment().load('lib/spending-metrics.ts');

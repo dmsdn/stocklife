@@ -2484,7 +2484,7 @@ export default function App() {
                             ? `손님 캐릭터(${loggedInPhone.slice(
                                 -4
                             )})`
-                            : '기본 캐릭터(0001)'}
+                            : '비로그인'}
                     </span>
 
 
