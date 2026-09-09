@@ -220,11 +220,29 @@ export async function fetchLowStockTargets(floor: number): Promise<LowStockItem[
 // (InternalEventController 주석: "프론트는 절대 이 경로를 직접 호출하면 안 된다").
 // 그래서 지금은 화면 연출용 스텁으로 남겨둔다 — 실제로 재고를 늘리려면 Agent/백엔드
 // 서버간 통신으로 처리하는 별도 공개 API가 먼저 필요하다.
-export async function confirmRestock(locationId: string, skuId: number, qty: number): Promise<void> {
-  console.log('[stub] confirmRestock (내부 전용 API라 브라우저에서 직접 호출 불가)', {
-    locationId,
-    skuId,
-    qty,
+export async function confirmRestock(
+    locationId: string,
+    skuId: number,
+    qty: number
+): Promise<void> {
+  const res = await fetch('/internal/events/shelf', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      eventType: 'RESTOCK_IN',
+      skuId,
+      locationId,
+      qty,
+      taskId: null,
+    }),
   });
-  return Promise.resolve();
+
+  if (!res.ok) {
+    const message = await res.text().catch(() => '');
+    throw new Error(
+        `재고 보충 실패 (${res.status})${message ? `: ${message}` : ''}`
+    );
+  }
 }

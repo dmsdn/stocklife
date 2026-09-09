@@ -9,7 +9,7 @@ import ProductPopup from './components/ProductPopup';
 import CartGroupModal from './components/CartGroupModal';
 import CheckoutTargetModal from './components/CheckoutTargetModal';
 import ShoppingListModal from './components/ShoppingListModal';
-import { fetchFloorData } from './api/locations';
+import { fetchFloorData, confirmRestock } from './api/locations';
 import { fetchProductsAtLocation, adjustStock } from './api/products';
 import { addItemToDbCart, fetchCartFromDb, fetchCartGroups, type CartGroupOption } from './api/cart';
 import {
@@ -27,6 +27,7 @@ import {
     type ProductSearchResult,
     type ShoppingListItem,
 } from './api/shoppingList';
+import { fetchCartRoute, pathPointsOnFloor, type CartRoute } from './api/route';
 import { runTrip, type TransferMethod } from './game/trip';
 import { escalatorRoute, floorLabel } from './game/floorGraph';
 import type { FloorData, LocationInfo, FacilityInfo, GridPoint, ProductInfo, CartItem } from './game/types';
@@ -67,7 +68,10 @@ export default function App() {
     const draggingRef = useRef(false);
 
     // 09-03: 캐릭터 머리 위 이름표 — 휴대폰 뒷번호(마지막 4자리)만 노출한다(전체 번호는
-    // 화면에 그대로 띄우기엔 과하다는 판단). 로그인 안 했으면 "(비로그인)"으로 표시.
+    // 화면에 그대로 띄우기엔 과하다는 판단). 로그인 안 했으면 "(비로그인)"으로 표시한다.
+    // 09-09: "(비로그인)" 은 곧 기본 계정 0001(consumer_id=1)이다 — 표시만 (비로그인)이고
+    // 실제 API 는 그 계정으로 나간다(currentConsumer.ts 의 DEFAULT_CONSUMER_ID). 상단바
+    // 표기도 "기본 캐릭터(비로그인)" 으로 같은 말을 쓴다.
     // 의도적으로 deps 배열을 안 둔다(매 렌더마다 실행) — 바로 아래 events 주입 effect와
     // 같은 이유: Phaser 씬(게임)이 floorData 로딩 이후 비동기로 생겨서, loggedInPhone이
     // 이미 정해진 상태에서 씬만 늦게 준비되는 경우 deps 배열이 있으면 그 갱신을 영영
@@ -85,6 +89,10 @@ export default function App() {
     const [purchased, setPurchased] = useState<CartItem[]>([]);
     const [cartGroupOpen, setCartGroupOpen] = useState(false);
     const [checkoutTargetOpen, setCheckoutTargetOpen] = useState(false);
+    // 백엔드가 계산해준 장바구니 전체 동선. null 이면 지금 그려진 동선이 없다는 뜻이다.
+    const [activeRoute, setActiveRoute] = useState<CartRoute | null>(null);
+    // 동선을 불러오는 중인 리스트 id — 모달에서 해당 리스트만 로딩 표시를 하기 위한 값.
+    const [routeLoadingGroupId, setRouteLoadingGroupId] = useState<number | null>(null);
     // 담을 리스트 선택 — null이면 예전처럼 "기본 장바구니"에 담긴다(하위 호환 기본값).
     const [cartGroups, setCartGroups] = useState<CartGroupOption[]>([]);
     const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
@@ -283,6 +291,114 @@ export default function App() {
             canvasRef.current?.clearProductPin();
             return null;
         });
+    }, []);
+
+
+    // ============================================================
+    // 장바구니 동선 (장민영) — 백엔드 /api/navigation 결과를 시뮬레이션 화면에 선으로 그린다.
+    // ============================================================
+
+    /** 백엔드가 준 전체 동선 중 지금 보고 있는 층에 해당하는 구간만 잘라서 그린다. */
+    const drawRouteForFloor = useCallback((route: CartRoute, floor: number) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const points = pathPointsOnFloor(route.path, floor);
+        if (points.length === 0) {
+            canvas.clearRoute();
+            return;
+        }
+        const stops = route.stops.filter((s) => s.floor === floor).map((s) => ({ x: s.x, y: s.y }));
+        canvas.drawRoute(points, stops);
+    }, []);
+
+    // 보고 있는 층이 바뀌면 그 층의 동선 구간으로 다시 그린다.
+    useEffect(() => {
+        if (!activeRoute) return;
+        drawRouteForFloor(activeRoute, viewFloor);
+    }, [activeRoute, viewFloor, drawRouteForFloor]);
+
+    /**
+     * 장바구니 리스트 하나를 받아서 그 상품들을 도는 동선을 백엔드에 요청한다.
+     * 백엔드에 넘기기 전에 상품 위치를 읽어 "가까운 것부터" 순서로 한 번 정렬한다
+     * (같은 층을 먼저 돌도록 다른 층에는 FLOOR_PENALTY 를 준다).
+     */
+    const handleShowCartRoute = useCallback(
+        async (groupId: number, items: { skuId: number; name: string }[]) => {
+            if (!playerCell) {
+                setStatusMessage('캐릭터 위치를 아직 확인하지 못했습니다.');
+                setTimeout(() => setStatusMessage(''), 2500);
+                return;
+            }
+            if (items.length === 0) return;
+
+            setRouteLoadingGroupId(groupId);
+            try {
+                const withLoc = await Promise.all(
+                    items.map(async (it) => ({ item: it, loc: await resolveProductLocation(it.skuId) }))
+                );
+                const found = withLoc.filter(
+                    (v): v is { item: typeof v.item; loc: NonNullable<typeof v.loc> } => v.loc !== null
+                );
+                const notFound = withLoc.filter((v) => v.loc === null).map((v) => v.item);
+
+                const FLOOR_PENALTY = 1000;
+                let cursor = { floor: playerFloor, x: playerCell.x, y: playerCell.y };
+                const pool = [...found];
+                const ordered: typeof items = [];
+                while (pool.length > 0) {
+                    let bestIdx = 0;
+                    let bestDist = Infinity;
+                    pool.forEach((v, i) => {
+                        const floorPenalty = v.loc.floorNo === cursor.floor ? 0 : FLOOR_PENALTY;
+                        const dist =
+                            floorPenalty + Math.abs(v.loc.x - cursor.x) + Math.abs(v.loc.y - cursor.y);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestIdx = i;
+                        }
+                    });
+                    const [picked] = pool.splice(bestIdx, 1);
+                    ordered.push(picked.item);
+                    cursor = { floor: picked.loc.floorNo, x: picked.loc.x, y: picked.loc.y };
+                }
+                // 위치를 못 찾은 상품은 순서를 정할 수 없으니 맨 뒤에 붙인다.
+                ordered.push(...notFound);
+
+                const route = await fetchCartRoute({
+                    floor: playerFloor,
+                    x: playerCell.x,
+                    y: playerCell.y,
+                    items: ordered,
+                });
+                setActiveRoute(route);
+                setCartGroupOpen(false);
+
+                const startFloor = route.path[0]?.floor ?? playerFloor;
+                if (startFloor !== viewFloor) {
+                    await handleFloorSwitch(startFloor);
+                }
+                drawRouteForFloor(route, startFloor);
+
+                setStatusMessage(
+                    route.unresolvedCount > 0
+                        ? `🧭 동선 안내: ${route.stops.length}개 매대, 총 ${route.totalDistance}칸 (${route.unresolvedCount}개는 위치를 찾지 못함)`
+                        : `🧭 동선 안내: ${route.stops.length}개 매대, 총 ${route.totalDistance}칸`
+                );
+            } catch (err) {
+                console.error('[handleShowCartRoute] 동선 조회 실패', err);
+                setStatusMessage(err instanceof Error ? err.message : '동선을 불러오지 못했습니다.');
+                setTimeout(() => setStatusMessage(''), 3500);
+            } finally {
+                setRouteLoadingGroupId(null);
+            }
+        },
+        [playerFloor, playerCell, viewFloor, handleFloorSwitch, drawRouteForFloor]
+    );
+
+    const handleClearRoute = useCallback(() => {
+        setActiveRoute(null);
+        canvasRef.current?.clearRoute();
+        setStatusMessage('');
     }, []);
 
     /**
@@ -493,6 +609,48 @@ export default function App() {
             });
     }, [selectedGroupId]);
 
+    /**
+     * 매대 팝업의 "재고 채우기" (장민영).
+     * 1. 백엔드 실제 재고 DB +5 (/internal/events/shelf -> RESTOCK_IN -> stocks.qty 증가)
+     * 2. 시뮬레이션 로컬 재고 오버레이도 +5 (팝업을 다시 열어도 늘어난 값이 보이게)
+     * 3. 지금 열려 있는 팝업의 숫자도 즉시 +5
+     */
+    const handleManualRestock = useCallback(async (location: LocationInfo, product: ProductInfo) => {
+        const RESTOCK_QTY = 5;
+        try {
+            setStatusMessage(`"${product.name}" 재고를 채우는 중...`);
+
+            await confirmRestock(location.locationId, product.skuId, RESTOCK_QTY);
+            adjustStock(location.locationId, product.skuId, RESTOCK_QTY);
+
+            setProductPopup((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    groups: prev.groups.map((group) => {
+                        if (group.location.locationId !== location.locationId) return group;
+                        return {
+                            ...group,
+                            products: group.products.map((p) =>
+                                p.skuId === product.skuId ? { ...p, stock: p.stock + RESTOCK_QTY } : p
+                            ),
+                        };
+                    }),
+                };
+            });
+
+            setStatusMessage(`✅ "${product.name}" 재고 +${RESTOCK_QTY}`);
+            setTimeout(() => setStatusMessage(''), 2000);
+        } catch (err) {
+            console.error('[재고 채우기] 실패:', err);
+            setStatusMessage(
+                err instanceof Error ? `재고 채우기 실패: ${err.message}` : '재고 채우기에 실패했습니다.'
+            );
+            setTimeout(() => setStatusMessage(''), 3500);
+            throw err;
+        }
+    }, []);
+
     const handleCheckout = useCallback(() => {
         const total = cart.reduce((sum, it) => sum + it.price * it.qty, 0);
         if (cart.length === 0 || total > cash) return;
@@ -661,7 +819,7 @@ export default function App() {
                             color: '#facc15',
                             fontWeight: 700,
                         }}
-                        title="예시 잔액 (구매 기능 미구현이라 차감되지 않음)"
+                        title="예시 잔액"
                     >
                         💰 ${cash.toLocaleString()}
                     </div>
@@ -768,9 +926,9 @@ export default function App() {
                             fontSize: 13,
                             fontWeight: 600,
                         }}
-                        title="frontend에서 로그인한 계정을 따라갑니다"
+                        title="frontend에서 로그인한 계정을 따라갑니다 (비로그인은 기본 계정 0001로 동작합니다)"
                     >
-                        👤 {loggedInPhone ? `손님 캐릭터(${loggedInPhone.slice(-4)})` : '기본 캐릭터(0001)'}
+                        👤 {loggedInPhone ? `손님 캐릭터(${loggedInPhone.slice(-4)})` : '기본 캐릭터(비로그인)'}
                     </span>
 
                     {viewFloor !== playerFloor && (
@@ -779,6 +937,23 @@ export default function App() {
                         </div>
                     )}
                     {statusMessage && <div style={{ fontSize: 12, color: '#22c55e' }}>{statusMessage}</div>}
+                    {activeRoute && (
+                        <button
+                            onClick={handleClearRoute}
+                            style={{
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                border: '1px solid #3a3f4b',
+                                background: '#1e2128',
+                                color: '#60a5fa',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            🧭 동선 지우기
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -865,6 +1040,7 @@ export default function App() {
                         cart.map((it) => [`${it.locationId}::${it.skuId}`, it.qty])
                     )}
                     onAddToCart={(location, p) => handleAddToCart(location, p)}
+                    onRestock={(location, p) => handleManualRestock(location, p)}
                     onClose={() => setProductPopup(null)}
                 />
             )}
@@ -877,6 +1053,8 @@ export default function App() {
                         setSelectedGroupId(groupId);
                     }}
                     onClose={() => setCartGroupOpen(false)}
+                    onShowRoute={handleShowCartRoute}
+                    routeLoadingGroupId={routeLoadingGroupId}
                 />
             )}
 
