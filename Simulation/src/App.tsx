@@ -148,13 +148,7 @@ export default function App() {
     // 상단 상태
     // ============================================================
 
-    const [cash, setCash] =
-        useState(99999999);
-
     const [cart, setCart] =
-        useState<CartItem[]>([]);
-
-    const [purchased, setPurchased] =
         useState<CartItem[]>([]);
 
     const [cartGroupOpen, setCartGroupOpen] =
@@ -1726,107 +1720,13 @@ export default function App() {
         );
 
 
-    // ============================================================
-    // 기존 로컬 구매/환불
-    // ============================================================
-
-    const handleCheckout =
-        useCallback(() => {
-
-            const total =
-                cart.reduce(
-                    (sum, it) =>
-                        sum +
-                        it.price *
-                        it.qty,
-                    0
-                );
-
-
-            if (
-                cart.length === 0 ||
-                total > cash
-            ) {
-                return;
-            }
-
-
-            setCash(
-                (prev) =>
-                    prev - total
-            );
-
-
-            for (
-                const it of cart
-                ) {
-
-                adjustStock(
-                    it.locationId,
-                    it.skuId,
-                    -it.qty
-                );
-            }
-
-
-            setPurchased(
-                (prev) => [
-                    ...prev,
-                    ...cart,
-                ]
-            );
-
-
-            setCart([]);
-
-        }, [
-            cart,
-            cash,
-        ]);
-
-
-    const handleRefund =
-        useCallback(
-            (index: number) => {
-
-                setPurchased(
-                    (prev) => {
-
-                        const it =
-                            prev[index];
-
-
-                        if (!it) {
-                            return prev;
-                        }
-
-
-                        setCash(
-                            (c) =>
-                                c +
-                                it.price *
-                                it.qty
-                        );
-
-
-                        adjustStock(
-                            it.locationId,
-                            it.skuId,
-                            it.qty
-                        );
-
-
-                        return prev.filter(
-                            (_, i) =>
-                                i !==
-                                index
-                        );
-                    }
-                );
-            },
-            []
-        );
-
+    // 09-09: 시뮬레이션의 로컬 잔액/구매/환불(cash, purchased, handleCheckout,
+    // handleRefund)을 걷어냈다. 실제 결제 API가 붙기 전에 만든 흉내내기였는데,
+    //   - 화면에 남아 있던 건 상단바의 '💰 $99,999,999' 칩 하나뿐이었고
+    //   - handleCheckout/handleRefund 는 선언만 되고 부르는 곳이 없었으며
+    //     (CartModal.tsx 도 어디에서도 import 하지 않는다)
+    //   - 진짜 결제는 오른쪽 웹 화면의 스캔/결제 흐름이 담당한다.
+    // 지워도 동작이 바뀌는 곳이 없어서 통째로 걷어냈다.
 
     // ============================================================
     // 쇼핑목록 추가/삭제/순서변경
@@ -2268,28 +2168,6 @@ export default function App() {
                         gap: 10,
                     }}
                 >
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '6px 12px',
-                            borderRadius: 8,
-                            border:
-                                '1px solid #3a3f4b',
-                            background:
-                                '#1e2128',
-                            color:
-                                '#facc15',
-                            fontWeight: 700,
-                        }}
-                        title="예시 잔액"
-                    >
-                        💰 $
-                        {cash.toLocaleString()}
-                    </div>
-
-
                     <FloorDropdown
                         current={
                             viewFloor
