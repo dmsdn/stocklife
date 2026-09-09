@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:auth": "node --test scripts/member-auth-check.cjs"
+    "test:auth": "node --test scripts/member-auth-check.cjs scripts/barcode-check.cjs"
   },
   "dependencies": {
     "phaser": "^3.80.1",

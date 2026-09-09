@@ -106,6 +106,7 @@ export async function login(
   });
 
   // 2. JWT 저장
+  clearMemberCartCache();
   setTokens(res.accessToken, res.refreshToken, keepLoggedIn);
   resetCartMigrationAttempt();
 

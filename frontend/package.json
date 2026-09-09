@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:integration": "node --test scripts/integration-check.cjs"
+    "test:integration": "node --test scripts/integration-check.cjs scripts/member-cache-check.cjs scripts/api-origin-check.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

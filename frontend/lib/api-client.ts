@@ -37,14 +37,14 @@ export function getOrCreateGuestSessionId(): string {
   return id;
 }
 
-// ✅ IP를 하드코딩하지 않고, "지금 이 페이지를 연 주소"를 그대로 따라가되 포트만
-//   8080으로 바꿔서 백엔드를 찾습니다. localhost로 열면 localhost:8080을, IP로 열면
-//   그 IP의 8080을 자동으로 찾아가서 — 와이파이 바뀔 때마다 IP를 다시 안 고쳐도 됩니다.
-//   .env.local에 NEXT_PUBLIC_API_BASE_URL을 명시적으로 넣어두면 그 값이 항상 우선합니다.
+// 브라우저 요청은 현재 origin의 /api를 사용한다. 개발은 Next/Vite 프록시,
+// 배포는 Nginx가 백엔드로 전달하므로 HTTPS에서 HTTP:8080 요청이 생기지 않는다.
+// 별도 API 서버를 쓰는 환경은 기존 NEXT_PUBLIC_API_BASE_URL 설정을 유지한다.
 function resolveApiBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) return process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (typeof window !== "undefined") return `http://${window.location.hostname}:8080`;
-  return "http://localhost:8080"; // 서버사이드 렌더링 시점 폴백
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (configured !== undefined) return configured.replace(/\/$/, "");
+  if (typeof window !== "undefined") return "";
+  return process.env.BACKEND_BASE_URL ?? "http://localhost:8080";
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
