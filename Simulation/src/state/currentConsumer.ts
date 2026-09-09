@@ -1,6 +1,6 @@
 // src/state/currentConsumer.ts
 
-const DEFAULT_CONSUMER_ID = 1;
+const DEFAULT_CONSUMER_ID = 0; // 비로그인. 권한은 서버가 JWT로 검증한다.
 
 const STORAGE_KEY = "storeflow-simulation-consumer";
 

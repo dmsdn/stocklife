@@ -4,10 +4,14 @@
 //   따로 만들었습니다 — StoreMap 자체는 그대로 재사용(핀 1개, 동선 없음).
 "use client";
 
+import { useEffect } from "react";
+import { notifySimulationLocation } from "@/lib/simulation-location";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StoreMap } from "./store-map";
 
 interface LocationMapDialogProps {
+  skuId?: number;
   open: boolean;
   onClose: () => void;
   floorNo: number;
@@ -18,6 +22,7 @@ interface LocationMapDialogProps {
 }
 
 export function LocationMapDialog({
+  skuId = 0,
   open,
   onClose,
   floorNo,
@@ -26,6 +31,9 @@ export function LocationMapDialog({
   productName,
   price,
 }: LocationMapDialogProps) {
+  useEffect(() => {
+    if (open) notifySimulationLocation({skuId, name: productName, floorNo, x, y});
+  }, [open, skuId, productName, floorNo, x, y]);
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="flex max-h-[95vh] w-[95vw] max-w-3xl flex-col gap-0 overflow-y-auto p-0">

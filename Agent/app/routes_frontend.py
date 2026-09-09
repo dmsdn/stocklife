@@ -36,8 +36,9 @@ from __future__ import annotations
 
 import os
 import tempfile
+import httpx
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, UploadFile, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app import config, loop, sot_client
@@ -265,7 +266,8 @@ def photo_search(photo: UploadFile = File(...)) -> dict:
     # ⚠ 빈 목록을 주되 **"매장에 없다"는 뜻이 되지 않게** message 로 사유를 남긴다.
     if out.get("error"):
         return {"productName": None, "results": [], "tier": "unsure",
-                "message": out.get("message")}
+                "error": out["error"],
+                "message": out.get("message") or "사진 검색을 사용할 수 없습니다. 잠시 뒤 다시 시도해 주세요."}
 
     cands = out.get("candidates") or []
     return {
@@ -276,3 +278,95 @@ def photo_search(photo: UploadFile = File(...)) -> dict:
         "tier": out.get("tier"),
         "categoryL2": out.get("l2"),
     }
+
+
+class RouteAnchor(BaseModel):
+    """사용자가 확인한 위치만 받는다. 실제 좌표 해석·시설 존재 확인은 솔버가 한다."""
+    skuId: int | None = Field(default=None, gt=0)
+    locationId: str | None = Field(default=None, max_length=80)
+    floorNo: int | None = Field(default=None, ge=1, le=3)
+    x: int | None = Field(default=None, ge=0, le=94)
+    y: int | None = Field(default=None, ge=0, le=74)
+
+
+class RouteBody(BaseModel):
+    """미수집 상품과 확인 위치. 0개여도 계산대·출구 경로는 필요하다."""
+    skuIds: list[int] = Field(max_length=40)
+    lastScannedSkuId: int | None = Field(default=None, gt=0)
+    anchor: RouteAnchor | None = None
+    detourLocationId: str | None = Field(default=None, max_length=80)
+    paid: bool = False
+
+
+@router.post("/api/ai/route-optimize")
+def route_optimize(body: RouteBody) -> dict:
+    """화면 → compute → 제약 솔버 → Spring A* 경로. 구매 상태를 바꾸지 않는다."""
+    if config.USE_MOCK_SOT:
+        return {"error": "real_map_required", "message": "실제 매장 연결을 확인해 주세요."}
+    if any(s <= 0 for s in body.skuIds):
+        return {"error": "invalid_sku", "message": "상품 번호를 확인해 주세요."}
+    anchor = body.anchor.model_dump(exclude_none=True) if body.anchor else None
+    if not anchor and body.lastScannedSkuId:
+        anchor = {"skuId": body.lastScannedSkuId}
+    if anchor and "floorNo" in anchor and ("x" not in anchor or "y" not in anchor):
+        return {"error": "invalid_anchor", "message": "출발 좌표를 확인해 주세요."}
+    return compute._optimize_route(sku_ids=body.skuIds, shopping={
+        "anchor": anchor, "detour_id": body.detourLocationId, "paid": body.paid,
+    })
+
+
+class InsightsBody(BaseModel):
+    skuIds: list[int] = Field(max_length=40)
+    consumerId: int | None = Field(default=None, gt=0)
+
+
+@router.post("/api/ai/list-insights")
+def list_insights(body: InsightsBody, x_internal_service_key: str = Header(default="")) -> dict:
+    """실제 소비주기·가용예측을 리스트 보조 정보로 전달한다.
+
+    JWT는 Spring에서 검증하고 서버 간 키로 이 경계를 확인한다. 본문에 임의 회원
+    번호를 보내 남의 구매 이력을 조회하는 경로를 막는다. ContextVar 신원은 finally로
+    복구한다. 모델 누락/큐 조회 실패는 예측을 비우며 가짜 확률을 채우지 않는다.
+    """
+    import secrets
+    from app.tools import query
+    expected = os.environ.get("INTERNAL_SERVICE_KEY", "")
+    if not expected or not secrets.compare_digest(expected, x_internal_service_key):
+        raise HTTPException(status_code=403, detail="서버 간 인증이 필요합니다.")
+    ids = list(dict.fromkeys(body.skuIds))
+    if any(s <= 0 for s in ids):
+        raise HTTPException(status_code=422, detail="상품 번호를 확인해 주세요.")
+    rows = {s: {"skuId": s} for s in ids}
+    token = query._CURRENT_MEMBER_ID.set(config.to_member_id(body.consumerId))
+    try:
+        # 기존 추론 도구는 발화 길이를 위해 5개씩 반환하므로 화면에서는 분할 호출한다.
+        if body.consumerId is not None:
+            for offset in range(0, len(ids), infer.REPURCHASE_MAX_ITEMS):
+                try:
+                    result = infer.predict_repurchase(ids[offset:offset+infer.REPURCHASE_MAX_ITEMS])
+                    for r in result.get("items", []):
+                        cycle = r.get("typical_cycle_days")
+                        if cycle and r["sku_id"] in rows:
+                            personal = (r.get("past_intervals") or 0) > 0
+                            text = f'{"구매 이력 기준" if personal else "같은 소분류의 일반적인"} 소비주기 약 {cycle:.0f}일'
+                            if personal and r.get("days_since_last") is not None:
+                                text += f' · 마지막 구매 후 {r["days_since_last"]:.0f}일'
+                            rows[r["sku_id"]]["repurchase"] = text + " (추정)"
+                except (ValueError, KeyError, httpx.HTTPError):
+                    pass  # 한 묶음의 누락이 다른 상품 정보까지 지우지 않게 한다.
+        for sku in ids:
+            try:
+                result = infer.predict_availability(sku)
+                curve = result.get("curve") or []
+                # prob_pct는 이미 백분율이다. 다시 100을 곱하면 7,500% 같은 값이 된다.
+                points = [p for p in curve if p.get("prob_pct") is not None and p.get("within")]
+                if not result.get("error") and points:
+                    point = next((p for p in points if p["prob_pct"] >= 50), points[-1])
+                    pct = point["prob_pct"]
+                    shown = "0.1% 미만" if pct < 0.1 else "99.9% 초과" if pct > 99.9 else f"{pct:.1f}%"
+                    rows[sku]["availability"] = f'보충 대기 · {point["within"]} 내 매대 가용 확률 {shown} (예측, 입고 확정 아님)'
+            except (ValueError, KeyError, httpx.HTTPError):
+                pass
+        return {"items": list(rows.values()), "personalized": body.consumerId is not None}
+    finally:
+        query._CURRENT_MEMBER_ID.reset(token)

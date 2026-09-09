@@ -60,10 +60,10 @@ const PLAYER_SPEED = 2000; // px/sec — 09-03: 성원님 요청으로 1500에�
 const HOLD_MOVE_DELAY = Math.max((TILE / PLAYER_SPEED) * 1000, 8); // 방향키를 누르고 있을 때 한 칸 이동 간격(ms)
 
 // ── NPC(재고 담당 직원) 관련 상수 ──
-// NPC는 "지하 창고에서 물건을 받아 각 층 매대로 배달"하는 흐름을 표현한다 — 실제로 B1 씬까지
-// 오가는 건 아니고(한 번에 한 층만 씬에 로드되는 구조라서), 그 층의 엘리베이터 앞을 "지하
-// 창고 반입구"로 삼아 NPC가 매번 그 자리를 거쳐서 매대로 이동하는 것으로 연출한다.
-const NPC_COUNT = 3; // 층당 동시에 돌아다니는 직원 수
+// 요청으로 재입고 NPC를 화면에서 완전히 없앤다 — NPC_COUNT=0이면 spawnNpcs()가 아무것도
+// 만들지 않고 아래 로직(순찰/재입고 루프)은 그냥 실행되지 않는다. 관련 로직 자체는 나중에
+// 다시 켤 수 있도록 지우지 않고 남겨둔다.
+const NPC_COUNT = 0; // 층당 동시에 돌아다니는 직원 수 (0 = 비활성화)
 const NPC_SPEED = 1500; // px/sec — 요청에 따라 최대 속도로 설정(플레이어의 약 4.5배). TILE 변경에 맞춰 1.5배
 const LOW_STOCK_THRESHOLD = 5; // 이 재고 미만이면 "재입고 필요"로 판단
 const RESTOCK_QTY = 15; // 한 번 재입고할 때 채워 넣는 수량
@@ -1142,16 +1142,20 @@ export default class StoreScene extends Phaser.Scene {
     const homeGoal = elevatorFac ? { x: elevatorFac.x, y: elevatorFac.y } : this.findEntranceCell();
     this.npcHomeCell = this.grid.nearestWalkableTo(homeGoal) ?? homeGoal;
 
+    // 지하 창고 제거 요청 — NPC가 없으면(count === 0) "🚚 지하 창고 반입구" 표시도 같이 없앤다.
     this.npcHomeMarker?.destroy();
-    this.npcHomeMarker = this.add
-        .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
-          fontSize: '20px',
-          color: '#78350f',
-          backgroundColor: '#fef3c7cc',
-          padding: { x: 2, y: 0 },
-        })
-        .setOrigin(0.5, 1)
-        .setDepth(DEPTH_NPC);
+    this.npcHomeMarker = undefined;
+    if (count > 0) {
+      this.npcHomeMarker = this.add
+          .text(this.npcHomeCell.x * TILE + TILE / 2, this.npcHomeCell.y * TILE - 2, '🚚 지하 창고 반입구', {
+            fontSize: '20px',
+            color: '#78350f',
+            backgroundColor: '#fef3c7cc',
+            padding: { x: 2, y: 0 },
+          })
+          .setOrigin(0.5, 1)
+          .setDepth(DEPTH_NPC);
+    }
 
     for (let i = 0; i < count; i++) {
       const cell = this.npcHomeCell;

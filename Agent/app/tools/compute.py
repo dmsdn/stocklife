@@ -486,8 +486,14 @@ def _route_floor_decomposed(start: tuple, destinations: list, leg):
 
 def _optimize_route(sku_ids: list | None = None, start_location_id: str | None = None,
                     start_floor: int | None = None, start_x: int | None = None,
-                    start_y: int | None = None, facility_stops: list | None = None) -> dict:
+                    start_y: int | None = None, facility_stops: list | None = None,
+                    shopping: dict | None = None) -> dict:
     """방문 순서 최적화의 입구. 실패는 전부 값으로(원칙 ④)."""
+    # 화면의 전체 장보기는 종단·냉장 순서 제약을 추가한다. 동결된 학습/평가의
+    # 기존 도구 인자를 바꾸지 않고 명시적으로 요청한 화면 모드에만 적용한다.
+    if shopping is not None:
+        from app.tools.shopping_route import optimize
+        return optimize(sku_ids or [], **shopping)
     # dict.fromkeys(목록) = 목록의 원소를 키로 하는 dict — 파이썬 dict는 넣은
     # 순서를 기억하므로, 이걸 다시 list로 뜨면 **순서를 보존한 중복 제거**가 된다.
     # set(목록)으로 지우면 순서가 사라져서 같은 입력에 다른 순서가 나올 수 있다.
@@ -585,8 +591,12 @@ def _optimize_route(sku_ids: list | None = None, start_location_id: str | None =
 
     return {"ok": True, "mode": "backend_astar_exact_order",
             "algorithm": "층 분해(층 순서 전수) + 층내 Held-Karp + 백엔드 A* 구간 비용",
-            "start": {"floor_no": start[0], "x": start[1], "y": start[2]},
-            "visit_order": ordered, "floor_order": floor_order,
+            # 좌표는 **안 싣는다** (09-05 상류 감사). definitions.py 가 "좌표 숫자는 읽지 말고
+            #   층·방향·거리로 말한다"고 광고하는데 정작 값을 손에 쥐여 주고 있었다 — 규율로 덮는 부류가 아니라 **안 보내는 것이 답인 부류**다.
+            #   거리는 total_distance·legs 로 이미 나간다 — 잃는 것이 없다.
+            "start": {"floor_no": start[0]},
+            "visit_order": [{k: v for k, v in d.items() if k not in ("x", "y")}
+                            for d in ordered], "floor_order": floor_order,
             "optimized_cost": optimized_cost,
             "total_distance": int(final_route.get("totalDistance", optimized_cost)),
             "legs": _fold_legs(final_route.get("legs", [])),
@@ -957,14 +967,37 @@ def _compare_products(sku_ids: list, sort_by: str = "price_asc") -> dict:
     # [왜 이름을 세나] "행사 상품이 있다"까지만 말하면 LLM 이 어느 것인지
     #   되짚어야 한다. 이름을 주면 문장의 주어가 그대로 온다.
     promo = [r["name"] for r in rows if r.get("on_promo")]
+    # ── 규율을 **항상** 싣는다 (09-05) ──────────────────────────────────────
+    # [무엇이 났나] 09-05 골든 실호출에서 이 발화가 나왔다:
+    #
+    #     "차액은 **max_diff_krw 기준** 800원입니다."
+    #
+    #   숫자는 맞다. 원장에도 있다. 그래서 가드 1·2단계가 다 통과한다 —
+    #   09-05 에 새로 건 형식 자(speech_check ⑪ snake_case)가 잡았다.
+    #
+    # [뿌리] 이 도구의 read_as 는 **행사 갈래에만** 있었고, 그 문장이 하필
+    #   *"regular_price_krw · discount_krw · final_price_krw 가 그 문장의
+    #   재료이고"* 라고 **칸 이름을 모델에게 가르친다.** 모델에게 칸 이름을
+    #   말해 주는 것 자체는 옳다(무엇을 쓰라는 지시다). 빠진 것은 **그 이름을
+    #   손님에게는 읽지 말라**는 한 줄이었다.
+    #
+    #   > 모델에게 하는 말과 손님에게 할 말을 가르지 않으면,
+    #     지시문이 그대로 발화가 된다.
+    #
+    #   그래서 금지를 **갈래와 무관하게** 싣는다 — 행사가 없는 판에서도
+    #   `max_diff_krw`·`diff_from_cheapest_krw` 는 늘 결과에 있다.
+    _ra = ("가격 차이는 **숫자와 상품명으로** 말하세요 — "
+           "'A가 B보다 800원 싸요'. max_diff_krw·diff_from_cheapest_krw·"
+           "final_price_krw 같은 **칸 이름은 손님에게 읽어 주지 않습니다**. "
+           "그것은 어느 값을 쓰라는 지시이지 발화의 낱말이 아닙니다.")
+    if promo:
+        _ra += (f" 그리고 **행사 중인 상품이 있습니다** — {', '.join(promo)}. "
+                "'원래 O원인데 O원 할인된 O원'처럼 **행사 사실을 함께 말하세요.** "
+                "정가·할인액·행사가가 그 문장의 재료이고, 셋 다 원장에 있으니 "
+                "아무 수도 만들지 마세요.")
     return {"sort_by": sort_by, "items": rows, "missing_sku_ids": missing,
             "cheapest_sku_id": cheapest["sku_id"] if cheapest else None,
-            **({"read_as": (
-                f"**행사 중인 상품이 있습니다** — {', '.join(promo)}. "
-                "'원래 O원인데 O원 할인된 O원'처럼 **행사 사실을 함께 말하세요.** "
-                "regular_price_krw · discount_krw · final_price_krw 가 그 문장의 "
-                "재료이고, 셋 다 원장에 있으니 아무 수도 만들지 마세요.")}
-               if promo else {}),
+            "read_as": _ra,
             # 최고가−최저가. "둘 중 뭐가 싸냐"는 2개 비교에서 이 값이 곧 답이다.
             "max_diff_krw": (max(r["final_price_krw"] for r in rows)
                              - cheapest["final_price_krw"]) if rows else None}

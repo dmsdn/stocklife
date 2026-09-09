@@ -45,6 +45,10 @@ export function sessionFor(groupId: number): ShoppingSession {
 //   켜도(탭을 새로 열어도) "결제 전까지 고정"이 유지돼야 하기 때문입니다.
 const ACTIVE_SCAN_GROUP_KEY = "storeflow_active_scan_group";
 
+function canUseStorage() {
+  return typeof window !== "undefined";
+}
+
 export function readActiveScanGroupId(): number | null {
   if (!canUseStorage()) return null;
   try {

@@ -10,6 +10,10 @@ interface Props {
     selectedGroupId: number | null;
     onSelectGroup: (groupId: number | null) => void;
     onClose: () => void;
+    // 이 리스트의 최적 동선을 시뮬레이션 화면에 네비게이션처럼 그려달라는 요청.
+    // 로딩/에러 처리는 App.tsx가 status bar로 보여주므로 여기선 요청만 던진다.
+    onShowRoute?: (groupId: number, items: { skuId: number; name: string }[]) => void;
+    routeLoadingGroupId?: number | null;
 }
 
 interface ProductDetail {
@@ -23,6 +27,8 @@ export default function CartGroupModal({
                                            selectedGroupId,
                                            onSelectGroup,
                                            onClose,
+                                           onShowRoute,
+                                           routeLoadingGroupId,
                                        }: Props) {
     const [openedGroup, setOpenedGroup] =
         useState<CartGroupOption | null>(null);
@@ -273,6 +279,52 @@ export default function CartGroupModal({
                             ? '✓ 현재 이 리스트에 담는 중'
                             : '이 리스트에 상품 담기'}
                     </button>
+
+                    {/* 동선 안내 — 백엔드가 A*+TSP로 계산한 최적 경로를 시뮬레이션 화면에 그려준다 */}
+                    {onShowRoute && (
+                        <button
+                            type="button"
+                            disabled={
+                                items.length === 0 ||
+                                routeLoadingGroupId != null
+                            }
+                            onClick={() =>
+                                onShowRoute(
+                                    openedGroup.cartGroupId,
+                                    items.map((item) => ({
+                                        skuId: item.skuId,
+                                        name:
+                                            products[item.skuId]?.name ??
+                                            `상품 #${item.skuId}`,
+                                    }))
+                                )
+                            }
+                            style={{
+                                width: '100%',
+                                padding: '11px 12px',
+                                marginBottom: 14,
+                                borderRadius: 7,
+                                border: '1px solid #3a3f4b',
+                                background:
+                                    items.length === 0 ||
+                                    routeLoadingGroupId != null
+                                        ? '#252a33'
+                                        : '#0f766e',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                cursor:
+                                    items.length === 0 ||
+                                    routeLoadingGroupId != null
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                            }}
+                        >
+                            {routeLoadingGroupId ===
+                            openedGroup.cartGroupId
+                                ? '동선 계산 중...'
+                                : '🧭 이 리스트로 길찾기'}
+                        </button>
+                    )}
 
                     {/* 에러 */}
                     {productError && (
