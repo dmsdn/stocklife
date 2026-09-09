@@ -7,7 +7,7 @@ import { PromoBanner } from "@/components/domain/promo-banner";
 
 export function HomePaymentBanner() {
   return (
-    <section className="w-full h-[150px] px-4 sm:px-6 lg:px-8">
+    <section className="w-full h-[120px] px-4 sm:px-6 lg:px-8">
       <PromoBanner
         bgColor="#F7AE93"
         title="앱으로 결제하면 포인트 두 배"

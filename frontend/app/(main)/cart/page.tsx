@@ -17,7 +17,8 @@ import { LoginRequiredDialog } from "@/components/domain/login-required-dialog";
 import { ProductLocationDialog } from "@/components/domain/product-location-dialog";
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { apiFetch, isLoggedIn, resolveImageUrl } from "@/lib/api-client";
-import { readCartGroups, updateCartGroups } from "@/lib/cart-storage";
+import { readCartGroups, updateCartGroups, loadCartGroups } from "@/lib/cart-storage";
+import { markGroupCompleted } from "@/lib/completed-groups";
 import { notifySimulationCartChanged } from "@/lib/simulation-bridge";
 import { fetchCoupons, type Coupon } from "@/lib/coupons-mock";
 import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
@@ -152,6 +153,29 @@ export default function CartPage() {
         body: JSON.stringify({ consumerCouponId: selectedCouponId }),
       });
       trackConsumerEvent({ event_type: "PURCHASE" });
+      // ✅ 버그 수정(요청 — "저장 화면 결제완료 검은 배경이 안 뜬다") — 원인을 찾았습니다.
+      //   이 화면(장바구니)의 결제하기가 /checkout 페이지(스캔 → 결제 흐름)와는 별개로
+      //   존재하는 예전 경로였는데, 결제 성공 후 markGroupCompleted()를 아예 호출하지
+      //   않고 있었습니다 — 그래서 이 경로로 결제한 리스트는 저장 화면에서 계속
+      //   "진행 중"으로 보였던 것입니다.
+      //   다만 이 화면이 부르는 GET /api/cart는 장바구니 항목에 어느 리스트(그룹) 소속인지
+      //   정보를 안 줘서(백엔드 CartItemResponse에 groupId가 없음), 정확히 어느 그룹을
+      //   결제했는지 이 화면만으로는 알 수 없습니다. 차선책으로 결제한 상품(skuId)들이
+      //   들어있는 리스트를 전부 찾아서 완료 처리합니다 — 대부분은 한 리스트에서만
+      //   결제하니 이걸로 충분하지만, 여러 리스트에 같은 상품이 겹쳐 담겨 있으면 실제로
+      //   결제 안 한 리스트까지 완료로 표시될 수 있습니다(백엔드가 groupId를 내려주게
+      //   되면 이 근사치 로직은 없애고 정확한 값을 쓰면 됩니다).
+      try {
+        const paidSkuIds = new Set(selectedItems.map((i) => i.skuId));
+        const groups = await loadCartGroups();
+        for (const group of groups) {
+          if (group.products.some((p) => paidSkuIds.has(p.id))) {
+            markGroupCompleted(group.id);
+          }
+        }
+      } catch {
+        // 완료 표시 실패해도 결제 자체는 이미 끝났으니 화면 이동은 그대로 진행
+      }
       router.push("/mypage/receipts");
     } catch {
       setCheckoutError("결제할 상품이 선택되지 않았거나 처리 중 오류가 발생했어요.");

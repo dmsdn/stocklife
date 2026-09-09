@@ -378,20 +378,16 @@ function ScanPageInner() {
   const lookupByCode = async (code: string) => {
     if (!code.trim()) return;
 
-    // ✅ 수정(2026-09) — 리스트를 고르지 않고 바로 스캔하면 예전엔 "담을 리스트를
-    //   준비하는 중이에요"만 뜨고 계속 막혀있었다. "리스트 없이 시작하기"를 누른 것과
-    //   똑같이, 뒤에서 조용히 기본 그룹을 마련해서 바로 담아준다 — 별도 안내나 대기 없음.
+    // ✅ 수정(요청 — "자동으로 만들지 않게") — 예전엔 리스트를 고르지 않고 바로 스캔하면
+    //   뒤에서 조용히 "빠른 장보기" 리스트를 만들어서 바로 담아줬는데, 이러면 사용자가
+    //   원하지도 않은 리스트가 계속 쌓입니다. 이제 리스트가 안 골라진 상태로 스캔하면
+    //   담지 않고, 리스트 선택 화면을 띄워서 직접 고르거나(또는 "리스트 없이 시작하기"를
+    //   명시적으로 눌러서) 스스로 정하게 합니다.
     let currentGroupId = groupId;
     if (!currentGroupId) {
-      try {
-        const quick = await getOrCreateQuickCartGroup();
-        currentGroupId = quick.id;
-        setGroupId(quick.id);
-        setGroups((prev) => (prev.some((g) => g.id === quick.id) ? prev : [...prev, quick]));
-      } catch {
-        setError("담을 리스트를 준비하지 못했어요. 잠시 후 다시 시도해주세요.");
-        return;
-      }
+      setError("먼저 담을 리스트를 선택해주세요.");
+      setGroupPickerOpen(true);
+      return;
     } else if (groupCompleted) {
       setError("이미 결제 완료된 리스트예요. 다른 리스트를 선택해주세요.");
       return;

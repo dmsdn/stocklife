@@ -9,6 +9,7 @@ import { apiFetch, setTokens, clearTokens } from "./api-client";
 import {
   migrateGuestCartToAccount,
   resetCartMigrationAttempt,
+  clearMemberCartCache,
 } from "./cart-storage";
 
 export interface SignupPayload {
@@ -147,6 +148,9 @@ export async function logout(): Promise<void> {
   } finally {
     // 토큰 삭제
     clearTokens();
+    // ✅ 버그 수정 — 다음 로그인 사용자에게 이전 사용자의 리스트 캐시가 잠깐이라도
+    //   보이지 않도록, 로그아웃 시 회원 장바구니 세션 캐시도 같이 지움.
+    clearMemberCartCache();
 
     // 시뮬레이션에도 로그아웃 알림
     notifySimulationLogout();
