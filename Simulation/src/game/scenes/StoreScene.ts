@@ -47,9 +47,11 @@ import { ZONE_LABEL_OVERRIDES, SERVICE_AREA_LABEL_OVERRIDES } from '../../data/f
 // 반비례하게 맞추므로 기본(꽉 채운) 화면에서 전체 크기는 그대로고, 실제로 달라지는 건
 // 렌더링 선명도 + 사용자가 확대했을 때 보이는 디테일이다.
 const TILE = 24;
-const PLAYER_SPEED = 2000; // px/sec — 09-03: 성원님 요청으로 1500에서 재상향(NPC_SPEED보다도
-// 빠름). 타일 이동 tween에는 최소 40ms 바닥이 걸려 있어(advancePath() 참고) 아무리 빨라도
-// 순간이동처럼 보이진 않는다.
+const PLAYER_SPEED = 1200; // px/sec — 09-09: 성원님 요청으로 2000에서 소폭 하향. 2000은
+// 눈으로 따라가기 어려울 만큼 빨라서 "어디로 갔는지 모르겠다"는 느낌이 있었다. 타일 이동
+// tween에는 최소 40ms 바닥이 걸려 있어(advancePath() 참고) 이 값이 더 커져도 순간이동처럼
+// 보이진 않는다. 더 느리게 하려면 이 값만 낮추면 되고 HOLD_MOVE_DELAY는 아래에서 이 값에
+// 맞춰 자동으로 따라간다.
 // 09-03: 이전엔 140ms 고정값이었는데, PLAYER_SPEED를 크게 올려도(타일 하나 이동에 실제로
 // 걸리는 시간은 훨씬 짧아짐) 이 값이 그대로 140ms라서 "한 칸 휙 움직이고 ~130ms 가만히
 // 서있다가 다음 칸 휙"처럼 뚝뚝 끊겨 보였다(성원님 피드백) — 실제 원인은 tween 길이가
@@ -228,6 +230,7 @@ export default class StoreScene extends Phaser.Scene {
   // walkTo/advancePath가 pathGraphics를 지울 때 같이 지워지면 안 되어 분리했다.
   private routeGraphics!: Phaser.GameObjects.Graphics;
   // 09-08 상품 위치 핀. 한 번에 하나만 띄운다(새로 찍으면 이전 것은 지운다).
+  private routeEndpointLayer?: Phaser.GameObjects.Container; // 출발/도착 마커(09-09)
   private productPin?: Phaser.GameObjects.Container;
   private productPinCell?: GridPoint;
   private floorTileLayer?: Phaser.GameObjects.Graphics;
@@ -525,6 +528,7 @@ export default class StoreScene extends Phaser.Scene {
     this.pathGraphics.clear();
     this.routeGraphics.clear(); // 이전 층에서 그려둔 추천 동선은 층이 바뀌면 좌표가 무의미해지므로 같이 지운다
     this.clearProductPin();     // 상품 위치 핀도 같은 이유로 지운다. 다른 층 좌표에 남아 있으면 엉뚱한 자리를 가리킨다
+    this.clearRouteEndpoints(); // 출발/도착 마커도 마찬가지 — 층이 바뀌면 그 좌표는 다른 자리를 가리킨다
     this.currentPath = [];
     this.moving = false;
     this.spawnNpcs(NPC_COUNT);
@@ -590,6 +594,58 @@ export default class StoreScene extends Phaser.Scene {
   }
 
   /**
+   * 동선의 출발점과 도착점에 마커를 꽂는다(09-09).
+   *
+   * [왜 productPin 과 따로인가] productPin 은 "한 번에 하나"만 유지하는 구조다(핀을 새로
+   * 꽂으면 이전 핀을 지운다 — 클릭하면 그 자리로 출발하는 동작이 붙어 있어서 둘 이상이면
+   * 어느 쪽으로 가야 할지 모호해진다). 출발/도착은 동시에 둘 다 보여야 하므로 클릭 동작이
+   * 없는 별도 레이어로 그린다.
+   *
+   * 좌표는 "지금 로드된 층" 기준이다. 다른 층의 지점은 부르는 쪽에서 null 로 넘겨야 한다 —
+   * 층이 다른 좌표를 그대로 그리면 엉뚱한 자리를 가리킨다.
+   */
+  showRouteEndpoints(start: GridPoint | null, end: GridPoint | null) {
+    this.clearRouteEndpoints();
+
+    const layer = this.add.container(0, 0);
+    layer.setDepth(DEPTH_ROUTE);
+
+    const marker = (cell: GridPoint, color: number, text: string) => {
+      const cx = cell.x * TILE + TILE / 2;
+      const cy = cell.y * TILE + TILE / 2;
+      const r = TILE * 0.62;
+
+      const g = this.add.graphics();
+      g.fillStyle(0x000000, 0.25);
+      g.fillEllipse(cx, cy + r * 0.75, r * 1.6, r * 0.5);
+      g.fillStyle(color, 1);
+      g.fillCircle(cx, cy, r);
+      g.lineStyle(3, 0xffffff, 0.95);
+      g.strokeCircle(cx, cy, r);
+      layer.add(g);
+
+      const label = this.add.text(cx, cy, text, {
+        fontFamily: 'sans-serif',
+        fontSize: `${Math.round(TILE * 0.5)}px`,
+        color: '#ffffff',
+        fontStyle: 'bold',
+      });
+      label.setOrigin(0.5, 0.5);
+      layer.add(label);
+    };
+
+    if (start) marker(start, 0x22c55e, '출발');
+    if (end) marker(end, 0xef4444, '도착');
+
+    this.routeEndpointLayer = layer;
+  }
+
+  clearRouteEndpoints() {
+    this.routeEndpointLayer?.destroy(true);
+    this.routeEndpointLayer = undefined;
+  }
+
+  /**
    * 09-08 상품 위치 핀.
    *
    * 오른쪽 웹 화면의 검색 결과에서 가격 밑 위치("3층 홈 가전 구역")를 누르면, 그 상품이
@@ -599,6 +655,72 @@ export default class StoreScene extends Phaser.Scene {
    * 한 번에 하나만 띄운다. 새 상품을 누르면 이전 핀은 지운다 — 여러 개가 남아 있으면
    * 어느 것이 방금 누른 것인지 알 수 없다.
    */
+  /**
+   * 매대 몸체 그리기 — 2x2 베이 단위로 묶어서 큰 사각형 하나로 그린다(09-09 성원님 요청).
+   *
+   * [왜] 예전엔 칸(1x1)마다 사각형을 하나씩 그려서, 4칸 두께 매대가 자잘한 네모 16개로
+   * 보였다. 세계 데이터(map_cells)는 손대면 안 되므로(상품 위치·통행 판정이 전부 거기서
+   * 나온다) **차지하는 칸은 그대로 두고 그리는 단위만** 2x2로 키운다.
+   *
+   * [불변식] 이 함수는 칸을 더 칠하지도, 덜 칠하지도 않는다. 2x2 네 칸이 "모두" 같은 존의
+   * 매대일 때만 묶고, 하나라도 비었으면 남은 칸을 예전처럼 1x1로 그린다. 그래서 매대의
+   * 겉모양(footprint)은 픽셀 단위로 이전과 같고, 클릭 판정(locationByCell)과도 어긋나지
+   * 않는다 — 판정은 부르는 쪽에서 칸 단위로 이미 다 만들어 두었다.
+   *
+   * [격자 기준] 베이는 map_layout.py의 BAY_CELLS=2 규칙에 따라 항상 짝수 좌표에서 시작한다.
+   * 그래서 묶음의 기준점은 좌표를 2로 내림한 값(x - x%2)이다. 이 규칙이 바뀌면 여기도 같이
+   * 바뀌어야 한다 — 안 그러면 베이 경계를 가로질러 묶여서 이음매가 어긋나 보인다.
+   */
+  private drawShelfCellsMerged(
+      cells: { x: number; y: number; zoneId: string }[],
+      colorForZone: (zoneId: string) => number,
+  ) {
+    const BLOCK = 2; // 묶는 단위(칸). map_layout.py의 BAY_CELLS와 같은 값이어야 한다.
+
+    // 같은 존의 매대 칸인지 빠르게 확인하기 위한 색인. 존까지 키에 넣는 이유는, 서로 다른
+    // 존의 매대가 등을 맞대고 붙어 있을 때 색이 다른 두 존을 한 사각형으로 묶어버리면
+    // 존 경계가 사라지기 때문이다.
+    const present = new Set<string>();
+    for (const c of cells) present.add(`${c.x},${c.y},${c.zoneId}`);
+
+    const drawn = new Set<string>();
+    const paint = (cx: number, cy: number, size: number, color: number) => {
+      this.shelfLayer.add(this.add.rectangle(cx, cy, size, size, color));
+    };
+
+    for (const cell of cells) {
+      const key = `${cell.x},${cell.y}`;
+      if (drawn.has(key)) continue;
+
+      const bx = cell.x - (cell.x % BLOCK);
+      const by = cell.y - (cell.y % BLOCK);
+      const quad: [number, number][] = [];
+      for (let dx = 0; dx < BLOCK; dx++) {
+        for (let dy = 0; dy < BLOCK; dy++) quad.push([bx + dx, by + dy]);
+      }
+
+      const canMerge = quad.every(
+          ([qx, qy]) => present.has(`${qx},${qy},${cell.zoneId}`) && !drawn.has(`${qx},${qy}`));
+
+      if (canMerge) {
+        for (const [qx, qy] of quad) drawn.add(`${qx},${qy}`);
+        paint(
+            bx * TILE + (TILE * BLOCK) / 2,
+            by * TILE + (TILE * BLOCK) / 2,
+            TILE * BLOCK * SHELF_INSET,
+            colorForZone(cell.zoneId));
+      } else {
+        // 묶이지 않는 자투리 칸(존 경계, 홀수 폭 매대 등) — 예전 방식 그대로 한 칸으로.
+        drawn.add(key);
+        paint(
+            cell.x * TILE + TILE / 2,
+            cell.y * TILE + TILE / 2,
+            TILE * SHELF_INSET,
+            colorForZone(cell.zoneId));
+      }
+    }
+  }
+
   showProductPin(cell: GridPoint, label: string) {
     this.clearProductPin();
 
@@ -853,6 +975,8 @@ export default class StoreScene extends Phaser.Scene {
         const rect = this.add.rectangle(fx * TILE + TILE / 2, fy * TILE + TILE / 2, TILE, TILE, 0xd6d6d6);
         this.shelfLayer.add(rect);
       }
+      // 클릭 판정(locationByCell)은 예전 그대로 "칸 하나씩" 만든다 — 아래 그리기만 2x2로
+      // 묶는다. 판정과 그림이 어긋나면 안 되므로 이 둘을 절대 한 루프에 합치지 않는다.
       for (const cell of shelfCells) {
         // 클릭 → 상품 팝업 연결: 같은 존의 location 중 가장 가까운 접근 지점
         let nearest: LocationInfo | null = null;
@@ -863,11 +987,8 @@ export default class StoreScene extends Phaser.Scene {
         }
         const key = `${cell.x},${cell.y}`;
         if (nearest && !this.locationByCell.has(key)) this.locationByCell.set(key, nearest);
-        const rect = this.add.rectangle(
-            cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
-            TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
-        this.shelfLayer.add(rect);
       }
+      this.drawShelfCellsMerged(shelfCells, colorForZone);
     } else if (occupiedCells.length > 0) {
       for (const [ox, oy] of occupiedCells) {
         let nearest: LocationInfo | null = null;

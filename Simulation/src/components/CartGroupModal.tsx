@@ -13,6 +13,9 @@ interface Props {
     // 이 리스트의 최적 동선을 시뮬레이션 화면에 네비게이션처럼 그려달라는 요청.
     // 로딩/에러 처리는 App.tsx가 status bar로 보여주므로 여기선 요청만 던진다.
     onShowRoute?: (groupId: number, items: { skuId: number; name: string }[]) => void;
+    // 09-09: 1층 입구가 아니라 "지금 서 있는 자리"에서 다시 동선을 잡는다. 출발점은
+    // 오른쪽 웹 화면 카메라로 매대 바코드를 찍어서 정한다.
+    onRouteFromHere?: (groupId: number, items: { skuId: number; name: string }[]) => void;
     routeLoadingGroupId?: number | null;
 }
 
@@ -28,6 +31,7 @@ export default function CartGroupModal({
                                            onSelectGroup,
                                            onClose,
                                            onShowRoute,
+                                           onRouteFromHere,
                                            routeLoadingGroupId,
                                        }: Props) {
     const [openedGroup, setOpenedGroup] =
@@ -322,7 +326,50 @@ export default function CartGroupModal({
                             {routeLoadingGroupId ===
                             openedGroup.cartGroupId
                                 ? '동선 계산 중...'
-                                : '🧭 이 리스트로 길찾기'}
+                                : '🧭 이 리스트로 길찾기 (1층 입구에서 출발)'}
+                        </button>
+                    )}
+
+                    {/* 09-09: 쇼핑 도중에 다시 잡는 동선 — 출발점은 바코드로 정한다 */}
+                    {onRouteFromHere && (
+                        <button
+                            type="button"
+                            disabled={
+                                items.length === 0 ||
+                                routeLoadingGroupId != null
+                            }
+                            onClick={() =>
+                                onRouteFromHere(
+                                    openedGroup.cartGroupId,
+                                    items.map((item) => ({
+                                        skuId: item.skuId,
+                                        name:
+                                            products[item.skuId]?.name ??
+                                            `상품 #${item.skuId}`,
+                                    }))
+                                )
+                            }
+                            style={{
+                                width: '100%',
+                                padding: '11px 12px',
+                                marginBottom: 14,
+                                borderRadius: 7,
+                                border: '1px solid #3a3f4b',
+                                background:
+                                    items.length === 0 ||
+                                    routeLoadingGroupId != null
+                                        ? '#252a33'
+                                        : '#7c3aed',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                cursor:
+                                    items.length === 0 ||
+                                    routeLoadingGroupId != null
+                                        ? 'not-allowed'
+                                        : 'pointer',
+                            }}
+                        >
+                            📷 지금 위치에서부터 길찾기
                         </button>
                     )}
 
