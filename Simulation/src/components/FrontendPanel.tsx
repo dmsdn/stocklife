@@ -1,7 +1,13 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 
 interface Props {
-    /** frontend(Next.js) 개발 서버 주소. .env에서 VITE_FRONTEND_URL로 오버라이드 가능 */
+    /**
+     * 오른쪽 웹 화면 주소. 기본값 '/' 는 "지금 이 페이지와 같은 주소의 최상위"라는 뜻이다.
+     * 배포(EC2)는 프론트가 /, 시뮬레이션이 /simulation/ 이고, 개발 서버도 vite.config.ts의
+     * 프록시로 같은 구조를 만들어 뒀으므로 양쪽 다 이 값으로 맞는다.
+     * 같은 origin이어야 memberAuth.ts가 프론트의 로그인 토큰(localStorage)을 읽을 수 있다.
+     * 굳이 다른 주소를 쓰려면 .env에서 VITE_FRONTEND_URL로 덮어쓴다.
+     */
     src?: string;
     width?: number;
 }
@@ -21,15 +27,17 @@ export interface FrontendPanelHandle {
 //   웹 화면 -> 시뮬레이션 : { source: 'storeflow-frontend',   type: 'CART_CHANGED' }  (App.tsx가 수신)
 //   시뮬레이션 -> 웹 화면 : { source: 'storeflow-simulation', type: 'CART_CHANGED' }  (여기서 발신)
 const FrontendPanel = forwardRef<FrontendPanelHandle, Props>(function FrontendPanel({
-    src = import.meta.env.VITE_FRONTEND_URL ?? 'http://localhost:3000',
+    src = import.meta.env.VITE_FRONTEND_URL ?? '/',
     width = 420,
 }, ref) {
     const iframeRef = useRef<HTMLIFrameElement>(null);
 
-    // targetOrigin에 iframe src를 그대로 넣는다. '*'로 열어두면 이 메시지가 어떤 창에서든
-    // 읽힐 수 있으므로, 우리가 직접 지정한 프론트엔드 주소로만 가도록 좁혀둔다.
+    // targetOrigin에는 완전한 origin(http://호스트:포트)만 넣을 수 있다. src가 '/' 같은
+    // 상대경로일 수 있으므로 지금 페이지 주소를 기준으로 풀어서 origin만 뽑는다.
+    // '*'로 열어두면 이 메시지가 어떤 창에서든 읽힐 수 있어서 그렇게 하지 않는다.
+    const targetOrigin = new URL(src, window.location.href).origin;
     const postToFrontend = (message: unknown) => {
-        iframeRef.current?.contentWindow?.postMessage(message, src);
+        iframeRef.current?.contentWindow?.postMessage(message, targetOrigin);
     };
 
     useImperativeHandle(ref, () => ({
