@@ -33,7 +33,7 @@ export function GroupPickerDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>담는 곳을 선택하세요</DialogTitle>
+          <DialogTitle>어느 리스트를 불러올까요?</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2">

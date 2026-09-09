@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
 import { loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
+import { isGroupCompleted } from "@/lib/completed-groups";
 
 interface SaveToListDialogProps {
   open: boolean;
@@ -36,6 +37,9 @@ export function SaveToListDialog({ open, onClose, onSelect }: SaveToListDialogPr
       setNewTitle("");
       setLoading(true);
       loadCartGroups()
+        // ✅ 신규(요청 3번) — 결제 완료된 리스트는 더 이상 담을 수 없게 잠겨있으므로,
+        //   여기(어느 화면에서 부르든 공통으로 쓰는 저장 모달)에서도 선택지에서 뺌.
+        .then((groups) => groups.filter((g) => g.status !== "COMPLETED" && !isGroupCompleted(g.id)))
         .then(setGroups)
         .finally(() => setLoading(false));
     }

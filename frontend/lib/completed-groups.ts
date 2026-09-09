@@ -29,3 +29,17 @@ export function markGroupCompleted(groupId: number) {
 export function isGroupCompleted(groupId: number): boolean {
   return Boolean(readAll()[groupId]);
 }
+
+export function getGroupCompletedAt(groupId: number): string | null {
+  return readAll()[groupId] ?? null;
+}
+
+
+export function getMostRecentCompletedAt(): string | null {
+  const all = readAll();
+  const values = Object.values(all).filter(Boolean);
+  if (values.length === 0) return null;
+  return values.sort(
+    (a, b) => new Date(b).getTime() - new Date(a).getTime()
+  )[0] ?? null;
+}
