@@ -24,7 +24,11 @@ public class RouteRequest {
 
     @NotEmpty(message = "목적지가 최소 1개는 있어야 합니다.")
     @Valid
+    @jakarta.validation.constraints.Size(max = 64)
     private List<RouteStopRequest> stops;
+    private boolean escalatorsOnly;
+    public boolean isEscalatorsOnly() { return escalatorsOnly; }
+    public void setEscalatorsOnly(boolean value) { escalatorsOnly = value; }
 
     public Integer getStartFloor() { return startFloor; }
     public void setStartFloor(Integer startFloor) { this.startFloor = startFloor; }

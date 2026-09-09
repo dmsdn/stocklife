@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import GameCanvas, { type GameCanvasHandle } from './game/GameCanvas';
 import FloorDropdown from './components/FloorDropdown';
 import SidePanel from './components/SidePanel';
-import FrontendPanel from './components/FrontendPanel';
+import FrontendPanel, { type FrontendPanelHandle } from './components/FrontendPanel';
 import TransferChoiceModal from './components/TransferChoiceModal';
 import ElevatorFloorModal from './components/ElevatorFloorModal';
 import ProductPopup from './components/ProductPopup';
@@ -47,6 +47,17 @@ export default function App() {
     const [selectedLocation, setSelectedLocation] = useState<LocationInfo | null>(null);
     const [transferPrompt, setTransferPrompt] = useState<TransferPrompt | null>(null);
     const [elevatorPrompt, setElevatorPrompt] = useState(false);
+    // 09-08 상품 위치 핀. 오른쪽 웹 화면에서 가격 밑 위치를 누르면 그 매대에 핀이 꽂힌다.
+    // pinnedProduct 는 "지금 어느 상품을 가리키고 있는지", pinConfirmOpen 은 핀을 눌러서
+    // "여기로 갈까요?" 확인 창이 떠 있는 상태인지를 나타낸다.
+    const [pinnedProduct, setPinnedProduct] = useState<{
+        skuId: number; name: string; floorNo: number; x: number; y: number;
+    } | null>(null);
+    // 아래 postMessage 리스너는 이 파일에서 showProductPin 보다 위에 선언돼 있어서 직접
+    // 부를 수 없다(선언 전 사용). 리스너를 통째로 옮기면 diff가 커지므로 ref 로 연결한다.
+    const showProductPinRef = useRef<
+        ((info: { skuId: number; name: string; floorNo: number; x: number; y: number }) => Promise<void>) | null
+    >(null);
     const [statusMessage, setStatusMessage] = useState<string>('');
     const [busy, setBusy] = useState(false);
     const [showFrontend, setShowFrontend] = useState(true);
@@ -85,31 +96,74 @@ export default function App() {
     // 상단 장바구니 배지가 새로고침하면 0개로 보이던 문제 — cart state를 로컬에만 두지 않고
     // (1) 처음 켜질 때, (2) 로그인/로그아웃으로 계정이 바뀔 때마다 DB(cart_group/cart_item)에서
     // 실제 값을 다시 읽어와 채운다. 계정이 바뀌면 그 계정의 기존 장바구니로 통째로 교체된다.
+    // 오른쪽 웹 화면(iframe)에 "장바구니 바뀌었으니 다시 읽어라"를 보낼 때 쓰는 창구.
+    const frontendPanelRef = useRef<FrontendPanelHandle>(null);
+
+    // 장바구니를 DB에서 다시 읽어 화면에 반영한다. 예전에는 이 로직이 아래 useEffect 안에
+    // 갇혀 있어서 "처음 켜질 때"와 "계정이 바뀔 때" 말고는 부를 방법이 없었고, 그래서 오른쪽
+    // 웹 화면에서 수량을 바꾸면 새로고침을 해야만 반영됐다. 밖으로 꺼내서 알림 수신과 주기
+    // 동기화에서도 같이 쓴다.
+    const reloadCartFromDb = useCallback((consumerId?: number) => {
+        const id = consumerId ?? getCurrentConsumerId();
+        fetchCartFromDb(id)
+            .then((items) => {
+                setCart((prev) =>
+                    items.map((item) => {
+                        // DB의 cart_item에는 시뮬레이션 매대 좌표(locationId)가 없다. 결제할 때
+                        // 그 매대의 재고를 깎으려면 이 값이 필요하므로, 이미 화면이 들고 있던
+                        // 같은 상품의 locationId를 그대로 물려준다. 이게 없으면 주기 동기화가
+                        // 한 번 돌 때마다 캐릭터가 어느 매대에서 집었는지를 잊어버린다.
+                        const known = prev.find((p) => p.skuId === item.skuId && p.locationId);
+                        return known ? { ...item, locationId: known.locationId } : item;
+                    })
+                );
+            })
+            .catch((err) => console.error('[DB장바구니] 조회 실패:', err));
+    }, []);
+
+    const reloadCartGroups = useCallback((consumerId?: number) => {
+        const id = consumerId ?? getCurrentConsumerId();
+        fetchCartGroups(id)
+            .then((groups) => setCartGroups(groups))
+            .catch((err) => console.error('[DB장바구니] 리스트 목록 조회 실패:', err));
+    }, []);
+
+    // 알림이 연달아 오거나(수량 +를 빠르게 여러 번 누름) 주기 동기화와 겹칠 때 API를 매번
+    // 부르지 않도록, 300ms 안에 들어온 요청은 마지막 한 번으로 묶는다.
+    const cartReloadTimerRef = useRef<number | null>(null);
+    const requestCartReload = useCallback(() => {
+        if (cartReloadTimerRef.current != null) window.clearTimeout(cartReloadTimerRef.current);
+        cartReloadTimerRef.current = window.setTimeout(() => {
+            cartReloadTimerRef.current = null;
+            reloadCartFromDb();
+            reloadCartGroups();
+        }, 300);
+    }, [reloadCartFromDb, reloadCartGroups]);
+
     useEffect(() => {
-        const loadCartFromDb = (consumerId: number) => {
-            fetchCartFromDb(consumerId)
-                .then((items) => setCart(items))
-                .catch((err) => console.error('[DB장바구니] 조회 실패:', err));
-        };
-
-        // 리스트 드롭다운도 계정이 바뀔 때마다 그 계정의 리스트 목록으로 다시 채우고,
-        // 이전 계정에서 고르던 groupId는 의미가 없어지므로 기본 장바구니로 되돌린다.
-        const loadCartGroupsFor = (consumerId: number) => {
-            fetchCartGroups(consumerId)
-                .then((groups) => setCartGroups(groups))
-                .catch((err) => console.error('[DB장바구니] 리스트 목록 조회 실패:', err));
-            setSelectedGroupId(null);
-        };
-
-        loadCartFromDb(getCurrentConsumerId());
-        loadCartGroupsFor(getCurrentConsumerId());
+        reloadCartFromDb(getCurrentConsumerId());
+        reloadCartGroups(getCurrentConsumerId());
 
         const unsubscribe = subscribeCurrentConsumer((consumerId) => {
-            loadCartFromDb(consumerId);
-            loadCartGroupsFor(consumerId);
+            reloadCartFromDb(consumerId);
+            reloadCartGroups(consumerId);
+            // 계정이 바뀌면 이전 계정에서 고르던 groupId는 의미가 없으므로 기본 장바구니로 되돌린다.
+            // (주기 동기화에서는 이걸 건드리면 안 된다 — 사용자가 고른 리스트가 3초마다 풀려버린다.)
+            setSelectedGroupId(null);
         });
         return unsubscribe;
-    }, []);
+    }, [reloadCartFromDb, reloadCartGroups]);
+
+    // 폴백 주기 동기화. 오른쪽 웹 화면이 알림을 못 보내는 상황(프론트에 알림 호출이 아직
+    // 안 들어갔거나, 메시지가 유실됐거나)에서도 최대 3초 안에는 장바구니가 맞춰지도록 한다.
+    // 알림이 정상 동작할 때는 이미 같은 값이라 화면이 깜빡이지 않는다. 탭이 뒤에 있으면 건너뛴다.
+    useEffect(() => {
+        const timer = window.setInterval(() => {
+            if (document.hidden) return;
+            reloadCartFromDb();
+        }, 3000);
+        return () => window.clearInterval(timer);
+    }, [reloadCartFromDb]);
 
 
     // 쇼핑목록(9~11번): 검색해서 담고, 순서를 바꾸고, 그 순서대로 캐릭터를 안내한다.
@@ -158,11 +212,27 @@ export default function App() {
                 resetCurrentConsumerToDefault();
                 setLoggedInName(null);
                 setLoggedInPhone(null);
+            } else if (data.type === 'LOCATE_PRODUCT') {
+                // 오른쪽 웹 화면 검색 결과에서 가격 밑 위치를 누른 것.
+                // 프론트가 층과 좌표까지 실어 보내주므로 여기서 다시 조회하지 않는다.
+                if (typeof data.floorNo === 'number' && typeof data.x === 'number' && typeof data.y === 'number') {
+                    void showProductPinRef.current?.({
+                        skuId: Number(data.skuId) || 0,
+                        name: typeof data.name === 'string' && data.name ? data.name : '선택한 상품',
+                        floorNo: data.floorNo,
+                        x: data.x,
+                        y: data.y,
+                    });
+                }
+            } else if (data.type === 'CART_CHANGED') {
+                // 오른쪽 웹 화면에서 장바구니를 바꿨다는 신호. 숫자를 실어 보내지 않고
+                // "바뀌었다"만 알려오므로, 여기서 DB를 다시 읽어 화면을 맞춘다.
+                requestCartReload();
             }
         };
         window.addEventListener('message', onMessage);
         return () => window.removeEventListener('message', onMessage);
-    }, []);
+    }, [requestCartReload]);
 
 
 
@@ -204,7 +274,65 @@ export default function App() {
 
     const handlePlayerArrive = useCallback((point: GridPoint) => {
         setPlayerCell(point);
+        // 핀이 가리키던 자리에 도착했으면 핀을 지운다. 목적지 표시라 도착하면 역할이 끝난다.
+        // (도착 지점은 매대 바로 옆 통행 칸일 수 있어서 한 칸 오차까지 도착으로 본다.)
+        setPinnedProduct((prev) => {
+            if (!prev) return prev;
+            const near = Math.abs(prev.x - point.x) <= 1 && Math.abs(prev.y - point.y) <= 1;
+            if (!near) return prev;
+            canvasRef.current?.clearProductPin();
+            return null;
+        });
     }, []);
+
+    /**
+     * 09-08 상품 위치 핀 표시.
+     * 다른 층 상품이면 보고 있는 화면을 그 층으로 먼저 넘긴 다음 핀을 꽂는다.
+     * (loadFloor 가 핀을 지우므로 층 전환이 끝난 뒤에 꽂아야 한다.)
+     * 캐릭터는 아직 안 움직인다 — 핀을 눌러야 출발한다.
+     */
+    const showProductPin = useCallback(
+        async (info: { skuId: number; name: string; floorNo: number; x: number; y: number }) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+
+            if (info.floorNo !== viewFloor) {
+                const data = await getFloorData(info.floorNo);
+                setViewFloor(info.floorNo);
+                setViewFloorData(data);
+                canvas.loadFloor(data, {
+                    startCell: info.floorNo === playerFloor ? (playerCell ?? undefined) : undefined,
+                    hidePlayer: info.floorNo !== playerFloor,
+                });
+            }
+
+            canvas.showProductPin({ x: info.x, y: info.y }, info.name);
+            setPinnedProduct(info);
+            setStatusMessage(`${info.name} 위치를 표시했습니다. 핀을 누르면 그 매대로 이동합니다.`);
+            setTimeout(() => setStatusMessage(''), 3000);
+        },
+        [viewFloor, playerFloor, playerCell, getFloorData]
+    );
+
+    useEffect(() => {
+        showProductPinRef.current = showProductPin;
+    }, [showProductPin]);
+
+    // 핀 클릭 — 바로 출발한다.
+    // 같은 층이면 걸어가고, 다른 층이면 기존 이동수단 선택 창(엘리베이터/에스컬레이터)으로
+    // 넘긴다. handleTileClick 과 같은 규칙이다. 그 창 자체가 이미 확인 역할을 하므로
+    // "이 매대로 이동할까요?" 를 따로 띄우지 않는다.
+    const handleProductPinClick = useCallback(() => {
+        if (busy) return;
+        const target = pinnedProduct;
+        if (!target) return;
+        const cell = { x: target.x, y: target.y };
+        if (target.floorNo === playerFloor) {
+            canvasRef.current?.walkTo(cell);
+        } else {
+            setTransferPrompt({ targetFloor: target.floorNo, targetCell: cell });
+        }
+    }, [busy, pinnedProduct, playerFloor]);
 
     const handleTileClick = useCallback(
         (cell: GridPoint, loc: LocationInfo | null) => {
@@ -353,9 +481,16 @@ export default function App() {
         // 화면(로컬 상태) 반영과 별개로, 현재 로그인된 계정의 실제 DB 장바구니(cart_group/cart_item)
         // 에도 담는다. selectedGroupId가 골라져 있으면 그 리스트에, 아니면 "기본 장바구니"에 담긴다.
         // 실패해도 게임 진행엔 영향 없도록 콘솔에만 남긴다.
-        addItemToDbCart(product.skuId, 1, selectedGroupId).catch((err) => {
-            console.error('DB 장바구니 반영 실패:', err);
-        });
+        addItemToDbCart(product.skuId, 1, selectedGroupId)
+            .then(() => {
+                // 반대 방향 동기화 — 캐릭터가 집은 상품이 오른쪽 웹 화면 장바구니에도
+                // 새로고침 없이 바로 뜨게 한다. DB 반영이 끝난 뒤에 알려야 웹 화면이
+                // 다시 읽었을 때 방금 담은 상품이 확실히 들어있다.
+                frontendPanelRef.current?.notifyCartChanged();
+            })
+            .catch((err) => {
+                console.error('DB 장바구니 반영 실패:', err);
+            });
     }, [selectedGroupId]);
 
     const handleCheckout = useCallback(() => {
@@ -398,6 +533,25 @@ export default function App() {
             },
         ]);
     }, []);
+
+    // 시뮬레이션 자체 검색에서 "위치" 를 눌렀을 때. 목록에 담지 않고 핀만 꽂는다.
+    // 오른쪽 웹 화면의 LOCATE_PRODUCT 와 같은 곳으로 흘러간다.
+    const handleLocateShoppingItem = useCallback(async (product: ProductSearchResult) => {
+        const loc = await resolveProductLocation(product.skuId);
+        if (!loc) {
+            setStatusMessage('이 상품의 매대 위치를 찾을 수 없습니다.');
+            setTimeout(() => setStatusMessage(''), 2000);
+            return;
+        }
+        setShoppingListOpen(false);
+        await showProductPin({
+            skuId: product.skuId,
+            name: product.name,
+            floorNo: loc.floorNo,
+            x: loc.x,
+            y: loc.y,
+        });
+    }, [showProductPin]);
 
     const handleRemoveShoppingItem = useCallback((index: number) => {
         setShoppingList((prev) => prev.filter((_, i) => i !== index));
@@ -638,6 +792,7 @@ export default function App() {
                             onPlayerArrive: handlePlayerArrive,
                             onFacilityInteract: handleFacilityInteract,
                             onLocationInteract: handleLocationInteract,
+                            onProductPinClick: handleProductPinClick,
                         }}
                     />
                     {viewFloor !== playerFloor && (
@@ -672,7 +827,7 @@ export default function App() {
                                 background: '#2a2f3a',
                             }}
                         />
-                        <FrontendPanel width={frontendWidth} />
+                        <FrontendPanel ref={frontendPanelRef} width={frontendWidth} />
                     </>
                 )}
             </div>
@@ -737,6 +892,7 @@ export default function App() {
                     items={shoppingList}
                     navigatingIndex={navigatingIndex}
                     onAdd={handleAddShoppingItem}
+                    onLocate={handleLocateShoppingItem}
                     onRemove={handleRemoveShoppingItem}
                     onMove={handleMoveShoppingItem}
                     onNavigate={handleNavigateShoppingList}

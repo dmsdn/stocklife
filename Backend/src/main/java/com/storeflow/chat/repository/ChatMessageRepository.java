@@ -12,6 +12,10 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     // 챗창을 다시 열 때 이어서 보여주기용: 시간순 전체 조회
     List<ChatMessage> findByChatSessionIdOrderByCreatedAtAsc(Long chatSessionId);
 
+    // 채팅방 삭제(DELETE /api/chat/sessions/{sessionId})용 — 세션 삭제 전에 그 세션의
+    // 메시지를 먼저 지운다(FK: chat_message.chat_session_id -> chat_session).
+    void deleteByChatSessionId(Long chatSessionId);
+
     // Agent에 넘길 "최근 대화"용: 최신 N개를 내림차순으로 가져온 뒤 서비스단에서 뒤집는다
     List<ChatMessage> findTop20ByChatSessionIdOrderByCreatedAtDesc(Long chatSessionId);
 

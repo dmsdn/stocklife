@@ -41,11 +41,11 @@ public class ChatService {
         private String agentBaseUrl;
 
         public ChatService(ChatSessionRepository chatSessionRepository,
-                        ChatMessageRepository chatMessageRepository,
-                        ChatAttachmentRepository chatAttachmentRepository,
-                        RestTemplate restTemplate,
-                        EventBroadcastService eventBroadcastService,
-                        CartGroupRepository cartGroupRepository) {
+                           ChatMessageRepository chatMessageRepository,
+                           ChatAttachmentRepository chatAttachmentRepository,
+                           RestTemplate restTemplate,
+                           EventBroadcastService eventBroadcastService,
+                           CartGroupRepository cartGroupRepository) {
                 this.chatSessionRepository = chatSessionRepository;
                 this.chatMessageRepository = chatMessageRepository;
                 this.chatAttachmentRepository = chatAttachmentRepository;
@@ -74,10 +74,10 @@ public class ChatService {
                 Long ownedGroupId = resolveOwnedGroupIdOrNull(consumerIdOrNull, groupIdOrNull);
 
                 ChatSession session = new ChatSession(
-                                sessionId,
-                                consumerIdOrNull,
-                                consumerIdOrNull == null ? normalizeAnonymousId(anonymousIdOrNull) : null,
-                                ownedGroupId);
+                        sessionId,
+                        consumerIdOrNull,
+                        consumerIdOrNull == null ? normalizeAnonymousId(anonymousIdOrNull) : null,
+                        ownedGroupId);
 
                 return ChatSessionResponse.from(chatSessionRepository.save(session));
         }
@@ -88,8 +88,8 @@ public class ChatService {
                         return null;
                 }
                 return cartGroupRepository.findByCartGroupIdAndConsumerId(groupIdOrNull, consumerIdOrNull)
-                                .map(CartGroup::getCartGroupId)
-                                .orElse(null);
+                        .map(CartGroup::getCartGroupId)
+                        .orElse(null);
         }
 
         /**
@@ -100,8 +100,8 @@ public class ChatService {
          */
         @Transactional(readOnly = true)
         public List<ChatSearchResultResponse> searchMessages(Long consumerIdOrNull,
-                        String anonymousIdOrNull,
-                        String keyword) {
+                                                             String anonymousIdOrNull,
+                                                             String keyword) {
                 requireOwnerIdentity(consumerIdOrNull, anonymousIdOrNull);
 
                 if (keyword == null || keyword.isBlank()) {
@@ -110,9 +110,9 @@ public class ChatService {
                 String trimmedKeyword = keyword.trim();
 
                 List<ChatSession> ownedSessions = consumerIdOrNull != null
-                                ? chatSessionRepository.findByConsumerIdOrderByUpdatedAtDesc(consumerIdOrNull)
-                                : chatSessionRepository.findByAnonymousIdOrderByUpdatedAtDesc(
-                                                normalizeAnonymousId(anonymousIdOrNull));
+                        ? chatSessionRepository.findByConsumerIdOrderByUpdatedAtDesc(consumerIdOrNull)
+                        : chatSessionRepository.findByAnonymousIdOrderByUpdatedAtDesc(
+                        normalizeAnonymousId(anonymousIdOrNull));
 
                 if (ownedSessions.isEmpty()) {
                         return List.of();
@@ -132,26 +132,26 @@ public class ChatService {
                 LinkedHashMap<Long, List<ChatMessage>> grouped = new LinkedHashMap<>();
                 for (ChatMessage message : matched) {
                         List<ChatMessage> bucket = grouped.computeIfAbsent(message.getChatSessionId(),
-                                        k -> new ArrayList<>());
+                                k -> new ArrayList<>());
                         if (bucket.size() < 5) {
                                 bucket.add(message);
                         }
                 }
 
                 return grouped.entrySet().stream()
-                                .map(entry -> {
-                                        ChatSession session = sessionsByPk.get(entry.getKey());
-                                        List<ChatMessageResponse> messages = entry.getValue().stream()
-                                                        .map(ChatMessageResponse::from)
-                                                        .toList();
-                                        return new ChatSearchResultResponse(
-                                                        session.getSessionId(),
-                                                        session.getTitle(),
-                                                        session.getGroupId(),
-                                                        messages);
-                                })
-                                // grouped는 이미 "가장 최근 매칭 메시지가 처음 나온 순서"대로 쌓였으므로 그대로 최신순.
-                                .toList();
+                        .map(entry -> {
+                                ChatSession session = sessionsByPk.get(entry.getKey());
+                                List<ChatMessageResponse> messages = entry.getValue().stream()
+                                        .map(ChatMessageResponse::from)
+                                        .toList();
+                                return new ChatSearchResultResponse(
+                                        session.getSessionId(),
+                                        session.getTitle(),
+                                        session.getGroupId(),
+                                        messages);
+                        })
+                        // grouped는 이미 "가장 최근 매칭 메시지가 처음 나온 순서"대로 쌓였으므로 그대로 최신순.
+                        .toList();
         }
 
         /**
@@ -162,13 +162,13 @@ public class ChatService {
                 requireOwnerIdentity(consumerIdOrNull, anonymousIdOrNull);
 
                 List<ChatSession> sessions = consumerIdOrNull != null
-                                ? chatSessionRepository.findByConsumerIdOrderByUpdatedAtDesc(consumerIdOrNull)
-                                : chatSessionRepository.findByAnonymousIdOrderByUpdatedAtDesc(
-                                                normalizeAnonymousId(anonymousIdOrNull));
+                        ? chatSessionRepository.findByConsumerIdOrderByUpdatedAtDesc(consumerIdOrNull)
+                        : chatSessionRepository.findByAnonymousIdOrderByUpdatedAtDesc(
+                        normalizeAnonymousId(anonymousIdOrNull));
 
                 return sessions.stream()
-                                .map(ChatSessionResponse::from)
-                                .toList();
+                        .map(ChatSessionResponse::from)
+                        .toList();
         }
 
         /**
@@ -176,8 +176,8 @@ public class ChatService {
          */
         @Transactional(readOnly = true)
         public ChatSessionResponse getSession(String sessionId,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull) {
+                                              Long consumerIdOrNull,
+                                              String anonymousIdOrNull) {
                 ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
                 return ChatSessionResponse.from(session);
         }
@@ -188,12 +188,34 @@ public class ChatService {
          */
         @Transactional
         public ChatSessionResponse renameSession(String sessionId,
-                        String title,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull) {
+                                                 String title,
+                                                 Long consumerIdOrNull,
+                                                 String anonymousIdOrNull) {
                 ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
                 session.setTitle(title.trim());
                 return ChatSessionResponse.from(session);
+        }
+
+        /**
+         * 채팅방 삭제. 소유자 확인은 조회/수정과 동일한 규칙(getOwnedSession)을 그대로 쓴다 —
+         * 남의 세션이면 SecurityException, 없는 세션이면 NoSuchElementException.
+         *
+         * FK 순서 때문에 첨부 -> 메시지 -> 세션 순으로 지운다(둘 다 chat_session_id를 갖고
+         * 있어서 chat_session_id 기준으로 바로 지울 수 있다 — 메시지 목록을 먼저 조회할
+         * 필요 없음). 첨부파일 실물(NCP Object Storage)은 현재 업로드 로직 자체가 비용 문제로
+         * 꺼져 있어 DB 행만 지운다 — 나중에 업로드를 다시 켜면 여기도 실제 오브젝트 삭제를
+         * 같이 넣어야 한다.
+         */
+        @Transactional
+        public void deleteSession(String sessionId,
+                                  Long consumerIdOrNull,
+                                  String anonymousIdOrNull) {
+                ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
+                Long chatSessionId = session.getChatSessionId();
+
+                chatAttachmentRepository.deleteByChatSessionId(chatSessionId);
+                chatMessageRepository.deleteByChatSessionId(chatSessionId);
+                chatSessionRepository.delete(session);
         }
 
         /**
@@ -203,25 +225,25 @@ public class ChatService {
          */
         @Transactional(readOnly = true)
         public List<ChatMessageResponse> getMessages(String sessionId,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull) {
+                                                     Long consumerIdOrNull,
+                                                     String anonymousIdOrNull) {
                 ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
 
                 List<ChatMessage> messages = chatMessageRepository
-                                .findByChatSessionIdOrderByCreatedAtAsc(session.getChatSessionId());
+                        .findByChatSessionIdOrderByCreatedAtAsc(session.getChatSessionId());
 
                 List<Long> messageIds = messages.stream().map(ChatMessage::getChatMessageId).toList();
 
                 Map<Long, List<ChatAttachmentResponse>> attachmentsByMessageId = chatAttachmentRepository
-                                .findByChatMessageIdIn(messageIds).stream()
-                                .map(ChatAttachmentResponse::from)
-                                .collect(Collectors.groupingBy(ChatAttachmentResponse::getChatMessageId));
+                        .findByChatMessageIdIn(messageIds).stream()
+                        .map(ChatAttachmentResponse::from)
+                        .collect(Collectors.groupingBy(ChatAttachmentResponse::getChatMessageId));
 
                 return messages.stream()
-                                .map(m -> ChatMessageResponse.from(
-                                                m,
-                                                attachmentsByMessageId.getOrDefault(m.getChatMessageId(), List.of())))
-                                .toList();
+                        .map(m -> ChatMessageResponse.from(
+                                m,
+                                attachmentsByMessageId.getOrDefault(m.getChatMessageId(), List.of())))
+                        .toList();
         }
 
         /**
@@ -231,21 +253,21 @@ public class ChatService {
          */
         @Transactional
         public ChatResponse relay(ChatRequest request,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull) {
+                                  Long consumerIdOrNull,
+                                  String anonymousIdOrNull) {
 
                 ChatSession session = getOrCreateOwnedSession(
-                                request.getSessionId(), consumerIdOrNull, anonymousIdOrNull);
+                        request.getSessionId(), consumerIdOrNull, anonymousIdOrNull);
 
                 List<ChatMessage> recent = chatMessageRepository
-                                .findTop20ByChatSessionIdOrderByCreatedAtDesc(session.getChatSessionId());
+                        .findTop20ByChatSessionIdOrderByCreatedAtDesc(session.getChatSessionId());
                 Collections.reverse(recent);
 
                 List<AgentChatRequest.HistoryTurn> history = new ArrayList<>();
                 for (ChatMessage message : recent) {
                         String role = message.getSender() == ChatMessage.Sender.USER
-                                        ? "user"
-                                        : "assistant";
+                                ? "user"
+                                : "assistant";
 
                         history.add(new AgentChatRequest.HistoryTurn(role, message.getContent()));
                 }
@@ -257,10 +279,10 @@ public class ChatService {
                 chatSessionRepository.save(session);
 
                 ChatMessage userMessage = chatMessageRepository.save(
-                                new ChatMessage(
-                                                session.getChatSessionId(),
-                                                ChatMessage.Sender.USER,
-                                                request.getMessage()));
+                        new ChatMessage(
+                                session.getChatSessionId(),
+                                ChatMessage.Sender.USER,
+                                request.getMessage()));
 
                 // 첨부(카메라/갤러리/파일/영수증)를 먼저 업로드해두고 attachmentIds로 실어 보낸 경우,
                 // 방금 만든 사용자 메시지에 연결한다. 업로드 API에서 세션 소유권은 이미 확인했지만,
@@ -269,7 +291,7 @@ public class ChatService {
                 List<String> attachmentUrls = List.of();
                 if (request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty()) {
                         List<ChatAttachment> pending = chatAttachmentRepository
-                                        .findByChatAttachmentIdInAndChatMessageIdIsNull(request.getAttachmentIds());
+                                .findByChatAttachmentIdInAndChatMessageIdIsNull(request.getAttachmentIds());
 
                         List<ChatAttachment> linkedToThisSession = new ArrayList<>();
                         for (ChatAttachment attachment : pending) {
@@ -284,29 +306,29 @@ public class ChatService {
                         // "사진이 첨부됐다"는 사실 자체를 알 수 있다 (연결만 하고 URL을 안 넘기면 Agent 입장에선
                         // 첨부가 없었던 것과 똑같다).
                         attachmentUrls = linkedToThisSession.stream()
-                                        .map(ChatAttachment::getUrl)
-                                        .toList();
+                                .map(ChatAttachment::getUrl)
+                                .toList();
                 }
 
                 AgentChatRequest agentRequest = new AgentChatRequest(
-                                request.getSessionId(),
-                                consumerIdOrNull,
-                                request.getMessage(),
-                                history,
-                                attachmentUrls);
+                        request.getSessionId(),
+                        consumerIdOrNull,
+                        request.getMessage(),
+                        history,
+                        attachmentUrls);
 
                 AgentChatResponse agentResponse;
                 String reply;
 
                 try {
                         agentResponse = restTemplate.postForObject(
-                                        agentBaseUrl + "/agent/chat",
-                                        agentRequest,
-                                        AgentChatResponse.class);
+                                agentBaseUrl + "/agent/chat",
+                                agentRequest,
+                                AgentChatResponse.class);
 
                         reply = agentResponse != null && agentResponse.getReply() != null
-                                        ? agentResponse.getReply()
-                                        : "지금 답변을 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
+                                ? agentResponse.getReply()
+                                : "지금 답변을 가져오지 못했어요. 잠시 후 다시 시도해주세요.";
 
                 } catch (RestClientException e) {
                         log.error("Agent 서버 호출 실패 (sessionId={})", request.getSessionId(), e);
@@ -315,17 +337,17 @@ public class ChatService {
                 }
 
                 chatMessageRepository.save(
-                                new ChatMessage(
-                                                session.getChatSessionId(),
-                                                ChatMessage.Sender.AI,
-                                                reply));
+                        new ChatMessage(
+                                session.getChatSessionId(),
+                                ChatMessage.Sender.AI,
+                                reply));
 
                 session.touch();
                 chatSessionRepository.save(session);
 
                 List<Map<String, Object>> actions = agentResponse != null && agentResponse.getActions() != null
-                                ? agentResponse.getActions()
-                                : Collections.emptyList();
+                        ? agentResponse.getActions()
+                        : Collections.emptyList();
 
                 return new ChatResponse(reply, actions);
         }
@@ -342,13 +364,13 @@ public class ChatService {
         @Transactional
         public ChatMessageResponse saveProactiveMessage(String sessionId, String content) {
                 ChatSession session = chatSessionRepository.findBySessionId(sessionId)
-                                .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
 
                 ChatMessage saved = chatMessageRepository.save(
-                                new ChatMessage(
-                                                session.getChatSessionId(),
-                                                ChatMessage.Sender.AI_PROACTIVE,
-                                                content));
+                        new ChatMessage(
+                                session.getChatSessionId(),
+                                ChatMessage.Sender.AI_PROACTIVE,
+                                content));
 
                 session.touch();
                 chatSessionRepository.save(session);
@@ -357,13 +379,13 @@ public class ChatService {
                 // 프론트가 챗창을 닫아뒀어도(구독자 없음) EventBroadcastService가 조용히 버리므로 안전하고,
                 // 다음에 챗창을 열면 어차피 getMessages()(24번, DB 조회)로 이 메시지를 다시 보게 된다.
                 eventBroadcastService.pushToFrontend(
-                                sessionId,
-                                "chat_message",
-                                Map.of(
-                                                "messageId", saved.getChatMessageId(),
-                                                "sender", saved.getSender().name(),
-                                                "content", saved.getContent(),
-                                                "createdAt", saved.getCreatedAt().toString()));
+                        sessionId,
+                        "chat_message",
+                        Map.of(
+                                "messageId", saved.getChatMessageId(),
+                                "sender", saved.getSender().name(),
+                                "content", saved.getContent(),
+                                "createdAt", saved.getCreatedAt().toString()));
 
                 return ChatMessageResponse.from(saved);
         }
@@ -375,40 +397,40 @@ public class ChatService {
          * 다만 새 프론트에서는 POST /api/chat/sessions로 먼저 생성하는 것을 권장.
          */
         private ChatSession getOrCreateOwnedSession(String sessionId,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull) {
+                                                    Long consumerIdOrNull,
+                                                    String anonymousIdOrNull) {
 
                 Optional<ChatSession> existing = chatSessionRepository.findBySessionId(sessionId);
 
                 if (existing.isPresent()) {
                         return authorizeAndMaybeClaim(
-                                        existing.get(),
-                                        consumerIdOrNull,
-                                        anonymousIdOrNull,
-                                        true);
+                                existing.get(),
+                                consumerIdOrNull,
+                                anonymousIdOrNull,
+                                true);
                 }
 
                 String anonymousId = consumerIdOrNull == null
-                                ? normalizeAnonymousIdNullable(anonymousIdOrNull)
-                                : null;
+                        ? normalizeAnonymousIdNullable(anonymousIdOrNull)
+                        : null;
 
                 return chatSessionRepository.save(
-                                new ChatSession(sessionId, consumerIdOrNull, anonymousId));
+                        new ChatSession(sessionId, consumerIdOrNull, anonymousId));
         }
 
         private ChatSession getOwnedSession(String sessionId,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull,
-                        boolean allowClaim) {
+                                            Long consumerIdOrNull,
+                                            String anonymousIdOrNull,
+                                            boolean allowClaim) {
 
                 ChatSession session = chatSessionRepository.findBySessionId(sessionId)
-                                .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
+                        .orElseThrow(() -> new NoSuchElementException("채팅 세션을 찾을 수 없습니다."));
 
                 return authorizeAndMaybeClaim(
-                                session,
-                                consumerIdOrNull,
-                                anonymousIdOrNull,
-                                allowClaim);
+                        session,
+                        consumerIdOrNull,
+                        anonymousIdOrNull,
+                        allowClaim);
         }
 
         /**
@@ -417,8 +439,8 @@ public class ChatService {
          * 이 메서드를 통해 재사용한다. allowClaim=false — 첨부 업로드로 세션 소유권이 바뀌면 안 됨.
          */
         public ChatSession getOwnedSessionForAttachment(String sessionId,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull) {
+                                                        Long consumerIdOrNull,
+                                                        String anonymousIdOrNull) {
                 return getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
         }
 
@@ -436,9 +458,9 @@ public class ChatService {
          * sessionId를 가진 기존 클라이언트 호환을 위해 접근을 허용한다.
          */
         private ChatSession authorizeAndMaybeClaim(ChatSession session,
-                        Long consumerIdOrNull,
-                        String anonymousIdOrNull,
-                        boolean allowClaim) {
+                                                   Long consumerIdOrNull,
+                                                   String anonymousIdOrNull,
+                                                   boolean allowClaim) {
 
                 if (session.getConsumerId() != null) {
                         if (!Objects.equals(session.getConsumerId(), consumerIdOrNull)) {
@@ -469,7 +491,7 @@ public class ChatService {
         private void requireOwnerIdentity(Long consumerIdOrNull, String anonymousIdOrNull) {
                 if (consumerIdOrNull == null && normalizeAnonymousIdNullable(anonymousIdOrNull) == null) {
                         throw new IllegalArgumentException(
-                                        "비회원 채팅에서는 X-Chat-Client-Id 헤더가 필요합니다.");
+                                "비회원 채팅에서는 X-Chat-Client-Id 헤더가 필요합니다.");
                 }
         }
 
@@ -477,7 +499,7 @@ public class ChatService {
                 String normalized = normalizeAnonymousIdNullable(anonymousId);
                 if (normalized == null) {
                         throw new IllegalArgumentException(
-                                        "비회원 채팅에서는 X-Chat-Client-Id 헤더가 필요합니다.");
+                                "비회원 채팅에서는 X-Chat-Client-Id 헤더가 필요합니다.");
                 }
                 return normalized;
         }
@@ -494,7 +516,7 @@ public class ChatService {
 
                 if (normalized.length() > 64) {
                         throw new IllegalArgumentException(
-                                        "X-Chat-Client-Id는 64자를 초과할 수 없습니다.");
+                                "X-Chat-Client-Id는 64자를 초과할 수 없습니다.");
                 }
 
                 return normalized;
