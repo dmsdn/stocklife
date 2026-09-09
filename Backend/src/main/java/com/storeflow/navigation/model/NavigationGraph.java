@@ -63,6 +63,11 @@ public class NavigationGraph {
 
     /** 현재 칸에서 이동 가능한 이웃(같은 층 4방향 + 무빙워크 간선)을 돌려준다. */
     public List<Edge> neighbors(GridKey key) {
+        return neighbors(key, false);
+    }
+
+    /** 장보기는 실제 ESC 계약의 인접 층만 연결한다. 엘리베이터·같은 층 순간 이동을 배제한다. */
+    public List<Edge> neighbors(GridKey key, boolean escalatorsOnly) {
         List<Edge> edges = new java.util.ArrayList<>();
 
         for (int[] d : DIRECTIONS) {
@@ -76,6 +81,12 @@ public class NavigationGraph {
         if (current != null && current.getTransitId() != null && !current.getTransitId().isBlank()) {
             for (GridKey other : transitGroups.getOrDefault(current.getTransitId(), List.of())) {
                 if (!other.equals(key) && isPassable(other)) {
+                    if (escalatorsOnly) {
+                        // 세계 정본 TRANSIT=ESC. 시설 이름을 추측하거나 임의 transit을 허용하지 않는다.
+                        if (!"ESC".equals(current.getTransitId())
+                                || Math.abs(other.floorNo() - key.floorNo()) != 1
+                                || other.x() != key.x() || other.y() != key.y()) continue;
+                    }
                     edges.add(new Edge(other, TRANSIT_COST));
                 }
             }

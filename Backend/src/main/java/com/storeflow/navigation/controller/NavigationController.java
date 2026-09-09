@@ -4,6 +4,9 @@ import com.storeflow.global.jwt.ConsumerJwtUtil;
 import com.storeflow.navigation.dto.NavigationRequest;
 import com.storeflow.navigation.dto.NavigationResponse;
 import com.storeflow.navigation.service.CartRouteService;
+import com.storeflow.navigation.dto.RouteRequest;
+import com.storeflow.navigation.service.NavigationService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,16 +16,24 @@ public class NavigationController {
 
     private final CartRouteService cartRouteService;
     private final ConsumerJwtUtil jwtUtil;
+    private final NavigationService navigationService;
 
     public NavigationController(
             CartRouteService cartRouteService,
-            ConsumerJwtUtil jwtUtil
+            ConsumerJwtUtil jwtUtil,
+            NavigationService navigationService
     ) {
         this.cartRouteService =
                 cartRouteService;
 
         this.jwtUtil =
                 jwtUtil;
+        this.navigationService = navigationService;
+    }
+
+    @PostMapping("/matrix")
+    public ResponseEntity<java.util.Map<String, Object>> getMatrix(@Valid @RequestBody RouteRequest request) {
+        return ResponseEntity.ok(navigationService.buildMatrix(request));
     }
 
     @PostMapping("/cart-route")

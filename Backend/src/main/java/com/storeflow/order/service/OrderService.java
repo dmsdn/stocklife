@@ -74,8 +74,16 @@ public class OrderService {
                         Long consumerId,
                         Long groupId,
                         Integer pointsToUseOrNull) {
+                return checkout(consumerId, groupId, pointsToUseOrNull, null);
+        }
+
+        @Transactional
+        public OrderResponse checkout(Long consumerId, Long groupId, Integer pointsToUseOrNull,
+                                      List<Integer> skuIds) {
+                if (skuIds != null && (skuIds.isEmpty() || skuIds.size() > 100))
+                        throw new IllegalStateException("결제할 스캔 상품을 확인해 주세요.");
                 List<CartItem> allCheckedItems = cartItemRepository.findByConsumerId(consumerId).stream()
-                                .filter(CartItem::isChecked)
+                                .filter(item -> skuIds == null ? item.isChecked() : skuIds.contains(item.getSkuId()))
                                 .toList();
 
                 List<CartItem> checkedItems;
@@ -94,6 +102,9 @@ public class OrderService {
                                         .toList();
                 }
 
+                if (skuIds != null && checkedItems.stream().map(CartItem::getSkuId).distinct().count()
+                        != skuIds.stream().distinct().count())
+                        throw new IllegalStateException("리스트의 스캔 상품이 바뀌었어요. 다시 확인해 주세요.");
                 if (checkedItems.isEmpty()) {
                         throw new IllegalStateException(
                                         "결제할 상품이 선택되지 않았습니다.");
@@ -255,7 +266,8 @@ public class OrderService {
                  * 버그가 있었다. 별도 save() 호출 불필요 — 트랜잭션 안에서 관리되는
                  * 엔티티라 dirty checking으로 자동 flush됨.
                  */
-                if (group != null) {
+                if (group != null && cartItemRepository.findByConsumerId(consumerId).stream()
+                                .noneMatch(item -> groupId.equals(item.getCartGroupId()))) {
                         group.markCompleted();
                 }
 

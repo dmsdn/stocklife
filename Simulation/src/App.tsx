@@ -111,6 +111,18 @@ export default function App() {
             getCurrentConsumerPhone()
         );
 
+    // 09-08 상품 위치 핀. 오른쪽 웹 화면에서 가격 밑 위치를 누르면 그 매대에 핀이 꽂힌다.
+    // pinnedProduct 는 "지금 어느 상품을 가리키고 있는지", pinConfirmOpen 은 핀을 눌러서
+    // "여기로 갈까요?" 확인 창이 떠 있는 상태인지를 나타낸다.
+    const [pinnedProduct, setPinnedProduct] = useState<{
+        skuId: number; name: string; floorNo: number; x: number; y: number;
+    } | null>(null);
+    // 아래 postMessage 리스너는 이 파일에서 showProductPin 보다 위에 선언돼 있어서 직접
+    // 부를 수 없다(선언 전 사용). 리스너를 통째로 옮기면 diff가 커지므로 ref 로 연결한다.
+    const showProductPinRef = useRef<
+        ((info: { skuId: number; name: string; floorNo: number; x: number; y: number }) => Promise<void>) | null
+    >(null);
+
     const draggingRef = useRef(false);
 
 
@@ -504,6 +516,19 @@ export default function App() {
                     setLoggedInName(null);
                     setLoggedInPhone(null);
 
+            } else if (data.type === 'LOCATE_PRODUCT') {
+                // 오른쪽 웹 화면 검색 결과에서 가격 밑 위치를 누른 것.
+                // 프론트가 층과 좌표까지 실어 보내주므로 여기서 다시 조회하지 않는다.
+                if (typeof data.floorNo === 'number' && typeof data.x === 'number' && typeof data.y === 'number') {
+                    void showProductPinRef.current?.({
+                        skuId: Number(data.skuId) || 0,
+                        name: typeof data.name === 'string' && data.name ? data.name : '선택한 상품',
+                        floorNo: data.floorNo,
+                        x: data.x,
+                        y: data.y,
+                    });
+                }
+
                 } else if (
                     data.type === 'CART_CHANGED'
                 ) {
@@ -647,6 +672,16 @@ export default function App() {
             (point: GridPoint) => {
 
                 setPlayerCell(point);
+        // 핀이 가리키던 자리에 도착했으면 핀을 지운다. 목적지 표시라 도착하면 역할이 끝난다.
+        // (도착 지점은 매대 바로 옆 통행 칸일 수 있어서 한 칸 오차까지 도착으로 본다.)
+        setPinnedProduct((prev) => {
+            if (!prev) return prev;
+            const near = Math.abs(prev.x - point.x) <= 1 && Math.abs(prev.y - point.y) <= 1;
+            if (!near) return prev;
+            canvasRef.current?.clearProductPin();
+            return null;
+        });
+
 
             },
             []
@@ -1039,6 +1074,56 @@ export default function App() {
     // ============================================================
     // Tile / Facility interaction
     // ============================================================
+
+    /**
+     * 09-08 상품 위치 핀 표시.
+     * 다른 층 상품이면 보고 있는 화면을 그 층으로 먼저 넘긴 다음 핀을 꽂는다.
+     * (loadFloor 가 핀을 지우므로 층 전환이 끝난 뒤에 꽂아야 한다.)
+     * 캐릭터는 아직 안 움직인다 — 핀을 눌러야 출발한다.
+     */
+    const showProductPin = useCallback(
+        async (info: { skuId: number; name: string; floorNo: number; x: number; y: number }) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+
+            if (info.floorNo !== viewFloor) {
+                const data = await getFloorData(info.floorNo);
+                setViewFloor(info.floorNo);
+                setViewFloorData(data);
+                canvas.loadFloor(data, {
+                    startCell: info.floorNo === playerFloor ? (playerCell ?? undefined) : undefined,
+                    hidePlayer: info.floorNo !== playerFloor,
+                });
+            }
+
+            canvas.showProductPin({ x: info.x, y: info.y }, info.name);
+            setPinnedProduct(info);
+            setStatusMessage(`${info.name} 위치를 표시했습니다. 핀을 누르면 그 매대로 이동합니다.`);
+            setTimeout(() => setStatusMessage(''), 3000);
+        },
+        [viewFloor, playerFloor, playerCell, getFloorData]
+    );
+
+    useEffect(() => {
+        showProductPinRef.current = showProductPin;
+    }, [showProductPin]);
+
+    // 핀 클릭 — 바로 출발한다.
+    // 같은 층이면 걸어가고, 다른 층이면 기존 이동수단 선택 창(엘리베이터/에스컬레이터)으로
+    // 넘긴다. handleTileClick 과 같은 규칙이다. 그 창 자체가 이미 확인 역할을 하므로
+    // "이 매대로 이동할까요?" 를 따로 띄우지 않는다.
+    const handleProductPinClick = useCallback(() => {
+        if (busy) return;
+        const target = pinnedProduct;
+        if (!target) return;
+        const cell = { x: target.x, y: target.y };
+        if (target.floorNo === playerFloor) {
+            canvasRef.current?.walkTo(cell);
+        } else {
+            setTransferPrompt({ targetFloor: target.floorNo, targetCell: cell });
+        }
+    }, [busy, pinnedProduct, playerFloor]);
+
 
     const handleTileClick =
         useCallback(
@@ -1887,6 +1972,26 @@ export default function App() {
         );
 
 
+    // 시뮬레이션 자체 검색에서 "위치" 를 눌렀을 때. 목록에 담지 않고 핀만 꽂는다.
+    // 오른쪽 웹 화면의 LOCATE_PRODUCT 와 같은 곳으로 흘러간다.
+    const handleLocateShoppingItem = useCallback(async (product: ProductSearchResult) => {
+        const loc = await resolveProductLocation(product.skuId);
+        if (!loc) {
+            setStatusMessage('이 상품의 매대 위치를 찾을 수 없습니다.');
+            setTimeout(() => setStatusMessage(''), 2000);
+            return;
+        }
+        setShoppingListOpen(false);
+        await showProductPin({
+            skuId: product.skuId,
+            name: product.name,
+            floorNo: loc.floorNo,
+            x: loc.x,
+            y: loc.y,
+        });
+    }, [showProductPin]);
+
+
     const handleRemoveShoppingItem =
         useCallback(
             (
@@ -2558,6 +2663,7 @@ export default function App() {
                             onFacilityInteract:
                             handleFacilityInteract,
 
+                            onProductPinClick: handleProductPinClick,
                             onLocationInteract:
                             handleLocationInteract,
                         }}
@@ -2822,6 +2928,7 @@ export default function App() {
                     navigatingIndex={
                         navigatingIndex
                     }
+                    onLocate={handleLocateShoppingItem}
                     onAdd={
                         handleAddShoppingItem
                     }
