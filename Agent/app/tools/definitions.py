@@ -198,7 +198,7 @@ TOOLS = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {"group_id": {"type": "integer", "description": "지정된 리스트가 있으면 이전 groups 조회로 확인한 group_id. 생략하면 현재 채팅에 연결된 리스트"}},
             "required": [],
         },
     },
@@ -638,6 +638,7 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
+                "group_id": {"type": "integer", "description": "손님이 다른 리스트를 명시한 경우 get_session_cart의 groups에서 확인한 번호. 생략하면 이 채팅에 연결된 리스트. 선택이 필요하다는 오류면 추측하지 말고 되묻는다"},
                 "sku_id": {"type": "integer", "description": "담을 상품"},
                 "quantity": {"type": "integer", "description": "수량(기본 1)"},
             },

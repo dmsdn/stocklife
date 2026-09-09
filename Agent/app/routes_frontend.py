@@ -372,3 +372,18 @@ def list_insights(body: InsightsBody, x_internal_service_key: str = Header(defau
         return {"items": list(rows.values()), "personalized": body.consumerId is not None}
     finally:
         query._CURRENT_MEMBER_ID.reset(token)
+
+
+class RecommendationsBody(BaseModel):
+    consumerId: int | None = Field(default=None, gt=0)
+    limit: int = Field(default=8, ge=1, le=8)
+
+
+@router.post("/api/ai/recommendations")
+def recommendations(body: RecommendationsBody, x_internal_service_key: str = Header(default="")) -> dict:
+    import secrets
+    from app.recommendations import recommend
+    expected = os.environ.get("INTERNAL_SERVICE_KEY", "")
+    if not expected or not secrets.compare_digest(expected, x_internal_service_key):
+        raise HTTPException(status_code=403, detail="서버 간 인증이 필요합니다.")
+    return recommend(body.consumerId, body.limit)

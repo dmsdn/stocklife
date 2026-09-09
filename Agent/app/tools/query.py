@@ -1,3 +1,4 @@
+from app import config
 # ============================================================================
 # StoreFlow 하네스 — 조회형 도구 10종 실행부 (definitions.py의 짝)
 # ============================================================================
@@ -429,6 +430,15 @@ def _get_purchase_history(member_id: int) -> dict:
     #   반환에서 빼도 아무것도 안 잃는다.
     out = {"total_rows": total,
            "truncated": total > len(recent), "purchases": recent}
+    cid = config.to_consumer_id(member_id)
+    if cid is not None and not config.USE_MOCK_SOT:
+        try:
+            orders = sot_client._http_get("/internal/orders", {"consumerId": cid}, headers=sot_client._internal_headers()) or []
+            out["orders"] = [{"order_id": o["orderId"], "ordered_at": o.get("orderedAt"),
+                              "total_krw": o.get("totalAmount"), "status": o.get("status"),
+                              "items": o.get("items", [])} for o in orders]
+        except Exception:
+            out["order_links_unavailable"] = True # Do not guess order IDs from basket_id.
     # ⚠ **방향을 결과에 싣는다** — 08-28 발견. 도구 설명문은 "시간순으로
     #   가져온다"고만 해서 **어느 쪽 끝이 최신인지 안 말했다.** 그러면
     #   `purchases[0]` 을 「가장 최근에 사신 것」으로 읽는 발화가 나오는데,
@@ -454,8 +464,14 @@ def _get_purchase_history(member_id: int) -> dict:
     return out
 
 
-def _get_session_cart(session_id: str) -> dict:
+def _get_session_cart(session_id: str, group_id: int | None = None) -> dict:
     """장바구니. 합계가 이미 계산되어 있으므로 그대로 넘긴다(가공 금지)."""
+    if group_id is not None:
+        from app import cart_context
+        selected, err = cart_context.resolve_group(group_id)
+        if err:
+            return err
+        cart_context.set_group(selected)
     return sot_client.get_session_cart(session_id)
 
 
@@ -478,7 +494,10 @@ def _get_wishlist(member_id: int) -> dict:
         #   숫자를 지워도 경로로 새면 같은 일이다.
         row = {k: v for k, v in w.items() if k not in ("member_id", "image_url")}
         out.append({**row, "name": p["name"] if p else None})  # ㉑-b + 조건 표현식
+    from app import cart_context
+    groups = [cart_context.summary(g) for g in cart_context.groups(config.to_consumer_id(member_id))] if not config.USE_MOCK_SOT and config.to_consumer_id(member_id) is not None else []
     return {
+        "groups": groups,
         "items": out,
         # read_as 가 여기만 없었다(09-05 감사: 26 창구 중 17종이 규율 없음).
         "read_as": ("현재 저장된 장보기 리스트의 상품입니다. 찜 기능은 없습니다. "

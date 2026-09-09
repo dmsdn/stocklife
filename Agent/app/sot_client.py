@@ -579,32 +579,8 @@ def get_session_cart(session_id: str) -> dict:
             # 액션 3종의 _require_member 와 같은 판정을 조회에서도 한다.
             return {"session_id": session_id, "items": [], "total_krw": 0,
                     "note": "비회원 세션이라 장바구니가 없습니다."}
-        r = _http_get(_API["get_session_cart"],
-                      {"consumerId": cid},
-                      headers=_internal_headers()) or {}
-        # camelCase → 우리 계약. 실물 DTO(SessionCartItemResponse)의 이름은
-        # skuId · productName · priceKrw · quantity · subtotal 이다.
-        items = [{"cart_item_id": it.get("cartItemId"),
-                  "sku_id": it.get("skuId"),
-                  "name": it.get("productName"),
-                  "quantity": it.get("quantity"),
-                  "price_krw": it.get("priceKrw"),
-                  "line_total_krw": it.get("subtotal")}
-                 for it in (r.get("items") or [])]
-        # `cart_item_id` 는 수량변경·빼기가 받는 번호다. sku 와 다르다 —
-        # 같은 상품이 여러 줄일 수 있어 sku 로는 줄을 지목할 수 없다.
-        # 08-28 이전에는 이 칸이 응답에 없어 사슬이 끊겨 있었다(백엔드 DTO 보강).
-        # ⚠ 그래도 없이 오는 경우가 있으면(구 백엔드) **없다는 사실을 값으로
-        #   실어 보낸다** — 조용히 비우면 LLM 이 sku 를 넘겨 엉뚱한 줄을 지운다.
-        out = {"session_id": session_id, "items": items,
-               "total_krw": r.get("totalAmount", 0)}
-        if items and any(it.get("cart_item_id") is None for it in items):
-            out["note"] = ("일부 줄에 cart_item_id 가 없습니다(구 백엔드). "
-                           "그 줄은 수량 변경·빼기를 호출하지 말고, "
-                           "손님께 앱에서 직접 수정해 달라고 안내하세요. "
-                           "sku_id 를 cart_item_id 로 넘기지 마세요.")
-        return out
-
+        from app import cart_context
+        return cart_context.read_cart(session_id, cid)
     # counts = {sku_id: 순수 담긴 개수}. 담으면 +1, 빼면 -1로 누적한다.
     # `: dict[int, int]`는 타입 힌트(개념 ④ — 키도 값도 int라는 표시일 뿐).
     counts: dict[int, int] = {}
@@ -646,11 +622,12 @@ def get_wishlist(member_id: int) -> list[dict]:
     consumer_id = config.to_consumer_id(member_id)
     if consumer_id is None:
         return []
-    rows = _http_get("/internal/cart", {"consumerId": consumer_id},
-                     headers=_internal_headers()) or []
-    return [{"sku_id": r["skuId"], "quantity": r.get("quantity", 1),
-             "checked": bool(r.get("checked")), "source": "saved_list"}
-            for r in rows if r.get("skuId") is not None]
+    from app import cart_context
+    return [{"sku_id": item["skuId"], "quantity": item.get("quantity", 1),
+             "checked": bool(item.get("checked")), "source": "saved_list",
+             "group_id": g["cartGroupId"], "group_title": g["title"]}
+            for g in cart_context.groups(consumer_id) for item in g.get("items", [])
+            if item.get("skuId") is not None]
 
 
 def get_change_events(sku_ids: list[int] | None = None,
@@ -1272,3 +1249,12 @@ def push_proactive_message(session_id: str, content: str) -> dict:
         return {"ok": False, "status": None, "reason": f"{type(e).__name__}: {e}"}
     message_id = body.get("messageId") if isinstance(body, dict) else None
     return {"ok": True, "message_id": message_id, "raw": body}
+
+
+def get_product_cards(sku_ids: list[int]) -> list[dict]:
+    """Screen-only projection: retain image/lifecycle without exposing them to tool text."""
+    if config.USE_MOCK_SOT:
+        return get_products_by_skus(sku_ids)
+    rows = _http_get(_API["get_products_by_skus"], {"skuIds": sku_ids}) if sku_ids else []
+    return [dict(_norm_product(r), image_url=r.get("imageUrl"),
+                 discontinued=r.get("discontinued", False), lifecycle_status=r.get("lifecycleStatus")) for r in rows]
