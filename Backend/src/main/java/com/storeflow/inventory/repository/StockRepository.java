@@ -97,7 +97,7 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
      */
     @Query("""
         SELECT NEW com.storeflow.inventory.dto.LocationProductResponse(
-            s.skuId, p.name, p.priceKrw, s.qty)
+            s.skuId, p.name, p.priceKrw, s.qty, p.barcode)
         FROM Stock s, Product p
         WHERE s.locationId = :locationId AND s.skuId = p.skuId
         ORDER BY s.skuId

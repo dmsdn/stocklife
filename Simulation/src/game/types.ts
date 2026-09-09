@@ -55,6 +55,7 @@ export interface ProductInfo {
   name: string;
   price: number;
   stock: number;
+  barcode?: string;
 }
 
 // Agent/sim/out/world_seed.sql의 stocks(PICK) + locations를 그대로 합친 상품 좌표.

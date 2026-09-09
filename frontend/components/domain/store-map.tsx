@@ -363,9 +363,13 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
           {/* ✅ 신규(요청) — "현재 위치" 마커. 상품 핀(순번 원형)과는 다르게 파란 점 +
               은은한 펄스 링으로 구분. 실제 위치 추적이 아니라 "가장 최근에 스캔한 상품
               위치"를 대신 씀 — 그래서 진짜 GPS처럼 계속 움직이진 않고, 스캔할 때마다
-              한 번씩 갱신됩니다. */}
+              한 번씩 갱신됩니다.
+              ✅ 버그 수정(요청 — "동선/핀 좌표계 확인") — 이 좌표도 상품 핀·동선 선과
+              똑같이 백엔드가 주는 실제 위치(pickLocation() 결과)라서, 정밀 변환 함수인
+              navigationPercent()를 써야 다른 핀들과 같은 자리에 정확히 겹쳐 보입니다.
+              예전엔 toPercent()(구역용, 대략치)를 쓰고 있어서 아주 살짝 어긋날 수 있었음. */}
           {currentLocationPin && (() => {
-            const { left, top } = toPercent(currentLocationPin.x, currentLocationPin.y);
+            const { left, top } = navigationPercent(currentLocationPin.x, currentLocationPin.y);
             return (
               <div
                 className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"

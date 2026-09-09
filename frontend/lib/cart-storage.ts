@@ -99,6 +99,16 @@ function writeMemberCache(groups: CartGroup[]) {
   if (canUseStorage()) window.sessionStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify(groups));
 }
 
+/** ✅ 버그 수정(요청 — "리스트는 회원마다 본인 것만 보이는 게 맞는지 확인해") — 로그인 중
+ *  readCartGroups()가 동기 폴백으로 쓰는 이 세션 캐시가, 로그아웃할 때 지워지지 않고
+ *  있었습니다. 같은 브라우저 탭에서 A가 로그아웃하고 B가 로그인하면(탭을 안 닫은 채로),
+ *  네트워크가 느리거나 loadCartGroups()가 실패해서 readCartGroups() 폴백을 타는 순간
+ *  A의 리스트 캐시가 그대로 B 화면에 잠깐 보일 수 있는 구조였습니다 — logout()에서
+ *  이 함수를 불러서 지워야 합니다.*/
+export function clearMemberCartCache() {
+  if (canUseStorage()) window.sessionStorage.removeItem(MEMBER_CACHE_KEY);
+}
+
 /** 동기 UI 코드용. 회원 데이터의 영구 원본은 DB이고, 여기 값은 sessionStorage UI 캐시일 뿐이다. */
 export function readCartGroups(): CartGroup[] {
   return isLoggedIn() ? readMemberCache() : readGuestGroups();

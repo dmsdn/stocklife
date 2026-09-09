@@ -8,16 +8,17 @@
 //   1) 진짜 행사 상품 목록과 그게 진열된 실제 매대 위치(locationId 또는 x,y)가 필요하고,
 //   2) 이상적으로는 백엔드에 "지금 행사 중인 상품" API가 생겨서 여기 대신 그걸 불러오는
 //      게 맞습니다(지금은 그런 API가 없어서 화면 확인용 목업으로 대체).
-//   좌표만 바꾸고 싶으면 x/y 값만 고치면 됩니다(같은 그리드 좌표계 — public/maps/
-//   MAP_GUIDE.md, map-coord-tool.html 참고).
+//   좌표만 바꾸고 싶으면 x/y 값만 고치면 됩니다(같은 그리드 좌표계 — 95×75, 백엔드
+//   map_layout.py의 FLOOR_W/FLOOR_H와 동일. public/maps/MAP_GUIDE.md,
+//   rack-coord-tool.html 참고).
 import type { PromoPin } from "@/components/domain/store-map";
 
 export const MOCK_PROMO_PINS: PromoPin[] = [
   {
     id: 9001,
     floorNo: 1,
-    x: 4.75,
-    y: 10.25, // F1-A 구역 중심
+    x: 18.8,
+    y: 48.05, // F1-A 구역 중심
     title: "신선식품 특가",
     discountLabel: "최대 40% 할인",
     validUntil: "9월 14일",
@@ -25,8 +26,8 @@ export const MOCK_PROMO_PINS: PromoPin[] = [
   {
     id: 9002,
     floorNo: 1,
-    x: 12.75,
-    y: 11.6, // F1-B 구역 중심
+    x: 50.47,
+    y: 54.38, // F1-B 구역 중심
     title: "정육 1+1",
     discountLabel: "삼겹살 1+1",
     validUntil: "9월 10일",
@@ -34,8 +35,8 @@ export const MOCK_PROMO_PINS: PromoPin[] = [
   {
     id: 9003,
     floorNo: 2,
-    x: 5.9,
-    y: 10.6, // F2-B 구역 중심
+    x: 23.35,
+    y: 49.69, // F2-B 구역 중심
     title: "생활용품 특가전",
     discountLabel: "최대 30% 할인",
     validUntil: "9월 20일",
@@ -43,8 +44,8 @@ export const MOCK_PROMO_PINS: PromoPin[] = [
   {
     id: 9004,
     floorNo: 3,
-    x: 8.9,
-    y: 10.6, // F3-B 구역 중심
+    x: 35.23,
+    y: 49.69, // F3-B 구역 중심
     title: "가전 시즌오프",
     discountLabel: "최대 15% 할인",
     validUntil: "9월 30일",

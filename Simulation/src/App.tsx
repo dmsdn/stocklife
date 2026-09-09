@@ -131,11 +131,14 @@ export default function App() {
     // 캐릭터 이름표
     // ============================================================
 
+    // 09-09: 표기는 상단바와 한 낱말로 통일한다 — 머리 위도 상단바도 '비로그인'.
+    // 배포용 회원 JWT 전환(api/memberAuth.ts) 이후로 비로그인은 "기본 계정 0001"이
+    // 아니라 신원 없음이다. 그래서 '기본 캐릭터' 같은 말은 쓰지 않는다.
     useEffect(() => {
         const label =
             loggedInPhone
                 ? loggedInPhone.slice(-4)
-                : '(비로그인)';
+                : '비로그인';
 
         canvasRef.current?.setPlayerLabel(label);
     });
