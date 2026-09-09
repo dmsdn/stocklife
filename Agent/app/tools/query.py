@@ -74,6 +74,7 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 from app import searchterm, sot_client
+from datetime import datetime, timedelta, timezone
 
 # ── 현재 요청의 신원 (B안 확장, 2026-08-20) ─────────────────────────────────
 # action.py의 _CURRENT_CONSUMER_ID와 같은 설계를 조회 쪽으로 확장한 것.
@@ -494,10 +495,21 @@ def _get_change_events(sku_ids=None, within_hours: int = 24) -> dict:
     # ⚠ 이름을 붙인다 — 여기가 **킬링 장면 1**("물티슈 지금 있습니다")의 원료다.
     #   이름이 없으면 "sku 210622 들어왔습니다" 가 나간다(09-04 구매이력과 같은 부류).
     recent = _with_names(rows[-MAX_CHANGE_EVENTS:])
+    for event in recent:
+        raw = event.get("occurred_at")
+        if isinstance(raw, str):
+            try:
+                moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if moment.tzinfo is not None:
+                    event["occurred_at_local"] = moment.astimezone(
+                        timezone(timedelta(hours=9))).isoformat()
+            except ValueError:
+                pass
     out = {"total_rows": total, "truncated": total > len(recent), "events": recent}
     if recent:
         out["read_as"] = ("상품은 **name**(상품명)으로 말하고 sku 번호는 "
-                          "말하지 마세요.")
+                          "말하지 마세요. occurred_at_local이 있으면 한국 시각(KST)으로 "
+                          "설명하세요. 기록된 보충 시각과 앞으로 기다릴 보충 ETA를 구분하세요.")
     return out
 
 

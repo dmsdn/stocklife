@@ -21,6 +21,8 @@ import os
 #   피크(도착 배율 1.5~1.6 · 실측 큐 96건)다. 한쪽만 바꾸면 "이미 채워졌는데
 #   par 밑" 같은 자기모순 상태가 된다 — sim/mode1.py 의 스냅샷 주석 참조.
 DEMO_NOW = datetime(2026, 8, 8, 14, 20, 0)
+# 실물 구매를 만드는 시연만 벽시계를 사용한다. 오라클 평가의 고정 시계는 유지한다.
+LIVE_INFERENCE_CLOCK = os.environ.get("STOREFLOW_LIVE_CLOCK", "0") == "1"
 
 # ── 서버 ────────────────────────────────────────────────────────────────────
 # FastAPI가 자동 생성하는 문서(/docs · /openapi.json)에 뜨는 이름.
@@ -104,7 +106,7 @@ def to_consumer_id(member_id: int | None) -> int | None:
 #   `.env`에 `USE_MOCK_SOT=false` 한 줄이면 코드를 안 건드리고 바뀐다.
 #   os.environ을 읽으므로 **env.load_env()가 먼저 돌아야 한다**(입구가 보장).
 USE_MOCK_SOT = os.environ.get("USE_MOCK_SOT", "true").strip().lower() not in ("false", "0", "no")
-BACKEND_BASE_URL = "http://localhost:8080"   # Spring Boot. 팀계약 API 8종의 뿌리
+BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080").rstrip("/")
 # 액션(장바구니 쓰기)용 내부 API 인증키는 여기 두지 않는다 — 비밀값이라
 # 코드가 아니라 .env에서 읽는다(tools/action.py의 INTERNAL_SERVICE_KEY).
 # 코드에 적으면 git에 올라가고, 한 번 커밋되면 이력에서 지워지지 않는다.

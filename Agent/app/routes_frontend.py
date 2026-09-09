@@ -346,7 +346,9 @@ def list_insights(body: InsightsBody, x_internal_service_key: str = Header(defau
                     result = infer.predict_repurchase(ids[offset:offset+infer.REPURCHASE_MAX_ITEMS])
                     for r in result.get("items", []):
                         cycle = r.get("typical_cycle_days")
-                        if cycle and r["sku_id"] in rows:
+                        # 같은 날 반복 시연으로 생긴 수 분 간격을 소비주기 0일로 안내하지 않는다.
+                        elapsed = r.get("days_since_last")
+                        if cycle and cycle >= 1 and (elapsed is None or elapsed >= 0) and r["sku_id"] in rows:
                             personal = (r.get("past_intervals") or 0) > 0
                             text = f'{"구매 이력 기준" if personal else "같은 소분류의 일반적인"} 소비주기 약 {cycle:.0f}일'
                             if personal and r.get("days_since_last") is not None:
