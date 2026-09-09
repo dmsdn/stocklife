@@ -89,8 +89,9 @@ def gen_zones():
 def gen_locations():
     """베이마다 6단을 펼친다. 반환: (location_id, zone, rack, bay, level, tier, floor, x, y)
 
-    [랙·베이 번호] 존 안에서 같은 (행, 방향)을 공유하는 베이들을 하나의 랙으로 묶고,
-    좌표순으로 R01·R02… B01·B02…를 매긴다. 번호가 좌표에서 결정되므로 재생성해도
+    [랙·베이 번호] 존 안에서 같은 (행, 방향)을 공유하며 끊김 없이 이어지는
+    베이들을 하나의 랙으로 묶는다. 통로를 건너면 새 랙의 B01부터 시작한다.
+    기존 행·방향 순서 안에서 연속 구간을 좌표순으로 R01·R02…로 매긴다. 재생성해도
     같은 자리에 같은 번호가 붙는다 — location_id가 이벤트 로그에 영구히 남기 때문에
     번호가 흔들리면 과거 이벤트가 다른 위치를 가리키게 된다.
     """
@@ -105,8 +106,18 @@ def gen_locations():
         for x, y, face, f in bays:
             axis = y if face in ("U", "D") else x
             groups[(face, axis)].append((x, y, f))
-        for rno, key in enumerate(sorted(groups, key=lambda k: (k[1], k[0])), start=1):
+        racks = []
+        for key in sorted(groups, key=lambda k: (k[1], k[0])):
             members = sorted(groups[key], key=lambda t: (t[1], t[0]))
+            run = []
+            for member in members:
+                if run and abs(member[0] - run[-1][0]) + abs(member[1] - run[-1][1]) != BAY_CELLS:
+                    racks.append((key, run))
+                    run = []
+                run.append(member)
+            if run:
+                racks.append((key, run))
+        for rno, (key, members) in enumerate(racks, start=1):
             for bno, (x, y, f) in enumerate(members, start=1):
                 dx, dy = FACE_D[key[0]]
                 ax, ay = x + dx, y + dy          # 접근 지점(통로 셀)
