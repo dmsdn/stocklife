@@ -18,8 +18,9 @@ import { ProductLocationDialog } from "@/components/domain/product-location-dial
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { apiFetch, isLoggedIn, resolveImageUrl } from "@/lib/api-client";
 import { readCartGroups, updateCartGroups } from "@/lib/cart-storage";
+import { notifySimulationCartChanged } from "@/lib/simulation-bridge";
 import { fetchCoupons, type Coupon } from "@/lib/coupons-mock";
-import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
+import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 
 interface CartItem {
   cartItemId?: number;
@@ -51,8 +52,8 @@ export default function CartPage() {
   const [locationDialogSkuId, setLocationDialogSkuId] = useState<number | null>(null);
   const loggedIn = isLoggedIn();
 
-  const loadCart = async () => {
-    setLoading(true);
+  const loadCart = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       let cartItems: CartItem[];
       if (loggedIn) {
@@ -87,6 +88,20 @@ export default function CartPage() {
 
   useEffect(() => { void loadCart(); }, []);
 
+  // ✅ 신규(요청 — 장바구니 실시간 연동 작업2) — 왼쪽 시뮬레이션에서 캐릭터가 장바구니를
+  //   건드리면 알림이 온다. 값은 안 실려오고 "바뀌었다"만 알려주므로, 여기서 서버에서
+  //   다시 읽는다. silent=true라 로딩 스피너가 번쩍이지 않음.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.source !== "storeflow-simulation") return;
+      if (data.type === "CART_CHANGED") void loadCart(true);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!loggedIn) return;
     // ✅ 쿠폰은 별도 시스템에서 처리 예정이라 목업(lib/coupons-mock.ts)으로 통일 —
@@ -107,6 +122,7 @@ export default function CartPage() {
     setItems((prev) => prev.map((i) => i === item ? { ...i, quantity } : i));
     if (!loggedIn) updateGuestItem(item, { quantity });
     else if (item.cartItemId != null) await apiFetch(`/api/cart/${item.cartItemId}`, { method: "PATCH", body: JSON.stringify({ quantity }) });
+    notifySimulationCartChanged();
     trackConsumerEvent({ event_type: "LIST_EDIT", sku_id: item.skuId, payload: { action: "quantity", quantity } });
   };
 
@@ -119,6 +135,7 @@ export default function CartPage() {
     } else if (item.cartItemId != null) {
       await apiFetch(`/api/cart/${item.cartItemId}`, { method: "DELETE" });
     }
+    notifySimulationCartChanged();
     trackConsumerEvent({ event_type: "LIST_EDIT", sku_id: item.skuId, payload: { action: "remove" } });
   };
 
@@ -152,7 +169,7 @@ export default function CartPage() {
         const next = new Map<number, string>();
         map.forEach((invItems, skuId) => {
           const loc = pickLocation(invItems);
-          if (loc) next.set(skuId, loc.locationId);
+          if (loc) next.set(skuId, formatLocationLabel(loc.locationId));
         });
         setLocationBySkuId(next);
       })

@@ -47,7 +47,7 @@ export function ProductLocationDialog({ open, onClose, skuId, name, price }: Pro
         ) : pin === null ? (
           <p className="py-8 text-center text-sm text-muted-foreground">위치 정보가 없어요.</p>
         ) : (
-          <StoreMap floorNo={floorNo} pins={[pin]} routeOrder={[]} />
+          <StoreMap floorNo={floorNo} pins={[pin]} routeOrder={[]} showFloorBadge />
         )}
       </DialogContent>
     </Dialog>

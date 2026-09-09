@@ -23,6 +23,10 @@ import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 
 export function useBarcodeScanner(onDetected: (code: string) => void) {
+  const detectedRef = useRef(onDetected);
+  detectedRef.current = onDetected;
+  const lastCodeRef = useRef("");
+  const lastSeenRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const [permission, setPermission] = useState<"idle" | "granted" | "denied" | "insecure">("idle");
@@ -61,8 +65,15 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
     const onFrame = (result: { getText(): string } | undefined, err: unknown) => {
       setPermission("granted");
       if (result) {
-        onDetected(result.getText());
+        const code = result.getText();
+        lastSeenRef.current = Date.now();
+        if (lastCodeRef.current !== code) {
+          lastCodeRef.current = code;
+          detectedRef.current(code);
+        }
       }
+      // 같은 바코드를 계속 비추면 한 번만 담고, 800ms 이상 화면에서 사라진 뒤 다시 인식합니다.
+      if (!result && Date.now() - lastSeenRef.current > 800) lastCodeRef.current = "";
       // NotFoundException은 "이번 프레임엔 바코드가 없었다"는 정상적인 매 프레임 상황이라 무시
       if (err && !(err instanceof NotFoundException)) {
         // 다른 종류의 에러(카메라 끊김 등)는 조용히 다음 프레임에서 재시도됨

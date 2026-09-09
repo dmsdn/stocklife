@@ -6,7 +6,6 @@ import { BottomBarVisibilityProvider, useBottomBarVisibility } from "./bottom-ba
 import { AiPanel } from "./ai-panel";
 import { AiMobileSheet } from "./ai-mobile-sheet";
 import { HomeAiHeader } from "./home-ai-header";
-import { AiProactiveBubble } from "./ai-proactive-bubble";
 import { useProactiveStream } from "@/lib/realtime";
 import { saveProactiveNotification } from "@/lib/proactive-notifications";
 
@@ -58,7 +57,6 @@ function AppShellBody({ children }: { children: React.ReactNode }) {
       </div>
 
       <BottomTabBar />
-      <AiProactiveBubble />
       <AiMobileSheet />
     </div>
   );

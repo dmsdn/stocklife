@@ -6,7 +6,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine } from "@remixicon/react";
+import { RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine, RiFilterLine } from "@remixicon/react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { ScrollToTopButton, FloatingBackButton } from "@/components/domain/scroll-to-top-button";
@@ -300,79 +300,70 @@ function SearchPageInner() {
         )}
       </form>
 
-      <div className="mb-2 flex items-center gap-2 text-sm">
+      {/* ✅ 수정(요청) — "카테고리/상태/가격 버튼 3개를 필터 아이콘 버튼 하나로 묶고,
+          선택된 필터는 그 옆에 같은 줄·같은 높이로". 필터 아이콘을 누르면 그동안 마지막으로
+          봤던 탭(filterTab)이 열림 — 처음엔 "카테고리" 탭부터. */}
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
         <button
           type="button"
-          onClick={() => { setFilterTab("카테고리"); setFilterOpen(true); }}
-          className={`rounded-full border px-3 py-1.5 ${filters.categories.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
+          onClick={() => setFilterOpen(true)}
+          aria-label="필터"
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+            filters.categories.length > 0 || filters.statuses.length > 0 || priceActive
+              ? "border-primary text-primary"
+              : "border-border text-muted-foreground"
+          }`}
         >
-          카테고리
+          <RiFilterLine size={16} />
         </button>
-        <button
-          type="button"
-          onClick={() => { setFilterTab("재고여부"); setFilterOpen(true); }}
-          className={`rounded-full border px-3 py-1.5 ${filters.statuses.length ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
-        >
-          상태
-        </button>
-        <button
-          type="button"
-          onClick={() => { setFilterTab("가격"); setFilterOpen(true); }}
-          className={`rounded-full border px-3 py-1.5 ${priceActive ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
-        >
-          가격
-        </button>
-      </div>
 
-      {/* ✅ 신규(요청) — 선택된 필터를 칩(작은 버튼)으로 나열, 각각 X로 개별 해제 가능. */}
-      {(filters.categories.length > 0 || filters.statuses.length > 0 || priceActive) && (
-        <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
-          {filters.categories.map((c) => (
-            <button
-              key={`cat-${c}`}
-              type="button"
-              onClick={() => {
-                const next = { ...filters, categories: filters.categories.filter((x) => x !== c) };
-                setFilters(next);
-                runSearch(keyword);
-              }}
-              className="flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 py-1 text-primary"
-            >
-              {c}
-              <RiCloseLine size={16} />
-            </button>
-          ))}
-          {filters.statuses.map((s) => (
-            <button
-              key={`status-${s}`}
-              type="button"
-              onClick={() => {
-                const next = { ...filters, statuses: filters.statuses.filter((x) => x !== s) };
-                setFilters(next);
-                runSearch(keyword);
-              }}
-              className="flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 py-1 text-primary"
-            >
-              {s}
-              <RiCloseLine size={16} />
-            </button>
-          ))}
-          {priceActive && (
-            <button
-              type="button"
-              onClick={() => {
-                const next = { ...filters, priceRange: [PRICE_MIN, PRICE_MAX] as [number, number] };
-                setFilters(next);
-                runSearch(keyword);
-              }}
-              className="flex items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 py-1 text-primary"
-            >
-              {filters.priceRange[0].toLocaleString()}원~{filters.priceRange[1].toLocaleString()}원
-              <RiCloseLine size={16} />
-            </button>
-          )}
-        </div>
-      )}
+        {/* ✅ 선택된 필터 칩 — 진한 보더+텍스트로 "선택됨" 표시, X로 개별 해제. 필터
+            버튼과 같은 줄, 같은 높이(h-8). */}
+        {filters.categories.map((c) => (
+          <button
+            key={`cat-${c}`}
+            type="button"
+            onClick={() => {
+              const next = { ...filters, categories: filters.categories.filter((x) => x !== c) };
+              setFilters(next);
+              runSearch(keyword);
+            }}
+            className="flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 font-medium text-primary"
+          >
+            {c}
+            <RiCloseLine size={16} />
+          </button>
+        ))}
+        {filters.statuses.map((s) => (
+          <button
+            key={`status-${s}`}
+            type="button"
+            onClick={() => {
+              const next = { ...filters, statuses: filters.statuses.filter((x) => x !== s) };
+              setFilters(next);
+              runSearch(keyword);
+            }}
+            className="flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 font-medium text-primary"
+          >
+            {s}
+            <RiCloseLine size={16} />
+          </button>
+        ))}
+        {priceActive && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = { ...filters, priceRange: [PRICE_MIN, PRICE_MAX] as [number, number] };
+              setFilters(next);
+              runSearch(keyword);
+            }}
+            className="flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 font-medium text-primary"
+          >
+            {filters.priceRange[0].toLocaleString()}원~{filters.priceRange[1].toLocaleString()}원
+            <RiCloseLine size={16} />
+          </button>
+        )}
+      </div>
 
       <div className="mb-2 flex items-center justify-between text-sm">
         <span>{loading ? "불러오는 중..." : `${results.length}개 결과`}</span>
