@@ -477,6 +477,7 @@ function SearchPageInner() {
 
       {locationMapSku !== null && productLocations.has(locationMapSku) && (
         <LocationMapDialog
+          skuId={locationMapSku}
           open
           onClose={() => setLocationMapSku(null)}
           floorNo={productLocations.get(locationMapSku)!.floorNo}

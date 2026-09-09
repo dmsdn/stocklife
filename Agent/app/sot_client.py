@@ -421,6 +421,8 @@ def _norm_product(r: dict) -> dict:
             #   JSON)을 **버리고 있었다.** 그래서 단위가격 비교가 "파서를 만들어야
             #   하는 일"로 보였다 — 실제로는 창구가 값을 안 넘긴 것뿐이다.
             "spec": g("spec"),
+            "is_frozen": g("frozen"), "is_fresh": g("fresh"),
+            "is_refrigerated": g("refrigerated"),
             "on_promo": bool(g("onPromo")),
             "discount_krw": g("discountKrw"), "final_price_krw": g("finalPriceKrw")}
 
@@ -632,20 +634,23 @@ def get_session_cart(session_id: str) -> dict:
 
 
 def get_wishlist(member_id: int) -> list[dict]:
-    """회원의 위시리스트 — 도구 get_wishlist의 실체.
-    [출력 예] [{"member_id": 9001, "sku_id": 101042, "added_at": "2026-08-12 …"}]
-    입고 알림(장면 1의 자발형 버전)의 관련성 판정에 쓰인다:
-    세계 감시자가 RESTOCK_IN 이벤트를 받으면 "이 sku를 위시리스트에 둔 회원"을 찾는다.
+    """호환 이름을 유지하면서 실제 저장 리스트의 상품을 조회한다.
+
+    09-07 결정: UI에는 찜이 없으며 cart_group/cart_item이 저장 리스트의 정본이다.
+    과거 도구 호출 이력을 깨지 않도록 함수 이름만 유지하고 wishlists 테이블은 읽지 않는다.
+    member 축은 config 한 곳에서 consumer 축으로 변환한다. 회원이 없으면 다른 회원이나
+    세계 mock 찜으로 폴백하지 않는다. 반환은 SKU·리스트 수량·선택 상태의 현재값이다.
     """
-    if not config.USE_MOCK_SOT:
-        rows = _http_get(_API["get_wishlist"], {"memberId": int(member_id)},
-                         headers=_internal_headers()) or []
-        # camelCase → 우리 계약(경계에서 한 번에 — 이 파일의 규율).
-        return [{"member_id": int(member_id), "sku_id": r.get("skuId"),
-                 "name": r.get("name"), "brand": r.get("brand"),
-                 "price_krw": r.get("priceKrw"), "image_url": r.get("imageUrl"),
-                 "added_at": r.get("addedAt")} for r in rows]
-    return [w for w in mock_data.WISHLISTS if w["member_id"] == member_id]
+    if config.USE_MOCK_SOT:
+        return []  # 비상 mock에 폐기된 찜 데이터를 다시 넣지 않는다.
+    consumer_id = config.to_consumer_id(member_id)
+    if consumer_id is None:
+        return []
+    rows = _http_get("/internal/cart", {"consumerId": consumer_id},
+                     headers=_internal_headers()) or []
+    return [{"sku_id": r["skuId"], "quantity": r.get("quantity", 1),
+             "checked": bool(r.get("checked")), "source": "saved_list"}
+            for r in rows if r.get("skuId") is not None]
 
 
 def get_change_events(sku_ids: list[int] | None = None,
@@ -1200,7 +1205,7 @@ def get_floor_map(floor_no: int) -> dict | None:
 
 
 def get_navigation_route(start_floor: int, start_x: int, start_y: int,
-                         stops: list[dict]) -> dict:
+                         stops: list[dict], *, escalators_only: bool = False) -> dict:
     """백엔드 A* 경로 계산기 호출 — 동선 계산(optimize_route)의 실물 비용 원천.
 
     stops = [{"skuId": 101042, "label": "물티슈"}, …]. **순서를 바꾸지 않는다** —
@@ -1216,7 +1221,19 @@ def get_navigation_route(start_floor: int, start_x: int, start_y: int,
         raise RuntimeError("mock 모드에서는 백엔드 경로 계산을 부르지 않는다 (compute.py의 분기 버그)")
     return _http_post(_API["navigation_route"], {
         "startFloor": int(start_floor), "startX": int(start_x), "startY": int(start_y),
-        "stops": stops,
+        "stops": stops, "escalatorsOnly": escalators_only,
+    })
+
+
+def get_navigation_matrix(start: dict, stops: list[dict]) -> dict:
+    """장보기 솔버용 실제 보행 비용. 표시 경로와 같은 ESC 정책을 강제한다.
+
+    백엔드 한 요청 안에서 지도 스냅샷을 재사용한다. 상품마다 HTTP 왕복을
+    n²번 하는 대신 좌표 후보 전체를 한 번 보내며 null 비용은 단절로 보존한다.
+    """
+    return _http_post("/api/navigation/matrix", {
+        "startFloor": start["floorNo"], "startX": start["x"], "startY": start["y"],
+        "stops": stops, "escalatorsOnly": True,
     })
 
 

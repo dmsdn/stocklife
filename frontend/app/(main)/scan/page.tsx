@@ -42,7 +42,7 @@ import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibilit
 import { apiFetch, isLoggedIn, ApiError, resolveImageUrl } from "@/lib/api-client";
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { writeCheckoutDraft } from "@/lib/checkout-draft";
-import { ProductInsights } from "@/components/domain/product-insights";
+import { ProductInsights, useProductInsights } from "@/components/domain/product-insights";
 import {
   addProductToCartGroup,
   updateCartGroups,

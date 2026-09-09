@@ -13,9 +13,9 @@ import {
 import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { loadCartGroups, type CartGroup } from "@/lib/cart-storage";
 import { fetchCoupons, type Coupon } from "@/lib/coupons-mock";
-import { readCheckoutDraft, clearCheckoutDraft } from "@/lib/checkout-draft";
+import { readCheckoutDraft, clearCheckoutDraft, buildCheckoutUrl } from "@/lib/checkout-draft";
 import { markGroupCompleted } from "@/lib/completed-groups";
-import { writeLastCheckout } from "@/lib/checkout-summary";
+import { sessionFor, writeShoppingSession, writeActiveScanGroupId } from "@/lib/shopping-session";
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
@@ -39,7 +39,6 @@ function CheckoutInner() {
 
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [selectedCouponId, setSelectedCouponId] = useState<number | null>(null);
   const [pointBalance, setPointBalance] = useState(0);
   const [pointInput, setPointInput] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("신한카드");
@@ -95,16 +94,8 @@ function CheckoutInner() {
   }, [group, scannedIds]);
 
   const subtotal = products.reduce((sum, p) => sum + p.price * p.quantity, 0);
-  const selectedCoupon = coupons.find((c) => c.consumerCouponId === selectedCouponId) ?? null;
-  const couponDiscount = selectedCoupon && subtotal >= selectedCoupon.minOrderAmount
-    ? selectedCoupon.discountType === "FIXED"
-      ? Math.min(selectedCoupon.discountValue, subtotal)
-      : Math.min(
-          Math.floor(subtotal * selectedCoupon.discountValue / 100),
-          selectedCoupon.maxDiscountAmount ?? Infinity,
-          subtotal
-        )
-    : 0;
+  // 현재 주문 API에는 쿠폰 적용 계약이 없다. 서버에서 차감하지 않는 할인을 표시하지 않는다.
+  const couponDiscount = 0;
   const maxPointUse = Math.min(
     pointBalance,
     Math.max(0, subtotal - couponDiscount)
@@ -124,13 +115,23 @@ function CheckoutInner() {
       // 백엔드 체크아웃 API는 pointsToUse를 JSON body가 아니라
       // query parameter로 받습니다.
       const order = await apiFetch<{ orderId: number }>(
-        `/api/orders/checkout?groupId=${groupId}&pointsToUse=${pointUse}`,
+        buildCheckoutUrl(groupId, products.map((p) => p.id), pointUse),
         { method: "POST" }
       );
 
-      markGroupCompleted(groupId);
-      clearCheckoutDraft();
-      trackConsumerEvent({ event_type: "PURCHASE" });
+      // 주문 성공 뒤 보조 상태 저장 실패를 결제 실패로 안내하면 중복 결제를 유도할 수 있다.
+      try {
+        writeShoppingSession({ ...sessionFor(groupId), paid: true, orderId: order.orderId });
+        clearCheckoutDraft();
+        const updated = (await loadCartGroups()).find((g) => g.id === groupId);
+        if (updated?.status === "COMPLETED") {
+          markGroupCompleted(groupId);
+          writeActiveScanGroupId(null);
+        }
+      } catch {
+        // 실제 주문 결과는 완료 화면에서 서버로 다시 조회한다.
+      }
+      void trackConsumerEvent({ event_type: "PURCHASE" }).catch(() => {});
       router.push(`/checkout-complete?orderId=${order.orderId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "결제에 실패했습니다.");
@@ -185,8 +186,8 @@ function CheckoutInner() {
       <section className="mt-4 rounded-[20px] border border-border bg-white p-5">
         <h2 className="text-base font-semibold">쿠폰</h2>
         <select
-          value={selectedCouponId ?? ""}
-          onChange={(e) => setSelectedCouponId(e.target.value ? Number(e.target.value) : null)}
+          value=""
+          disabled
           className="mt-3 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
         >
           <option value="">쿠폰 사용 안 함</option>
@@ -196,6 +197,7 @@ function CheckoutInner() {
             </option>
           ))}
         </select>
+        <p className="mt-2 text-xs text-muted-foreground">쿠폰 결제 적용은 준비 중이에요. 현재 결제에는 포인트만 사용할 수 있어요.</p>
       </section>
 
       <section className="mt-4 rounded-[20px] border border-border bg-white p-5">

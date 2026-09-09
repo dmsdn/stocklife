@@ -45,6 +45,10 @@ from datetime import datetime
 import numpy as np
 
 from app import config, sot_client
+# 09-05. 이름 붙이기는 **도구층에 하나만** 둔다 — 여기 복제하면 두 벌이 되고
+# 언젠가 한쪽만 고쳐진다(`query._with_names` 독스트링의 판단과 같은 자리).
+# ⚠ 방향은 한쪽뿐이다: query 는 infer 를 안 부른다(순환 없음).
+from app.tools.query import _name_of, _with_names
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 ARTIFACTS = os.path.abspath(os.path.join(_HERE, "..", "artifacts"))
@@ -275,7 +279,10 @@ def _load_photo_encoder():
     import torch                                               # (53)
     from transformers import AutoModel, AutoProcessor
     mid = _STATE["photo"]["model_id"]
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    # config의 장치 계약을 따른다. CPU 모드는 사전학습 GPU와 메모리를 경쟁하지 않는다.
+    # auto일 때만 가용 장치를 고른다. cuda를 명시했는데 없다면 적재 오류로 보고한다.
+    requested = config.PHOTO_DEVICE
+    dev = ("cuda" if torch.cuda.is_available() else "cpu") if requested == "auto" else requested
     model = AutoModel.from_pretrained(mid).to(dev).eval()
     proc = AutoProcessor.from_pretrained(mid)
     _STATE["photo_encoder"] = (model, proc, dev)
@@ -463,6 +470,10 @@ def predict_availability(sku_id: int) -> dict:
 
     return {
         "sku_id": int(sku_id),
+        # ⚠ 09-05 상류 감사. 여기에 이름이 없어서 **킬링 장면 1 의 헤드라인**
+        #   ("약 15분 후 보충 예정")이 "sku 200032 는…" 으로 나갈 수 있었다.
+        #   09-04 구매이력 사건과 같은 뿌리 — 모델은 받은 것 중에서만 말한다.
+        "name": _name_of(int(sku_id)),
         "pick_qty": pick.get("qty"),
         "has_bulk": bool(mine["has_bulk"]),
         "path_type": path,
@@ -746,16 +757,29 @@ def predict_repurchase(sku_ids: list | None = None) -> dict:
     shown = results[:REPURCHASE_MAX_ITEMS]
 
     return {
-        "member_id": member_id,
+        # ⚠ 09-05 상류 감사 — `member_id` 를 안 싣는다. 모델이 쓸 일이 없고
+        #   결과에 있으면 "회원 1001 님" 으로 읽힐 길만 생긴다. 규율로
+        #   덮는 부류가 아니라 **안 보내는 것이 답인 부류**다.
         "evaluated": len(targets),
         "returned": len(shown),
         # 자른 사실을 명시한다 — 없으면 LLM 이 "전부 검토했다"고 말하게 된다
         "truncated": len(results) - len(shown),
-        "items": shown,
+        # ⚠ 09-05. `_with_names` 의 독스트링 ②가 *"infer.py 의 소비주기 추정도
+        #   같은 이력을 쓰는데 거기엔 이름이 필요 없다"* 라고 적었는데 —
+        #   **내부 추정에는 맞고 이 반환에는 틀렸다.** 이 items 가 곧 진입
+        #   브리핑(킬링 장면 3)의 재료다. 사람이 읽는 자리다.
+        "items": _with_names(shown),
         "failed": failed,
         "read_as": ("items 는 **살 때가 된 순서**(경과일÷평소 주기)로 정렬돼 "
                     "있습니다. 각 항목의 curve·read_as 를 그대로 따르세요. "
-                    "truncated 가 0 보다 크면 그만큼 더 있다는 사실을 알리세요."),
+                    "truncated 가 0 보다 크면 그만큼 더 있다는 사실을 알리세요. "
+                    # 09-05: 골든 실호출에서 주기·확률은 다 맞는데 **어느 상품
+                    # 이야기인지 한 번도 안 밝힌** 발화가 나왔다. 1턴이면
+                    # 손님이 방금 말했으니 통하지만, 여러 상품을 받은 판이나
+                    # 진입 브리핑에서는 **손님이 무엇의 이야기인지 모른다.**
+                    # ⚠ 09-05 에 이 items 에 name 을 붙였다 — 이제 말할 수 있다.
+                    "⚠ **어느 상품에 대한 답인지 name(상품명)으로 밝히세요.** "
+                    "주기·확률만 말하면 손님은 무엇의 이야기인지 모릅니다."),
     }
 
 
@@ -1063,25 +1087,27 @@ def find_facility(kind: str, floor_no: int | None = None) -> dict:
                    + ("스캔 직후라 위치가 확실합니다." if tier == "high" else
                       "위치는 마지막 스캔 기준 추정이니 '마지막 스캔 기준으로'라고 밝히세요.")
                    + " 이 시설을 동선에 넣으려면 optimize_route 의 facility_stops 에 location_id 를 넣으세요.")
-        others = [{k: c[k] for k in ("location_id", "kind", "label", "floor_no", "x", "y")}
+        others = [{k: c[k] for k in ("location_id", "kind", "label", "floor_no")}
                   for c in cands if c is not best]
         return {"location_id": best["location_id"], "kind": best["kind"], "label": best["label"],
-                "floor_no": best["floor_no"], "x": best["x"], "y": best["y"],
+                # 좌표는 **안 싣는다** (09-05 상류 감사). definitions.py 가 "좌표 숫자는 읽지 말고
+                #   층·방향·거리로 말한다"고 광고하는데 정작 값을 손에 쥐여 주고 있었다 — 규율로 덮는 부류가 아니라 **안 보내는 것이 답인 부류**다.
+                "floor_no": best["floor_no"],
                 "distance_m": dist, "distance_basis": basis,
-                "position": {"floor_no": pos[0], "x": pos[1], "y": pos[2]},
+                "position": {"floor_no": pos[0]},
                 "position_confidence": tier, "others": others[:6], "read_as": read_as}
 
     by_floor = {}
     for c in cands:
         by_floor.setdefault(str(c["floor_no"]), []).append(
-            {k: c[k] for k in ("location_id", "kind", "label", "floor_no", "x", "y")})
+            {k: c[k] for k in ("location_id", "kind", "label", "floor_no")})
     on_floors = sorted({c["floor_no"] for c in cands})
     return {"kind": kinds[0] if len(kinds) == 1 else "RESTROOM",
             "label": "·".join(dict.fromkeys(FACILITY_LABELS[k] for k in kinds)),
             "floor_no": on_floors[0] if len(on_floors) == 1 else None,
             "floors_with_facility": [{"floor_no": f} for f in on_floors],
-            "position": {"floor_no": pos[0], "x": pos[1], "y": pos[2]} if pos else None,
-            "x": None, "y": None, "distance_m": None, "distance_basis": None,
+            "position": {"floor_no": pos[0]} if pos else None,
+            "distance_m": None, "distance_basis": None,
             "by_floor": by_floor,
             "read_as": (("손님은 지금 " + str(pos[0]) + "층인데 이 시설은 그 층에 없습니다 — "
                          "있는 층(floors_with_facility)을 말하고 에스컬레이터·엘리베이터로 이동을 권하세요. ")
@@ -1089,6 +1115,20 @@ def find_facility(kind: str, floor_no: int | None = None) -> dict:
                         "손님 위치를 모릅니다(스캔 기록 없음). 층별 위치만 말하고, 몇 층인지 물어보세요. ")
                        + "좌표는 격자(1칸=1m, 원점 좌상단)라 '오른쪽 벽 쪽' 같은 방향어로 옮겨 "
                          "말하세요 — 숫자 좌표를 그대로 읽지 않습니다."}
+
+
+def facility_points(kind: str | None = None) -> list[dict]:
+    """시설 후보의 사본을 돌려준다. 경로 솔버가 실제 보행 비용으로 후보를 비교한다.
+
+    기존 nearest_facility_point는 같은 층 맨해튼 거리의 빠른 안내다. 계산대 선택에
+    그것을 쓰면 선반을 우회하는 비용과 출구 복귀가 빠진다. 원본 dict를 노출하면
+    요청 하나의 표시 라벨 변경이 다른 요청의 시설 캐시까지 바꾸므로 복사한다.
+    """
+    _ensure_floormap()
+    kinds = FACILITY_ALIASES.get(str(kind).upper()) or [str(kind).upper()]
+    return [dict(p) for floor in (1, 2, 3)
+            for p in (_STATE.get("facilities") or {}).get(floor, [])
+            if kind is None or p["kind"] in kinds]
 
 
 def facility_point(location_id: str) -> dict | None:
@@ -1161,7 +1201,9 @@ def get_position() -> dict:
     f, x, y = pos
     sx, sy, snapped = snap_to_walkable(f, x, y)
     tier, say = _confidence(age)
-    return {"floor_no": int(f), "x": sx, "y": sy,
+    # 좌표는 **안 싣는다** (09-05 상류 감사). definitions.py 가 "좌표 숫자는 읽지 말고
+    #   층·방향·거리로 말한다"고 광고하는데 정작 값을 손에 쥐여 주고 있었다 — 규율로 덮는 부류가 아니라 **안 보내는 것이 답인 부류**다.
+    return {"floor_no": int(f),
             "source": "scan_anchor+graph_snap",
             "snapped": snapped,
             "anchor_age_sec": None if age is None else round(age),
@@ -1346,7 +1388,8 @@ def match_preferences(top_k: int = 3) -> dict:
     #   — 실제로는 없는 게 아니라 못 알아본 것이다. 그래서 이유를 말한다.
     if cand and not by_sku:
         return {"state": "catalog_mismatch",
-                "member_id": int(member_id),
+                # 09-05: 오류 갈래에도 member_id 를 안 싣는다 — 유출 경로는
+                # 성공 갈래보다 **실패 갈래에서 더 잘 열린다**(감사 발견 ①).
                 "message": ("취향 모델의 카탈로그와 지금 조회되는 상품 목록이 "
                             "겹치지 않습니다. 추천을 만들 수 없으니 이 기능 "
                             "없이 답하고, 추천이 '없다'고 말하지 마세요."),
@@ -1379,7 +1422,9 @@ def match_preferences(top_k: int = 3) -> dict:
 
     top_l2 = np.argsort(-post_eff)[:3]
     return {
-        "member_id": int(member_id),
+        # ⚠ 09-05 상류 감사 — `member_id` 를 안 싣는다. 모델이 쓸 일이 없고
+        #   결과에 있으면 "회원 1001 님" 으로 읽힐 길만 생긴다. 규율로
+        #   덮는 부류가 아니라 **안 보내는 것이 답인 부류**다.
         "items": items,
         "history_skus": len(bought),
         "taste": [{"l2": b["l2_names"][int(j)],

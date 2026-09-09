@@ -104,7 +104,7 @@ def to_consumer_id(member_id: int | None) -> int | None:
 #   `.env`에 `USE_MOCK_SOT=false` 한 줄이면 코드를 안 건드리고 바뀐다.
 #   os.environ을 읽으므로 **env.load_env()가 먼저 돌아야 한다**(입구가 보장).
 USE_MOCK_SOT = os.environ.get("USE_MOCK_SOT", "true").strip().lower() not in ("false", "0", "no")
-BACKEND_BASE_URL = "http://localhost:8080"   # Spring Boot. 팀계약 API 8종의 뿌리
+BACKEND_BASE_URL = os.environ.get("BACKEND_BASE_URL", "http://localhost:8080")   # Spring Boot. 팀계약 API 8종의 뿌리
 # 액션(장바구니 쓰기)용 내부 API 인증키는 여기 두지 않는다 — 비밀값이라
 # 코드가 아니라 .env에서 읽는다(tools/action.py의 INTERNAL_SERVICE_KEY).
 # 코드에 적으면 git에 올라가고, 한 번 커밋되면 이력에서 지워지지 않는다.
@@ -237,3 +237,9 @@ WATCH_SESSION_TTL_SEC = 1800      # 30분 무소식 세션은 잊는다 — 상�
 # 데모에서 사진 기능을 쓸 때만 켠다. 환경변수로도 켤 수 있게 해 두어
 # 같은 코드로 두 가지 서버를 띄울 수 있다.
 LOAD_PHOTO_ENCODER = os.environ.get("LOAD_PHOTO_ENCODER", "0") == "1"
+
+# 사진 추론의 장치 선택. auto는 기존 동작, cpu는 별도 학습 중인 GPU를 사용하지 않는다.
+# 환경값을 명시하면 가용 메모리를 보고 임의로 학습 프로세스를 중단할 이유가 없다.
+PHOTO_DEVICE = os.environ.get("PHOTO_DEVICE", "auto").lower()
+if PHOTO_DEVICE not in {"auto", "cpu", "cuda"}:
+    raise ValueError("PHOTO_DEVICE는 auto/cpu/cuda 중 하나여야 합니다.")
