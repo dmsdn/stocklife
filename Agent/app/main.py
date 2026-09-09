@@ -348,6 +348,7 @@ def health() -> dict:
     return {"ok": True, "mock_sot": config.USE_MOCK_SOT,
             "tools": len(definitions.TOOLS), "model": config.LLM_MODEL,
             "assets": infer.loaded(),
+            "photo_runtime": infer.photo_runtime(),
             "search_index": searchterm.count()}
 
 
