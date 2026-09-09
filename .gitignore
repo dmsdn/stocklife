@@ -61,3 +61,6 @@ Agent/.demo_inject.json
 *.bak
 *.bak[0-9]
 *.bak_*
+
+# TypeScript incremental build cache
+*.tsbuildinfo

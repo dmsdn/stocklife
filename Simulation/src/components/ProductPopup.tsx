@@ -81,7 +81,7 @@ export default function ProductPopup({
 
     return (
         <>
-        <Modal
+        {!barcodeProduct && <Modal
             title={`${baseLabel} 진열 상품`}
             onClose={barcodeProduct ? undefined : onClose}
         >
@@ -274,7 +274,7 @@ export default function ProductPopup({
                     </div>
                 )}
             </div>
-        </Modal>
+        </Modal>}
 
         {barcodeProduct?.barcode && (
             <BarcodeModal

@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch, isLoggedIn, resolveImageUrl } from "./api-client";
+import { apiFetch, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
 import { notifySimulationCartChanged } from "./simulation-bridge";
 
 export interface CartProduct {
@@ -163,6 +163,7 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
 /** 로그인 회원은 항상 DB를 다시 읽어오고, 비회원은 localStorage를 읽는다. */
 export async function loadCartGroups(): Promise<CartGroup[]> {
   if (!isLoggedIn()) return readGuestGroups();
+  const requestToken = getAccessToken();
 
   // 로그인 직후 승계가 실패했더라도 같은 페이지 렌더에서 무한 재호출하지 않는다.
   // 로그인 1회당 migrate는 최대 1번만 시도하고, 실패 데이터는 localStorage에 보존한다.
@@ -186,6 +187,9 @@ export async function loadCartGroups(): Promise<CartGroup[]> {
 
   const serverGroups = await apiFetch<ServerCartGroup[]>("/api/cart/groups");
   const groups = await hydrateServerGroups(serverGroups);
+  if (getAccessToken() !== requestToken) {
+    throw new Error("로그인 상태가 변경되었습니다. 리스트를 다시 불러와 주세요.");
+  }
   writeMemberCache(groups);
   return groups;
 }

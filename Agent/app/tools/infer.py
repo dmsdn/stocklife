@@ -293,6 +293,13 @@ def loaded() -> dict:
     return {k: (v is not None) for k, v in _STATE.items()}
 
 
+def photo_runtime() -> dict:
+    """환경 설정이 아니라 실제 적재된 모델의 실행 장치를 보고한다."""
+    encoder = _STATE.get("photo_encoder")
+    return {"loaded": encoder is not None,
+            "device": str(next(encoder[0].parameters()).device) if encoder else None}
+
+
 # ── 공통 도구 ───────────────────────────────────────────────────────────────
 def _humanize(v: int, unit: str) -> str:
     """구간 상한을 **손님이 쓰는 단위**로 적는다. 1800초 → "30분".
@@ -424,7 +431,7 @@ def predict_availability(sku_id: int) -> dict:
     VERT_SEC, HORIZ_SEC = 130.0, 400.0     # 학습 세계의 대략적 평균 소요(초)
     q_work = q_vert * VERT_SEC + q_horiz * HORIZ_SEC
 
-    now = config.DEMO_NOW
+    now = datetime.now() if config.LIVE_INFERENCE_CLOCK else config.DEMO_NOW
     path = "VERTICAL" if mine["has_bulk"] else (
         "HORIZONTAL" if mine.get("floor_no") == pick.get("floor_no") else "FLOOR")
 
@@ -596,7 +603,9 @@ def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
         return _repurchase_typical(b, sku_id, prod, l2, l2_names)
 
     # 마지막 구매로부터 며칠 지났나 — 이것이 곡선을 읽는 x축의 원점이다.
-    now = _to_day(config.DEMO_NOW.isoformat())
+    from datetime import timezone
+    now_at = datetime.now(timezone.utc) if config.LIVE_INFERENCE_CLOCK else config.DEMO_NOW
+    now = _to_day(now_at.isoformat())
     elapsed = now - days[-1]
 
     # 과거 간격의 로그평균(past_log_mean)·개수(past_n) — 학습 때와 같은 정의.
@@ -785,14 +794,11 @@ def predict_repurchase(sku_ids: list | None = None) -> dict:
 
 def _to_day(ts: str) -> float:
     """ISO 시각 → 일 단위 실수(ordinal + 하루 중 비율). 학습 때와 같은 정의."""
-    s = str(ts).replace("Z", "").replace("T", " ").strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-        try:
-            d = datetime.strptime(s[:26], fmt)
-            return d.toordinal() + (d.hour * 3600 + d.minute * 60 + d.second) / 86400.0
-        except ValueError:
-            continue
-    raise ValueError(f"시각을 못 읽었습니다: {ts}")
+    from datetime import timezone
+    parsed = datetime.fromisoformat(str(ts).strip().replace("Z", "+00:00"))
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed.toordinal() + (parsed.hour * 3600 + parsed.minute * 60 + parsed.second) / 86400.0
 
 
 def _repurchase_curve(b, model_key, l2, past_n, eb, qty):

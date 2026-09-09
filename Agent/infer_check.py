@@ -226,7 +226,7 @@ def main():
     r, src = loop._dispatch("get_position", {})
     print(f"\n■ get_position   [출처 {src}]")
     print(f"    {r}" if "error" in r else
-          f"    {r['floor_no']}층 ({r['x']}, {r['y']}) · 출처 {r['source']}")
+          f"    {r['floor_no']}층 · 신뢰도 {r['confidence']} · 출처 {r['source']}")
 
     # ── ⑤ 사진 ──────────────────────────────────────────────────────────
     r, src = loop._dispatch("identify_product_photo",

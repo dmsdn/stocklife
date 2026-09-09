@@ -61,6 +61,7 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 import re
+from datetime import datetime, timedelta, timezone
 
 # ── 검사 대상 — "매장 사실"의 모양 ──────────────────────────────────────────
 # 왜 전부가 아니라 이 넷인가(설계서 §6.6.2): 발화의 모든 문장을 검사하면
@@ -386,6 +387,47 @@ def _locations(ledgers: dict) -> set:
     return found
 
 
+def _recorded_event_times(ledgers: dict) -> set:
+    """Read event clock times from SoT only; never treat them as future ETA minutes."""
+    found = set()
+    def visit(value):
+        if isinstance(value, dict):
+            raw = value.get("occurred_at_local") or value.get("occurred_at")
+            if isinstance(raw, str):
+                try:
+                    moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                    if moment.tzinfo is not None:
+                        moment = moment.astimezone(timezone(timedelta(hours=9)))
+                    found.add((moment.month, moment.day, moment.hour, moment.minute))
+                except ValueError:
+                    pass
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                visit(child)
+    visit(ledgers.get("sot", []))
+    return found
+
+
+def _clock_supported(prefix: str, minute: int, ledgers: dict):
+    match = re.search(r"(?:(\d{1,2})\s*월\s*(\d{1,2})\s*일\s*)?"
+                      r"(오전|오후|밤|아침|낮|저녁|새벽)?\s*(\d{1,2})\s*시\s*$", prefix)
+    if not match:
+        return None
+    month, day, period, raw_hour = match.groups()
+    hour = int(raw_hour)
+    if period in ("오후", "저녁", "낮") and hour < 12:
+        hour += 12
+    elif period == "밤":
+        hour = 0 if hour == 12 else hour + 12 if hour < 12 else hour
+    elif period in ("오전", "아침", "새벽") and hour == 12:
+        hour = 0
+    return any(h == hour and m == minute and
+               (month is None or (mo == int(month) and d == int(day)))
+               for mo, d, h, m in _recorded_event_times(ledgers))
+
+
 def check(reply: str, ledgers: dict) -> dict:
     """발화를 원장과 대조한다. 루프 다음, 사용자에게 나가기 직전에 부른다.
 
@@ -440,9 +482,17 @@ def check(reply: str, ledgers: dict) -> dict:
         # `require` 가 있으면 **그 화제일 때만** 검사한다(08-31 · eta 참조).
         if require and not re.search(require, reply):
             continue
-        for raw in re.findall(pattern, reply):          # 개념 ㊴
+        for match in re.finditer(pattern, reply):
+            raw = match.group(1)
             value = _to_int(raw)
             checked += 1
+            if kind == "eta":
+                clock = _clock_supported(reply[:match.start()], value, ledgers)
+                if clock is not None:
+                    if not clock:
+                        violations.append({"kind": "event_time", "value": value,
+                                           "text": raw, "reason": "unsupported"})
+                    continue
 
             # 허용 출처 중 한 곳에라도 근거가 있으면 통과.
             # any(...)는 "하나라도 참인가"(prompts ㉘-b의 all과 짝).
