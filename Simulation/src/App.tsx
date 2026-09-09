@@ -675,7 +675,7 @@ export default function App() {
         // 핀이 가리키던 자리에 도착했으면 핀을 지운다. 목적지 표시라 도착하면 역할이 끝난다.
         // (도착 지점은 매대 바로 옆 통행 칸일 수 있어서 한 칸 오차까지 도착으로 본다.)
         setPinnedProduct((prev) => {
-            if (!prev) return prev;
+            if (!prev || prev.floorNo !== playerFloor) return prev;
             const near = Math.abs(prev.x - point.x) <= 1 && Math.abs(prev.y - point.y) <= 1;
             if (!near) return prev;
             canvasRef.current?.clearProductPin();
@@ -684,7 +684,7 @@ export default function App() {
 
 
             },
-            []
+            [playerFloor]
         );
 
 

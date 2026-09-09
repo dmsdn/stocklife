@@ -86,7 +86,6 @@ export function computeSpendingMetrics(
   const totalSpent = orders.reduce((sum, o) => sum + o.totalAmount, 0);
   const totalOrders = orders.length;
   const totalQty = orders.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
-  const totalItemLines = orders.reduce((sum, o) => sum + o.items.length, 0);
 
   // 날짜별 합계
   const byDate = new Map<string, number>();
@@ -165,7 +164,7 @@ export function computeSpendingMetrics(
     daysInRange,
     avgPerDay: daysInRange > 0 ? Math.round(totalSpent / daysInRange) : 0,
     avgPerOrder: totalOrders > 0 ? Math.round(totalSpent / totalOrders) : 0,
-    avgPricePerItem: totalItemLines > 0 ? Math.round(totalSpent / totalItemLines) : 0,
+    avgPricePerItem: totalQty > 0 ? Math.round(totalSpent / totalQty) : 0,
     dailySeries,
     maxSpendDay,
     minSpendDay,

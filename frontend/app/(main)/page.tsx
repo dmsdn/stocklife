@@ -29,6 +29,7 @@ import {
 import { readShoppingSession, type ShoppingSession } from "@/lib/shopping-session";
 import { apiFetch, getAccessToken, isLoggedIn } from "@/lib/api-client";
 import { getMyProfile } from "@/lib/consumer-api";
+import { getStoreDayInfo } from "@/lib/store-hours";
 import { getClientId } from "@/lib/client-id";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notifications";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
