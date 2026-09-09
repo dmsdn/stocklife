@@ -12,6 +12,7 @@ import { RiArrowLeftLine } from "@remixicon/react";
 import { ProfileChoice } from "@/components/domain/profile-step";
 import { Button } from "@/components/ui/button";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { getMyProfile, updateMyProfile } from "@/lib/consumer-api";
 
 function QuestionBlock({
@@ -22,7 +23,7 @@ function QuestionBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-10 space-y-[11px]">
+    <div className="mt-10 space-y-[21px]">
       <h1 className="text-2xl font-bold leading-8">{title}</h1>
       <div className="space-y-2">{children}</div>
     </div>
@@ -37,6 +38,13 @@ export default function AccountHouseholdPage() {
   const [byCar, setByCar] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // ✅ 신규(요청) — 정보 수정 화면은 하단 탭바 숨김.
+  const { setHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setHidden(true);
+    return () => setHidden(false);
+  }, [setHidden]);
 
   useEffect(() => {
     getMyProfile()
@@ -60,7 +68,7 @@ export default function AccountHouseholdPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col pb-[140px] pt-[59px]">
+    <div className="flex min-h-dvh flex-col px-6 pb-[140px] pt-[59px]">
       <div className="flex h-8 items-center">
         <button
           type="button"

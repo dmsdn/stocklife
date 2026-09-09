@@ -207,10 +207,22 @@ def _search_products(**kw) -> dict:
     #   문장 안의 "먼저"와 문맥 안의 위치가 같은 것을 가리켜야 한다.
     notes = []
     if corrected:
-        notes.append(f"손님이 친 '{corrected['from']}' 로는 결과가 없어서 "
-                     f"'{corrected['to']}' 로 찾았습니다. **답할 때 이 사실을 "
-                     f"먼저 말하세요** — 다른 낱말로 찾았다는 것을 모르면 "
-                     f"손님은 자기가 물은 것의 답을 들었다고 믿습니다.")
+        # ⚠ 09-05 — **문장을 통째로 준다.** 전에는 *"이 사실을 먼저
+        #   말하세요"* 라고만 했는데, 실호출 3판 중 2판이 두 낱말을 **바꿔
+        #   썼다**:
+        #     "'쿡프리즈' 브랜드로 찾아봤어요('**쿡프리즈**' 없이는 결과가
+        #      안 나와서 이걸로 검색했어요)"      ← 손님이 친 건 '쿡프리즉'
+        #   지시는 지켰는데 **어느 쪽이 손님의 낱말인지**를 놓쳤다. 둘이
+        #   한 글자 차이라 그렇다 — 설명을 더 하는 것으로는 안 고쳐진다.
+        #
+        #   > 모델이 두 값을 헷갈리면, 규칙을 더 주지 말고 **문장을 줘라.**
+        notes.append(f"손님이 친 낱말은 '{corrected['from']}' 이고 우리가 찾은 "
+                     f"낱말은 '{corrected['to']}' 입니다 — **둘을 바꿔 쓰지 "
+                     f"마세요.** 답을 이 문장으로 시작하세요: "
+                     f"\"'{corrected['from']}' 으로는 안 나와서 "
+                     f"'{corrected['to']}' 로 찾아봤어요.\" "
+                     f"다른 낱말로 찾았다는 것을 모르면 손님은 자기가 물은 "
+                     f"것의 답을 들었다고 믿습니다.")
     if total > len(trimmed):
         notes.append("결과가 많아 일부만 확인했습니다. **'총 N개'라고 말하지 "
                      "마세요** — total_found 는 창구가 돌려준 행의 수지 매장 "
@@ -262,6 +274,17 @@ def _get_inventory(sku_id: int) -> dict:
     """
     inv = sot_client.get_inventory(sku_id)
     locs = inv["locations"]
+    # ⚠ 09-05 상류 감사 — 반환에서 **격자 좌표를 뺀다.** 손님에게 "x=81" 은
+    #   아무 뜻이 없고, 모델은 손에 든 것을 읽는다. 층·구역·매대 코드로 자리를
+    #   말하는 데 좌표는 필요 없다.
+    #   ⚠ **집계(pick_qty)는 좌표를 뺀 뒤가 아니라 원본으로 센다** — 아래 합계는
+    #     `locs` 를 쓰므로 순서가 중요하다. 여기서 바꾸면 그 값이 안 바뀐다
+    #     (뺀 것은 `qty`·`tier_role` 이 아니다).
+    #   ⚠ 원시 클라이언트(`sot_client.get_inventory`)는 그대로다 —
+    #     `main.py` 의 앵커 복원과 `compute` 의 동선 계산이 좌표를 쓴다.
+    #     **뺀 것은 「LLM 이 보는 판」 하나뿐이다.**
+    inv = {**inv, "locations": [{k: v for k, v in l.items() if k not in ("x", "y")}
+                                for l in locs]}
     # 개념 ㉑-a: 위치 목록을 훑으며 조건에 맞는 것의 qty만 더한다.
     # 읽는 법 — "locs의 각 l에 대해, l의 tier_role이 PICK이면, l의 qty를 더해라".
     # if가 뒤에 붙는 순서가 낯설지만 컴프리헨션의 고정된 어순이다.
@@ -269,6 +292,10 @@ def _get_inventory(sku_id: int) -> dict:
     other_qty = sum(l["qty"] for l in locs if l["tier_role"] != "PICK")   # != 는 "같지 않다"
     return {
         **inv,                                   # ㉑-b: 원본 내용을 통째로 쏟아 넣고
+        # ⚠ 09-05. `inv` 의 머리에는 **sku 만** 있고 이름이 없었다 — 09-04
+        #   구매이력 사건과 **같은 부류**다(모델은 받은 것 중에서만 말한다).
+        #   재고는 킬링 장면 1 의 첫 도구라 여기서 번호가 나오면 장면이 깨진다.
+        "name": _name_of(sku_id),
         "pick_qty": pick_qty,                    # 매대 합계
         "backup_qty": other_qty,                 # 매대 밖(보관단·백룸) 합계
         # 이 세 번째 값이 장면 1의 분기점이다:
@@ -301,7 +328,44 @@ def _get_inventory(sku_id: int) -> dict:
             "**find_substitutes 로 대체품을 찾아** 함께 제안하세요 — "
             "손님이 빈손으로 돌아가면 그 자체가 실패입니다.")}
            if pick_qty == 0 and other_qty == 0 else {}),
+        # ── 셋째 갈래는 09-05 까지 **비어 있었다** ────────────────────────────
+        # [왜 늦게 왔나] 08-31 에 세 갈래를 만들 때 「말해 줄 것이 있는 갈래」만
+        #   채웠다. 있으면 그냥 있다고 말하면 되니까. 그런데 **가장 흔한 갈래**가
+        #   이것이고, 규율이 없으면 모델은 손에 든 것을 그대로 읽는다 —
+        #   매대 코드(F1-C-R06-B05-L2) · 좌표(x=81) · 매대 구분(PICK).
+        #   09-05 상류 감사가 정확히 그 셋을 찾았다.
+        #
+        #   > 초록 갈래에도 규율이 필요하다. 결함이 나는 곳은 **잘 되는 길**이다.
+        **({"read_as": (
+            "재고가 있습니다. **상품은 name(상품명)으로, 자리는 층·구역으로** "
+            "말하세요. locations 의 location_id(매대 코드)·x·y(격자 좌표)·"
+            "tier_role 은 **내부 값이라 손님에게 읽어 주지 않습니다** — "
+            "손님은 그 코드로 물건을 못 찾습니다.")}
+           if pick_qty > 0 else {}),
     }
+
+
+def _name_of(sku_id) -> str | None:
+    """sku 하나의 상품명. **결과의 맨 위에 sku 만 있는 창구**를 위해 (09-05).
+
+    [왜 `_with_names` 로 안 되나] 그것은 **줄 목록**에 이름을 붙인다. 그런데
+    09-05 상류 감사(`leak_check.py`)가 찾은 것은 다른 꼴이다 —
+    `get_inventory`·`predict_availability` 는 **최상위에 `sku_id` 하나**를
+    싣고 그 곁에 이름이 없다. 목록이 아니라 머리라서 그 함수가 안 닿았다.
+
+    ⚠ 09-04 에 `_with_names` 를 만들며 *"한 창구에만 적용돼 있었다"* 고 적었는데,
+      **이번에도 한 꼴에만 적용돼 있었다.** 같은 병이 한 층 아래에서 반복됐다.
+
+    > 고친 자리의 이웃을 안 보면, 같은 결함이 모양만 바꿔 남는다.
+    """
+    try:
+        got = sot_client.get_products_by_skus([int(sku_id)]) or []
+    except Exception:                                        # noqa: BLE001
+        return None                 # 이름을 못 얻는 것이 재고 조회를 죽이면 안 된다
+    for p in got:
+        if p.get("sku_id") == int(sku_id):
+            return p.get("name")
+    return None
 
 
 def _with_names(rows: list, key: str = "sku_id") -> list:
@@ -357,7 +421,12 @@ def _get_purchase_history(member_id: int) -> dict:
     total = len(rows)
     # ⚠ 자른 **뒤에** 이름을 붙인다 — 보내지도 않을 줄까지 조회하면 낭비다.
     recent = _with_names(rows[-MAX_HISTORY_ROWS:])
-    out = {"member_id": member_id, "total_rows": total,
+    # ⚠ `member_id` 를 **안 싣는다** (09-05 상류 감사). 모델은 이 값을 쓸 일이
+    #   없다 — 누구의 이력인지는 이미 대화 맥락이고, 결과에 있으면 "회원 1001
+    #   님" 처럼 읽힐 길만 생긴다. 규율(read_as)로 덮는 부류가 아니라 **안 보내는
+    #   것이 답인 부류**다. 신원은 도구 진입에서 주입되므로(_CURRENT_MEMBER_ID)
+    #   반환에서 빼도 아무것도 안 잃는다.
+    out = {"total_rows": total,
            "truncated": total > len(recent), "purchases": recent}
     # ⚠ **방향을 결과에 싣는다** — 08-28 발견. 도구 설명문은 "시간순으로
     #   가져온다"고만 해서 **어느 쪽 끝이 최신인지 안 말했다.** 그러면
@@ -400,8 +469,22 @@ def _get_wishlist(member_id: int) -> dict:
         #   "p가 있으면 p['name'], 없으면 None". if/else를 값 자리에 쓴 형태다.
         # 왜 필요한가: 단종·삭제로 상품이 사라졌을 수 있다. 그때 p는 None인데
         #   None["name"]을 하면 TypeError로 죽는다. 이름 없이 넘기는 편이 낫다.
-        out.append({**w, "name": p["name"] if p else None})   # ㉑-b + 조건 표현식
-    return {"member_id": member_id, "items": out}
+        # ⚠ 09-05 상류 감사 — `**w` 가 통째로 쏟아져 `member_id`·`image_url` 까지
+        #   같이 왔다. `_SEARCH_FIELDS`(위쪽)는 image_url 을 *"프론트 몫"* 이라며
+        #   일부러 빼는데 **이 창구에만 그 규율이 안 걸려 있었다.** 같은 병이
+        #   창구마다 따로 나는 것이 이 파일의 반복 결함이다(`_with_names` 도 그랬다).
+        #   image_url 은 `/img/207413.webp` 라 **경로 안에 sku 가 박혀 있다** —
+        #   숫자를 지워도 경로로 새면 같은 일이다.
+        row = {k: v for k, v in w.items() if k not in ("member_id", "image_url")}
+        out.append({**row, "name": p["name"] if p else None})  # ㉑-b + 조건 표현식
+    return {
+        "items": out,
+        # read_as 가 여기만 없었다(09-05 감사: 26 창구 중 17종이 규율 없음).
+        "read_as": ("현재 저장된 장보기 리스트의 상품입니다. 찜 기능은 없습니다. "
+                    "상품명으로 설명하고 SKU 번호를 말하지 마세요. quantity는 리스트 수량, "
+                    "checked는 리스트의 선택 상태이며 실제 스캔·재고·구매 완료를 보장하지 않습니다. "
+                    "저장한 시각이나 이미 품절이었다는 이력을 추측하지 마세요."),
+    }
 
 
 def _get_change_events(sku_ids=None, within_hours: int = 24) -> dict:

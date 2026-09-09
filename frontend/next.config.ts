@@ -13,7 +13,7 @@ import type { NextConfig } from "next";
 //   터미널에 또 같은 경고가 뜨는데, 그때는 여기 배열에 새 IP를 추가하고 개발 서버를
 //   재시작(Ctrl+C 후 다시 npm run dev)하면 됩니다.
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["192.168.45.214", "192.168.0.80"],
+  allowedDevOrigins: ["192.168.45.46", "192.168.0.80"],
 };
 
 export default nextConfig;

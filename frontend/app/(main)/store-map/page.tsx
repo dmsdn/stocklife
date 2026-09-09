@@ -75,7 +75,7 @@ export default function StoreMapPage() {
   return (
     // ✅ 이 화면은 하단탭바를 항상 숨기는데, 지도 자체 높이도 고정 70vh(다른 화면과 공용)
     //   대신 이 화면 전용으로 뷰포트 끝까지 채우도록 늘림.
-    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-lg flex-col md:max-w-2xl">
+    <div className="mx-auto flex h-[calc(100dvh-4rem)] w-full max-w-lg flex-col overflow-hidden md:max-w-2xl">
       <div className="flex items-center gap-2 px-4 py-3">
         <Link href="/" aria-label="뒤로가기" className="flex h-8 w-8 items-center justify-center text-muted-foreground">
           <RiArrowLeftSLine size={22} />
@@ -91,12 +91,8 @@ export default function StoreMapPage() {
         onFloorChange={setFloorNo}
         onLivClick={() => openAiChat()}
         heightClassName="h-[calc(100dvh-8rem)]"
+        hideHelpText
       />
-
-      <p className="px-4 pt-2 text-xs text-muted-foreground">
-        색칠된 구역을 누르면 어떤 카테고리인지 볼 수 있어요.
-        {floorPins.length > 0 && " 담아둔 상품은 실제 위치에 핀으로 표시돼요."}
-      </p>
     </div>
   );
 }

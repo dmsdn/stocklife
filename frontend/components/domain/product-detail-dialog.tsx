@@ -9,9 +9,10 @@ import { RiMapPinLine } from "@remixicon/react";
 import { SaveToListDialog } from "./save-to-list-dialog";
 import { LocationMapDialog } from "./location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { getAlternatives, compareProducts, type AlternativeProduct, type PopularityItem } from "@/lib/ai-proxy";
 import { addRecentView } from "@/lib/recent-views";
+import { trackConsumerEvent } from "@/lib/consumer-events";
 
 interface ProductDetail {
   skuId: number;
@@ -51,8 +52,13 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
     setImageError(false);
     apiFetch<ProductDetail>(`/api/products/${productId}`, { auth: false })
       .then((p) => {
-        setProduct(p);
-        addRecentView({ skuId: p.skuId, name: p.name, price: p.finalPriceKrw, imageUrl: p.imageUrl });
+        const resolved = { ...p, imageUrl: resolveImageUrl(p.imageUrl) ?? null };
+        setProduct(resolved);
+        addRecentView({ skuId: resolved.skuId, name: resolved.name, price: resolved.finalPriceKrw, imageUrl: resolved.imageUrl });
+        // ✅ 신규(09-03 요청 ⑤) — 이 컴포넌트는 지금 화면 어디에서도 안 쓰이지만(실제
+        //   상품 상세는 app/(main)/product/[skuId]/page.tsx로 대체됨), 패치와 일관되게
+        //   VIEW 전송도 같이 넣어둠 — 나중에 다시 쓰이게 되더라도 바로 맞음.
+        trackConsumerEvent({ event_type: "VIEW", sku_id: resolved.skuId });
       })
       .catch(() => setProduct(null))
       .finally(() => setLoading(false));

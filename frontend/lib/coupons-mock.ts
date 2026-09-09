@@ -65,6 +65,104 @@ export const MOCK_COUPONS: Coupon[] = [
   },
 ];
 
+// ✅ 신규(요청) — 등급 달성 시 지급되는 쿠폰. lib/grade.ts GRADE_TIERS의 benefits 문구
+//   ("생일 쿠폰", "무료 배송 쿠폰 월 N회")와 실제로 맞춰서 만든 등급별 쿠폰입니다.
+//   등급은 누적(하위 등급 혜택 유지)이라, 쿠폰도 "지금 등급 + 그 아래 등급들"을 다 줍니다.
+//   consumerCouponId는 MOCK_COUPONS(1~3)와 안 겹치게 100번대로 뗐습니다.
+type GradeKey = "BASIC" | "BRONZE" | "SILVER" | "GOLD";
+
+const GRADE_COUPON_TEMPLATES: Record<Exclude<GradeKey, "BASIC">, Coupon[]> = {
+  BRONZE: [
+    {
+      consumerCouponId: 101,
+      code: "BRONZE-BIRTHDAY",
+      title: "[Bronze] 생일 쿠폰",
+      description: "생일 달에 전 상품 5,000원 할인 (2만원 이상 구매 시)",
+      discountType: "FIXED",
+      discountValue: 5000,
+      minOrderAmount: 20000,
+      maxDiscountAmount: null,
+      status: "AVAILABLE",
+      usable: true,
+      validUntil: "2026-12-31",
+    },
+  ],
+  SILVER: [
+    {
+      consumerCouponId: 102,
+      code: "SILVER-FREESHIP",
+      title: "[Silver] 무료 배송 쿠폰 (월 1회)",
+      description: "이번 달 배송비 무료 — 1회 사용 가능",
+      discountType: "FIXED",
+      discountValue: 3000,
+      minOrderAmount: 0,
+      maxDiscountAmount: null,
+      status: "AVAILABLE",
+      usable: true,
+      validUntil: "2026-09-30",
+    },
+  ],
+  GOLD: [
+    {
+      consumerCouponId: 103,
+      code: "GOLD-FREESHIP-1",
+      title: "[Gold] 무료 배송 쿠폰 1/2",
+      description: "이번 달 배송비 무료 — 월 2회 중 첫 번째",
+      discountType: "FIXED",
+      discountValue: 3000,
+      minOrderAmount: 0,
+      maxDiscountAmount: null,
+      status: "AVAILABLE",
+      usable: true,
+      validUntil: "2026-09-30",
+    },
+    {
+      consumerCouponId: 104,
+      code: "GOLD-FREESHIP-2",
+      title: "[Gold] 무료 배송 쿠폰 2/2",
+      description: "이번 달 배송비 무료 — 월 2회 중 두 번째",
+      discountType: "FIXED",
+      discountValue: 3000,
+      minOrderAmount: 0,
+      maxDiscountAmount: null,
+      status: "AVAILABLE",
+      usable: true,
+      validUntil: "2026-09-30",
+    },
+    {
+      consumerCouponId: 105,
+      code: "GOLD-VIP15",
+      title: "[Gold] VIP 15% 할인",
+      description: "전 상품 최대 10,000원까지, Gold 등급 전용",
+      discountType: "PERCENT",
+      discountValue: 15,
+      minOrderAmount: 30000,
+      maxDiscountAmount: 10000,
+      status: "AVAILABLE",
+      usable: true,
+      validUntil: "2026-09-30",
+    },
+  ],
+};
+
+const GRADE_ORDER: GradeKey[] = ["BASIC", "BRONZE", "SILVER", "GOLD"];
+
+/** 지금 등급 + 그 아래 등급들의 쿠폰을 전부 모아서 반환(등급은 누적 혜택이라 쿠폰도 누적). */
+function getGradeCoupons(grade: GradeKey): Coupon[] {
+  const upToIndex = GRADE_ORDER.indexOf(grade);
+  return GRADE_ORDER.slice(1, upToIndex + 1).flatMap(
+    (key) => GRADE_COUPON_TEMPLATES[key as Exclude<GradeKey, "BASIC">]
+  );
+}
+
 export async function fetchCoupons(): Promise<Coupon[]> {
-  return MOCK_COUPONS;
+  // ✅ 로그인 상태면 실제 등급(GET /api/consumers/me)에 맞는 등급 쿠폰을 같이 보여줌.
+  //   비로그인·조회 실패 시엔 등급 쿠폰 없이 기본 쿠폰만(예전 동작 그대로).
+  try {
+    const { getMyProfile } = await import("./consumer-api");
+    const profile = await getMyProfile();
+    return [...getGradeCoupons(profile.grade as GradeKey), ...MOCK_COUPONS];
+  } catch {
+    return MOCK_COUPONS;
+  }
 }

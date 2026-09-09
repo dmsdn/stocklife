@@ -8,10 +8,12 @@
 //   높이를 작게 줄여서 제목 위치(87px)에는 영향 없게 했습니다.
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { RiArrowLeftLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 export function ProfileStep({
   title,
@@ -32,8 +34,16 @@ export function ProfileStep({
 }) {
   const router = useRouter();
 
+  // ✅ 신규(요청) — 정보 수정 화면들은 입력에 집중하는 화면이라 하단 탭바가 안 보여야
+  //   함. 이 컴포넌트를 쓰는 화면(성별/생년월일 등) 전부에 한 번에 적용됨.
+  const { setHidden } = useBottomBarVisibility();
+  useEffect(() => {
+    setHidden(true);
+    return () => setHidden(false);
+  }, [setHidden]);
+
   return (
-    <div className="flex min-h-dvh flex-col pb-[140px]">
+    <div className="flex min-h-dvh flex-col px-6 pb-[140px]">
       {onBack && (
         <div className="flex h-8 items-center">
           <button
@@ -56,7 +66,7 @@ export function ProfileStep({
           </p>
         )}
 
-        <div className="mt-[43px] space-y-[11px]">{children}</div>
+        <div className="mt-[53px] space-y-[11px]">{children}</div>
       </div>
 
       {/* ✅ 수정(2026-09) — mt-auto(문서 흐름 안 맨 아래) 대신 화면에 진짜 고정(StickyBottomBar).

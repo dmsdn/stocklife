@@ -27,6 +27,12 @@ type InventoryBatchResponse = Record<string, InventoryItem[]>;
 let pendingBatch: Promise<Map<number, InventoryItem[]>> | null = null;
 let pendingKey = "";
 
+// ✅ 신규(2026-09) — 검색 결과처럼 skuId가 수천 개까지 넘어오는 경우, 전부 한 GET
+//   쿼리스트링에 욱여넣으면 URL이 수만 자까지 길어져서 브라우저/서버가 요청 자체를
+//   거부(net::ERR_FAILED)했습니다. 청크 단위로 잘라서 병렬 요청 후 합칩니다 — 호출부가
+//   몇 개를 넘기든 이 함수 하나만 고치면 전부 방어됩니다.
+const CHUNK_SIZE = 150;
+
 /** 여러 skuId의 위치를 한 번에 조회합니다. 재고 위치가 여러 곳이면 배열로 다 옵니다
  *  (PICK/BULK 등) — 화면에는 보통 PICK 위치 하나만 보여주면 됩니다 (pickLocation 참고). */
 export async function fetchInventoryBatch(skuIds: number[]): Promise<Map<number, InventoryItem[]>> {
@@ -37,18 +43,27 @@ export async function fetchInventoryBatch(skuIds: number[]): Promise<Map<number,
   if (pendingBatch && pendingKey === key) return pendingBatch;
 
   pendingKey = key;
-  pendingBatch = apiFetch<InventoryBatchResponse>(
-    `/api/products/inventory?skuIds=${uniqueIds.join(",")}`,
-    { auth: false }
+  const chunks: number[][] = [];
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE));
+  }
+
+  pendingBatch = Promise.all(
+    chunks.map((chunk) =>
+      apiFetch<InventoryBatchResponse>(`/api/products/inventory?skuIds=${chunk.join(",")}`, { auth: false }).catch(
+        () => ({} as InventoryBatchResponse)
+      )
+    )
   )
-    .then((res) => {
+    .then((results) => {
       const map = new Map<number, InventoryItem[]>();
-      for (const [skuIdStr, items] of Object.entries(res)) {
-        map.set(Number(skuIdStr), items);
+      for (const res of results) {
+        for (const [skuIdStr, items] of Object.entries(res)) {
+          map.set(Number(skuIdStr), items);
+        }
       }
       return map;
     })
-    .catch(() => new Map<number, InventoryItem[]>())
     .finally(() => {
       pendingBatch = null;
       pendingKey = "";

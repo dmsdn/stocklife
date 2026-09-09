@@ -21,6 +21,15 @@ public class CartController {
         this.jwtUtil = jwtUtil;
     }
 
+    /**
+     * 09-08: 장바구니 동선 기능은 이미 com.storeflow.navigation 패키지에
+     * (NavigationController: POST /api/navigation/cart-route) DB map_cells 기반
+     * 실제 A* + 층간 이동 + Held-Karp TSP로 구현되어 있었다. 여기에 같은 이름
+     * (CartRouteService)으로 별도 구현을 또 추가했다가 스프링 빈 이름 충돌로
+     * bootRun이 죽는 사고가 있었음 — 제거하고 기존 것을 그대로 쓴다.
+     * 프론트는 api/route.ts에서 POST /api/navigation/cart-route를 호출한다.
+     */
+
     @GetMapping
     public ResponseEntity<List<CartItemResponse>> getCart(@RequestHeader("Authorization") String authorization) {
         return ResponseEntity.ok(cartService.getCart(requireConsumerId(authorization)));

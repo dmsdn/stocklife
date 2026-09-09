@@ -31,7 +31,7 @@ import { Footer } from "@/components/layout/footer";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { LogoutButton } from "@/components/domain/logout-button";
 
-import { isLoggedIn as checkLoggedIn } from "@/lib/api-client";
+import { isLoggedIn as checkLoggedIn, clearTokens, ApiError } from "@/lib/api-client";
 import { getMyProfile, type ConsumerMe } from "@/lib/consumer-api";
 import { GRADE_TIERS, gradeIconSrc, gradeColor } from "@/lib/grade";
 import { fetchNotices, type Notice } from "@/lib/notices";
@@ -122,7 +122,22 @@ export default function MyPage() {
     setLoggedIn(isIn);
 
     if (isIn) {
-      getMyProfile().then(setProfile).catch(() => setProfile(null));
+      getMyProfile()
+        .then(setProfile)
+        .catch((e) => {
+          // ✅ 수정(2026-09) — 토큰은 남아있어서(isLoggedIn()===true) "로그인된 화면"이
+          //   뜨는데, 정작 그 계정 정보를 못 가져오면(토큰 만료·계정 삭제 등으로 401/404)
+          //   profile만 null인 어중간한 상태였다. 그래서 마이페이지에 "이름 미입력"처럼
+          //   빈 값이 뜨면서도 로그인된 것처럼 보였음. 이제 인증 자체가 무효인 경우엔
+          //   토큰을 지우고 진짜 로그아웃 상태로 전환한다 — 그래야 화면도 로그인 전
+          //   화면으로 정확히 바뀐다. (일시적 서버 오류·네트워크 문제는 재로그인을
+          //   강제할 이유가 없어서 401/404일 때만 로그아웃 처리.)
+          setProfile(null);
+          if (e instanceof ApiError && (e.status === 401 || e.status === 404)) {
+            clearTokens();
+            setLoggedIn(false);
+          }
+        });
     }
 
     fetchNotices().then((list) => {

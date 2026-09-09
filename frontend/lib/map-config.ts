@@ -11,6 +11,13 @@ export interface FloorMapConfig {
   image: string;
   gridWidth: number;
   gridHeight: number;
+  /** ✅ 신규 — 이미지의 실제 픽셀 크기. 화면의 지도 박스는 세로로 긴 모바일 비율인데
+   *  실제 지도 이미지 비율(가로:세로)은 이거랑 다르기 때문에, object-contain으로 표시하면
+   *  위아래(또는 좌우)에 레터박스 여백이 생긴다. 이 값으로 "지금 이 박스 안에서 이미지가
+   *  실제로 어디에 얼마 크기로 떠 있는지"를 계산해서, 좌표(%)가 박스 전체가 아니라
+   *  실제 이미지 위치 기준으로 맞게 보정한다. */
+  imageWidth: number;
+  imageHeight: number;
   /** ✅ 신규 — 지도 이미지를 해상도 개선하면서 상단 회색 여백(층 표시 텍스트 있던 부분)을
    *  잘라냈는데, 기존 좌표(핀·통로·매대)는 전부 "잘리기 전 이미지" 기준 퍼센트로 계산돼
    *  있어서, 새 이미지에 그대로 쓰면 위로 밀려 보입니다. 이 값(잘리기 전 이미지에서 회색
@@ -20,9 +27,9 @@ export interface FloorMapConfig {
 }
 
 export const FLOOR_MAPS: FloorMapConfig[] = [
-  { floorNo: 1, image: "/maps/floor-1.png", gridWidth: 24, gridHeight: 16, legacyTopOffsetPercent: 11.11 },
-  { floorNo: 2, image: "/maps/floor-2.png", gridWidth: 24, gridHeight: 16, legacyTopOffsetPercent: 11.7 },
-  { floorNo: 3, image: "/maps/floor-3.png", gridWidth: 24, gridHeight: 16, legacyTopOffsetPercent: 11.7 },
+  { floorNo: 1, image: "/maps/floor-1.png", gridWidth: 24, gridHeight: 16, imageWidth: 3836, imageHeight: 3200, legacyTopOffsetPercent: 0 },
+  { floorNo: 2, image: "/maps/floor-2.png", gridWidth: 24, gridHeight: 16, imageWidth: 3836, imageHeight: 3020, legacyTopOffsetPercent: 0 },
+  { floorNo: 3, image: "/maps/floor-3.png", gridWidth: 24, gridHeight: 16, imageWidth: 3836, imageHeight: 3020, legacyTopOffsetPercent: 0 },
 ];
 
 export function getFloorMap(floorNo: number): FloorMapConfig | undefined {
@@ -41,16 +48,17 @@ interface MapLocation {
   y: number;
 }
 
-/** ✅ 신규 — "매대 색마다 눌러도 반응이 없는" 문제의 원인: 개별 매대 클릭 영역
+/** ✅ "매대 색마다 눌러도 반응이 없는" 문제의 원인: 개별 매대 클릭 영역
  *  (getFloorLocations)은 백엔드 locations 시드가 있어야만 생기는데, zones(구역
  *  이름/색상 단위) 시드는 있어도 locations(칸 하나하나의 좌표) 시드가 비어있으면
  *  지도 위에 누를 수 있는 버튼 자체가 하나도 안 생김. 그래서 locations 유무와 무관하게
- *  항상 누를 수 있는 "구역 전체" 큰 클릭 영역을 하나 더 깐다. 실제 매대 이미지
- *  (public/maps/floor-1.png)를 보고 격자(24×16) 기준으로 대략의 사각 범위를 잡음 —
- *  정확한 칸 단위는 아니지만 "그 구역 아무 데나 눌러도 그 구역 이름은 뜨게" 하기엔 충분.
- *  2층·3층은 이미지에 구역 글자가 없어서(참고 이미지엔 1층만 A~H 라벨이 있었음) 색깔과
- *  zoneId를 확신 있게 매칭 못 해 비워뒀습니다 — 2층 F2-A~F2-F가 이미지의 어느 색인지
- *  알려주시면 채워넣을게요.
+ *  항상 누를 수 있는 "구역 전체" 큰 클릭 영역을 하나 더 깐다.
+ *  ✅ 수정(2026-09) — 실제 이미지 위에 격자를 겹쳐서 눈으로 보며 정밀하게 재측정한 값으로
+ *  교체(소수점 단위, 칸 스냅 아님 — 렌더링이 그냥 나눗셈이라 문제없음). 1~3층 전부 실제
+ *  GET /api/map/floors/{floorNo} 응답의 zoneId와 대조해서 확인한 값. 같은 구역이 이미지
+ *  위에서 여러 조각(L자 등)으로 나뉘어 보이는 곳은 같은 zoneId로 사각형을 여러 개 등록해
+ *  커버한다 — 클릭 판정은 zoneId 기준이라 여러 조각이어도 항상 같은 이름 팝업이 뜬다.
+ *  다른 zoneId끼리는 서로 겹치지 않게(겹치면 배열상 나중 항목이 클릭을 가로챔) 확인 완료.
  */
 interface ZoneRegion {
   zoneId: string;
@@ -62,17 +70,36 @@ interface ZoneRegion {
 
 const ZONE_REGIONS: Record<number, ZoneRegion[]> = {
   1: [
-    { zoneId: "F1-F", x1: 0, y1: 0, x2: 9, y2: 5 }, // 음료·주류 (좌상단, 하늘색)
-    { zoneId: "F1-D", x1: 0, y1: 5, x2: 9, y2: 8 }, // 정육·수산·계란 (좌중단, 분홍)
-    { zoneId: "F1-A", x1: 0, y1: 8, x2: 9, y2: 12 }, // 쌀·면·통조림 (좌하단, 베이지)
-    { zoneId: "F1-G", x1: 10, y1: 0, x2: 15, y2: 5 }, // 냉장식품 (중상단, 보라)
-    { zoneId: "F1-E", x1: 10, y1: 5, x2: 16, y2: 10 }, // 소스·조미료·오일 (중중단, 노랑)
-    { zoneId: "F1-B", x1: 10, y1: 10, x2: 16, y2: 13 }, // 간식·베이커리 (중하단, 주황)
-    { zoneId: "F1-H", x1: 16, y1: 0, x2: 23, y2: 5 }, // 냉동식품 (우상단, 남색)
-    { zoneId: "F1-C", x1: 16, y1: 8, x2: 23, y2: 13 }, // 청과·채소 (우하단, 초록)
+    { zoneId: "F1-F", x1: 0, y1: 0, x2: 9.75, y2: 4 },
+    { zoneId: "F1-D", x1: 0, y1: 4, x2: 9.25, y2: 5.25 },
+    { zoneId: "F1-D", x1: 0, y1: 5.25, x2: 6.25, y2: 8 },
+    { zoneId: "F1-A", x1: 0, y1: 8, x2: 9.5, y2: 12.5 },
+    { zoneId: "F1-B", x1: 9.5, y1: 9.75, x2: 16, y2: 13.5 },
+    { zoneId: "F1-C", x1: 16, y1: 9, x2: 22.25, y2: 13.5 },
+    { zoneId: "F1-E", x1: 9.5, y1: 4.75, x2: 16, y2: 9.75 },
+    { zoneId: "F1-H", x1: 16, y1: 4.5, x2: 21.5, y2: 5.5 },
+    { zoneId: "F1-H", x1: 14.75, y1: 0, x2: 22, y2: 4.75 },
+    { zoneId: "F1-G", x1: 9.75, y1: 0, x2: 14.75, y2: 4.75 },
   ],
-  2: [],
-  3: [],
+  2: [
+    { zoneId: "F2-A", x1: 20, y1: 8, x2: 22.25, y2: 10.5 },
+    { zoneId: "F2-A", x1: 11.5, y1: 9.5, x2: 22.25, y2: 13.25 },
+    { zoneId: "F2-B", x1: 0.25, y1: 8, x2: 11.5, y2: 13.25 },
+    { zoneId: "F2-C", x1: 11.5, y1: 4.5, x2: 18, y2: 9.5 },
+    { zoneId: "F2-D", x1: 0.25, y1: 4.5, x2: 11.5, y2: 8 },
+    { zoneId: "F2-F", x1: 0, y1: 0, x2: 10.25, y2: 4.5 },
+    { zoneId: "F2-E", x1: 10.25, y1: 0, x2: 20.5, y2: 4.5 },
+  ],
+  3: [
+    { zoneId: "F3-A", x1: 16.75, y1: 0, x2: 22, y2: 10.75 },
+    { zoneId: "F3-A", x1: 20.5, y1: 0, x2: 24, y2: 6 },
+    { zoneId: "F3-B", x1: 2.5, y1: 8.75, x2: 15.25, y2: 12.5 },
+    { zoneId: "F3-B", x1: 0, y1: 8.75, x2: 3.75, y2: 10.75 },
+    { zoneId: "F3-A", x1: 15.25, y1: 8.75, x2: 22, y2: 12.5 },
+    { zoneId: "F3-C", x1: 6.5, y1: 3.5, x2: 16.75, y2: 8.75 },
+    { zoneId: "F3-E", x1: 0, y1: 0, x2: 6.5, y2: 8.75 },
+    { zoneId: "F3-F", x1: 6.5, y1: 0, x2: 15.5, y2: 3.5 },
+  ],
 };
 
 export function getZoneRegions(floorNo: number): ZoneRegion[] {

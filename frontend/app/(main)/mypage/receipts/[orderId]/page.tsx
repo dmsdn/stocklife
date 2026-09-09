@@ -22,6 +22,8 @@ interface Order {
   items: OrderItem[];
   orderedAt?: string;
   paymentMethod?: string;
+  pointsUsed?: number;
+  pointsEarned?: number;
 }
 
 export default function ReceiptDetailPage() {

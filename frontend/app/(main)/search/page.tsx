@@ -13,7 +13,7 @@ import { ScrollToTopButton, FloatingBackButton } from "@/components/domain/scrol
 import { LocationMapDialog } from "@/components/domain/location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { fetchInventoryBatch, pickLocation, formatLocationText, type InventoryItem } from "@/lib/product-location";
 import { fetchRealFloorMap } from "@/lib/map-config";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
@@ -109,9 +109,10 @@ function SearchPageInner() {
       if (filters.categories[0]) qs.set("categoryL1", filters.categories[0]);
       if (filters.priceRange[1] !== PRICE_MAX) qs.set("maxPrice", String(filters.priceRange[1]));
       const res = await apiFetch<Product[]>(`/api/products/search?${qs.toString()}`, { auth: false });
-      setProducts(res);
+      const resolved = res.map((p) => ({ ...p, imageUrl: resolveImageUrl(p.imageUrl) ?? null }));
+      setProducts(resolved);
       if (categories.length === 0) {
-        setCategories([...new Set(res.map((p) => p.categoryL1).filter(Boolean))]);
+        setCategories([...new Set(resolved.map((p) => p.categoryL1).filter(Boolean))]);
       }
     } catch {
       setProducts([]);
@@ -164,10 +165,14 @@ function SearchPageInner() {
   }, [visibleCount, results.length]);
 
   // ✅ 화면에 보이는 상품들의 매대 위치를 한 번에 조회 (배치 API 재사용)
+  // ✅ 수정(2026-09) — results 전체(검색 결과 전부, 필터 없을 땐 카탈로그 수천 개)를
+  //   skuIds로 넘기고 있었음. GET 쿼리스트링이 수만 자까지 길어져서 브라우저/서버가
+  //   요청 자체를 거부(net::ERR_FAILED)했던 원인. 실제 화면에 렌더링되는 만큼만
+  //   (results.slice(0, visibleCount), 무한 스크롤 페이지네이션과 동일 범위) 조회하도록.
   useEffect(() => {
     if (results.length === 0) return;
     let cancelled = false;
-    const skuIds = results.map((p) => p.skuId);
+    const skuIds = results.slice(0, visibleCount).map((p) => p.skuId);
 
     fetchInventoryBatch(skuIds).then(async (invMap) => {
       const picked = new Map<number, InventoryItem>();
@@ -186,7 +191,7 @@ function SearchPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [results]);
+  }, [results, visibleCount]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

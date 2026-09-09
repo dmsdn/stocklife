@@ -81,6 +81,7 @@ const DEPTH_LABEL = 30;
 // 보이던 문제 — 존 이름표보다 위(DEPTH_LABEL보다 큰 값)로 올려서 항상 위에 그려지게 한다.
 const DEPTH_FACILITY = 35;
 const DEPTH_PATH = 40;
+const DEPTH_ROUTE = 41; // 추천 동선은 걷기 경로(DEPTH_PATH)보다 위, NPC/플레이어보다는 아래
 const DEPTH_NPC = 900;
 const DEPTH_PLAYER = 1000;
 
@@ -212,6 +213,10 @@ export default class StoreScene extends Phaser.Scene {
   private playerLabel!: Phaser.GameObjects.Text; // 09-03: 플레이어 머리 위 이름표(휴대폰 뒷번호/비로그인 표시)
   private playerGrid: GridPoint = { x: 2, y: 2 };
   private pathGraphics!: Phaser.GameObjects.Graphics;
+  // 캐릭터가 실제로 걷는 pathGraphics(초록, walkTo마다 clear됨)와 별개 레이어.
+  // "장바구니 추천 동선"은 캐릭터를 움직이지 않고 화면에 안내선만 계속 띄워두는 용도라
+  // walkTo/advancePath가 pathGraphics를 지울 때 같이 지워지면 안 되어 분리했다.
+  private routeGraphics!: Phaser.GameObjects.Graphics;
   private floorTileLayer?: Phaser.GameObjects.Graphics;
   private shelfLayer!: Phaser.GameObjects.Container;
   private labelLayer!: Phaser.GameObjects.Container;
@@ -230,6 +235,9 @@ export default class StoreScene extends Phaser.Scene {
   // 이번 층에서 "화면을 꽉 채우는" 줌 값 — fitCameraToWorld()가 매번 다시 계산해서 넣어두고,
   // 휠 줌의 최소값으로도 같이 써서 사용자가 이보다 더 축소해서 매장을 작게 만들 수 없게 한다.
   private minZoom = 0.15;
+  // 사용자가 휠로 직접 확대해서 보고 있는 중인지. 창이나 패널 크기가 바뀌었을 때
+  // "화면에 맞춰 다시 정렬해도 되는 상태"인지 판단하는 데 쓴다(handleResize 참고).
+  private userZoomed = false;
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private debugKey!: Phaser.Input.Keyboard.Key;
   private debugOccupiedLayer?: Phaser.GameObjects.Graphics;
@@ -310,6 +318,8 @@ export default class StoreScene extends Phaser.Scene {
 
     this.pathGraphics = this.add.graphics();
     this.pathGraphics.setDepth(DEPTH_PATH);
+    this.routeGraphics = this.add.graphics();
+    this.routeGraphics.setDepth(DEPTH_ROUTE);
     this.player = this.buildPlayer();
     this.placePlayerAt(this.findEntranceCell());
     this.spawnNpcs(NPC_COUNT);
@@ -381,6 +391,9 @@ export default class StoreScene extends Phaser.Scene {
     this.minZoom = Phaser.Math.Clamp(containZoom, 0.1, 3);
     this.cameras.main.setZoom(this.minZoom);
     this.cameras.main.centerOn(worldW / 2, worldH / 2);
+    // 여기를 지나면 화면에 딱 맞춰진 기본 상태이므로, 사용자가 확대해둔 상태는 아니다.
+    // (씬 생성 시점과 층 전환 loadFloor() 양쪽에서 이 함수를 부르므로 둘 다 커버된다.)
+    this.userZoomed = false;
   }
 
   // ── 하단 드래그바(React가 그리는 HTML 스크롤바)를 위한 카메라 조회/설정 ──
@@ -429,6 +442,14 @@ export default class StoreScene extends Phaser.Scene {
   // 캔버스 크기에 맞게 다시 계산한다.
   private handleResize() {
     if (!this.floorData) return;
+    // 사용자가 확대해서 보고 있는 게 아니라면(=화면 맞춤 상태), 새 캔버스 크기에 맞춰
+    // 줌과 가운데 정렬을 다시 계산한다. 예전에는 이 경우에도 minZoom 만 다시 구하고
+    // 카메라는 그대로 뒀기 때문에, 웹 UI 패널을 열어 캔버스가 좁아지면 넓을 때의 줌이
+    // 그대로 남아 지도가 왼쪽에 붙고 오른쪽에 빈 공간이 생겼다.
+    if (!this.userZoomed) {
+      this.fitCameraToWorld();
+      return;
+    }
     const worldW = this.floorData.gridWidth * TILE;
     const worldH = this.floorData.gridHeight * TILE;
     const canvasW = this.scale.width || worldW;
@@ -479,6 +500,7 @@ export default class StoreScene extends Phaser.Scene {
     }
     this.setPlayerVisible(!opts?.hidePlayer);
     this.pathGraphics.clear();
+    this.routeGraphics.clear(); // 이전 층에서 그려둔 추천 동선은 층이 바뀌면 좌표가 무의미해지므로 같이 지운다
     this.currentPath = [];
     this.moving = false;
     this.spawnNpcs(NPC_COUNT);
@@ -519,6 +541,40 @@ export default class StoreScene extends Phaser.Scene {
 
   teleportTo(cell: GridPoint) {
     this.placePlayerAt(cell);
+  }
+
+  /**
+   * 장바구니 동선 안내 — 백엔드(navigation.CartRouteService)가 DB map_cells 기반 A*로
+   * 이미 계산해준 실제 경로 좌표(현재 층 구간만 필터링된 것)를 받아서 그대로 선으로 그린다.
+   * 프론트에서 경로를 다시 계산하지 않는다 — 캐릭터를 걷게 하지도 않고 안내선만 표시한다.
+   * stops는 그 중 "몇 번째로 들르는 매대인지" 표시할 지점들(옵션).
+   */
+  drawRoute(pathPoints: GridPoint[], stops: GridPoint[] = []) {
+    this.routeGraphics.clear();
+    if (pathPoints.length < 2) return;
+    this.drawRouteLine(pathPoints, stops);
+  }
+
+  clearRoute() {
+    this.routeGraphics.clear();
+  }
+
+  private drawRouteLine(path: GridPoint[], stops: GridPoint[]) {
+    this.routeGraphics.lineStyle(4, 0x3b82f6, 0.85);
+    this.routeGraphics.beginPath();
+    path.forEach((p, i) => {
+      const px = p.x * TILE + TILE / 2;
+      const py = p.y * TILE + TILE / 2;
+      if (i === 0) this.routeGraphics.moveTo(px, py);
+      else this.routeGraphics.lineTo(px, py);
+    });
+    this.routeGraphics.strokePath();
+
+    // 각 방문 지점(몇 번째로 들를지)에 번호 원을 찍어준다.
+    this.routeGraphics.fillStyle(0x3b82f6, 1);
+    stops.forEach((p) => {
+      this.routeGraphics.fillCircle(p.x * TILE + TILE / 2, p.y * TILE + TILE / 2, 7);
+    });
   }
 
   getPlayerGrid(): GridPoint {
@@ -680,8 +736,8 @@ export default class StoreScene extends Phaser.Scene {
         const key = `${cell.x},${cell.y}`;
         if (nearest && !this.locationByCell.has(key)) this.locationByCell.set(key, nearest);
         const rect = this.add.rectangle(
-          cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
-          TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
+            cell.x * TILE + TILE / 2, cell.y * TILE + TILE / 2,
+            TILE * SHELF_INSET, TILE * SHELF_INSET, colorForZone(cell.zoneId));
         this.shelfLayer.add(rect);
       }
     } else if (occupiedCells.length > 0) {
@@ -1330,6 +1386,9 @@ export default class StoreScene extends Phaser.Scene {
     this.input.on('wheel', (_p: unknown, _o: unknown, _dx: number, dy: number) => {
       const zoom = Phaser.Math.Clamp(this.cameras.main.zoom - dy * 0.001, this.minZoom, 3);
       this.cameras.main.setZoom(zoom);
+      // 최소 줌보다 더 확대한 상태에서만 "사용자가 직접 확대 중"으로 본다. 도로 끝까지
+      // 축소하면 다시 자동 맞춤 대상이 된다.
+      this.userZoomed = zoom > this.minZoom + 0.0001;
       this.clampCameraScroll();
     });
   }

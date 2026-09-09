@@ -8,10 +8,9 @@
 //   - AI 대화 목록: 상대 시간("N시간 전") + 연결된 리스트 이름 표시
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiSearchLine, RiAddLine } from "@remixicon/react";
+import { RiSearchLine, RiAddLine, RiCheckLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,7 +19,7 @@ import { startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { formatRelativeTime, formatShoppingDate } from "@/lib/format-time";
 import { searchChatMessages, highlightMatch, type ChatSearchResult } from "@/lib/chat-search";
-import { readCartGroups, loadCartGroups, createCartGroup, type CartGroup } from "@/lib/cart-storage";
+import { readCartGroups, loadCartGroups, createCartGroup, deleteCartGroup, type CartGroup } from "@/lib/cart-storage";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
 import { SplitBottomBar } from "@/components/domain/split-bottom-bar";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
@@ -56,6 +55,46 @@ function SavedPageInner() {
   useEffect(() => {
     loadCartGroups().then(setGroups).catch(() => setGroups(readCartGroups()));
   }, []);
+
+  // ✅ 신규(요청) — 리스트 카드를 꾹 누르면(롱프레스) 선택모드로 들어가서 여러 개를
+  //   골라 한 번에 삭제할 수 있게. 선택모드 중엔 카드를 눌러도 이동 안 하고 선택만
+  //   토글되고, 하단에 취소/삭제 바가 뜸.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const toggleSelected = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const startLongPress = (id: number) => {
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      setSelectMode(true);
+      setSelectedIds(new Set([id]));
+    }, 500);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+  const handleDeleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`선택한 리스트 ${selectedIds.size}개를 삭제할까요?`)) return;
+    await Promise.all(Array.from(selectedIds).map((id) => deleteCartGroup(id)));
+    setGroups((prev) => prev.filter((g) => !selectedIds.has(g.id)));
+    exitSelectMode();
+  };
 
   const handleCreateGroup = async () => {
     if (!newGroupTitle.trim()) return;
@@ -178,6 +217,7 @@ function SavedPageInner() {
           onClick={() => {
             setTab("ai");
             setQuery("");
+            exitSelectMode();
           }}
           className={`border-b-2 pb-2.5 ${tab === "ai" ? "border-foreground font-semibold" : "border-transparent text-muted-foreground"}`}
         >
@@ -268,31 +308,76 @@ function SavedPageInner() {
               {query ? "검색 결과가 없어요." : "아직 만든 리스트가 없어요."}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-              {filteredGroups.map((group) => (
-                <div
-                  key={group.id}
-                  className="flex aspect-[4/5] flex-col justify-between rounded-lg bg-gradient-to-br from-muted to-border p-4"
-                >
-                  <Link href={`/saved/${group.id}`} className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-sm font-semibold">
-                      {group.title}
-                      {group.shoppingDate ? ` (${formatShoppingDate(group.shoppingDate)})` : ""}
-                    </p>
-                    <p className="mt-1.5 text-xs text-muted-foreground">{group.products.length}개</p>
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={() => handleAskLiv(group.id)}
-                    className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-xs font-normal"
+            <div className="grid grid-cols-2 gap-3 pb-20 md:grid-cols-3 lg:grid-cols-4">
+              {filteredGroups.map((group) => {
+                const isSelected = selectedIds.has(group.id);
+                return (
+                  <div
+                    key={group.id}
+                    role="button"
+                    tabIndex={0}
+                    onPointerDown={() => startLongPress(group.id)}
+                    onPointerUp={cancelLongPress}
+                    onPointerLeave={cancelLongPress}
+                    onPointerCancel={cancelLongPress}
+                    onClick={() => {
+                      if (longPressFired.current) {
+                        longPressFired.current = false;
+                        return;
+                      }
+                      if (selectMode) toggleSelected(group.id);
+                      else router.push(`/saved/${group.id}`);
+                    }}
+                    className={`relative flex aspect-[4/5] cursor-pointer flex-col justify-between rounded-lg bg-gradient-to-br from-muted to-border p-4 transition-opacity ${selectMode && !isSelected ? "opacity-60" : ""}`}
                   >
-                    <img src="/icons/liv-full.svg" alt="" className="h-4 w-4 shrink-0" />
-                    리브에게 물어보기
-                  </button>
-                </div>
-              ))}
+                    {/* ✅ 선택모드일 때만 우상단에 체크 표시 — 눌린 카드는 채워진 원,
+                        나머지는 빈 원 */}
+                    {selectMode && (
+                      <span
+                        className={`absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border-2 ${
+                          isSelected ? "border-brand bg-brand text-white" : "border-background bg-background/70"
+                        }`}
+                      >
+                        {isSelected && <RiCheckLine size={16} />}
+                      </span>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm font-semibold">
+                        {group.title}
+                        {group.shoppingDate ? ` (${formatShoppingDate(group.shoppingDate)})` : ""}
+                      </p>
+                      <p className="mt-1.5 text-xs text-muted-foreground">{group.products.length}개</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (selectMode) return;
+                        handleAskLiv(group.id);
+                      }}
+                      className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-xs font-normal"
+                    >
+                      <img src="/icons/liv-full.svg" alt="" className="h-4 w-4 shrink-0" />
+                      리브에게 물어보기
+                    </button>
+                  </div>
+                );
+              })}
             </div>
+          )}
+
+          {/* ✅ 신규(요청) — 선택모드일 때 하단 취소/삭제 바 */}
+          {selectMode && (
+            <SplitBottomBar
+              leftLabel="취소"
+              onLeft={exitSelectMode}
+              leftTone="muted"
+              rightLabel={`삭제 (${selectedIds.size})`}
+              onRight={handleDeleteSelected}
+              rightTone="danger"
+            />
           )}
         </div>
       )}
@@ -314,7 +399,7 @@ function SavedPageInner() {
               {contentResults.map((r) => {
                 const linkedTitle = r.groupId ? groupTitleById.get(r.groupId) : null;
                 return (
-                  <div key={r.sessionId} className="rounded-sm border border-border p-3">
+                  <div key={r.sessionId} className="rounded-sm p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-medium">{r.title ?? "한 줄 요약"}</p>
                       {linkedTitle && <p className="shrink-0 truncate text-xs text-muted-foreground">{linkedTitle}</p>}
@@ -328,17 +413,23 @@ function SavedPageInner() {
                             type="button"
                             key={m.messageId}
                             onClick={() => openSession(r.sessionId, m.messageId)}
-                            className="block w-full truncate rounded-sm px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
                           >
-                            {hl ? (
-                              <>
-                                {hl.before}
-                                <mark className="rounded-sm bg-foreground/15 text-foreground">{hl.match}</mark>
-                                {hl.after}
-                              </>
-                            ) : (
-                              m.content
-                            )}
+                            <span className="min-w-0 flex-1 truncate">
+                              {hl ? (
+                                <>
+                                  {hl.before}
+                                  <mark className="rounded-sm bg-foreground/15 text-foreground">{hl.match}</mark>
+                                  {hl.after}
+                                </>
+                              ) : (
+                                m.content
+                              )}
+                            </span>
+                            {/* ✅ 신규(요청) — 언제 보낸 대화인지 오른쪽에 표시 */}
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              {formatRelativeTime(m.createdAt)}
+                            </span>
                           </button>
                         );
                       })}

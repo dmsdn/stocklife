@@ -99,7 +99,7 @@ export function SessionListDrawer({ open, onClose, currentSessionId, onSelect }:
         className="absolute inset-0 bg-black/20"
       />
 
-      <div className="relative flex max-h-[80%] w-full flex-col rounded-b-[20px] bg-background p-4 shadow-[0_4px_30px_rgba(0,0,0,0.15)]">
+      <div className="relative flex max-h-[80%] w-full flex-col rounded-[20px] bg-background p-4 shadow-[0_4px_30px_rgba(0,0,0,0.15)]">
         <div className="flex items-center gap-2">
           <div className="flex h-10 flex-1 items-center gap-2 rounded-full bg-muted px-3">
             <RiSearchLine size={18} className="text-muted-foreground" />
