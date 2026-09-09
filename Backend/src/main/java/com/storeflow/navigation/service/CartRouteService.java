@@ -245,6 +245,44 @@ public class CartRouteService {
             previousIndex = targetIndex;
         }
 
+        /*
+         * 마지막 상품을 다 들른 뒤에는 출구(1층 ENTRANCE 시설)까지 경로를 이어 붙인다.
+         * map_cells에 ENTRANCE로 표시된 칸은 실제로는 통행 불가 블록이라
+         * nearestPassable로 그 앞 통로 칸을 목적지로 잡는다(매대 접근 방식과 동일).
+         * 출구가 없거나 이미 그 칸에 있는 경우엔 조용히 건너뛴다 — 기존 동작을 깨지 않기 위함.
+         */
+        Node lastVisited = points.get(previousIndex);
+
+        Cell entranceCell = map.values().stream()
+                .filter(cell -> "ENTRANCE".equals(cell.facilityKind()))
+                .findFirst()
+                .orElse(null);
+
+        if (entranceCell != null) {
+
+            Node exitAccess =
+                    nearestPassable(entranceCell.node(), map);
+
+            if (exitAccess != null
+                    && !exitAccess.equals(lastVisited)) {
+
+                PathResult exitSegment =
+                        findPath(lastVisited, exitAccess, map);
+
+                if (exitSegment != null
+                        && !exitSegment.path().isEmpty()) {
+
+                    totalDistance += exitSegment.cost();
+
+                    for (int i = 1; i < exitSegment.path().size(); i++) {
+                        fullPath.add(
+                                toPathPoint(exitSegment.path().get(i))
+                        );
+                    }
+                }
+            }
+        }
+
         return new NavigationResponse(
                 groupId,
                 totalDistance,
@@ -391,7 +429,8 @@ public class CartRouteService {
                     x,
                     y,
                     passable,
-                    transit_id
+                    transit_id,
+                    facility_kind
                 FROM map_cells
                 """,
                 rs -> {
@@ -407,7 +446,8 @@ public class CartRouteService {
                             new Cell(
                                     node,
                                     rs.getBoolean("passable"),
-                                    rs.getString("transit_id")
+                                    rs.getString("transit_id"),
+                                    rs.getString("facility_kind")
                             )
                     );
                 }
@@ -934,7 +974,8 @@ public class CartRouteService {
     private record Cell(
             Node node,
             boolean passable,
-            String transitId
+            String transitId,
+            String facilityKind
     ) {}
 
     private record Neighbor(
