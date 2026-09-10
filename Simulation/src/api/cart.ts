@@ -71,6 +71,7 @@ export interface CartGroupOption {
     title: string;
     itemCount: number;
     items: CartGroupItem[];
+    status: 'ACTIVE' | 'COMPLETED';
 }
 
 interface CartGroupDto {
@@ -78,6 +79,7 @@ interface CartGroupDto {
     title: string;
     itemCount: number;
     items?: CartGroupItem[];
+    status: 'ACTIVE' | 'COMPLETED';
 }
 
 /**
@@ -105,6 +107,7 @@ export async function fetchCartGroups(
         title: group.title,
         itemCount: group.itemCount,
         items: group.items ?? [],
+        status: group.status,
     }));
 }
 
@@ -132,7 +135,7 @@ interface SessionCartResponseDto {
  * 이 함수는 checked 여부와 상관없이 /internal/cart/session의 모든 item을 반환한다.
  */
 export async function fetchCartFromDb(_consumerId: number): Promise<
-    { skuId: number; name: string; price: number; stock: number; qty: number; locationId: string }[]
+    { cartItemId: number; skuId: number; name: string; price: number; stock: number; qty: number; locationId: string }[]
 > {
     const res = await memberFetch(
         '/api/cart/session'
@@ -148,6 +151,7 @@ export async function fetchCartFromDb(_consumerId: number): Promise<
     const data: SessionCartResponseDto = await res.json();
 
     return data.items.map((item) => ({
+        cartItemId: item.cartItemId,
         skuId: item.skuId,
         name: item.productName,
         price: item.priceKrw,
@@ -156,6 +160,37 @@ export async function fetchCartFromDb(_consumerId: number): Promise<
         // DB cart_item에는 시뮬레이션의 매대 locationId가 없으므로 빈 문자열.
         locationId: '',
     }));
+}
+
+/**
+ * 매대 팝업의 "빼기" 버튼용.
+ *
+ * 담긴 수량이 2개 이상이면 수량만 1개 줄이고(PATCH), 1개면 항목 자체를 지운다(DELETE).
+ * PATCH는 quantity에 @Min(1)이 걸려 있어 0으로는 못 줄이기 때문에 여기서 갈라줘야 한다.
+ */
+export async function removeOneFromDbCart(
+    cartItemId: number,
+    currentQty: number,
+): Promise<void> {
+    if (currentQty <= 1) {
+        const res = await memberFetch(`/api/cart/${cartItemId}`, { method: 'DELETE' });
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`DELETE /api/cart/${cartItemId} 실패 (${res.status}) ${text}`);
+        }
+        return;
+    }
+
+    const res = await memberFetch(`/api/cart/${cartItemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: currentQty - 1 }),
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`PATCH /api/cart/${cartItemId} 실패 (${res.status}) ${text}`);
+    }
 }
 
 // -----------------------------------------------------------------------------

@@ -72,6 +72,7 @@ export interface ProductPosition extends ProductInfo {
 export interface CartItem extends ProductInfo {
   locationId: string;
   qty: number;
+  cartItemId: number;
 }
 
 export interface FloorData {
