@@ -12,11 +12,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { RiMapLine, RiDeleteBin6Line, RiArrowRightSLine, RiCloseLine, RiMoreLine, RiCheckLine } from "@remixicon/react";
+import { RiRoadMapLine, RiDeleteBin6Line, RiArrowRightSLine, RiCloseLine, RiMoreLine, RiCheckLine, RiArrowLeftSLine } from "@remixicon/react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuantityStepper } from "@/components/domain/quantity-stepper";
-import {ProductInsights, useProductInsights} from "@/components/domain/product-insights";
 import {SHOPPING_CHANGED} from "@/lib/shopping-session";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { ProductLocationDialog } from "@/components/domain/product-location-dialog";
@@ -36,7 +35,6 @@ export default function SavedGroupDetailPage() {
 
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
-  const insights = useProductInsights(group?.products.map(p=>p.id)??[]);
   useEffect(()=>{
     const update=()=>loadCartGroups().then(gs=>setGroup(gs.find(g=>g.id===groupId)??null)).catch(()=>{});
     window.addEventListener(SHOPPING_CHANGED,update);
@@ -193,6 +191,15 @@ export default function SavedGroupDetailPage() {
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-8 pt-5 sm:max-w-xl md:max-w-2xl md:px-8 md:pt-8 lg:max-w-3xl">
       {/* 상단 헤더 — 타이틀+날짜 좌측, 점 3개 메뉴(이름 변경/장보러 가기) 우측 */}
+      {/* ✅ 신규(요청 — "리스트 상세페이지에 뒤로가기 버튼 없어") */}
+      <button
+        type="button"
+        onClick={() => router.back()}
+        aria-label="뒤로가기"
+        className="mb-2 flex h-8 w-8 items-center justify-center text-muted-foreground"
+      >
+        <RiArrowLeftSLine size={24} />
+      </button>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -323,7 +330,6 @@ export default function SavedGroupDetailPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <p className="line-clamp-2 text-sm leading-5">{product.name}</p>
-                  <ProductInsights item={insights[product.id]}/>
 
                   {!completed && (
                     <button
@@ -405,7 +411,7 @@ export default function SavedGroupDetailPage() {
               onClick={() => setRouteOpen(true)}
               className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background text-sm font-medium shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
             >
-              <RiMapLine size={20} />
+              <RiRoadMapLine size={20} />
               동선
             </button>
             <button

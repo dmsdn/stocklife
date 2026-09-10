@@ -49,6 +49,8 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [alternatives, setAlternatives] = useState<AlternativeProduct[]>([]);
+  // ✅ 신규 — 연관 상품 이미지 보강용 배치 조회 결과.
+  const [altDetails, setAltDetails] = useState<Map<number, ProductDetail>>(new Map());
   const [popularity, setPopularity] = useState<PopularityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [savePickerOpen, setSavePickerOpen] = useState(false);
@@ -85,6 +87,17 @@ export default function ProductDetailPage() {
       setAlternatives(alts);
       const compareIds = [productId, ...alts.map((a) => a.skuId)].slice(0, 5);
       compareProducts(compareIds).then(setPopularity);
+
+      // ✅ 버그 수정(요청 — "연관 상품 사진 안뜸") — Agent의 /api/ai/products/{id}/alternatives
+      //   응답은 방어적으로 파싱해야 할 만큼 형태가 들쭉날쭉해서(AlternativeProduct 타입
+      //   주석 참고), imageUrl이 아예 안 오는 경우가 있음. 그래서 실제 상품 상세 배치
+      //   조회(기존에 이미 쓰던 GET /api/products/by-skus)로 이미지·이름·가격을 다시
+      //   채워서, Agent 응답에 없어도 실제 상품 이미지가 뜨게 함.
+      if (alts.length > 0) {
+        apiFetch<ProductDetail[]>(`/api/products/by-skus?skuIds=${alts.map((a) => a.skuId).join(",")}`, { auth: false })
+          .then((details) => setAltDetails(new Map(details.map((d) => [d.skuId, d]))))
+          .catch(() => setAltDetails(new Map()));
+      }
     });
   }, [productId]);
 
@@ -142,7 +155,7 @@ export default function ProductDetailPage() {
             >
               <RiMapPinLine size={24} className="shrink-0" />
               {inventory[0]
-                ? `${formatLocationLabel(inventory[0].locationId)} · 재고 ${inventory[0].qty}개`
+                ? formatLocationLabel(inventory[0].locationId)
                 : "매장 위치 정보 없음"}
             </button>
 
@@ -156,7 +169,8 @@ export default function ProductDetailPage() {
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {alternatives.slice(0, 6).map((a) => {
                     const pop = popularity.find((p) => p.skuId === a.skuId);
-                    const img = resolveImageUrl(a.imageUrl ?? null);
+                    const detail = altDetails.get(a.skuId);
+                    const img = resolveImageUrl(detail?.imageUrl ?? a.imageUrl ?? null);
                     return (
                       <button
                         key={a.skuId}
@@ -172,7 +186,7 @@ export default function ProductDetailPage() {
                             <span className="text-[10px] text-muted-foreground">이미지 없음</span>
                           )}
                         </div>
-                        <p className="line-clamp-2 text-xs">{a.name ?? a.productName ?? `상품 ${a.skuId}`}</p>
+                        <p className="line-clamp-2 text-xs">{detail?.name ?? a.name ?? a.productName ?? `상품 ${a.skuId}`}</p>
                         {pop && <span className="text-[10px] text-muted-foreground">구매자 {pop.purchaserCount}명</span>}
                       </button>
                     );

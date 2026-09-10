@@ -6,7 +6,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine, RiFilterLine } from "@remixicon/react";
+import { RiSearchLine, RiCloseLine, RiBookmarkLine, RiCheckLine, RiMapPinLine, RiMenuLine } from "@remixicon/react";
 import { FilterPanel, type FilterTab } from "@/components/domain/filter-panel";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { ScrollToTopButton, FloatingBackButton } from "@/components/domain/scroll-to-top-button";
@@ -14,7 +14,7 @@ import { LocationMapDialog } from "@/components/domain/location-map-dialog";
 import { addProductToCartGroup } from "@/lib/cart-storage";
 import { addSearchHistory, readSearchHistory, removeSearchHistory } from "@/lib/search-history";
 import { apiFetch, resolveImageUrl } from "@/lib/api-client";
-import { fetchInventoryBatch, pickLocation, formatLocationText, type InventoryItem } from "@/lib/product-location";
+import { fetchInventoryBatch, pickLocation, formatLocationLabel, type InventoryItem } from "@/lib/product-location";
 import { fetchRealFloorMap } from "@/lib/map-config";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
@@ -308,13 +308,14 @@ function SearchPageInner() {
           type="button"
           onClick={() => setFilterOpen(true)}
           aria-label="필터"
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+          className={`flex h-8 shrink-0 items-center gap-1 rounded-full border px-2.5 ${
             filters.categories.length > 0 || filters.statuses.length > 0 || priceActive
               ? "border-primary text-primary"
               : "border-border text-muted-foreground"
           }`}
         >
-          <RiFilterLine size={16} />
+          <RiMenuLine size={16} />
+          필터
         </button>
 
         {/* ✅ 선택된 필터 칩 — 진한 보더+텍스트로 "선택됨" 표시, X로 개별 해제. 필터
@@ -424,7 +425,7 @@ function SearchPageInner() {
                       className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
                     >
                       <RiMapPinLine size={14} className="shrink-0" />
-                      {formatLocationText(productLocations.get(product.skuId)!)}
+                      {formatLocationLabel(productLocations.get(product.skuId)!.locationId)}
                     </button>
                   )}
                 </div>

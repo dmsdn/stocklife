@@ -1,4 +1,4 @@
-import { apiFetch, isLoggedIn, resolveImageUrl } from "./api-client";
+import { apiFetch, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
 import { MOCK_PRODUCTS, getFinalPrice, type MockProduct } from "./mock-products";
 
 export type HomeProduct = {
@@ -69,23 +69,53 @@ function mockToDiscovered(p: MockProduct): DiscoveredProduct {
   };
 }
 
-/** 홈 "FOR YOU" — 실제 GET /api/products/search, 없으면 목업 카탈로그 */
-export async function fetchRecommendedProducts(): Promise<RecommendedProduct[]> {
-  try {
-    const products = await apiFetch<BackendProduct[]>("/api/products/search", { auth: false });
-    if (products.length === 0) throw new Error("empty");
-    return products.slice(0, 8).map((p) => ({
-      id: p.skuId,
-      name: p.name,
-      category: p.categoryL1,
-      price: p.finalPriceKrw,
-      image: resolveImageUrl(p.imageUrl) ?? "",
-      reason: `${p.categoryL1} 카테고리 인기 상품이에요.`,
-      badge: p.onPromo ? "할인 중" : "추천",
-    }));
-  } catch {
-    return MOCK_PRODUCTS.slice(0, 8).map(mockToRecommended);
+// ✅ 수정(요청 — "채팅 리스트·상세 링크·리브 추천") — 예전엔 그냥 인기 상품 검색
+//   결과에 "OO 카테고리 인기 상품이에요"라는 일반 문구를 붙인 거였고, 실패하면 가짜
+//   목업 상품으로 조용히 바뀌었습니다(사용자는 그게 진짜 추천인지 목업인지 구분 불가).
+//   이제 실제 Agent 추천 API(predict_repurchase/match_preferences 기반)를 쓰고,
+//   비로그인·실패 시엔 목업으로 대체하지 않고 그 상태를 그대로 알려주는 message를 줍니다.
+export interface LivRecommendationResult {
+  items: RecommendedProduct[];
+  message: string;
+  status: "ready" | "login_required" | "unavailable";
+}
+
+export async function fetchLivRecommendations(): Promise<LivRecommendationResult> {
+  const owner = getAccessToken();
+  if (!owner) {
+    return { items: [], status: "login_required", message: "로그인하면 구매 이력을 참고해 추천해 드려요." };
   }
+  try {
+    const result = await apiFetch<{
+      items: { skuId: number; name: string; priceKrw: number; imageUrl?: string | null; categoryL1?: string; reason: string; badge: string }[];
+      message: string;
+      status: string;
+    }>("/api/ai/recommendations?limit=8");
+    // ✅ 응답이 오는 동안 계정이 바뀌었으면(로그아웃 후 다른 계정 로그인 등) 그 사이
+    //   응답은 이전 계정 것이므로 버림 — 새 계정 화면에 이전 계정 추천이 잠깐이라도
+    //   보이지 않게.
+    if (owner !== getAccessToken()) throw new Error("로그인 상태가 변경되었습니다.");
+    return {
+      ...result,
+      status: (result.status as LivRecommendationResult["status"]) ?? "ready",
+      items: result.items.map((p) => ({
+        id: p.skuId,
+        name: p.name,
+        category: p.categoryL1 ?? "",
+        price: p.priceKrw,
+        image: resolveImageUrl(p.imageUrl ?? null) ?? "",
+        reason: p.reason,
+        badge: p.badge,
+      })),
+    };
+  } catch {
+    return { items: [], status: "unavailable", message: "지금 추천을 불러오지 못했어요. 잠시 후 다시 확인해 주세요." };
+  }
+}
+
+/** ✅ 예전 이름을 그대로 쓰던 다른 화면들을 위한 얇은 호환 래퍼. */
+export async function fetchRecommendedProducts(): Promise<RecommendedProduct[]> {
+  return (await fetchLivRecommendations()).items;
 }
 
 /** 홈 "AI DISCOVERED" — 실제 할인 중(onPromo)인 상품, 없으면 목업 중 할인 상품 */

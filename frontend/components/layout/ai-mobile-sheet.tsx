@@ -254,6 +254,7 @@ export function AiMobileSheet() {
             onClose={() => setSessionListOpen(false)}
             currentSessionId={activeSessionId}
             onSelect={(id) => openSession(id)}
+            onNewSession={(id) => openSession(id)}
           />
 
           {/* ✅ 신규(요청) — 이름 수정을 인라인 대신 모달로. 이미 열려있는 바텀시트(z-150)

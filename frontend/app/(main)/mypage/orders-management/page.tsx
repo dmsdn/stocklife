@@ -7,7 +7,7 @@ export default function OrdersManagementPage() {
       title="주문 관리"
       items={[
         { href: "/mypage/receipts", label: "전자 영수증" },
-        { href: "/mypage/refunds", label: "취소 / 반품 / 환불 내역" },
+        { href: "/mypage/refunds", label: "취소/반품/환불" },
       ]}
     />
   );

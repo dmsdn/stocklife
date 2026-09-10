@@ -9,28 +9,59 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  RiToolsLine,
-  RiTvLine,
-  RiCupLine,
-  RiPriceTag3Line,
-} from "@remixicon/react";
+  PiBowlFoodDuotone,
+  PiCookieDuotone,
+  PiCarrotDuotone,
+  PiFishSimpleDuotone,
+  PiDropDuotone,
+  PiWineDuotone,
+  PiSnowflakeDuotone,
+  PiCubeDuotone,
+  PiPawPrintDuotone,
+  PiHeartbeatDuotone,
+  PiPackageDuotone,
+  PiToiletPaperDuotone,
+  PiCookingPotDuotone,
+  PiWashingMachineDuotone,
+  PiSoccerBallDuotone,
+  PiTelevisionDuotone,
+  PiPuzzlePieceDuotone,
+  PiTShirtDuotone,
+  PiHandbagDuotone,
+  PiTagDuotone,
+} from "react-icons/pi";
+import type { IconType } from "react-icons/lib";
+import { RiMapPin2Fill } from "@remixicon/react";
 import { getFloorMap, fetchRealFloorMap, getZoneRegions, getZoneCenters, getZoneName, FLOOR_MAPS, navigationImagePosition } from "@/lib/map-config";
 import type { GridPoint } from "@/lib/pathfinding";
 
-// ✅ 신규(요청) — 구역마다 어울리는 아이콘. remixicon 기준으로 골랐습니다.
-//   ⚠ F3-A~F3-E(매대 색상 구역)는 이 지도 이미지에 카테고리 이름이 안 적혀있어서
-//   실제로 뭘 파는 구역인지 몰라 전부 같은 임시 아이콘(태그)을 쓰고 있습니다 — 각
-//   구역이 실제로 어떤 상품 코너인지 알려주시면 맞는 아이콘으로 바꾸겠습니다
-//   (remixicon에 안 맞는 게 있으면 그때 phosphor-icons로 바꿀지 판단할게요 — 지금은
-//   설치 여부를 확인 못 해서 이미 쓰고 있는 게 확실한 remixicon만 썼습니다).
-//   F3-AS/HOME/LOUNGE(시설)는 이름이 있어서 바로 맞는 아이콘을 골랐습니다.
-const ZONE_ICONS: Record<string, typeof RiToolsLine> = {
-  "F3-AS": RiToolsLine, // A/S센터 — 공구
-  "F3-HOME": RiTvLine, // 가전 체험존 — TV
-  "F3-LOUNGE": RiCupLine, // 휴게 라운지 — 음료/휴식
+// ✅ 수정(요청 — "매장 지도 각 구역별 아이콘 phosphor icons에서 각각 찾아서, 모든 층 다") —
+//   map_layout.py의 ZONE_LABELS(실제 판매 카테고리)를 기준으로 19개 구역(1~3층) 전부에
+//   실제 어울리는 Phosphor 아이콘을 골랐습니다. react-icons에 이미 phosphor(react-icons/pi)가
+//   포함돼 있어서 새 패키지 설치 없이 바로 씀.
+const ZONE_ICONS: Record<string, IconType> = {
+  "F1-A": PiBowlFoodDuotone, // 쌀·면·통조림
+  "F1-B": PiCookieDuotone, // 간식·베이커리
+  "F1-C": PiCarrotDuotone, // 청과·채소
+  "F1-D": PiFishSimpleDuotone, // 정육·수산·계란
+  "F1-E": PiDropDuotone, // 소스·조미료·오일
+  "F1-F": PiWineDuotone, // 음료·주류
+  "F1-G": PiSnowflakeDuotone, // 냉장식품
+  "F1-H": PiCubeDuotone, // 냉동식품
+  "F2-A": PiPawPrintDuotone, // 반려동물용품
+  "F2-B": PiHeartbeatDuotone, // 뷰티·헬스
+  "F2-C": PiPackageDuotone, // 수납·생활잡화
+  "F2-D": PiToiletPaperDuotone, // 화장지·위생
+  "F2-E": PiCookingPotDuotone, // 주방용품
+  "F2-F": PiWashingMachineDuotone, // 세탁·청소
+  "F3-A": PiSoccerBallDuotone, // 스포츠·레저
+  "F3-B": PiTelevisionDuotone, // 홈·가전
+  "F3-C": PiPuzzlePieceDuotone, // 완구·문구
+  "F3-D": PiTShirtDuotone, // 의류
+  "F3-E": PiHandbagDuotone, // 잡화·가방
 };
 function getZoneIcon(zoneId: string) {
-  return ZONE_ICONS[zoneId] ?? RiPriceTag3Line;
+  return ZONE_ICONS[zoneId] ?? PiTagDuotone;
 }
 
 export interface MapPin {
@@ -43,6 +74,10 @@ export interface MapPin {
   facility?: boolean;
   /** ✅ 신규 — 있으면 핀 팝업에 실제 상품 이미지를 보여줌(없으면 회색 박스로 대체) */
   image?: string;
+  /** ✅ 신규(요청 — "동선 지도에도 방금 찍은 매대 위에 현위치 핀") — 여러 개의 collected
+   *  핀(지나온 매대) 중 "지금 서 있는" 자리 딱 하나에만 true. 번호/체크 배지 대신 흰
+   *  원 배경 + 은은한 그림자 + 메인 오렌지 map-pin-2-fill 아이콘으로 특별하게 그림. */
+  isCurrentLocation?: boolean;
 }
 
 // ✅ 행사상품 핀. 일반 담은 상품 핀(MapPin, 순번 원형 배지)과는 다르게 태그 아이콘으로
@@ -192,10 +227,23 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
 
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
-  const handleWheel = (e: React.WheelEvent) => {
+  const handleWheel = (e: React.WheelEvent | WheelEvent) => {
     e.preventDefault();
     setZoom((z) => clampZoom(z - e.deltaY * 0.0025));
   };
+
+  // ✅ 버그 수정(요청 — "Unable to preventDefault inside passive event listener") —
+  //   React의 onWheel prop은 wheel 이벤트를 기본적으로 passive(수동)로 등록해서,
+  //   그 안에서 e.preventDefault()를 불러도 무시됩니다(경고만 뜨고 실제로는 페이지
+  //   스크롤이 안 막힘 — 지도 확대/축소랑 같이 뒤 페이지도 스크롤되는 버그로 이어짐).
+  //   JSX의 onWheel 대신 이렇게 직접 {passive:false}로 리스너를 붙여야 진짜로 막힙니다.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -232,11 +280,18 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
   const activePin = pins.find((p) => p.id === activePinId);
 
   return (
-    <div className="space-y-2">
+    // ✅ 버그 수정(요청 — "지도, 동선이 떠야하는데 안 뜸") — 콘솔에 "Image ... has a
+    //   height value of 0" 경고가 근본 원인이었습니다. 이 바깥 래퍼가 space-y-2(높이를
+    //   전혀 지정 안 함, 콘텐츠만큼만 차지)라서, heightClassName="h-full"을 쓰는 화면
+    //   (scan/page.tsx의 카메라/지도 전환)에서 안쪽 containerRef div가 "부모의 100%"를
+    //   달라고 해도 그 부모(이 바깥 래퍼) 자체가 높이가 없어서 0으로 계산됐습니다.
+    //   flex+h-full로 바꿔서, 바깥 래퍼가 실제로 자기 부모(호출한 화면 쪽 컨테이너)의
+    //   높이를 그대로 물려받아 안쪽까지 제대로 내려가게 했습니다. 고정 높이(h-[70vh] 등)를
+    //   쓰는 다른 화면들은 이 변경과 무관하게 그대로 동작합니다.
+    <div className="flex h-full flex-col gap-2">
       <div
         ref={containerRef}
-        className={`relative w-full touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
-        onWheel={handleWheel}
+        className={`relative w-full flex-1 touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -252,42 +307,24 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
           {/* TODO: public/maps/floor-1.png 없으면 이 자리는 회색 배경으로만 보입니다 */}
           <Image src={config.image} alt={`매장 ${floorNo}층 지도`} fill className="object-contain" unoptimized />
 
-          {/* ✅ 신규(요청 — "동선 선 두께 4px로") — 실제 보행 경로(precomputedPath, agent가
-              계산해준 A* 경로)를 이어 그림. 구역/핀보다 먼저(=아래) 그려서 핀이 선 위에
-              보이게. 픽셀 두께가 확대/축소해도 항상 동일하게 보이도록 stroke-width를
-              zoom의 역수로 나눔(다른 마커들이 scale(1/zoom)으로 크기를 고정하는 것과 같은
-              방식). */}
-          {precomputedPath && precomputedPath.length > 1 && (
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-              style={{ zIndex: 1 }}
-            >
-              <polyline
-                points={precomputedPath.map((p) => { const { left, top } = navigationPercent(p.x, p.y); return `${left},${top}`; }).join(" ")}
-                fill="none"
-                stroke="var(--brand, #FF7A1A)"
-                strokeWidth={4}
-                vectorEffect="non-scaling-stroke"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.85}
-              />
-            </svg>
-          )}
-
-          {/* ✅ 수정(요청) — 쌀 아이콘만이 아니라 구역 전체를 눌러도 반응하게. 다만 예전
-              버그(누른 지점을 계산해서 그 자리에 팝업을 띄우던 방식)는 다시 안 넣었습니다 —
-              이 투명 오버레이도 단순히 "그 zoneId를 눌렀다"는 토글만 하고, 팝업 위치는
-              여전히 getZoneCenters()의 고정 중심 좌표를 씁니다. 그래서 구역 어디를 눌러도
-              팝업은 항상 그 구역 정중앙(쌀 아이콘 자리)에서 뜹니다. */}
+          {/* ✅ 버그 수정(요청 — "상품 위치랑 동선 표시가 이상하다") — 같은 경로
+              (precomputedPath)를 svg 두 개가 각각 그리고 있었습니다: 하나는 화살표 없이
+              4px로, 바로 아래 두 번째 svg는 pathSegments가 없을 때 같은 precomputedPath를
+              다시 받아 2.5px+화살표로 겹쳐 그렸습니다(둘 다 zIndex:1). 그래서 선이 두 겹으로
+              겹쳐 보이거나(굵기 다른 선이 살짝 어긋나 보임), 화살표 위치가 이상해 보였던
+              원인이었습니다. svg 하나로 합치고, "동선 두께 4px" 요청과 방향 화살표를 함께
+              적용합니다. 구역/핀보다 먼저(=아래) 그려서 핀이 선 위에 보이게 zIndex:1 유지. */}
+          {/* ✅ 쌀 아이콘만이 아니라 구역 전체를 눌러도 반응하게. 다만 예전 버그(누른 지점을
+              계산해서 그 자리에 팝업을 띄우던 방식)는 다시 안 넣었습니다 — 이 투명
+              오버레이도 단순히 "그 zoneId를 눌렀다"는 토글만 하고, 팝업 위치는 여전히
+              getZoneCenters()의 고정 중심 좌표를 씁니다. 그래서 구역 어디를 눌러도 팝업은
+              항상 그 구역 정중앙(쌀 아이콘 자리)에서 뜹니다. */}
           {/* 서버가 계산한 동선만 표시합니다. 층이 다른 구간은 호출 측에서 분리합니다. */}
           <svg aria-label="계산된 동선" className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ zIndex: 1 }}>
             <defs><marker id={arrowId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--brand, #e65c16)" /></marker></defs>
             {(pathSegments ?? (precomputedPath ? [precomputedPath] : [])).map((segment, index) => {
               const points = segment.map((point) => { const p = navigationPercent(point.x, point.y); return `${p.left},${p.top}`; }).join(" ");
-              return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={2.5} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={`url(#${arrowId})`} opacity={0.85} /> : null;
+              return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={`url(#${arrowId})`} opacity={0.85} /> : null;
             })}
           </svg>
           {routeOrigin && (
@@ -386,12 +423,23 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
             const order = routeOrder.indexOf(pin.id);
             const isActive = activePinId === pin.id;
             return (
-              <div key={pin.id} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${left}%`, top: `${top}%` }}>
+              // ✅ 수정(요청 — "선택한 핀이 가장 위로 올라오게, 겹치면 헷갈린다") — 지금까지
+              //   모든 핀이 zIndex:2로 동일해서, 바로 옆 핀과 겹칠 때 어느 게 위로 그려질지
+              //   배열 순서(=DOM 순서)에 맡겨져 있었습니다. 누른(active) 핀만 zIndex를
+              //   크게 올려서, 팝업 카드와 핀 본체가 이웃 핀 위로 항상 올라오게 합니다.
+              <div key={pin.id} className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: `${left}%`, top: `${top}%`, zIndex: isActive ? 20 : 2 }}>
                 {isActive && (
                   <div
-                    className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap rounded-[20px] border border-[#F4F4F4] bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
-                    style={{ transform: `translateX(-50%) scale(${1 / zoom})`, transformOrigin: "bottom center" }}
+                    className="pointer-events-auto absolute bottom-full mb-2 flex items-center gap-3 whitespace-nowrap rounded-[20px] border border-[#F4F4F4] bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
+                    style={{ transform: `scale(${1 / zoom})`, transformOrigin: "bottom center" }}
                   >
+                    {/* ✅ 수정(요청 — "카드 내용 말고, 핀이랑 카드를 가운데 정렬") — 카드
+                        내용(이미지 왼쪽·글자 오른쪽)은 원래대로 되돌리고, 대신 핀과
+                        카드의 정렬 방식 자체를 구역 아이콘과 같은 flex 방식으로 바꿈.
+                        예전엔 카드 폭이 핀 버튼 폭(24px)에 종속된 바깥 div 기준으로
+                        translate-x-1/2를 두 번 겹쳐 계산해서 어긋날 여지가 있었는데,
+                        이제 핀 버튼과 카드가 같은 flex 부모 안에서 각자 독립적으로
+                        가운데 정렬되어 항상 핀 중심축에 정확히 맞습니다. */}
                     {pin.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={pin.image} alt="" className="h-12 w-12 shrink-0 rounded-md border border-border object-cover" />
@@ -404,16 +452,30 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                     </div>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setActivePinId(isActive ? null : pin.id)}
-                  className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-background text-base font-semibold shadow ${
-                    pin.collected ? "bg-muted-foreground text-background" : "bg-primary text-primary-foreground"
-                  }`}
-                  style={{ transform: `scale(${1 / zoom})` }}
-                >
-                  {order >= 0 ? order + 1 : "✓"}
-                </button>
+                {pin.isCurrentLocation ? (
+                  // ✅ 신규 — "지금 서 있는" 자리 전용 핀. 다른 핀들(번호/체크 원형 배지)과
+                  //   구분되게 흰 원 배경 + 은은한 그림자 + 메인 오렌지 아이콘만(배경색 없이).
+                  <button
+                    type="button"
+                    onClick={() => setActivePinId(isActive ? null : pin.id)}
+                    aria-label="현재 위치"
+                    className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    style={{ transform: `scale(${1 / zoom})` }}
+                  >
+                    <RiMapPin2Fill size={18} className="text-brand" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setActivePinId(isActive ? null : pin.id)}
+                    className={`pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border-2 border-background text-base font-semibold shadow ${
+                      pin.collected ? "bg-muted-foreground text-background" : "bg-primary text-primary-foreground"
+                    }`}
+                    style={{ transform: `scale(${1 / zoom})` }}
+                  >
+                    {order >= 0 ? order + 1 : "✓"}
+                  </button>
+                )}
               </div>
             );
           })}

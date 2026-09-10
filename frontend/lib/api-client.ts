@@ -80,6 +80,12 @@ export function getRefreshToken(): string | null {
   return window.localStorage.getItem(REFRESH_TOKEN_KEY) ?? window.sessionStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+/** ✅ 신규(요청 — "채팅 리스트·상세 링크·리브 추천") — 로그인/로그아웃(계정 전환
+ *  포함)마다 쏘는 이벤트. 홈 화면 추천처럼 "지금 로그인된 계정 기준"으로 보여주는
+ *  화면들이 이 이벤트를 듣고 다시 불러와서, 계정이 바뀌었는데 이전 계정 데이터가
+ *  그대로 남아있는 일이 없게 합니다. */
+export const AUTH_CHANGED_EVENT = "storeflow:auth-changed";
+
 /** @param persist true면 localStorage(브라우저 재시작해도 유지), false면 sessionStorage(이 탭 닫으면 로그아웃) */
 export function setTokens(accessToken: string, refreshToken: string, persist: boolean = true) {
   const storage = persist ? window.localStorage : window.sessionStorage;
@@ -89,6 +95,7 @@ export function setTokens(accessToken: string, refreshToken: string, persist: bo
   other.removeItem(REFRESH_TOKEN_KEY);
   storage.setItem(ACCESS_TOKEN_KEY, accessToken);
   storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
 export function clearTokens() {
@@ -96,6 +103,7 @@ export function clearTokens() {
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
 export function isLoggedIn(): boolean {

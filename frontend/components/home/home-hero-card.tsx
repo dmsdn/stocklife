@@ -13,7 +13,7 @@
 //   아직 이 필드를 못 받아온 게스트 캐시 등) 경우를 위해 id 비교를 폴백으로 남겨둡니다.
 "use client";
 
-import { RiMapLine, RiQrScanLine, RiCalendarLine } from "@remixicon/react";
+import { RiRoadMapLine, RiQrScanLine, RiCalendarLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { CartGroup } from "@/lib/cart-storage";
@@ -102,7 +102,7 @@ export function HomeHeroCard({
               className="min-w-0 flex-1"
               onClick={() => onOpenRoute(shoppingGroup.id)}
             >
-              <RiMapLine size={20} />
+              <RiRoadMapLine size={20} />
               <span className="truncate">동선 보러가기</span>
             </Button>
           </div>

@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { RiSubtractLine, RiAddLine } from "@remixicon/react";
 import { SubpageHeader } from "@/components/domain/subpage-header";
 import { StickyBottomBar } from "@/components/domain/sticky-bottom-bar";
+import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api-client";
@@ -58,6 +59,10 @@ function readLayout(): SpendingLayoutItem[] {
 }
 
 export default function SpendingAnalysisPage() {
+  // ✅ 신규(요청 — "소비분석 화면에서 하단바 빼기") — 화면에 머무는 동안 하단 탭바를 숨김.
+  const { setHidden } = useBottomBarVisibility();
+  useEffect(() => { setHidden(true); return () => setHidden(false); }, [setHidden]);
+
   const [periodDays, setPeriodDays] = useState<number | null>(30);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [categoryData, setCategoryData] = useState<CategorySpending[]>([]);
@@ -334,8 +339,10 @@ export default function SpendingAnalysisPage() {
         </div>
       )}
 
-      {/* ✅ 수정(요청) — "완료 버튼은 하단에 60 높이짜리로" */}
-      {editing && (
+      {/* ✅ 수정(요청 — "카드 추가 모달에서 완료 버튼 아래로 숨기기") — 카탈로그 모달이
+          열려있는 동안엔 이 페이지 레벨 완료 버튼을 숨김(모달 안에도 자체 하단 버튼이
+          따로 있어서 두 개가 겹쳐 보이던 것을 정리). */}
+      {editing && !catalogOpen && (
         <StickyBottomBar>
           <Button className="mx-auto flex h-[60px] w-fit rounded-full px-8 shadow-[0_-2px_20px_rgba(0,0,0,0.1)]" onClick={() => setEditing(false)}>
             완료
@@ -386,8 +393,13 @@ export default function SpendingAnalysisPage() {
             </div>
           )}
 
-          <Button className="mt-2 w-full" onClick={() => setCatalogOpen(false)}>
-            완료
+          {/* ✅ 수정(요청 — "완료 버튼 대신 추가 버튼 60 버튼으로 밖으로") — 모달 하단
+              버튼을 페이지 레벨 완료 버튼과 같은 스타일(60px, 알약 모양)로 통일. */}
+          <Button
+            className="sticky bottom-0 left-0 right-0 mt-4 h-[60px] w-full rounded-full"
+            onClick={() => setCatalogOpen(false)}
+          >
+            추가 완료
           </Button>
         </DialogContent>
       </Dialog>

@@ -18,7 +18,6 @@ import { apiFetch, getAccessToken } from "@/lib/api-client";
 import { startNewSession } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { formatRelativeTime, formatShoppingDate } from "@/lib/format-time";
-import { searchChatMessages, highlightMatch, type ChatSearchResult } from "@/lib/chat-search";
 import { readCartGroups, loadCartGroups, createCartGroup, deleteCartGroup, type CartGroup } from "@/lib/cart-storage";
 import { isGroupCompleted } from "@/lib/completed-groups";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
@@ -43,9 +42,7 @@ function SavedPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { open: openAiChat, openSession } = useAiPanel();
-  // ✅ /ai의 "이전 대화 불러오기"와 하단탭 리브 버튼이 ?tab=ai로 곧장 리브 탭을 열 수 있게 함
-  const initialTab = searchParams.get("tab") === "ai" ? "ai" : "cart";
-  const [tab, setTab] = useState<"cart" | "ai">(initialTab);
+  // ✅ 수정(요청) — "리스트/리브" 탭이 없어져서 tab 상태 자체를 없앰(항상 리스트만 보임).
   const [query, setQuery] = useState("");
 
   const [groups, setGroups] = useState<CartGroup[]>([]);
@@ -128,6 +125,8 @@ function SavedPageInner() {
     await startNewSession();
     openAiChat();
   };
+  void handleNewChat; // ✅ 대화 목록(SessionListDrawer)에서 관리하게 되면서 이 페이지에선
+                       // 안 쓰지만, 다른 곳에서 재사용할 수 있어 일단 남겨둠.
 
   // ✅ 리스트에 연결된 세션 찾기 → 있으면 이어서, 없으면 그 리스트로 새 세션 생성
   const handleAskLiv = async (groupId: number) => {
@@ -188,94 +187,40 @@ function SavedPageInner() {
     });
   }, [groups, query]);
 
-  const groupTitleById = useMemo(() => {
-    const map = new Map<number, string>();
-    groups.forEach((g) => map.set(g.id, g.title));
-    return map;
-  }, [groups]);
-
-  const filteredSessions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter((s) => {
-      const linkedTitle = s.groupId ? groupTitleById.get(s.groupId) ?? "" : "";
-      return (s.title ?? "").toLowerCase().includes(q) || linkedTitle.toLowerCase().includes(q);
-    });
-  }, [sessions, query, groupTitleById]);
-
-  // ✅ 대화 "내용" 검색 — 제목/리스트 이름과 달리 이미 받아온 데이터로 안 되고 실제
-  //   GET /api/chat/search 호출이 필요함. 타이핑마다 매번 부르지 않도록 300ms 디바운스.
-  const [contentResults, setContentResults] = useState<ChatSearchResult[]>([]);
-  useEffect(() => {
-    if (tab !== "ai" || !query.trim()) {
-      setContentResults([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      searchChatMessages(query).then(setContentResults);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [tab, query]);
-
-  const contentResultSessionIds = useMemo(() => new Set(contentResults.map((r) => r.sessionId)), [contentResults]);
-  // 제목/리스트 이름으로만 일치하고 내용 검색 결과에는 없는 세션 — 중복 표시 방지
-  const titleOnlyMatches = useMemo(
-    () => filteredSessions.filter((s) => !contentResultSessionIds.has(s.sessionId)),
-    [filteredSessions, contentResultSessionIds]
-  );
+  // ✅ 수정(요청 — "저장에 리브 대화를 빼고") — 리브 탭이 없어지면서, 세션 검색/필터링
+  //   (filteredSessions, contentResults, groupTitleById, titleOnlyMatches)은 전부
+  //   대화 목록(SessionListDrawer)으로 옮겨서 여기선 더 이상 필요 없어 지웠습니다.
+  //   sessions/handleAskLiv는 리스트 카드의 "리브에게 물어보기" 버튼이 여전히 써서 남겨둠.
 
   return (
     <div className="mx-auto max-w-lg p-4 pb-24 sm:max-w-xl md:max-w-4xl md:p-8">
-      <h1 className="text-xl font-bold">저장</h1>
+      <h1 className="text-xl font-bold">계획</h1>
 
-      <div className="mt-4 flex gap-5 border-b border-border text-sm">
-        <button
-          type="button"
-          onClick={() => {
-            setTab("cart");
-            setQuery("");
-          }}
-          className={`border-b-2 pb-2.5 ${tab === "cart" ? "border-foreground font-semibold" : "border-transparent text-muted-foreground"}`}
-        >
-          리스트
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTab("ai");
-            setQuery("");
-            exitSelectMode();
-          }}
-          className={`border-b-2 pb-2.5 ${tab === "ai" ? "border-foreground font-semibold" : "border-transparent text-muted-foreground"}`}
-        >
-          리브
-        </button>
-      </div>
-
+      {/* ✅ 수정(요청 — "저장에 리브 대화를 빼고, 리브 대화는 대화 목록에서 관리하게") —
+          "리스트/리브" 탭 스위처를 없앰. 리브 대화는 이제 채팅 헤더의 대화 목록
+          (SessionListDrawer)에서 관리합니다 — 새 대화, 꾹 눌러 삭제, 연결된 리스트
+          표시까지 전부 그쪽으로 옮겼습니다. */}
       <div className="mt-4 flex items-center gap-3">
         <div className="relative min-w-0 flex-1">
           <RiSearchLine size={20} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={tab === "cart" ? "상품 또는 리스트 검색" : "대화 검색"}
+            placeholder="상품 또는 리스트 검색"
             className="h-11 w-full rounded-full border border-border bg-background pl-10 pr-4 text-sm outline-none focus-visible:border-foreground"
           />
         </div>
-        {/* ✅ 수정(요청 4번) — 텍스트 링크 대신 + 아이콘 원형 버튼. border는 검색바와
-            같은 border-border 색으로 맞춤. */}
         <button
           type="button"
-          onClick={() => (tab === "cart" ? setShowNewGroupInput(true) : handleNewChat())}
-          aria-label={tab === "cart" ? "새 리스트" : "새 대화"}
+          onClick={() => setShowNewGroupInput(true)}
+          aria-label="새 리스트"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-foreground"
         >
           <RiAddLine size={22} />
         </button>
       </div>
 
-      {tab === "cart" && (
-        <div className="mt-4">
+      <div className="mt-4">
           {/* ✅ 수정(요청) — 인라인 박스 대신 진짜 모달로. 이름 입력은 아이디/비밀번호
               입력란처럼 밑줄만(테두리 박스 없이), 장 볼 날짜는 라벨을 왼쪽에 두고 값은
               테두리 없이 오른쪽 정렬로, 오늘 이전 날짜는 선택 자체가 안 되게(disablePast).
@@ -367,8 +312,24 @@ function SavedPageInner() {
                       if (selectMode) toggleSelected(group.id);
                       else router.push(`/saved/${group.id}`);
                     }}
-                    className={`relative flex aspect-[4/5] cursor-pointer flex-col justify-between overflow-hidden rounded-lg bg-gradient-to-br from-muted to-border p-4 transition-opacity ${selectMode && !isSelected ? "opacity-60" : ""}`}
+                    className={`relative flex aspect-[4/5] cursor-pointer flex-col justify-between overflow-hidden rounded-lg bg-muted p-4 transition-opacity ${selectMode && !isSelected ? "opacity-60" : ""}`}
                   >
+                    {/* ✅ 수정(요청 — "회색 그라데이션 빼고 담긴 상품 이미지 옅게해서 최근
+                        4개를 4분할로") — 카드 배경의 무채색 그라데이션 대신, 최근에 담은
+                        상품 최대 4개의 이미지를 2x2로 채우고 옅게(opacity) 깔아서 카드
+                        내용(제목·버튼)이 잘 보이게 함. 이미지가 4개 미만이면 남는 칸은
+                        빈 채로 둠(무리해서 반복 안 함). */}
+                    <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+                      {group.products.slice(-4).reverse().map((p) => (
+                        <div key={p.id} className="overflow-hidden bg-card-border">
+                          {p.image && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.image} alt="" className="h-full w-full object-cover opacity-25" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
                     {/* ✅ 수정 — 우상단 배지 대신 카드 전체를 검은색으로 덮고
                         "결제완료"를 카드 정중앙에 배치.
                         ✅ 버그 수정(2026-09) — z-index가 없어서 형제 요소(제목/버튼)와의
@@ -388,7 +349,7 @@ function SavedPageInner() {
                       </span>
                     )}
 
-                    <div className="min-w-0 flex-1">
+                    <div className="relative min-w-0 flex-1">
                       <p className="line-clamp-2 text-sm font-semibold">
                         {group.title}
                         {group.shoppingDate ? ` (${formatShoppingDate(group.shoppingDate)})` : ""}
@@ -403,16 +364,19 @@ function SavedPageInner() {
                         if (selectMode) return;
                         handleAskLiv(group.id);
                       }}
-                      className="mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-xs font-normal"
+                      className="relative mt-3 flex shrink-0 items-center gap-1.5 self-start whitespace-nowrap rounded-full bg-background px-3 py-1.5 text-xs font-normal"
                     >
                       <img src="/icons/liv-full.svg" alt="" className="h-4 w-4 shrink-0" />
                       리브에게 물어보기
                     </button>
 
-                    {/* ✅ 수정(요청 — "투명도 10%로, 텍스트 더 크게") */}
+                    {/* ✅ 수정(요청 — "결제완료 왜 다시 버튼으로 돌아갔어. 배경을 어둡게
+                        깔고, 결제완료 크게 넣되 그림자는 빼라") — 작은 배지 대신 카드 전체를
+                        덮는 어두운 오버레이 + 가운데 큰 텍스트로 되돌림. text-shadow는
+                        없앰(그림자 없이 깔끔하게). */}
                     {completed && !selectMode && (
-                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/10">
-                        <span className="text-lg font-semibold text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">결제완료</span>
+                      <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55">
+                        <span className="text-xl font-bold text-white">결제완료</span>
                       </div>
                     )}
                   </div>
@@ -451,91 +415,7 @@ function SavedPageInner() {
             />
           )}
         </div>
-      )}
 
-      {tab === "ai" && (
-        <div className="mt-2">
-          {loadingSessions && <p className="py-16 text-center text-sm text-muted-foreground">불러오는 중...</p>}
-          {!loadingSessions && query && contentResults.length === 0 && titleOnlyMatches.length === 0 && (
-            <p className="py-16 text-center text-sm text-muted-foreground">검색 결과가 없어요.</p>
-          )}
-          {!loadingSessions && !query && sessions.length === 0 && (
-            <p className="py-16 text-center text-sm text-muted-foreground">대화 이력이 없어요.</p>
-          )}
-
-          {/* ✅ 대화 "내용"에 검색어가 있는 세션 — 매칭 메시지 스니펫(최대 5개) + 하이라이트.
-              스니펫을 누르면 그 메시지로 바로 스크롤 이동(?highlight=messageId). */}
-          {contentResults.length > 0 && (
-            <div className="space-y-4">
-              {contentResults.map((r) => {
-                const linkedTitle = r.groupId ? groupTitleById.get(r.groupId) : null;
-                return (
-                  <div key={r.sessionId} className="rounded-sm p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm font-medium">{r.title ?? "한 줄 요약"}</p>
-                      {linkedTitle && <p className="shrink-0 truncate text-xs text-muted-foreground">{linkedTitle}</p>}
-                    </div>
-
-                    <div className="mt-2 space-y-1.5">
-                      {r.matches.map((m) => {
-                        const hl = highlightMatch(m.content, query);
-                        return (
-                          <button
-                            type="button"
-                            key={m.messageId}
-                            onClick={() => openSession(r.sessionId, m.messageId)}
-                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
-                          >
-                            <span className="min-w-0 flex-1 truncate">
-                              {hl ? (
-                                <>
-                                  {hl.before}
-                                  <mark className="rounded-sm bg-foreground/15 text-foreground">{hl.match}</mark>
-                                  {hl.after}
-                                </>
-                              ) : (
-                                m.content
-                              )}
-                            </span>
-                            {/* ✅ 신규(요청) — 언제 보낸 대화인지 오른쪽에 표시 */}
-                            <span className="shrink-0 text-[11px] text-muted-foreground">
-                              {formatRelativeTime(m.createdAt)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className={contentResults.length > 0 ? "mt-4" : ""}>
-            {titleOnlyMatches.map((s) => {
-              const linkedTitle = s.groupId ? groupTitleById.get(s.groupId) : null;
-              return (
-                <button
-                  type="button"
-                  key={s.sessionId}
-                  onClick={() => openSession(s.sessionId)}
-                  className="flex w-full items-start justify-between gap-3 py-4 text-left"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{s.title ?? "한 줄 요약"}</p>
-                    {linkedTitle && (
-                      <p className="mt-1 truncate text-xs text-muted-foreground">{linkedTitle}</p>
-                    )}
-                  </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatRelativeTime(s.updatedAt)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

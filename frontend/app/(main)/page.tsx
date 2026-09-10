@@ -7,7 +7,7 @@ import {
   RiNotification4Line,
   RiMapPinLine,
   RiBookmarkLine,
-  RiRouteLine,
+  RiRoadMapLine,
   RiQrScanLine,
 } from "@remixicon/react";
 
@@ -22,12 +22,12 @@ import {
 import {
   fetchRecentOrder,
   fetchWishlistCount,
-  fetchRecommendedProducts,
+  fetchLivRecommendations,
   type RecommendedProduct,
   type RecentOrderSummary,
 } from "@/lib/home-data";
 import { readShoppingSession, type ShoppingSession } from "@/lib/shopping-session";
-import { apiFetch, getAccessToken, isLoggedIn } from "@/lib/api-client";
+import { apiFetch, getAccessToken, isLoggedIn, AUTH_CHANGED_EVENT } from "@/lib/api-client";
 import { getMyProfile } from "@/lib/consumer-api";
 import { getStoreDayInfo } from "@/lib/store-hours";
 import { getClientId } from "@/lib/client-id";
@@ -93,6 +93,9 @@ export default function HomePage() {
   //   없음"을 구분해서, 로딩 중엔 카드와 높이가 같은 스켈레톤을 미리 깔아 둠(=최종 데이터가
   //   와도 그 자리에서 내용만 바뀌지 섹션 높이 자체는 안 바뀜).
   const [loadingProducts, setLoadingProducts] = useState(true);
+  // ✅ 신규(요청 — "채팅 리스트·상세 링크·리브 추천") — 추천이 빈 상태일 때(비로그인/
+  //   실패) 왜 비어있는지 알려주는 문구.
+  const [recommendationMessage, setRecommendationMessage] = useState("");
   // ✅ 신규(요청 7번) — "이번달 소비 분석" 카드가 9,999원짜리 가짜 데이터였음. 실제
   //   GET /api/purchases/spending-by-category(마이페이지 소비분석 화면과 동일 API)를
   //   30일 기준으로 불러와서 상위 3개 카테고리 + 나머지로 보여주고, 카드 전체를 눌러
@@ -151,15 +154,28 @@ export default function HomePage() {
     fetchWishlistCount().then(setWishlistCount).catch(() => setWishlistCount(null));
   }, []);
 
-  // ✅ "리브 추천" — 예전엔 이름/가격만 있는 더미 8개였는데, lib/home-data.ts에 실제
-  //   데이터 기반 추천 이유(reason)/짧은 배지(badge)까지 만드는 함수가 이미 있어서(카테고리
-  //   기반 "OO 카테고리 인기 상품이에요" 같은 정직한 문구 — AI가 실제로 결제내역·리스트를
-  //   해석해서 만드는 진짜 개인화 이유는 아직 백엔드에 없어서 지어내지 않음) 그걸 그대로 씀.
+  // ✅ 수정(요청 — "채팅 리스트·상세 링크·리브 추천") — 예전엔 그냥 인기 상품 검색이었고
+  //   실패하면 조용히 목업으로 바뀌었음. 이제 실제 Agent 추천(fetchLivRecommendations)을
+  //   쓰고, 로그인 계정이 바뀌면(로그아웃 후 다른 계정 로그인 등) 다시 불러오면서 그
+  //   사이 오던 이전 계정 응답은 버립니다(revision으로 판단).
   useEffect(() => {
-    fetchRecommendedProducts()
-      .then(setProducts)
-      .catch(() => setProducts([]))
-      .finally(() => setLoadingProducts(false));
+    let revision = 0;
+    const reload = async () => {
+      const current = ++revision;
+      setProducts([]);
+      setLoadingProducts(true);
+      const result = await fetchLivRecommendations();
+      if (current !== revision) return; // 그 사이 계정이 또 바뀌었으면 이 응답은 버림
+      setProducts(result.items);
+      setRecommendationMessage(result.message);
+      setLoadingProducts(false);
+    };
+    void reload();
+    window.addEventListener(AUTH_CHANGED_EVENT, reload);
+    return () => {
+      revision++;
+      window.removeEventListener(AUTH_CHANGED_EVENT, reload);
+    };
   }, []);
 
   useEffect(() => {
@@ -250,8 +266,8 @@ export default function HomePage() {
             <div className="pt-[20px]" />
           )}
 
-          {!loggedIn ? (
-            <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-white p-5">
+          {
+            <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5">
               {recentlyCompleted ? (
                 <div>
                   <p className="text-17 font-medium">결제해주셔서 감사합니다.</p>
@@ -287,7 +303,7 @@ export default function HomePage() {
                       className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-[#fce3d9] text-main"
                       aria-label="동선"
                     >
-                      <RiRouteLine size={24} />
+                      <RiRoadMapLine size={24} />
                     </button>
                     <button
                       onClick={() => router.push("/scan")}
@@ -302,7 +318,7 @@ export default function HomePage() {
                     <button
                       onClick={() => router.push("/saved")}
                       className="flex h-[60px] w-[60px] items-center justify-center rounded-full bg-[#fce3d9] text-main"
-                      aria-label="저장"
+                      aria-label="계획"
                     >
                       <RiBookmarkLine size={24} />
                     </button>
@@ -324,14 +340,14 @@ export default function HomePage() {
                 </button>
               </div>
             </section>
-          ) : null}
+          }
 
           {/* 바로가기 — 카드 그림 3개는 실제 디자인 에셋 사용 중(/public/cards/*.png).
               왼쪽 카드는 고정 높이를 안 주고 grid의 기본 stretch로 오른쪽 두 칸 합친
               높이에 맞춰 늘어나게 함 — 오른쪽 칸 높이가 바뀌어도 항상 자동으로 맞음.
               이미지 3개 전부 카드 우측 하단에서 20px(=bottom-5 right-5) 띄워서 고정. */}
           <section className="mx-[20px] my-[20px] grid grid-cols-2 items-stretch gap-2">
-            <button type="button" onClick={recentSession ? () => openSession(recentSession.sessionId) : () => openAiChat()} className="relative h-[288px] rounded-[20px] border border-card-border bg-white p-5 text-left">
+            <button type="button" onClick={recentSession ? () => openSession(recentSession.sessionId) : () => openAiChat()} className="relative h-[288px] rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5 text-left">
               <div className="absolute left-5 top-5 text-left">
                 <p className="text-17 font-medium">리브와 함께</p>
                 <p className="text-17 font-medium">새 계획 세우기</p>
@@ -344,7 +360,7 @@ export default function HomePage() {
               />
             </button>
             <div className="flex flex-col gap-2">
-              <button type="button" onClick={() => router.push("/store-map")} className="relative h-[180px] shrink-0 rounded-[20px] border border-card-border bg-white p-5 text-left">
+              <button type="button" onClick={() => router.push("/store-map")} className="relative h-[180px] shrink-0 rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5 text-left">
                 <div className="absolute left-5 top-5 text-left">
                   <p className="text-17 font-medium">매장 지도</p>
                   <p className="mt-1 text-sm text-content-quaternary">구매하려는 상품을 직접<br />찾아보세요</p>
@@ -352,7 +368,7 @@ export default function HomePage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/cards/store-map.png" alt="" className="absolute bottom-5 right-5 h-9 w-9 object-contain" />
               </button>
-              <button type="button" onClick={goSearch} className="relative h-[100px] shrink-0 rounded-[20px] border border-card-border bg-white p-5 text-left">
+              <button type="button" onClick={goSearch} className="relative h-[100px] shrink-0 rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5 text-left">
                 <p className="absolute left-5 top-5 text-base font-medium">상품 검색</p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/cards/product-search.png" alt="" className="absolute bottom-5 right-5 h-9 w-9 object-contain" />
@@ -397,7 +413,7 @@ export default function HomePage() {
             // ✅ 신규(요청 6번) — 스크롤 걸림 원인 추가 발견: 이 카드도 데이터가 늦게
             //   도착하면 갑자기 나타나서(또는 데이터가 없으면 사라져서) 아래 내용을
             //   밀어냈음. 로딩 중엔 같은 높이의 스켈레톤을 깔아 둠.
-            <div className="mx-[20px] my-[60px] h-[132px] animate-pulse rounded-[20px] border border-card-border bg-white p-5">
+            <div className="mx-[20px] my-[60px] h-[132px] animate-pulse rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5">
               <div className="h-3.5 w-24 rounded-sm bg-card-border" />
               <div className="mt-2 h-4 w-40 rounded-sm bg-card-border" />
               <div className="mt-4 h-1.5 w-full rounded-full bg-card-border" />
@@ -413,7 +429,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => router.push("/mypage/spending")}
-              className="mx-[20px] my-[60px] block w-[calc(100%-40px)] rounded-[20px] border border-card-border bg-white p-5 text-left"
+              className="mx-[20px] my-[60px] block w-[calc(100%-40px)] rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5 text-left"
             >
               {(() => {
                 const sorted = [...spending].sort((a, b) => b.totalSpentKrw - a.totalSpentKrw);
@@ -464,6 +480,11 @@ export default function HomePage() {
               <img src="/icons/liv-line.svg" alt="" className="h-4 w-4 shrink-0" />
               리브 추천
             </div>
+            {/* ✅ 신규(요청) — 로그인 전이거나 추천을 못 불러왔을 때, 빈 그리드만 덩그러니
+                두지 않고 왜 비어있는지 알려줌. */}
+            {!loadingProducts && products.length === 0 && (
+              <p role="status" className="px-1 text-sm text-muted-foreground">{recommendationMessage}</p>
+            )}
             <div className="grid grid-cols-2 gap-x-2 gap-y-5">
               {loadingProducts
                 ? Array.from({ length: 4 }).map((_, i) => (
@@ -474,27 +495,42 @@ export default function HomePage() {
                     </div>
                   ))
                 : products.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => openSaveDialog(product)}
-                  className="min-w-0 text-left"
-                >
-                  <div className="relative aspect-square overflow-hidden rounded-[14px] bg-gradient-to-b from-[#d8d8d8] to-card-border">
-                    {product.image && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.image} alt="" className="h-full w-full object-cover" />
-                    )}
-                    <span className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/80"><RiBookmarkLine size={16} /></span>
-                  </div>
-                  {/* ✅ "인기상품" 고정 문구 대신 실제 추천 이유(짧은 배지: 할인 중/추천 등) */}
-                  <div className="mt-1 flex items-center gap-1 text-base text-[#333]">
-                    <img src="/icons/liv-line.svg" alt="" className="h-4 w-4 shrink-0" />
-                    {product.badge || "추천"}
-                  </div>
-                  <p className="text-md">{product.name}</p>
-                  <p className="mt-0.5 text-lg font-medium">{product.price.toLocaleString()}원</p>
-                </button>
+                <div key={product.id} className="relative min-w-0 text-left">
+                  {/* ✅ 수정(요청 — "리브 추천 그냥 누르면 저장임 > 저장 아이콘만 저장으로,
+                      그냥 누르면 상세 페이지로") — 예전엔 카드 전체가 버튼 하나라 어디를
+                      눌러도 저장(openSaveDialog)됐음. 이제 카드 본문은 상세 페이지 이동,
+                      저장은 우상단 북마크 아이콘(별도 버튼)에서만. 바깥 div가 relative라
+                      북마크 버튼은 이미지 우상단에 그대로 겹쳐 보임. */}
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/product/${product.id}`)}
+                    className="block w-full min-w-0 text-left"
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-[14px] bg-gradient-to-b from-[#d8d8d8] to-card-border">
+                      {product.image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.image} alt="" className="h-full w-full object-cover" />
+                      )}
+                    </div>
+                    {/* ✅ "인기상품" 고정 문구 대신 실제 추천 이유(짧은 배지: 할인 중/추천 등) */}
+                    <div className="mt-1 flex items-center gap-1 text-base text-[#333]">
+                      <img src="/icons/liv-line.svg" alt="" className="h-4 w-4 shrink-0" />
+                      {product.badge || "추천"}
+                    </div>
+                    <p className="text-md">{product.name}</p>
+                    {/* ✅ 신규(요청) — Agent가 준 추천 사유(재구매 간격/구매 분야 근거)를 그대로 표시 */}
+                    {product.reason && <p className="mt-1 text-xs text-muted-foreground">{product.reason}</p>}
+                    <p className="mt-0.5 text-lg font-medium">{product.price.toLocaleString()}원</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openSaveDialog(product)}
+                    aria-label={`${product.name} 저장`}
+                    className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/80"
+                  >
+                    <RiBookmarkLine size={16} />
+                  </button>
+                </div>
               ))}
             </div>
           </section>

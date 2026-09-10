@@ -35,7 +35,7 @@ export interface SpendingCardDef {
 //   똑같은 스타일(rounded-[20px] border border-card-border bg-white)로 맞춤.
 function CardShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex h-48 flex-col rounded-[20px] border border-card-border bg-white p-4">
+    <section className="flex h-48 flex-col rounded-[20px] border border-card-border bg-card p-4 shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)]">
       <p className="shrink-0 text-sm font-semibold">{title}</p>
       <div className="mt-2.5 min-h-0 flex-1 overflow-y-auto">{children}</div>
     </section>
@@ -95,18 +95,6 @@ export const SPENDING_CARDS: SpendingCardDef[] = [
     ),
   },
   {
-    id: "avg_per_day",
-    title: "일평균 소비",
-    group: "소비 금액",
-    description: "하루 평균 사용 금액",
-    defaultSize: "half",
-    render: (m) => (
-      <CardShell title="일평균 소비">
-        <p className="text-2xl font-bold">{m.avgPerDay.toLocaleString()}원</p>
-      </CardShell>
-    ),
-  },
-  {
     id: "avg_per_order",
     title: "구매 1회 평균 금액",
     group: "소비 금액",
@@ -115,18 +103,6 @@ export const SPENDING_CARDS: SpendingCardDef[] = [
     render: (m) => (
       <CardShell title="구매 1회 평균 금액">
         <p className="text-2xl font-bold">{m.avgPerOrder.toLocaleString()}원</p>
-      </CardShell>
-    ),
-  },
-  {
-    id: "avg_price_per_item",
-    title: "상품 1개 평균 가격",
-    group: "소비 금액",
-    description: "구매한 상품 하나당 평균 가격",
-    defaultSize: "half",
-    render: (m) => (
-      <CardShell title="상품 1개 평균 가격">
-        <p className="text-2xl font-bold">{m.avgPricePerItem.toLocaleString()}원</p>
       </CardShell>
     ),
   },
