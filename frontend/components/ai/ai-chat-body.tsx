@@ -9,6 +9,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { chatDetailHref } from "@/lib/chat-detail-links";
 import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine, RiCornerDownLeftLine } from "@remixicon/react";
 
 // ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
@@ -72,6 +74,7 @@ import { apiFetch, getAccessToken, resolveImageUrl } from "@/lib/api-client";
 import {
   setActiveSessionId,
   withValidSession,
+  getSessionMetadata,
 } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
 import { PROACTIVE_EVENT } from "@/lib/realtime";
@@ -90,18 +93,26 @@ function chatAttachmentHeaders(): Record<string, string> {
 
 async function uploadChatAttachment(
   kind: "camera" | "image" | "document" | "receipt",
-  file: File
+  file: File,
+  boundSessionId: string | null
 ): Promise<number | null> {
   try {
+    // ✅ 버그 수정(요청) — 화면이 아직 자기 세션을 확정 못 했으면(고정 전) 업로드 자체를
+    //   막음 — 확정 전에 업로드하면 그 사이 다른 세션으로 화면이 바뀌었을 때 엉뚱한
+    //   세션에 파일이 붙을 수 있음.
+    if (!boundSessionId) return null;
     const type = kind === "document" ? "DOCUMENT" : kind === "receipt" ? "RECEIPT" : "IMAGE";
     const form = new FormData();
     form.append("file", file);
 
-    const res = await withValidSession(undefined, (sessionId) =>
-      apiFetch<{ attachmentId: number }>(
-        `/api/chat/sessions/${sessionId}/attachments?type=${type}`,
-        { method: "POST", body: form, headers: chatAttachmentHeaders() }
-      )
+    const res = await withValidSession(
+      undefined,
+      (sessionId) =>
+        apiFetch<{ attachmentId: number }>(
+          `/api/chat/sessions/${sessionId}/attachments?type=${type}`,
+          { method: "POST", body: form, headers: chatAttachmentHeaders() }
+        ),
+      boundSessionId
     );
     return res.attachmentId;
   } catch {
@@ -149,9 +160,24 @@ function extractGroupIds(actions: Record<string, unknown>[] | undefined): number
 //   돼있으면 빌드가 깨지니, 외부 패키지 없이 순수 React로 흔히 쓰이는 문법만(굵게,
 //   글머리 기호/번호 목록, 문단)을 가볍게 지원합니다. 기존 말풍선(<p> 하나짜리) 모양은
 //   그대로 두고, 안쪽 내용만 이걸로 바꿔서 말풍선 모양 자체는 안 바뀝니다.
-function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+// ✅ 수정(요청 — "채팅 리스트·상세 링크·리브 추천") — 굵게/목록에 이어서, 리브가 조회한
+//   리스트·구매내역을 가리키는 Markdown 링크([주말 장보기](/saved/11))도 지원. 아무
+//   경로나 링크로 만들면 위험해서(외부 URL, javascript: 등) chat-detail-links.ts의
+//   허용 목록을 거친 경로만 실제 Link로 만들고, 나머지는 그냥 텍스트로 둡니다.
+function renderInlineMarkdown(text: string, keyPrefix: string, onNavigate: () => void): React.ReactNode[] {
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
+    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (link) {
+      const href = chatDetailHref(link[2]);
+      return href ? (
+        <Link key={`${keyPrefix}-${i}`} href={href} onClick={onNavigate} className="font-medium underline underline-offset-2">
+          {link[1]}
+        </Link>
+      ) : (
+        <span key={`${keyPrefix}-${i}`}>{link[1]}</span>
+      );
+    }
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return <strong key={`${keyPrefix}-${i}`}>{part.slice(2, -2)}</strong>;
     }
@@ -160,6 +186,8 @@ function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[
 }
 
 function MarkdownText({ text }: { text: string }) {
+  // ✅ 링크를 누르면 상세 화면을 바로 보여줄 수 있게 AI 패널을 닫음.
+  const { close } = useAiPanel();
   const blocks = text.split(/\n{2,}/);
   return (
     <>
@@ -172,7 +200,7 @@ function MarkdownText({ text }: { text: string }) {
           return (
             <ul key={bi} className="list-disc space-y-0.5 pl-4">
               {lines.map((l, li) => (
-                <li key={li}>{renderInlineMarkdown(l.trim().replace(/^[-•]\s/, ""), `${bi}-${li}`)}</li>
+                <li key={li}>{renderInlineMarkdown(l.trim().replace(/^[-•]\s/, ""), `${bi}-${li}`, close)}</li>
               ))}
             </ul>
           );
@@ -181,7 +209,7 @@ function MarkdownText({ text }: { text: string }) {
           return (
             <ol key={bi} className="list-decimal space-y-0.5 pl-4">
               {lines.map((l, li) => (
-                <li key={li}>{renderInlineMarkdown(l.trim().replace(/^\d+\.\s/, ""), `${bi}-${li}`)}</li>
+                <li key={li}>{renderInlineMarkdown(l.trim().replace(/^\d+\.\s/, ""), `${bi}-${li}`, close)}</li>
               ))}
             </ol>
           );
@@ -191,7 +219,7 @@ function MarkdownText({ text }: { text: string }) {
             {lines.map((l, li) => (
               <span key={li}>
                 {li > 0 && <br />}
-                {renderInlineMarkdown(l, `${bi}-${li}`)}
+                {renderInlineMarkdown(l, `${bi}-${li}`, close)}
               </span>
             ))}
           </p>
@@ -446,6 +474,15 @@ export function AiChatBody({
   onSessionReady,
 }: AiChatBodyProps) {
   const { groupId } = useAiPanel();
+  // ✅ 버그 수정(요청 — "다른 창에서 활성 채팅 ID가 바뀌면 메시지가 다른 채팅으로 감") —
+  //   이 컴포넌트 인스턴스(=지금 열려있는 이 AI 패널/시트 하나)가 로드 시 확정한 세션
+  //   id를 여기 "고정"해둡니다. 이후 메시지 전송·첨부 업로드는 항상 이 값을 쓰고,
+  //   lib/session.ts의 전역 활성 세션(다른 탭/패널이 바꿀 수 있음)을 다시 안 읽습니다.
+  const boundSession = useRef<string | null>(null);
+  const [boundGroupId, setBoundGroupId] = useState<number | null>(null);
+  // 화면이 바뀔 때마다(다른 세션으로 다시 로드) 늘어나는 값. 오래된 비동기 응답이
+  // 그 사이 바뀐 화면에 반영되는 걸 막는 데 씀(revision이 다르면 무시).
+  const viewRevision = useRef(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(
     highlightMessageIdProp ?? null
   );
@@ -484,6 +521,19 @@ export function AiChatBody({
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    // ✅ 화면이 다른 세션으로 다시 로드되는 시점 — revision을 올려서 그 이전 revision으로
+    //   진행 중이던 전송·업로드의 응답이 지금 화면에 반영되지 않게 하고, 고정 세션과
+    //   지금까지 쌓인 대화 내용도 전부 리셋해서 이전 대화가 잠깐이라도 섞여 보이지 않게 함.
+    viewRevision.current += 1;
+    boundSession.current = null;
+    setBoundGroupId(null);
+    setTurns([]);
+    setAttachments([]);
+    setSending(false);
+    const owner = getAccessToken();
+    const current = () => !cancelled && owner === getAccessToken();
+
     (async () => {
       setLoading(true);
 
@@ -496,14 +546,24 @@ export function AiChatBody({
         //   세션 id가 백엔드에서 이미 없어졌는데(개발 DB 리셋 등), 그걸 확인 없이 계속
         //   재사용해서 이 조회가 매번 404였음(화면은 그냥 빈 대화창으로만 보임). 404면
         //   그 세션을 버리고 새 세션으로 한 번 더 시도.
-        const messages = await withValidSession(groupId, async (sessionId) => {
-          onSessionReady?.(sessionId);
-          return apiFetch<{ messageId: number; sender: string; content: string; createdAt?: string }[]>(
-            `/api/chat/sessions/${sessionId}/messages`,
-            { headers: chatHeaders() }
-          );
-        });
+        const messages = await withValidSession(
+          groupId,
+          async (sessionId) => {
+            // ✅ 이 화면이 실제로 쓸 세션의 groupId를 먼저 확인해서 boundGroupId로 고정.
+            const metadata = await getSessionMetadata(sessionId);
+            if (!current()) throw new Error("대화가 변경되었습니다.");
+            boundSession.current = sessionId;
+            setBoundGroupId(metadata.groupId ?? null);
+            onSessionReady?.(sessionId);
+            return apiFetch<{ messageId: number; sender: string; content: string; createdAt?: string }[]>(
+              `/api/chat/sessions/${sessionId}/messages`,
+              { headers: chatHeaders() }
+            );
+          },
+          sessionIdOverride
+        );
 
+        if (!current()) return;
         setTurns(
           messages.map((m) => ({
             role: m.sender === "USER" ? "user" : "assistant",
@@ -514,14 +574,18 @@ export function AiChatBody({
           }))
         );
       } catch {
-        setTurns([]);
+        if (current()) setTurns([]);
       } finally {
-        setLoading(false);
+        if (current()) setLoading(false);
       }
     })();
 
+    return () => {
+      cancelled = true;
+      viewRevision.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionIdOverride]);
+  }, [sessionIdOverride, groupId]);
 
   // ✅ 메시지가 다 로드된 뒤 하이라이트 대상으로 스크롤 이동 + 2초 후 하이라이트 해제
   useEffect(() => {
@@ -539,8 +603,10 @@ export function AiChatBody({
   //   뜻이라 패널 열림 여부를 따로 체크할 필요가 없음.
   useEffect(() => {
     const onProactive = (e: Event) => {
-      const data = (e as CustomEvent<{ messageId?: number; content: string; createdAt?: string }>).detail;
-      if (!data?.content) return;
+      const data = (e as CustomEvent<{ sessionId?: string; messageId?: number; content: string; createdAt?: string }>).detail;
+      // ✅ 버그 수정(요청) — 다른 세션 구독에서 온 이벤트가 이 화면에 섞여 들어오지 않게,
+      //   이 화면이 고정한 세션과 일치할 때만 반영.
+      if (!data?.content || data.sessionId !== boundSession.current) return;
       setTurns((prev) => [
         ...prev,
         { role: "assistant", content: data.content, messageId: data.messageId, createdAt: data.createdAt ?? new Date().toISOString(), proactive: true },
@@ -562,23 +628,37 @@ export function AiChatBody({
   //   이 함수 하나만 씀(유저 말풍선을 새로 추가하느냐만 다름).
   // ✅ 수정(2026-09) — 여기도 위와 같은 이유로 withValidSession으로 감쌈. 안 그러면
   //   무효한 세션 id로 계속 보내다가 매번 실패해서 "리브가 답을 안 준다"로 보였음.
+  // ✅ 버그 수정(요청 — "다른 창에서 세션이 바뀌면 메시지가 다른 채팅으로 감") — groupId
+  //   (다른 창이 바꿀 수 있는 전역 컨텍스트) 대신 boundGroupId(이 화면이 로드 시 확정한
+  //   값), 그리고 boundSession.current를 destination으로 고정해서 씀. 아직 세션이
+  //   확정 전이면(destination이 null) 아무 데도 안 보냄.
   const sendToBackend = async (content: string, attachmentIds: number[], turnIndex: number) => {
+    const owner = getAccessToken();
+    const revision = viewRevision.current;
+    const current = () => owner === getAccessToken() && revision === viewRevision.current;
+    const destination = boundSession.current;
+    if (!destination) return;
     setSending(true);
     try {
-      const res = await withValidSession(groupId, (sessionId) =>
-        apiFetch<{
-          reply: string;
-          actions: Record<string, unknown>[];
-        }>("/api/chat", {
-          method: "POST",
-          headers: chatHeaders(),
-          body: JSON.stringify({
-            sessionId,
-            message: content,
-            attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+      const res = await withValidSession(
+        boundGroupId,
+        (sessionId) =>
+          apiFetch<{
+            reply: string;
+            actions: Record<string, unknown>[];
+          }>("/api/chat", {
+            method: "POST",
+            headers: chatHeaders(),
+            body: JSON.stringify({
+              sessionId,
+              message: content,
+              attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+            }),
           }),
-        })
+        destination
       );
+
+      if (!current()) return;
 
       if (res.actions?.length) {
         console.log("agent actions", res.actions);
@@ -595,18 +675,21 @@ export function AiChatBody({
         },
       ]);
     } catch {
+      if (!current()) return;
       // ✅ 실패해도 별도 assistant 말풍선을 안 붙이고, 이 유저 메시지 자체를 실패
       //   상태로 표시만 함 — "다시 보내기" 버튼으로 나중에 같은 내용을 재전송할 수 있게.
       setTurns((prev) => prev.map((t, i) => (i === turnIndex ? { ...t, failed: true } : t)));
     } finally {
-      setSending(false);
+      if (current()) setSending(false);
     }
   };
 
   const handleSend = async (text?: string) => {
     const content = (text ?? message).trim();
 
-    if (!content || sending) return;
+    // ✅ 버그 수정(요청) — 아직 세션이 확정되기 전(loading)이거나 boundSession이 없으면
+    //   전송 자체를 막음. 확정 전에 보내면 그 사이 화면이 바뀔 때 엉뚱한 세션으로 갈 수 있음.
+    if (!content || sending || loading || !boundSession.current) return;
 
     // ✅ 답장 대상이 걸려있으면 인용구를 붙여서 같은 세션에 그대로 보냄(백엔드에 별도
     //   "답장" 개념은 없어서, 리브가 문맥을 알아볼 수 있게 텍스트로 인용해서 보냄).
@@ -683,7 +766,8 @@ export function AiChatBody({
       //   receipt만 백엔드에 대응 타입(IMAGE/DOCUMENT/RECEIPT)이 있어서 업로드 대상.
       //   list/voice는 업로드하지 않음(list는 참조일 뿐이고, voice는 이 API가 지원 안 함).
       if (kind === "document" || kind === "receipt") {
-        prepared.then((ready) => uploadChatAttachment(kind, ready)).catch(() => null).then((attachmentId) => {
+        const uploadSession = boundSession.current;
+        prepared.then((ready) => uploadChatAttachment(kind, ready, uploadSession)).catch(() => null).then((attachmentId) => {
           setAttachments((prev) =>
             prev.map((a, i) =>
               a.localId === localId
@@ -1093,7 +1177,7 @@ export function AiChatBody({
 
                       {/* ✅ 신규(요청) — 리브가 언급한 상품 목록 카드 */}
                       {!isUser && turn.mentionedSkuIds && turn.mentionedSkuIds.length > 0 && (
-                        <MentionedProducts skuIds={turn.mentionedSkuIds} groupId={groupId} />
+                        <MentionedProducts skuIds={turn.mentionedSkuIds} groupId={boundGroupId} />
                       )}
 
                       {/* ✅ 신규(요청 4번) — 리브가 언급한 리스트 카드 */}
@@ -1290,7 +1374,7 @@ export function AiChatBody({
             <button
               type="button"
               aria-label="전송"
-              disabled={attachments.some((a) => a.uploading)}
+              disabled={loading || sending || !boundSession.current || attachments.some((a) => a.uploading)}
               onClick={() => handleSend()}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground disabled:opacity-40"
             >

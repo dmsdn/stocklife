@@ -13,6 +13,7 @@ import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { getAlternatives, compareProducts, type AlternativeProduct, type PopularityItem } from "@/lib/ai-proxy";
 import { addRecentView } from "@/lib/recent-views";
 import { trackConsumerEvent } from "@/lib/consumer-events";
+import { formatLocationLabel } from "@/lib/product-location";
 
 interface ProductDetail {
   skuId: number;
@@ -130,7 +131,7 @@ export function ProductDetailDialog({ productId, onClose }: { productId: number 
                 >
                   <RiMapPinLine size={24} className="shrink-0" />
                   {inventory[0]
-                    ? `${inventory[0].floorNo}층 ${inventory[0].zoneId} 구역 · 매대 ${inventory[0].locationId} · 재고 ${inventory[0].qty}개`
+                    ? formatLocationLabel(inventory[0].locationId)
                     : "매장 위치 정보 없음"}
                 </button>
 

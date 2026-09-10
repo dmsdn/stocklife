@@ -11,6 +11,9 @@ export interface CartProduct {
   price: number;
   quantity: number;
   checked: boolean;
+  /** ✅ 신규(요청 — "리스트=F, 실제 스캔=T") — 백엔드가 scanned_at을 노출하면 채워짐.
+   *  null/undefined면 아직 스캔 안 한 계획 상태. 비회원은 서버 저장이 없어 항상 null. */
+  scannedAt?: string | null;
   image?: string;
 }
 
@@ -35,6 +38,8 @@ interface ServerCartItem {
   skuId: number;
   quantity: number;
   checked: boolean;
+  /** ✅ 신규 — 백엔드 CartItemResponse.scannedAt (ISO 문자열, 없으면 null) */
+  scannedAt?: string | null;
 }
 
 interface ServerCartGroup {
@@ -154,6 +159,7 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
         price: p?.priceKrw ?? 0,
         quantity: i.quantity,
         checked: i.checked,
+        scannedAt: i.scannedAt ?? null,
         image: resolveImageUrl(p?.imageUrl) ?? undefined,
       };
     }),
@@ -225,9 +231,14 @@ export function resetCartMigrationAttempt(): void {
   window.sessionStorage.removeItem(MIGRATION_ATTEMPTED_KEY);
 }
 
+// ✅ 수정(요청 — "리스트에 담을 때는 F, 실제 바코드 찍으면 T") — scanned 옵션 추가.
+//   백엔드 요청사항(docs/scanned-at-redesign-backend-request.md)이 반영되면 바로 동작
+//   하도록 미리 연결해둠 — 아직 백엔드에 이 필드가 없으면 그냥 무시되니 지금 당장은
+//   무해합니다(검색/계획 추가는 scanned 생략 = 기존과 동일하게 F).
 export async function addProductToCartGroup(
   groupId: number,
-  product: { id: number; name: string; category?: string; price: number; image?: string }
+  product: { id: number; name: string; category?: string; price: number; image?: string },
+  scanned?: boolean
 ): Promise<CartGroup[]> {
   if (!isLoggedIn()) {
     const groups = readGuestGroups();
@@ -245,7 +256,7 @@ export async function addProductToCartGroup(
 
   await apiFetch(`/api/cart/groups/${groupId}/items`, {
     method: "POST",
-    body: JSON.stringify({ skuId: product.id, quantity: 1 }),
+    body: JSON.stringify({ skuId: product.id, quantity: 1, ...(scanned != null ? { scanned } : {}) }),
   });
   notifySimulationCartChanged();
   return loadCartGroups();
@@ -347,11 +358,14 @@ export function updateCartGroups(updater: (groups: CartGroup[]) => CartGroup[]):
   return next;
 }
 
-export async function syncUpdateServerCart(cartItemId: number | undefined, quantity?: number, checked?: boolean) {
+// ✅ 수정(요청 — "T가 된 뒤에 담은 개수에 따라 결제") — scanned 파라미터 추가. 수량과는
+//   완전히 독립적으로 scanned_at만 갱신(백엔드 요청사항 문서 참고). 이미 리스트에 있던
+//   상품을 매장에서 스캔했을 때, 수량은 안 건드리고 이걸로만 F→T 전환.
+export async function syncUpdateServerCart(cartItemId: number | undefined, quantity?: number, checked?: boolean, scanned?: boolean) {
   if (!isLoggedIn() || cartItemId == null) return;
   await apiFetch(`/api/cart/${cartItemId}`, {
     method: "PATCH",
-    body: JSON.stringify({ ...(quantity != null ? { quantity } : {}), ...(checked != null ? { checked } : {}) }),
+    body: JSON.stringify({ ...(quantity != null ? { quantity } : {}), ...(checked != null ? { checked } : {}), ...(scanned != null ? { scanned } : {}) }),
   });
   notifySimulationCartChanged();
 }

@@ -107,8 +107,10 @@ from contextvars import ContextVar
 _CURRENT_CONSUMER_ID: ContextVar = ContextVar("consumer_id", default=None)
 
 
-def set_consumer_id(consumer_id: int | None) -> None:
+def set_consumer_id(consumer_id: int | None, group_id: int | None = None) -> None:
     """루프가 요청을 시작할 때 현재 사용자를 등록한다. 비회원이면 None."""
+    from app import cart_context
+    cart_context.set_group(group_id)
     _CURRENT_CONSUMER_ID.set(consumer_id)     # ContextVar — 이 요청(스레드·태스크)에만
 
 
@@ -200,7 +202,7 @@ def _call(method: str, path: str, json_body: dict | None = None,
 
 # ── 도구별 실행 함수 ────────────────────────────────────────────────────────
 
-def _add_to_cart(sku_id: int, quantity: int = 1) -> dict:
+def _add_to_cart(sku_id: int, quantity: int = 1, group_id: int | None = None) -> dict:
     """장바구니에 담기 — POST /internal/cart"""
     # ㉕-a: 두 값을 한 번에 받아 푼다. err이 None이 아니면(=비회원이면)
     # 그 오류 dict를 그대로 도구 결과로 돌려주고 끝낸다. 세 함수가 전부 이 두 줄로
@@ -208,8 +210,16 @@ def _add_to_cart(sku_id: int, quantity: int = 1) -> dict:
     cid, err = _require_member()
     if err:
         return err
-    return _call("POST", INTERNAL_CART_PATH,
-                 json_body={"consumerId": cid, "skuId": sku_id, "quantity": quantity})
+    from app import cart_context
+    selected, err = cart_context.resolve_group(group_id)
+    if err:
+        return err
+    result = _call("POST", INTERNAL_CART_PATH,
+                   json_body={"consumerId": cid, "skuId": sku_id, "quantity": quantity,
+                              "groupId": selected})
+    if result.get("ok"):
+        result["group_id"] = selected
+    return result
 
 
 def _update_cart_quantity(cart_item_id: int, quantity: int) -> dict:
@@ -220,6 +230,10 @@ def _update_cart_quantity(cart_item_id: int, quantity: int) -> dict:
     없고, get_session_cart로 먼저 확인해야 한다(도구 설명에 그렇게 적어두었다).
     """
     cid, err = _require_member()
+    if err:
+        return err
+    from app import cart_context
+    err = cart_context.check_item(cart_item_id)
     if err:
         return err
     return _call("PATCH", f"{INTERNAL_CART_PATH}/{cart_item_id}",
@@ -233,6 +247,10 @@ def _remove_from_cart(cart_item_id: int) -> dict:
     쿼리 파라미터로 붙인다(백엔드 컨트롤러가 그렇게 받도록 되어 있다).
     """
     cid, err = _require_member()
+    if err:
+        return err
+    from app import cart_context
+    err = cart_context.check_item(cart_item_id)
     if err:
         return err
     return _call("DELETE", f"{INTERNAL_CART_PATH}/{cart_item_id}",

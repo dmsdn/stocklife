@@ -1,5 +1,7 @@
 "use client";
 
+import { ROUTE_PROGRESS_KEY } from "./shopping-route-progress";
+
 export type RouteAnchor = {skuId: number} | {locationId: string} | {floorNo: number; x: number; y: number};
 export interface ShoppingSession {
   groupId: number;
@@ -23,11 +25,18 @@ export function readShoppingSession(): ShoppingSession | null {
   } catch { return null; }
 }
 
-/** 같은 탭의 스캔 화면·동선 모달에 변경을 알린다. storage 이벤트는 같은 탭에 오지 않는다. */
-export function writeShoppingSession(session: ShoppingSession | null) {
+/** 같은 탭의 스캔 화면·동선 모달에 변경을 알린다. storage 이벤트는 같은 탭에 오지 않는다.
+ *  ✅ 수정(버그 인계 — "동선이 처음으로 돌아감") — 세션이 바뀌면 기본적으로 저장해둔
+ *  동선 진행 상태(shopping-route-progress.ts)도 같이 지워서, 다음에 지도를 열 때 새로
+ *  계산하게 합니다. 다만 "이미 새 세션에 맞는 진행 상태를 direct으로 저장해둔" 도착
+ *  확인·먼저 들르기 처리 쪽에서는 이 세션 변경 때문에 방금 저장한 진행 상태가 지워지면
+ *  안 되므로, {preserveRoute: true}를 넘기면 지우지 않습니다. 실제 스캔·계획 변경에는
+ *  이 옵션을 절대 넘기면 안 됩니다(순서가 그대로 굳어버림). */
+export function writeShoppingSession(session: ShoppingSession | null, options?: { preserveRoute?: boolean }) {
   if (typeof window === "undefined") return;
   if (session) window.sessionStorage.setItem(KEY, JSON.stringify(session));
   else window.sessionStorage.removeItem(KEY);
+  if (!options?.preserveRoute) window.sessionStorage.removeItem(ROUTE_PROGRESS_KEY);
   window.dispatchEvent(new Event(SHOPPING_CHANGED));
 }
 

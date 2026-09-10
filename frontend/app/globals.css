@@ -283,7 +283,7 @@
      이 토큰으로 교체해서 앞으로는 새 코드가 재사용하게 했습니다. --primary/--brand(진한
      텍스트/버튼)와 헷갈리지 않도록 이름을 card-border/surface-subtle로 분리.
      text-[#999]/text-[#aaa]도 같은 방식으로 text-tertiary/text-quaternary로 승격. */
-  --card-border: #f4f4f4;
+  --card-border: #eeeeee;
   --surface-subtle: #f8f8f8;
   --content-tertiary: #999999;
   --content-quaternary: #aaaaaa;

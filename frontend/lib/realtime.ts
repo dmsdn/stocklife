@@ -20,6 +20,9 @@ import { API_BASE_URL } from "./api-client";
 import { getOrCreateSessionId, SESSION_CHANGED_EVENT } from "./session";
 
 export interface ProactiveMessage {
+  /** ✅ 신규(버그 수정 — "다른 창의 세션 이벤트가 이 채팅에도 반영됨") — 이 이벤트가
+   *  어느 세션 구독에서 온 건지. ai-chat-body.tsx가 자기 boundSession과 다르면 무시. */
+  sessionId?: string;
   messageId?: number;
   sender: string;
   content: string;
@@ -52,6 +55,7 @@ export function useProactiveStream(onMessage: (m: ProactiveMessage) => void) {
       es.addEventListener("chat_message", (ev) => {
         try {
           const data = JSON.parse((ev as MessageEvent).data) as ProactiveMessage;
+          data.sessionId = sessionId;
           if (data.sender !== "AI_PROACTIVE") return; // 내가 물어본 답은 /api/chat 응답으로 이미 그렸음
 
           const key = dedupeKey(data);

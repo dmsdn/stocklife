@@ -86,7 +86,7 @@ export function HomeAiHeader({ active = "home", onAiChat, onHamburgerClick, vari
           <Link href="/search" aria-label="검색" title="검색" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
             <RiSearchLine size={20} />
           </Link>
-          <Link href="/saved" aria-label="저장" title="저장" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
+          <Link href="/saved" aria-label="계획" title="계획" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">
             <RiBookmarkLine size={20} />
           </Link>
           <Link href="/scan" aria-label="스캔" title="스캔" className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground">

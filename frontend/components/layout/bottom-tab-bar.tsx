@@ -40,7 +40,7 @@ import { useAiPanel } from "./ai-panel-context";
 
 export const navigationItems = [
   { href: "/", label: "홈", LineIcon: RiHome5Line, FillIcon: RiHome5Fill },
-  { href: "/saved", label: "저장", LineIcon: RiBookmarkLine, FillIcon: RiBookmarkFill },
+  { href: "/saved", label: "계획", LineIcon: RiBookmarkLine, FillIcon: RiBookmarkFill },
   { href: "/scan", label: "스캔", LineIcon: RiQrScanLine, FillIcon: RiQrScanFill },
   { href: "/mypage", label: "마이", LineIcon: RiUser3Line, FillIcon: RiUser3Fill },
 ];
@@ -134,14 +134,25 @@ export function BottomTabBar() {
       <div className="relative shrink-0">
         {showHint && !aiOpen && (
           <div
-            className="absolute bottom-full left-1/2 mb-3 flex -translate-x-1/2 animate-[badge-float_2s_ease-in-out_infinite] items-center gap-1 whitespace-nowrap rounded-full border border-main bg-white py-2 pl-3 pr-2 text-xs font-medium text-black shadow-[0_6px_14px_rgba(0,0,0,0.12)]"
+            className="absolute bottom-full right-0 mb-3 flex animate-[badge-float_2s_ease-in-out_infinite] items-center gap-1 whitespace-nowrap rounded-full border border-main bg-white py-2 pl-3 pr-2 text-xs font-medium text-black shadow-[0_6px_14px_rgba(0,0,0,0.12)]"
           >
+            {/* ✅ 수정(요청 5번) — 리브 버튼이 화면 오른쪽에 있어서, 말풍선을 버튼 중심에
+                맞춰 가운데 정렬(left-1/2 -translate-x-1/2)하면 좁은 화면에서 말풍선 오른쪽이
+                뷰포트 밖으로 밀려나 글자/닫기 버튼이 잘렸음. 버튼과 같은 오른쪽 끝(right-0)에
+                맞춰서 말풍선이 왼쪽으로만 펼쳐지게 바꿈 — 이제 화면 폭에 상관없이 안 잘림. */}
             liv에게 물어보세요
             {/* ✅ 수정 — 참고 이미지(Union.png)처럼 각진 다이아몬드 대신 둥근 말풍선 꼬리로.
                 테두리색 삼각형(살짝 크게) 위에 흰색 삼각형(살짝 작게)을 겹쳐서, 테두리만
-                가늘게 보이는 꼬리를 만듦. */}
-            <span className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-l-[7px] border-r-[7px] border-t-[9px] border-l-transparent border-r-transparent border-t-main" />
-            <span className="absolute left-1/2 top-full -mt-px h-0 w-0 -translate-x-1/2 border-l-[6px] border-r-[6px] border-t-[7px] border-l-transparent border-r-transparent border-t-white" />
+                가늘게 보이는 꼬리를 만듦.
+                ✅ 수정(요청 5번) — 꼬리는 여전히 리브 버튼(원형, w-16) 중심을 가리켜야 해서,
+                말풍선이 right-0 기준으로 바뀐 만큼 꼬리도 right-8(=버튼 중심까지 32px)로
+                옮김. 예전엔 꼬리가 말풍선 가운데(left-1/2)에 있었는데, 말풍선 폭이 버튼보다
+                넓어서 꼬리가 말풍선의 둥근 우측 모서리(rounded-full 곡선) 쪽에 걸쳐 있었고,
+                그 자리에서 꼬리 테두리 삼각형과 말풍선 자체 테두리(곡선)가 겹쳐 보여 그
+                지점만 테두리가 두꺼워 보였음 — 꼬리를 곡선 구간 밖(버튼 중심)으로 옮기면서
+                같이 해결됨. */}
+            <span className="absolute right-8 top-full h-0 w-0 border-l-[7px] border-r-[7px] border-t-[9px] border-l-transparent border-r-transparent border-t-main" />
+            <span className="absolute right-8 top-full -mt-px h-0 w-0 border-l-[6px] border-r-[6px] border-t-[7px] border-l-transparent border-r-transparent border-t-white" />
             <button
               type="button"
               onClick={dismissHint}

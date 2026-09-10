@@ -170,11 +170,13 @@ def _moved_items(member_id: int) -> list[dict]:
     hours = MOVED_LOOKBACK_MAX_DAYS * 24
     if last:
         try:
-            from datetime import datetime
+            from datetime import datetime, timezone
             t = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
-            if t.tzinfo is not None:
-                t = t.replace(tzinfo=None)
-            gap = (config.DEMO_NOW - t).total_seconds() / 3600.0
+            if config.LIVE_INFERENCE_CLOCK:
+                t = t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t
+                gap = (config.business_now() - t).total_seconds() / 3600.0
+            else:
+                gap = (config.DEMO_NOW - t.replace(tzinfo=None)).total_seconds() / 3600.0
             # 하한 24시간: 방금 사고 나간 손님에게도 "어제 바뀌었어요"는 유효하다.
             hours = max(24.0, min(float(hours), gap))
         except Exception:                                      # noqa: BLE001
