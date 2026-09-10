@@ -7,6 +7,7 @@
 import type { FloorData, LocationInfo, ZoneInfo, FacilityInfo } from '../game/types';
 import { FLOOR_AMENITIES, ZONE_COLORS, fallbackZoneColor, OCCUPIED_CELL_OVERRIDES } from '../data/floorAmenities';
 import { fetchProductsAtLocation } from './products';
+import { memberFetch } from './memberAuth';
 
 const FLOOR_LABELS: Record<number, string> = { 0: 'B1', 1: '1F', 2: '2F', 3: '3F' };
 
@@ -214,28 +215,21 @@ export async function fetchLowStockTargets(floor: number): Promise<LowStockItem[
   return targets;
 }
 
-// NPC가 매대에 도착해서 실제로 보충을 완료했을 때 호출되는 자리.
-// 실제 재고 반영은 백엔드 내부 엔드포인트(/internal/events/shelf)를 통해서만 이뤄지는데,
-// 이 경로는 X-Internal-Service-Key(공유 비밀키)가 필요해서 브라우저에 노출하면 안 된다
-// (InternalEventController 주석: "프론트는 절대 이 경로를 직접 호출하면 안 된다").
-// 그래서 지금은 화면 연출용 스텁으로 남겨둔다 — 실제로 재고를 늘리려면 Agent/백엔드
-// 서버간 통신으로 처리하는 별도 공개 API가 먼저 필요하다.
+// 골든 계정 권한을 서버에서 확인하고 BULK에서 PICK으로 5개를 옮긴다.
 export async function confirmRestock(
     locationId: string,
     skuId: number,
     qty: number
 ): Promise<void> {
-  const res = await fetch('/internal/events/shelf', {
+  const res = await memberFetch('/api/simulation/restock', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      eventType: 'RESTOCK_IN',
       skuId,
       locationId,
       qty,
-      taskId: null,
     }),
   });
 
