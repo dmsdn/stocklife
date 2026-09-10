@@ -174,6 +174,7 @@ export default function MyPage() {
               사용자 이름 + 로그인 유도
              ========================= */}
 
+          {profile?.phoneNumber && ["01090000001","01090000002","01090000003","01090000004","01090000005","01090000006"].includes(profile.phoneNumber) && <Link href="/demo" className="block py-3 text-orange-600 underline">골든 시연 열기</Link>}
           {loggedIn ? (
             <Link href="/mypage/account" className="block py-4">
               <p className="text-[20px] font-semibold leading-[1.6] text-[#111]">

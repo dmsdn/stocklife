@@ -52,7 +52,7 @@ public class OrderResponse {
     public int getPointsUsed() { return pointsUsed; }
     public int getPointsEarned() { return pointsEarned; }
     public List<ItemDto> getItems() { return items; }
-    public LocalDateTime getOrderedAt() { return orderedAt; }
+    public java.time.OffsetDateTime getOrderedAt() { return orderedAt == null ? null : orderedAt.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime(); }
     public String getPaymentMethod() { return paymentMethod; }
 
     public static class ItemDto {

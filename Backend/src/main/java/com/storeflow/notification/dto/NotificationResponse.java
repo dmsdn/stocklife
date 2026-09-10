@@ -50,11 +50,11 @@ public class NotificationResponse {
         return read;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public java.time.OffsetDateTime getCreatedAt() {
+        return createdAt == null ? null : createdAt.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
     }
 
-    public LocalDateTime getReadAt() {
-        return readAt;
+    public java.time.OffsetDateTime getReadAt() {
+        return readAt == null ? null : readAt.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
     }
 }

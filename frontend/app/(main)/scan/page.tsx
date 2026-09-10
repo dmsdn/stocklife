@@ -776,7 +776,7 @@ function ScanPageInner() {
         isCurrentLocation: i === arr.length - 1,
       };
     })
-    .filter((p): p is MapPin & { floorNo: number } => !!p);
+    .filter((p): p is NonNullable<typeof p> => p !== null);
 
   // 이미 찍은 핀 + 앞으로 찍을 핀을 합쳐서 지도에 같이 그림. routeOrder는 "앞으로 찍을"
   // 핀들의 id만 담아서, 이미 찍은 핀은 routeOrder에 안 잡혀 order===-1이 되고(체크 배지),

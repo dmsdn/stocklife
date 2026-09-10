@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { AUTH_CHANGED_EVENT } from "@/lib/api-client";
 
 interface AiPanelState {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface AiPanelState {
   /** ✅ 신규 — lib/realtime.ts가 자발형 메시지를 받을 때마다 호출. 패널이 이미 열려
    *  있으면 셀 필요 없음(AiChatBody가 바로 붙여서 보여주니까). */
   bumpUnread: () => void;
+  clearUnread: () => void;
   /** 새 대화(또는 특정 프롬프트로 시작하는 대화)를 엶. sessionId는 항상 초기화됨. */
   open: (prompt?: string, groupId?: number) => void;
   /** ✅ 신규 — 이미 있는 대화(세션)를 이어서 엶. */
@@ -40,6 +42,15 @@ export function AiPanelProvider({ children }: { children: React.ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [highlightMessageId, setHighlightMessageId] = useState<number | null>(null);
   const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    const reset = () => {
+      setIsOpen(false); setInitialMessage(""); setGroupId(null);
+      setSessionId(null); setHighlightMessageId(null); setUnread(0);
+    };
+    window.addEventListener(AUTH_CHANGED_EVENT, reset);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, reset);
+  }, []);
 
   const open = (prompt?: string, targetGroupId?: number) => {
     setInitialMessage(prompt ?? "");
@@ -79,6 +90,7 @@ export function AiPanelProvider({ children }: { children: React.ReactNode }) {
   //   상태 값이지 setter가 아님) — 대신 bumpUnread를 호출하는 쪽(app-shell)이 이미
   //   isOpen을 알고 있으므로 그쪽에서 열려있으면 아예 안 부르게 함. 여기선 항상 +1만.
   const bumpUnread = () => setUnread((n) => n + 1);
+  const clearUnread = () => setUnread(0);
 
   return (
     <AiPanelContext.Provider
@@ -90,6 +102,7 @@ export function AiPanelProvider({ children }: { children: React.ReactNode }) {
         highlightMessageId,
         unread,
         bumpUnread,
+        clearUnread,
         open,
         openSession,
         close,

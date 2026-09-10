@@ -87,6 +87,8 @@ export function getRefreshToken(): string | null {
 export const AUTH_CHANGED_EVENT = "storeflow:auth-changed";
 
 /** @param persist true면 localStorage(브라우저 재시작해도 유지), false면 sessionStorage(이 탭 닫으면 로그아웃) */
+
+
 export function setTokens(accessToken: string, refreshToken: string, persist: boolean = true) {
   const storage = persist ? window.localStorage : window.sessionStorage;
   const other = persist ? window.sessionStorage : window.localStorage;

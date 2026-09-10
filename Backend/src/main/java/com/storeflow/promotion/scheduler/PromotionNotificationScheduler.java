@@ -66,6 +66,7 @@ public class PromotionNotificationScheduler {
         List<Consumer> consumers = consumerRepository.findAll();
 
         for (Promotion promotion : promotions) {
+            if ("GOLDEN_DEMO".equals(promotion.getPromoType())) continue;
 
             Product product = productRepository
                     .findById(promotion.getSkuId())

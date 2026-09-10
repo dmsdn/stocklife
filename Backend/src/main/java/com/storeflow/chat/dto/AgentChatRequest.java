@@ -6,6 +6,10 @@ import java.util.List;
 public class AgentChatRequest {
 
     private String sessionId;
+    private Long groupId;
+    public Long getGroupId() { return groupId; }
+    public void setGroupId(Long groupId) { this.groupId = groupId; }
+
     private Long consumerId;       // 비회원이면 null
     private String message;
     private List<HistoryTurn> history; // 최근 대화 (오래된 순)

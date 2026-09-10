@@ -56,6 +56,16 @@ public class EventBroadcastService {
      * 여기서 별도로 문자열을 다시 만들지 않는다.
      */
     public void publishToAgent(String type, Map<String, Object> data) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            var snapshot = new java.util.HashMap<>(data);
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override public void afterCommit() { deliverToAgent(type, snapshot); }
+                });
+        } else { deliverToAgent(type, data); }
+    }
+
+    private void deliverToAgent(String type, Map<String, Object> data) {
         if (agentEmitters.isEmpty()) {
             return; // Agent가 아직 구독 전이어도 기록 자체는 이미 끝났으므로 조용히 무시
         }

@@ -45,6 +45,13 @@ public class Order {
         this.totalAmount = 0;
     }
 
+    /** Explicit synthetic demo receipt; no payment, stock sale or points are generated. */
+    public static Order demoHistory(Long consumerId, LocalDateTime purchasedAt) {
+        Order order = new Order(consumerId);
+        order.createdAt = java.util.Objects.requireNonNull(purchasedAt);
+        return order;
+    }
+
     public void addItem(OrderItem item) {
         this.orderItems.add(item);
         item.assignOrder(this);
@@ -69,7 +76,7 @@ public class Order {
 
     @PrePersist
     protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
+        if (this.createdAt == null) this.createdAt = LocalDateTime.now();
     }
 
     /** 5-3(포인트 사용): checkout에서 이 주문에 사용한 포인트 수량을 기록. */

@@ -39,6 +39,8 @@ export function useProactiveStream(onMessage: (m: ProactiveMessage) => void) {
   // ✅ 이 컴포넌트(앱 셸)가 떠 있는 동안 계속 유지 — 재연결이 여러 번 일어나도 한 번
   //   본 메시지는 계속 기억함. 너무 커지지 않게 최근 200개까지만.
   const seenRef = useRef<Set<string>>(new Set());
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
 
   useEffect(() => {
     let es: EventSource | null = null;
@@ -66,7 +68,7 @@ export function useProactiveStream(onMessage: (m: ProactiveMessage) => void) {
             if (first) seenRef.current.delete(first);
           }
 
-          onMessage(data);
+          onMessageRef.current(data);
           window.dispatchEvent(new CustomEvent(PROACTIVE_EVENT, { detail: data }));
         } catch {
           /* 깨진 프레임은 버림 */
@@ -75,15 +77,16 @@ export function useProactiveStream(onMessage: (m: ProactiveMessage) => void) {
       // 브라우저 EventSource는 연결이 끊기면 스스로 재접속합니다. 세션이 바뀌면(새 대화
       // 시작·다른 대화로 전환) 아래 두 리스너 중 하나가 잡아서 다시 붙입니다.
     };
-    connect();
+    const reconnect = () => void connect().catch(() => undefined);
+    reconnect();
 
     // ✅ 다른 탭에서 세션이 바뀐 경우(브라우저 기본 storage 이벤트 — 지금 이 탭 자신이
     //   바꾼 건 여기로 안 옴)
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "storeflow_active_session_id" && e.newValue) connect();
+      if (e.key === "storeflow_active_session_id") onSessionChanged();
     };
     // ✅ 지금 이 탭에서 세션이 바뀐 경우(lib/session.ts가 쏘는 커스텀 이벤트)
-    const onSessionChanged = () => connect();
+    const onSessionChanged = () => { es?.close(); es = null; seenRef.current.clear(); reconnect(); };
 
     window.addEventListener("storage", onStorage);
     window.addEventListener(SESSION_CHANGED_EVENT, onSessionChanged);

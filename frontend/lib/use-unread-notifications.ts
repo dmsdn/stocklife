@@ -5,15 +5,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "./api-client";
+import { apiFetch, AUTH_CHANGED_EVENT, getAccessToken } from "./api-client";
 
 export function useUnreadNotificationCount(): number {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    apiFetch<{ read: boolean }[]>("/api/notifications")
-      .then((list) => setCount(list.filter((n) => !n.read).length))
-      .catch(() => setCount(0));
+    let active = true;
+    const load = () => {const token=getAccessToken(); return apiFetch<{ read: boolean }[]>("/api/notifications")
+      .then((list) => active && token===getAccessToken() && setCount(list.filter((n) => !n.read).length))
+      .catch(() => active && token===getAccessToken() && setCount(0));};
+    load(); const timer = window.setInterval(load, 5000);
+    window.addEventListener(AUTH_CHANGED_EVENT, load);
+    return () => {active=false;window.clearInterval(timer);window.removeEventListener(AUTH_CHANGED_EVENT, load);};
   }, []);
 
   return count;

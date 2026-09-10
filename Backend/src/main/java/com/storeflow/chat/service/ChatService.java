@@ -27,6 +27,8 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ChatService {
+        @org.springframework.beans.factory.annotation.Autowired
+        private com.storeflow.notification.service.NotificationService notificationService;
 
         private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
@@ -317,6 +319,10 @@ public class ChatService {
                         history,
                         attachmentUrls);
 
+                Long chatGroupId = session.getGroupId();
+                if (chatGroupId != null && resolveOwnedGroupIdOrNull(consumerIdOrNull, chatGroupId) == null)
+                        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "연결된 리스트를 사용할 수 없습니다.");
+                agentRequest.setGroupId(chatGroupId);
                 AgentChatResponse agentResponse;
                 String reply;
 
@@ -374,6 +380,10 @@ public class ChatService {
 
                 session.touch();
                 chatSessionRepository.save(session);
+                if (session.getConsumerId() != null && notificationService != null)
+                        notificationService.createNotification(session.getConsumerId(), "AI_PROACTIVE", "리브의 안내",
+                                content.length() > 480 ? content.substring(0, 480) + "…" : content,
+                                "/ai?session=" + sessionId);
 
                 // 요구사항 22: 저장과 동시에 프론트 실시간 채널로도 말풍선을 밀어준다.
                 // 프론트가 챗창을 닫아뒀어도(구독자 없음) EventBroadcastService가 조용히 버리므로 안전하고,

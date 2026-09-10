@@ -20,9 +20,9 @@ function environment(browser = true, mocks = {}) {
     const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
-    vm.runInNewContext(code, { module, exports: module.exports, window, Event, URL, URLSearchParams, console,
+    vm.runInNewContext(code, { module, exports: module.exports, window, Event, URL, URLSearchParams, console, process: {env:{}},
       document: {referrer: 'https://simulation.example/simulation/'},
-      require: id => id in mocks ? mocks[id] : id.startsWith('@/') ? load(id.slice(2) + '.ts') : require(id),
+      require: id => id in mocks ? mocks[id] : id.startsWith('@/') ? load(id.slice(2) + '.ts') : id.startsWith('.') ? load(path.relative(root, path.resolve(path.dirname(file), id + '.ts'))) : require(id),
     }, { filename: file });
     cache.set(file, module.exports);
     return module.exports;

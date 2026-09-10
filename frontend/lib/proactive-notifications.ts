@@ -8,6 +8,7 @@
 "use client";
 
 import type { ProactiveMessage } from "./realtime";
+import { AUTH_CHANGED_EVENT } from "./api-client";
 
 const KEY = "storeflow_proactive_notifications";
 const MAX_ITEMS = 50;
@@ -56,4 +57,14 @@ export function markProactiveNotificationRead(id: string) {
   const list = readProactiveNotifications();
   write(list.map((n) => (n.id === id ? { ...n, read: true } : n)));
   window.dispatchEvent(new Event("storeflow:proactive-notifications-changed"));
+}
+
+// 팀 알림 보관 기능을 오라클의 계정 전환 경계에도 연결한다.
+export function clearProactiveNotifications() {
+  if (!canUseStorage()) return;
+  window.localStorage.removeItem(KEY);
+  window.dispatchEvent(new Event("storeflow:proactive-notifications-changed"));
+}
+if (typeof window !== "undefined") {
+  window.addEventListener(AUTH_CHANGED_EVENT, clearProactiveNotifications);
 }

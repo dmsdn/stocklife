@@ -293,7 +293,7 @@ public class OrderService {
                                 String.format(
                                                 "%,d원 결제가 완료됐어요.",
                                                 order.getTotalAmount()),
-                                "/orders/"
+                                "/mypage/orders/"
                                                 + order.getOrderId());
 
                 /*
@@ -427,7 +427,7 @@ public class OrderService {
                                                 + order.getOrderId()
                                                 + " 환불 요청이 접수됐어요. "
                                                 + "승인까지 기다려주세요.",
-                                "/orders/"
+                                "/mypage/orders/"
                                                 + order.getOrderId());
 
                 return new OrderResponse(order);
@@ -517,7 +517,7 @@ public class OrderService {
                                 "주문 #"
                                                 + order.getOrderId()
                                                 + " 환불이 승인·완료됐어요.",
-                                "/orders/"
+                                "/mypage/orders/"
                                                 + order.getOrderId());
 
                 return new OrderResponse(order);
