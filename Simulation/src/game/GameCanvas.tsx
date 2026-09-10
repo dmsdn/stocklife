@@ -20,6 +20,9 @@ export interface GameCanvasHandle {
     // 09-08 상품 위치 핀 — 오른쪽 웹 화면에서 상품 위치를 누르면 그 매대에 핀을 꽂는다.
     showProductPin: (cell: GridPoint, label: string) => void;
     clearProductPin: () => void;
+    // 09-09: 동선의 출발/도착 마커. 지금 로드된 층의 좌표만 넘긴다(다른 층이면 null).
+    showRouteEndpoints: (start: GridPoint | null, end: GridPoint | null) => void;
+    clearRouteEndpoints: () => void;
     setControlsEnabled: (enabled: boolean) => void;
     setPlayerVisible: (visible: boolean) => void;
     getPlayerGrid: () => GridPoint | null;
@@ -163,6 +166,14 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
         clearProductPin: () => {
             const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
             scene?.clearProductPin();
+        },
+        showRouteEndpoints: (start, end) => {
+            const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+            scene?.showRouteEndpoints(start, end);
+        },
+        clearRouteEndpoints: () => {
+            const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
+            scene?.clearRouteEndpoints();
         },
         setControlsEnabled: (enabled) => {
             const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;

@@ -20,6 +20,12 @@ interface Props {
 export interface FrontendPanelHandle {
     /** 시뮬레이션 캐릭터가 장바구니를 건드렸을 때 오른쪽 웹 화면도 다시 읽게 한다. */
     notifyCartChanged: () => void;
+    /**
+     * 오른쪽 웹 화면을 바코드 스캔 페이지(/scan)로 이동시킨다 — '지금 위치에서부터
+     * 길찾기'(09-09)가 쓴다. 프론트에 새 API를 요구하지 않으려고 iframe 주소만 바꾼다.
+     * 브라우저 정책상 카메라는 사용자가 화면에서 한 번 눌러야 켜질 수 있다.
+     */
+    openScanner: () => void;
 }
 
 // 시뮬레이션 화면 오른쪽에 frontend(Next.js) 웹 UI를 iframe으로 붙이는 패널.
@@ -43,6 +49,14 @@ const FrontendPanel = forwardRef<FrontendPanelHandle, Props>(function FrontendPa
     useImperativeHandle(ref, () => ({
         notifyCartChanged: () => {
             postToFrontend({ source: 'storeflow-simulation', type: 'CART_CHANGED' });
+        },
+        openScanner: () => {
+            const iframe = iframeRef.current;
+            if (!iframe) return;
+            const target = new URL('/scan', window.location.href).href;
+            // 이미 스캔 화면이면 다시 로드해서 카메라를 껐다 켜는 일이 없게 한다.
+            if (iframe.src === target) return;
+            iframe.src = target;
         },
     }));
 
