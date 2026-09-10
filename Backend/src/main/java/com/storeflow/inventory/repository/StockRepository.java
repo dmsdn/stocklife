@@ -110,4 +110,16 @@ public interface StockRepository extends JpaRepository<Stock, Stock.StockId> {
      * (안 보고 옮기면 INSERT 에서 제약 위반으로 500 이 난다 - move 의 주석 참조)
      */
     Optional<Stock> findByLocationId(String locationId);
+
+    /**
+     * 09-08 장바구니 재고 검증용 — 이 SKU 의 PICK(진열대, L1~L3) 위치 재고 합계.
+     * BULK(그 위 예비, L4~L6)는 제외한다. "손님이 매대에서 집을 수 있는 수량"이
+     * 장바구니 담기의 상한이라는 규칙을 그대로 옮긴 것이다.
+     * 재고 행이 없으면 SUM 이 null 이므로 COALESCE 로 0을 돌려준다.
+     */
+    @Query("""
+        SELECT COALESCE(SUM(s.qty), 0) FROM Stock s, Location l
+        WHERE s.locationId = l.locationId AND s.skuId = :skuId AND l.tierRole = :pick
+        """)
+    long sumPickQtyBySkuId(@Param("skuId") Integer skuId, @Param("pick") Location.TierRole pick);
 }

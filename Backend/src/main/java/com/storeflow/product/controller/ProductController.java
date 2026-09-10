@@ -27,6 +27,10 @@ public class ProductController {
     }
 
     /** 쇼핑몰/요구사항 8번 조건형 검색. */
+    // 09-08 성능. limit 을 추가했다(선택 파라미터, 안 주면 예전과 똑같이 전부 반환).
+    // 홈 화면이 상품 8개를 보여주려고 조건 없는 search 로 전체 카탈로그(약 2.2MB)를 받아가고
+    // 있었고, 그런 호출이 두 군데라 홈 한 번 여는 데 4.4MB가 오갔다. 프론트가 필요한 만큼만
+    // 요청할 수 있도록 서버가 자를 수 있게 한다.
     @GetMapping("/search")
     public ResponseEntity<List<ProductSearchResponse>> search(
             @RequestParam(required = false) String keyword,
@@ -34,10 +38,15 @@ public class ProductController {
             @RequestParam(required = false) String categoryL2,
             @RequestParam(required = false) Integer maxPrice,
             @RequestParam(name = "onPromo", required = false, defaultValue = "false") boolean onPromoOnly,
-            @RequestParam(required = false) Integer recentDays
+            @RequestParam(required = false) Integer recentDays,
+            @RequestParam(required = false) Integer limit
     ) {
-        return ResponseEntity.ok(productSearchService.search(
-                keyword, categoryL1, categoryL2, maxPrice, onPromoOnly, recentDays));
+        List<ProductSearchResponse> result = productSearchService.search(
+                keyword, categoryL1, categoryL2, maxPrice, onPromoOnly, recentDays);
+        if (limit != null && limit > 0 && result.size() > limit) {
+            result = result.subList(0, limit);
+        }
+        return ResponseEntity.ok(result);
     }
 
     /** Agent가 쓰는 다중 키워드/가격 범위 검색. */

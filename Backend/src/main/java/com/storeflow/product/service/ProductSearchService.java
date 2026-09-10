@@ -11,6 +11,7 @@ import com.storeflow.inventory.entity.Location;
 import com.storeflow.inventory.entity.Stock;
 import com.storeflow.inventory.repository.LocationRepository;
 import com.storeflow.inventory.repository.StockRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -152,6 +153,10 @@ public class ProductSearchService {
     }
 
     @Transactional(readOnly = true)
+    // 09-08 성능. 상품 마스터 정보는 시연 중 바뀌지 않으므로 메모리에 담아 DB 왕복을 없앤다.
+    // 이 환경은 왕복 한 번이 약 195ms라, 장바구니 화면처럼 상품을 여러 개 조회하는 화면에서
+    // 그대로 몇 초가 된다. 재고는 여기 안 들어간다(CacheConfig 주석 참고).
+    @Cacheable(value = com.storeflow.global.config.CacheConfig.PRODUCT_DETAIL, key = "#skuId")
     public ProductDetailResponse getDetail(
             Integer skuId
     ) {
@@ -722,6 +727,7 @@ public class ProductSearchService {
      * 전체 대분류(categoryL1) 목록.
      */
     @Transactional(readOnly = true)
+    @Cacheable(com.storeflow.global.config.CacheConfig.CATEGORY_L1)
     public List<String> getAllCategoryL1() {
         return productRepository
                 .findAllCategoryL1();
