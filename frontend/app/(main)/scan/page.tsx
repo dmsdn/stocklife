@@ -57,6 +57,7 @@ import {
   createCartGroup,
   getOrCreateQuickCartGroup,
   syncUpdateServerCart,
+  syncRemoveFromServerCart,
   moveProductsBetweenGroups,
   type CartGroup,
 } from "@/lib/cart-storage";
@@ -439,7 +440,8 @@ function ScanPageInner() {
     const nextQty = Math.max(0, current.quantity - quantity);
     if (isLoggedIn()) {
       if (current.cartItemId == null) throw new Error("상품 정보를 다시 불러온 뒤 시도해주세요.");
-      await syncUpdateServerCart(current.cartItemId, nextQty);
+      if (nextQty === 0) await syncRemoveFromServerCart(current.cartItemId);
+      else await syncUpdateServerCart(current.cartItemId, nextQty);
     }
 
     // ✅ 신규(09-03 요청 ④) — 스캔 취소(카트에서 빼기)도 행동 신호. 같은 카테고리를
