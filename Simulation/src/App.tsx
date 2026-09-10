@@ -22,6 +22,7 @@ import {
 
 import {
     addItemToDbCart,
+    removeOneFromDbCart,
     fetchCartFromDb,
     fetchCartGroups,
     type CartGroupOption,
@@ -166,6 +167,7 @@ export default function App() {
     >(null);
 
     const draggingRef = useRef(false);
+    const [isResizingFrontend, setIsResizingFrontend] = useState(false);
 
 
     // ============================================================
@@ -508,6 +510,8 @@ export default function App() {
             draggingRef.current =
                 false;
 
+            setIsResizingFrontend(false);
+
             document.body.style.cursor =
                 '';
         };
@@ -600,29 +604,29 @@ export default function App() {
                     setLoggedInName(null);
                     setLoggedInPhone(null);
 
-            } else if (data.type === 'LOCATE_PRODUCT') {
-                // 오른쪽 웹 화면 검색 결과에서 가격 밑 위치를 누른 것.
-                // 프론트가 층과 좌표까지 실어 보내주므로 여기서 다시 조회하지 않는다.
-                if (typeof data.floorNo === 'number' && typeof data.x === 'number' && typeof data.y === 'number') {
-                    void showProductPinRef.current?.({
-                        skuId: Number(data.skuId) || 0,
-                        name: typeof data.name === 'string' && data.name ? data.name : '선택한 상품',
-                        floorNo: data.floorNo,
-                        x: data.x,
-                        y: data.y,
-                    });
-                }
+                } else if (data.type === 'LOCATE_PRODUCT') {
+                    // 오른쪽 웹 화면 검색 결과에서 가격 밑 위치를 누른 것.
+                    // 프론트가 층과 좌표까지 실어 보내주므로 여기서 다시 조회하지 않는다.
+                    if (typeof data.floorNo === 'number' && typeof data.x === 'number' && typeof data.y === 'number') {
+                        void showProductPinRef.current?.({
+                            skuId: Number(data.skuId) || 0,
+                            name: typeof data.name === 'string' && data.name ? data.name : '선택한 상품',
+                            floorNo: data.floorNo,
+                            x: data.x,
+                            y: data.y,
+                        });
+                    }
 
-            } else if (data.type === 'SCANNED_PRODUCT') {
-                // 09-09: '지금 위치에서부터 길찾기'로 대기 중일 때만 의미가 있다.
-                // 평소 장보기 스캔에서도 이 메시지는 오지만, 대기 중이 아니면 아래
-                // 함수가 스스로 아무 일도 하지 않고 돌아간다.
-                if (typeof data.skuId === 'number') {
-                    void runRouteFromScannedProductRef.current?.(
-                        data.skuId,
-                        typeof data.name === 'string' && data.name ? data.name : '찍은 상품',
-                    );
-                }
+                } else if (data.type === 'SCANNED_PRODUCT') {
+                    // 09-09: '지금 위치에서부터 길찾기'로 대기 중일 때만 의미가 있다.
+                    // 평소 장보기 스캔에서도 이 메시지는 오지만, 대기 중이 아니면 아래
+                    // 함수가 스스로 아무 일도 하지 않고 돌아간다.
+                    if (typeof data.skuId === 'number') {
+                        void runRouteFromScannedProductRef.current?.(
+                            data.skuId,
+                            typeof data.name === 'string' && data.name ? data.name : '찍은 상품',
+                        );
+                    }
 
                 } else if (
                     data.type === 'CART_CHANGED'
@@ -767,15 +771,15 @@ export default function App() {
             (point: GridPoint) => {
 
                 setPlayerCell(point);
-        // 핀이 가리키던 자리에 도착했으면 핀을 지운다. 목적지 표시라 도착하면 역할이 끝난다.
-        // (도착 지점은 매대 바로 옆 통행 칸일 수 있어서 한 칸 오차까지 도착으로 본다.)
-        setPinnedProduct((prev) => {
-            if (!prev || prev.floorNo !== playerFloor) return prev;
-            const near = Math.abs(prev.x - point.x) <= 1 && Math.abs(prev.y - point.y) <= 1;
-            if (!near) return prev;
-            canvasRef.current?.clearProductPin();
-            return null;
-        });
+                // 핀이 가리키던 자리에 도착했으면 핀을 지운다. 목적지 표시라 도착하면 역할이 끝난다.
+                // (도착 지점은 매대 바로 옆 통행 칸일 수 있어서 한 칸 오차까지 도착으로 본다.)
+                setPinnedProduct((prev) => {
+                    if (!prev || prev.floorNo !== playerFloor) return prev;
+                    const near = Math.abs(prev.x - point.x) <= 1 && Math.abs(prev.y - point.y) <= 1;
+                    if (!near) return prev;
+                    canvasRef.current?.clearProductPin();
+                    return null;
+                });
 
 
             },
@@ -1981,8 +1985,8 @@ export default function App() {
             ]);
             if (getMemberToken() !== token) return;
             setCart(prev => items.map(item => ({ ...item, locationId:
-                item.skuId === product.skuId ? location.locationId :
-                prev.find(p => p.skuId === item.skuId)?.locationId ?? item.locationId })));
+                    item.skuId === product.skuId ? location.locationId :
+                        prev.find(p => p.skuId === item.skuId)?.locationId ?? item.locationId })));
             setCartGroups(groups);
             frontendPanelRef.current?.notifyCartChanged();
             setStatusMessage('회원 장바구니에 반영했습니다.');
@@ -1991,6 +1995,36 @@ export default function App() {
             setStatusMessage(error instanceof Error ? error.message : '장바구니 반영 실패');
         }
     }, [selectedGroupId]);
+
+    // ============================================================
+    // 상품 빼기 (담기의 반대) — "담음 N개"에서 1개를 빼고, 1개뿐이면 항목을 지운다.
+    // ============================================================
+
+    const handleRemoveFromCart = useCallback(async (location: LocationInfo, product: ProductInfo) => {
+        const token = getMemberToken();
+        if (!token) { setStatusMessage('오른쪽 앱에서 회원 로그인을 먼저 해주세요.'); return; }
+
+        const existing = cart.find(item => item.skuId === product.skuId);
+        if (!existing || existing.qty <= 0) return;
+
+        try {
+            await removeOneFromDbCart(existing.cartItemId, existing.qty);
+            if (getMemberToken() !== token) return;
+            const [items, groups] = await Promise.all([
+                fetchCartFromDb(getCurrentConsumerId()), fetchCartGroups(getCurrentConsumerId()),
+            ]);
+            if (getMemberToken() !== token) return;
+            setCart(prev => items.map(item => ({ ...item, locationId:
+                    item.skuId === product.skuId ? location.locationId :
+                        prev.find(p => p.skuId === item.skuId)?.locationId ?? item.locationId })));
+            setCartGroups(groups);
+            frontendPanelRef.current?.notifyCartChanged();
+            setStatusMessage('회원 장바구니에서 뺐습니다.');
+        } catch (error) {
+            if (getMemberToken() !== token) return;
+            setStatusMessage(error instanceof Error ? error.message : '장바구니에서 빼기 실패');
+        }
+    }, [cart]);
 
     // ============================================================
     // ★ 재고 채우기 +5
@@ -2882,6 +2916,8 @@ export default function App() {
                                 draggingRef.current =
                                     true;
 
+                                setIsResizingFrontend(true);
+
                                 document.body.style.cursor =
                                     'col-resize';
                             }}
@@ -2904,6 +2940,23 @@ export default function App() {
                                 frontendWidth
                             }
                         />
+
+                        {isResizingFrontend && (
+                            <div
+                                style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    zIndex: 9999,
+                                    cursor: 'col-resize',
+                                    // iframe 위에서도 마우스 이벤트가 window(부모 문서)로
+                                    // 계속 잡히도록 화면 전체를 덮어버린다. 배경은 안 보이게
+                                    // 투명하게 둔다 — 실제 리사이즈 계산은 window의 mousemove
+                                    // 리스너가 그대로 처리하고, 이 div는 iframe이 이벤트를
+                                    // 가로채지 못하게 막는 역할만 한다.
+                                    background: 'transparent',
+                                }}
+                            />
+                        )}
                     </>
                 )}
             </div>
@@ -3024,11 +3077,37 @@ export default function App() {
                         )
                     }
 
+                    cartGroups={
+                        cartGroups
+                    }
+
+                    selectedGroupId={
+                        selectedGroupId
+                    }
+
+                    onSelectGroup={(
+                        groupId
+                    ) =>
+                        setSelectedGroupId(
+                            groupId
+                        )
+                    }
+
                     onAddToCart={(
                         location,
                         p
                     ) =>
                         handleAddToCart(
+                            location,
+                            p
+                        )
+                    }
+
+                    onRemoveFromCart={(
+                        location,
+                        p
+                    ) =>
+                        handleRemoveFromCart(
                             location,
                             p
                         )
