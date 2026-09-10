@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { displayedPath } from '../displayedPath';
 import type { FloorData, LocationInfo, FacilityInfo, GridPoint } from '../types';
 import { Grid, findPath } from '../pathfinding/astar';
 import { fetchProductsAtLocation, fetchLowStockLocations, adjustStock } from '../../api/products';
@@ -503,6 +504,8 @@ export default class StoreScene extends Phaser.Scene {
 
   // ── 층 전환/트립 진행 중 씬 재사용 ──
   loadFloor(floorData: FloorData, opts?: { startCell?: GridPoint; hidePlayer?: boolean }) {
+    this.displayedSegments=[];
+    this.pendingWalk?.callback?.(false);this.pendingWalk=undefined;
     this.floorData = floorData;
     this.cellAddressLabel?.destroy();
     this.cellAddressLabel = undefined;
@@ -556,6 +559,14 @@ export default class StoreScene extends Phaser.Scene {
   // 뜻이다(안 보이는 충돌구역 등으로 목적지가 고립된 경우) — 호출부가 이걸 "도착했다"로
   // 착각하고 다음 단계로 넘어가면 안 된다(4번 문제와 엮인 2/3번 버그의 원인이었다).
   walkTo(goal: GridPoint, onArrive?: (success: boolean) => void) {
+    // 진행 중 tween의 도착 칸에서 다시 계획해 대각선 건너뛰기를 막는다.
+    if(this.moving){this.pendingWalk?.callback?.(false);this.pendingWalk={goal,callback:onArrive};return;}
+    const shown=displayedPath(this.displayedSegments,this.playerGrid,goal,p=>this.grid.isWalkable(p.x,p.y),(a,b)=>findPath(this.grid,a,b));
+    if(shown){
+      this.currentPath=shown.slice(1);this.drawPath(shown);
+      this.pendingArriveCallback=(success=true)=>onArrive?.(success);this.advancePath();return;
+    }
+
     // 목적지가 매대 칸이면 그 앞 통로 칸으로 대신 간다. 예전에는 바로 옆 8칸만 봐서,
     // 여러 칸짜리 매대 덩어리의 한가운데를 클릭하면 후보를 못 찾고 막힌 칸을 그대로
     // 목적지로 써서 경로 탐색이 항상 실패했다(층간 이동 후 "경로를 찾지 못했습니다").
@@ -567,7 +578,7 @@ export default class StoreScene extends Phaser.Scene {
       if (path.length === 0) continue;
       this.currentPath = path.slice(1);
       this.drawPath(path);
-      this.pendingArriveCallback = () => onArrive?.(true);
+      this.pendingArriveCallback = (success=true) => onArrive?.(success);
       if (!this.moving) this.advancePath();
       return;
     }
@@ -585,17 +596,20 @@ export default class StoreScene extends Phaser.Scene {
    * stops는 그 중 "몇 번째로 들르는 매대인지" 표시할 지점들(옵션).
    */
   drawRoute(pathPoints: GridPoint[], stops: GridPoint[] = []) {
+    this.displayedSegments=[pathPoints.map(p=>({...p}))];
     this.routeGraphics.clear();
     if (pathPoints.length < 2) return;
     this.drawRouteLine(pathPoints, stops);
   }
 
   drawRouteSegments(segments: GridPoint[][], stops: GridPoint[] = []) {
+    this.displayedSegments=segments.map(s=>s.map(p=>({...p})));
     this.routeGraphics.clear();
     segments.forEach((segment,i) => {if(segment.length>1)this.drawRouteLine(segment,i===0?stops:[]);});
   }
 
   clearRoute() {
+    this.displayedSegments=[];
     this.routeGraphics.clear();
   }
 
@@ -837,7 +851,9 @@ export default class StoreScene extends Phaser.Scene {
     return this.playerGrid;
   }
 
-  private pendingArriveCallback?: () => void; // walkTo가 onArrive를 감싸서 넣어둔다(항상 success 인자까지 처리된 상태)
+  private displayedSegments: GridPoint[][] = [];
+  private pendingWalk?: {goal:GridPoint;callback?: (success:boolean)=>void};
+  private pendingArriveCallback?: (success?:boolean) => void; // walkTo가 onArrive를 감싸서 넣어둔다(항상 success 인자까지 처리된 상태)
 
   private buildFloor() {
     this.grid = new Grid(this.floorData.gridWidth, this.floorData.gridHeight, this.floorData.occupied);
@@ -1542,7 +1558,7 @@ export default class StoreScene extends Phaser.Scene {
 
   private drawPath(path: GridPoint[]) {
     this.pathGraphics.clear();
-    this.pathGraphics.lineStyle(3, 0x22c55e, 0.8);
+    this.pathGraphics.lineStyle(3, 0x2563eb, 0.9);
     this.pathGraphics.beginPath();
     path.forEach((p, i) => {
       const px = p.x * TILE + TILE / 2;
@@ -1579,6 +1595,11 @@ export default class StoreScene extends Phaser.Scene {
       duration: Math.max(duration, 8), // 09-03: 40ms->8ms로 낮춤(성원님 요청) — 이유는 위 NPC 쪽 주석과 동일
       onComplete: () => {
         this.playerGrid = next;
+        if(this.pendingWalk){
+          const request=this.pendingWalk;this.pendingWalk=undefined;this.moving=false;
+          const previous=this.pendingArriveCallback;this.pendingArriveCallback=undefined;
+          this.currentPath=[];previous?.(false);this.walkTo(request.goal,request.callback);return;
+        }
         this.advancePath();
       },
     });
