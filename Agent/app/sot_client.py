@@ -673,7 +673,7 @@ def get_change_events(sku_ids: list[int] | None = None,
         #   ⚠ 백엔드에 `since` 를 받는 인자가 생기면 이 보정을 지운다.
         #     지금은 `hours` 뿐이라 부르는 쪽에서 감당한다.
         skew_h = (datetime.now() - config.DEMO_NOW).total_seconds() / 3600.0
-        hours = int(within_hours) + max(0, int(skew_h) + 1)
+        hours = int(within_hours) if config.LIVE_INFERENCE_CLOCK else int(within_hours) + max(0, int(skew_h) + 1)
         rows = _http_get(_API["get_change_events"],
                          {"skuIds": list(sku_ids), "hours": hours}) or []
         # ⚠ 원시 camelCase 를 흘려보내면 안 된다 — 08-27 에 `get_inventory`·
