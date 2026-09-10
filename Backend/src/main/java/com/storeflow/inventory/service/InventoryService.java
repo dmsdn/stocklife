@@ -105,6 +105,10 @@ public class InventoryService {
         if (oldQty > 0 && newQty == 0) {
             broadcast(shelfEventRepository.save(new ShelfEvent(
                     ShelfEvent.EventType.STOCKOUT, skuId, locationId, 0, null, now, null)));
+
+            // 5-5(알림 트리거) "품절": 재고가 있다가 0이 된 순간, 자기 리스트(장바구니)에
+            // 이 상품을 담아둔 회원들에게만 알린다. (재입고 알림과 짝을 이루는 로직)
+            notifyCartOwnersOfStockout(skuId);
         }
 
         // 5-5(알림 트리거) "재입고": 품절(0) 상태였다가 다시 채워졌을 때만 알린다.
@@ -129,6 +133,25 @@ public class InventoryService {
                     "RESTOCK",
                     "재입고 알림",
                     productName + "이(가) 다시 입고됐어요. 장바구니에 담아두신 상품이에요!",
+                    null
+            );
+        }
+    }
+
+    private void notifyCartOwnersOfStockout(Integer skuId) {
+        List<Long> consumerIds = cartItemRepository.findConsumerIdsBySkuId(skuId);
+        if (consumerIds.isEmpty()) {
+            return;
+        }
+        Product product = productRepository.findById(skuId).orElse(null);
+        String productName = product != null ? product.getName() : ("상품 #" + skuId);
+
+        for (Long consumerId : consumerIds) {
+            notificationService.createNotification(
+                    consumerId,
+                    "STOCKOUT",
+                    "품절 알림",
+                    productName + "이(가) 품절됐어요. 장바구니에 담아두신 상품이에요!",
                     null
             );
         }

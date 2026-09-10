@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RiArrowLeftSLine } from "@remixicon/react";
 import { StoreMap, type MapPin } from "@/components/domain/store-map";
+import { MOCK_PROMO_PINS } from "@/lib/promo-mock";
 import { FLOOR_MAPS } from "@/lib/map-config";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
 import { loadCartGroups, readCartGroups } from "@/lib/cart-storage";
@@ -92,6 +93,7 @@ export default function StoreMapPage() {
         onLivClick={() => openAiChat()}
         heightClassName="h-[calc(100dvh-8rem)]"
         hideHelpText
+        promoPins={MOCK_PROMO_PINS}
       />
     </div>
   );

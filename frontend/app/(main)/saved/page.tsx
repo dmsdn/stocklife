@@ -20,6 +20,7 @@ import { getClientId } from "@/lib/client-id";
 import { formatRelativeTime, formatShoppingDate } from "@/lib/format-time";
 import { searchChatMessages, highlightMatch, type ChatSearchResult } from "@/lib/chat-search";
 import { readCartGroups, loadCartGroups, createCartGroup, deleteCartGroup, type CartGroup } from "@/lib/cart-storage";
+import { isGroupCompleted } from "@/lib/completed-groups";
 import { BirthDatePicker } from "@/components/domain/birth-date-picker";
 import { SplitBottomBar } from "@/components/domain/split-bottom-bar";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
@@ -153,12 +154,38 @@ function SavedPageInner() {
   //   전부 이미 받아온 데이터(groups/sessions) 안에서 필터링 — 별도 검색 API 불필요.
   const filteredGroups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter(
-      (g) =>
-        g.title.toLowerCase().includes(q) ||
-        g.products.some((p) => p.name.toLowerCase().includes(q))
-    );
+    const filtered = q
+      ? groups.filter(
+          (g) =>
+            g.title.toLowerCase().includes(q) ||
+            g.products.some((p) => p.name.toLowerCase().includes(q))
+        )
+      : groups;
+
+    // 결제 완료 리스트는 아래에 모으고, 완료된 리스트끼리는 최근 결제순.
+    // 결제 시각은 서버 status만 있는 경우 로컬 완료 시각을 알 수 없으므로
+    // localStorage의 완료 시각을 우선 사용하고, 그 다음 updatedAt/id를 fallback으로 사용.
+    const completedAt = (g: CartGroup) => {
+      if (typeof window !== "undefined") {
+        try {
+          const raw = window.localStorage.getItem("storeflow_completed_groups");
+          const map = raw ? (JSON.parse(raw) as Record<number, string>) : {};
+          const value = map[g.id];
+          if (value) return new Date(value).getTime();
+        } catch {}
+      }
+      return g.updatedAt ? new Date(g.updatedAt).getTime() : g.id;
+    };
+
+    return [...filtered].sort((a, b) => {
+      const aCompleted = a.status === "COMPLETED" || isGroupCompleted(a.id);
+      const bCompleted = b.status === "COMPLETED" || isGroupCompleted(b.id);
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+      if (aCompleted && bCompleted) return completedAt(b) - completedAt(a);
+      const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : a.id;
+      const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : b.id;
+      return bTime - aTime;
+    });
   }, [groups, query]);
 
   const groupTitleById = useMemo(() => {
@@ -199,7 +226,7 @@ function SavedPageInner() {
 
   return (
     <div className="mx-auto max-w-lg p-4 pb-24 sm:max-w-xl md:max-w-4xl md:p-8">
-      <h1 className="text-xl font-bold">기록</h1>
+      <h1 className="text-xl font-bold">저장</h1>
 
       <div className="mt-4 flex gap-5 border-b border-border text-sm">
         <button
@@ -308,9 +335,21 @@ function SavedPageInner() {
               {query ? "검색 결과가 없어요." : "아직 만든 리스트가 없어요."}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3 pb-20 md:grid-cols-3 lg:grid-cols-4">
-              {filteredGroups.map((group) => {
+            <div className="pb-20">
+              {(() => {
+                const activeGroups = filteredGroups.filter(
+                  (g) => !(g.status === "COMPLETED" || isGroupCompleted(g.id))
+                );
+                const completedGroups = filteredGroups.filter(
+                  (g) => g.status === "COMPLETED" || isGroupCompleted(g.id)
+                );
+
+                const renderGroups = (list: CartGroup[]) => (
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                    {list.map((group) => {
                 const isSelected = selectedIds.has(group.id);
+                // ✅ 신규(요청 3번) — 결제 완료된 리스트를 저장 화면에서도 알아볼 수 있게 표시
+                const completed = group.status === "COMPLETED" || isGroupCompleted(group.id);
                 return (
                   <div
                     key={group.id}
@@ -328,8 +367,15 @@ function SavedPageInner() {
                       if (selectMode) toggleSelected(group.id);
                       else router.push(`/saved/${group.id}`);
                     }}
-                    className={`relative flex aspect-[4/5] cursor-pointer flex-col justify-between rounded-lg bg-gradient-to-br from-muted to-border p-4 transition-opacity ${selectMode && !isSelected ? "opacity-60" : ""}`}
+                    className={`relative flex aspect-[4/5] cursor-pointer flex-col justify-between overflow-hidden rounded-lg bg-gradient-to-br from-muted to-border p-4 transition-opacity ${selectMode && !isSelected ? "opacity-60" : ""}`}
                   >
+                    {/* ✅ 수정 — 우상단 배지 대신 카드 전체를 검은색으로 덮고
+                        "결제완료"를 카드 정중앙에 배치.
+                        ✅ 버그 수정(2026-09) — z-index가 없어서 형제 요소(제목/버튼)와의
+                        페인트 순서가 기기별로 불안정했고, 카드에 overflow-hidden이 없어
+                        모서리도 안 맞물렸음. z-20 + 카드 쪽 overflow-hidden으로 확실히
+                        고정. 형제들보다 나중에 그려지도록 맨 아래로도 옮김. */}
+
                     {/* ✅ 선택모드일 때만 우상단에 체크 표시 — 눌린 카드는 채워진 원,
                         나머지는 빈 원 */}
                     {selectMode && (
@@ -362,9 +408,34 @@ function SavedPageInner() {
                       <img src="/icons/liv-full.svg" alt="" className="h-4 w-4 shrink-0" />
                       리브에게 물어보기
                     </button>
+
+                    {/* ✅ 수정(요청 — "투명도 10%로, 텍스트 더 크게") */}
+                    {completed && !selectMode && (
+                      <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-black/10">
+                        <span className="text-lg font-semibold text-white [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">결제완료</span>
+                      </div>
+                    )}
                   </div>
                 );
-              })}
+                    })}
+                  </div>
+                );
+
+                return (
+                  <>
+                    {activeGroups.length > 0 && renderGroups(activeGroups)}
+                    {/* ✅ 수정(요청 — "결제 완료 몇 개 이렇게 텍스트로 구분해둔 거 빼") —
+                        아래에 배치하는 순서는 그대로 유지하되, "결제 완료 N" 제목/개수
+                        텍스트는 없앰. 각 카드 자체에 이미 "결제완료" 오버레이가 있어서
+                        구분은 충분함. */}
+                    {completedGroups.length > 0 && (
+                      <section className={activeGroups.length > 0 ? "mt-8" : ""}>
+                        {renderGroups(completedGroups)}
+                      </section>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 

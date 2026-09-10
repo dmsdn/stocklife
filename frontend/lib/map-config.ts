@@ -27,9 +27,9 @@ export interface FloorMapConfig {
 }
 
 export const FLOOR_MAPS: FloorMapConfig[] = [
-  { floorNo: 1, image: "/maps/floor-1.png", gridWidth: 24, gridHeight: 16, imageWidth: 3836, imageHeight: 3200, legacyTopOffsetPercent: 0 },
-  { floorNo: 2, image: "/maps/floor-2.png", gridWidth: 24, gridHeight: 16, imageWidth: 3836, imageHeight: 3020, legacyTopOffsetPercent: 0 },
-  { floorNo: 3, image: "/maps/floor-3.png", gridWidth: 24, gridHeight: 16, imageWidth: 3836, imageHeight: 3020, legacyTopOffsetPercent: 0 },
+  { floorNo: 1, image: "/maps/floor-1.png", gridWidth: 95, gridHeight: 75, imageWidth: 3836, imageHeight: 3200, legacyTopOffsetPercent: 0 },
+  { floorNo: 2, image: "/maps/floor-2.png", gridWidth: 95, gridHeight: 75, imageWidth: 3836, imageHeight: 3020, legacyTopOffsetPercent: 0 },
+  { floorNo: 3, image: "/maps/floor-3.png", gridWidth: 95, gridHeight: 75, imageWidth: 3836, imageHeight: 3020, legacyTopOffsetPercent: 0 },
 ];
 
 export function getFloorMap(floorNo: number): FloorMapConfig | undefined {
@@ -70,40 +70,65 @@ interface ZoneRegion {
 
 const ZONE_REGIONS: Record<number, ZoneRegion[]> = {
   1: [
-    { zoneId: "F1-F", x1: 0, y1: 0, x2: 9.75, y2: 4 },
-    { zoneId: "F1-D", x1: 0, y1: 4, x2: 9.25, y2: 5.25 },
-    { zoneId: "F1-D", x1: 0, y1: 5.25, x2: 6.25, y2: 8 },
-    { zoneId: "F1-A", x1: 0, y1: 8, x2: 9.5, y2: 12.5 },
-    { zoneId: "F1-B", x1: 9.5, y1: 9.75, x2: 16, y2: 13.5 },
-    { zoneId: "F1-C", x1: 16, y1: 9, x2: 22.25, y2: 13.5 },
-    { zoneId: "F1-E", x1: 9.5, y1: 4.75, x2: 16, y2: 9.75 },
-    { zoneId: "F1-H", x1: 16, y1: 4.5, x2: 21.5, y2: 5.5 },
-    { zoneId: "F1-H", x1: 14.75, y1: 0, x2: 22, y2: 4.75 },
-    { zoneId: "F1-G", x1: 9.75, y1: 0, x2: 14.75, y2: 4.75 },
+    { zoneId: "F1-F", x1: 0, y1: 0, x2: 38.59, y2: 18.75 },
+    { zoneId: "F1-D", x1: 0, y1: 18.75, x2: 36.61, y2: 24.61 },
+    { zoneId: "F1-D", x1: 0, y1: 24.61, x2: 24.74, y2: 37.5 },
+    { zoneId: "F1-A", x1: 0, y1: 37.5, x2: 37.6, y2: 58.59 },
+    { zoneId: "F1-B", x1: 37.6, y1: 45.7, x2: 63.33, y2: 63.28 },
+    { zoneId: "F1-C", x1: 63.33, y1: 42.19, x2: 88.07, y2: 63.28 },
+    { zoneId: "F1-E", x1: 37.6, y1: 22.27, x2: 63.33, y2: 45.7 },
+    { zoneId: "F1-H", x1: 63.33, y1: 21.09, x2: 85.1, y2: 25.78 },
+    { zoneId: "F1-H", x1: 58.39, y1: 0, x2: 87.08, y2: 22.27 },
+    { zoneId: "F1-G", x1: 38.59, y1: 0, x2: 58.39, y2: 22.27 },
   ],
   2: [
-    { zoneId: "F2-A", x1: 20, y1: 8, x2: 22.25, y2: 10.5 },
-    { zoneId: "F2-A", x1: 11.5, y1: 9.5, x2: 22.25, y2: 13.25 },
-    { zoneId: "F2-B", x1: 0.25, y1: 8, x2: 11.5, y2: 13.25 },
-    { zoneId: "F2-C", x1: 11.5, y1: 4.5, x2: 18, y2: 9.5 },
-    { zoneId: "F2-D", x1: 0.25, y1: 4.5, x2: 11.5, y2: 8 },
-    { zoneId: "F2-F", x1: 0, y1: 0, x2: 10.25, y2: 4.5 },
-    { zoneId: "F2-E", x1: 10.25, y1: 0, x2: 20.5, y2: 4.5 },
+    { zoneId: "F2-A", x1: 79.17, y1: 37.5, x2: 88.07, y2: 49.22 },
+    { zoneId: "F2-A", x1: 45.52, y1: 44.53, x2: 88.07, y2: 62.11 },
+    { zoneId: "F2-B", x1: 0.99, y1: 37.5, x2: 45.52, y2: 62.11 },
+    { zoneId: "F2-C", x1: 45.52, y1: 21.09, x2: 71.25, y2: 44.53 },
+    { zoneId: "F2-D", x1: 0.99, y1: 21.09, x2: 45.52, y2: 37.5 },
+    { zoneId: "F2-F", x1: 0, y1: 0, x2: 40.57, y2: 21.09 },
+    { zoneId: "F2-E", x1: 40.57, y1: 0, x2: 81.15, y2: 21.09 },
   ],
   3: [
-    { zoneId: "F3-A", x1: 16.75, y1: 0, x2: 22, y2: 10.75 },
-    { zoneId: "F3-A", x1: 20.5, y1: 0, x2: 24, y2: 6 },
-    { zoneId: "F3-B", x1: 2.5, y1: 8.75, x2: 15.25, y2: 12.5 },
-    { zoneId: "F3-B", x1: 0, y1: 8.75, x2: 3.75, y2: 10.75 },
-    { zoneId: "F3-A", x1: 15.25, y1: 8.75, x2: 22, y2: 12.5 },
-    { zoneId: "F3-C", x1: 6.5, y1: 3.5, x2: 16.75, y2: 8.75 },
-    { zoneId: "F3-E", x1: 0, y1: 0, x2: 6.5, y2: 8.75 },
-    { zoneId: "F3-F", x1: 6.5, y1: 0, x2: 15.5, y2: 3.5 },
+    { zoneId: "F3-A", x1: 66.3, y1: 0, x2: 87.08, y2: 50.39 },
+    { zoneId: "F3-A", x1: 81.15, y1: 0, x2: 95, y2: 28.12 },
+    { zoneId: "F3-B", x1: 9.9, y1: 41.02, x2: 60.36, y2: 58.59 },
+    { zoneId: "F3-B", x1: 0, y1: 41.02, x2: 14.84, y2: 50.39 },
+    { zoneId: "F3-A", x1: 60.36, y1: 41.02, x2: 87.08, y2: 58.59 },
+    { zoneId: "F3-C", x1: 25.73, y1: 16.41, x2: 66.3, y2: 41.02 },
+    { zoneId: "F3-E", x1: 0, y1: 0, x2: 25.73, y2: 41.02 },
+    { zoneId: "F3-F", x1: 25.73, y1: 0, x2: 61.35, y2: 16.41 },
   ],
 };
 
 export function getZoneRegions(floorNo: number): ZoneRegion[] {
   return ZONE_REGIONS[floorNo] ?? [];
+}
+
+/** ✅ 신규(요청) — 같은 zoneId가 여러 사각형 조각(L자 모양 등)으로 나뉜 경우, 그 조각들을
+ *  전부 합친 바운딩박스의 중심점 하나를 zoneId마다 계산합니다. 매대 좌표(쌀 아이콘)를
+ *  누른 자리가 아니라 항상 이 고정된 중심에 놓기 위한 용도 — 누른 지점 계산이 확대/축소·
+ *  드래그 상태에 따라 어긋나서 "엉뚱한 자리(왼쪽 위)에 뜨는" 문제 자체를 없앱니다. */
+export function getZoneCenters(floorNo: number): { zoneId: string; x: number; y: number }[] {
+  const regions = getZoneRegions(floorNo);
+  const bounds = new Map<string, { x1: number; y1: number; x2: number; y2: number }>();
+  for (const r of regions) {
+    const cur = bounds.get(r.zoneId);
+    if (!cur) {
+      bounds.set(r.zoneId, { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 });
+    } else {
+      cur.x1 = Math.min(cur.x1, r.x1);
+      cur.y1 = Math.min(cur.y1, r.y1);
+      cur.x2 = Math.max(cur.x2, r.x2);
+      cur.y2 = Math.max(cur.y2, r.y2);
+    }
+  }
+  return Array.from(bounds.entries()).map(([zoneId, b]) => ({
+    zoneId,
+    x: (b.x1 + b.x2) / 2,
+    y: (b.y1 + b.y2) / 2,
+  }));
 }
 
 interface FloorMapApiResponse {
@@ -126,8 +151,8 @@ export async function fetchRealFloorMap(floorNo: number): Promise<void> {
   try {
     const res = await apiFetch<FloorMapApiResponse>(`/api/map/floors/${floorNo}`);
     const config = getFloorMap(floorNo);
-    const width = config?.gridWidth ?? Math.max(...res.cells.map((c) => c.x)) + 1;
-    const height = config?.gridHeight ?? Math.max(...res.cells.map((c) => c.y)) + 1;
+    const width = res.cells.length ? Math.max(...res.cells.map((c) => c.x)) + 1 : config?.gridWidth ?? 0;
+    const height = res.cells.length ? Math.max(...res.cells.map((c) => c.y)) + 1 : config?.gridHeight ?? 0;
     const grid: boolean[][] = Array.from({ length: height }, () => Array(width).fill(false));
     for (const cell of res.cells) {
       if (cell.y < height && cell.x < width) grid[cell.y][cell.x] = cell.passable;
@@ -187,4 +212,16 @@ export function getWalkableGrid(floorNo: number): boolean[][] {
     grid.push(row);
   }
   return grid;
+}
+/** DB의 1m 격자 중심을 기존 도면 이미지의 비율 좌표로 바꾼다.
+ * 구역 클릭에 사용하는 표시 좌표(FLOOR_MAPS.gridWidth/gridHeight, 95×75 — 백엔드
+ * map_layout.py의 FLOOR_W/FLOOR_H와 동일)와는 별개로, 이 함수는 도면 이미지 픽셀에
+ * 직접 맞춘 정밀 보정(1m=40px, 크롭 후 원점 (16px,16px))을 씁니다 — 상품 핀·동선처럼
+ * 백엔드가 실제로 내려주는 좌표는 이 함수(또는 store-map.tsx의 navigationPercent)를
+ * 거쳐야 정확합니다. 실제 이미지 크기는 FLOOR_MAPS를 사용한다. */
+export function navigationImagePosition(floorNo: number, x: number, y: number) {
+  const config = getFloorMap(floorNo);
+  if (!config) return null;
+  return {left: (16 + (x + 0.5) * 40) / config.imageWidth,
+    top: (16 + (y + 0.5) * 40) / config.imageHeight};
 }

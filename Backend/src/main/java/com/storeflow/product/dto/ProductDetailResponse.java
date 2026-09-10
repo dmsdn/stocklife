@@ -5,6 +5,12 @@ import com.storeflow.promotion.entity.Promotion;
 
 public class ProductDetailResponse {
     private Integer skuId;
+    private boolean refrigerated;
+    private boolean frozen;
+    private boolean fresh;
+    public boolean isRefrigerated() { return refrigerated; }
+    public boolean isFrozen() { return frozen; }
+    public boolean isFresh() { return fresh; }
     private String name;
     private String brand;
     private String categoryL1;
@@ -30,6 +36,9 @@ public class ProductDetailResponse {
 
     public ProductDetailResponse(Product product, Promotion activePromotion) {
         this.skuId = product.getSkuId();
+        this.refrigerated = product.isRefrigerated();
+        this.frozen = product.isFrozen();
+        this.fresh = product.isFresh();
         this.name = product.getName();
         this.brand = product.getBrand();
         this.categoryL1 = product.getCategoryL1();

@@ -8,6 +8,7 @@
 //   미리 작성해뒀습니다. 실제로 붙여보고 필드명 등이 다르면 손봐야 할 수 있습니다.
 import { apiFetch } from "./api-client";
 import { getZoneName, fetchRealFloorMap } from "./map-config";
+import { resolvePinCoord } from "./location-pins";
 
 export interface InventoryItem {
   skuId: number;
@@ -18,6 +19,19 @@ export interface InventoryItem {
   x: number;
   y: number;
   qty: number;
+}
+
+// ✅ 신규(요청) — locationId 원본("F2-D-R01-B04-L1")을 그대로 보여주면 무슨 뜻인지 알 수
+//   없어서, 사람이 읽는 형태("2층 D01 4번칸 1단")로 바꿔줍니다.
+//   F2=층(floorNo), D=구역(zoneId), R01=랙 번호(rackNo), B04=베이 번호(bayNo, "칸"),
+//   L1=레벨(levelNo, "단") — 같은 랙+베이의 L1~L6은 같은 자리에서 위아래 층만 다름
+//   (L1~L3는 손님이 직접 집는 진열 층, L4~L6은 위쪽 예비재고).
+//   형식이 다르면(예상 못 한 값) 안전하게 원본 그대로 반환합니다.
+export function formatLocationLabel(locationId: string): string {
+  const match = locationId.match(/^F(\d+)-([A-Za-z0-9]+)-R(\d+)-B(\d+)-L(\d+)$/);
+  if (!match) return locationId;
+  const [, floor, zone, rack, bay, level] = match;
+  return `${floor}층 ${zone}${rack} ${parseInt(bay, 10)}번칸 ${parseInt(level, 10)}단`;
 }
 
 type InventoryBatchResponse = Record<string, InventoryItem[]>;
@@ -76,7 +90,11 @@ export async function fetchInventoryBatch(skuIds: number[]): Promise<Map<number,
  *  없으면 BULK(창고성 진열) 중 첫 번째. */
 export function pickLocation(items: InventoryItem[] | undefined): InventoryItem | null {
   if (!items || items.length === 0) return null;
-  return items.find((i) => i.tierRole === "PICK") ?? items[0];
+  const picked = items.find((i) => i.tierRole === "PICK") ?? items[0];
+  // ✅ 신규(요청) — 백엔드 좌표 대신 직접 찍어둔 좌표(lib/location-pins.ts)가 있으면
+  //   그걸 우선으로. 못 찾으면 백엔드 좌표 그대로(기존 동작과 동일).
+  const resolved = resolvePinCoord(picked.locationId, { floorNo: picked.floorNo, x: picked.x, y: picked.y });
+  return { ...picked, floorNo: resolved.floorNo, x: resolved.x, y: resolved.y };
 }
 
 /** InventoryItem을 "3층 유제품 코너" 같은 사람이 읽을 텍스트로 바꿉니다.

@@ -15,6 +15,7 @@ import { addProductToCartGroup } from "@/lib/cart-storage";
 import { apiFetch, resolveImageUrl } from "@/lib/api-client";
 import { getAlternatives, compareProducts, type AlternativeProduct, type PopularityItem } from "@/lib/ai-proxy";
 import { addRecentView } from "@/lib/recent-views";
+import { formatLocationLabel, pickLocation, type InventoryItem } from "@/lib/product-location";
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
@@ -29,15 +30,6 @@ interface ProductDetail {
   specRaw: string;
   imageUrl: string | null;
   discontinued: boolean;
-}
-
-interface InventoryItem {
-  locationId: string;
-  zoneId: string;
-  floorNo: number;
-  x: number;
-  y: number;
-  qty: number;
 }
 
 export default function ProductDetailPage() {
@@ -81,7 +73,12 @@ export default function ProductDetailPage() {
       .finally(() => setLoading(false));
 
     apiFetch<InventoryItem[]>(`/api/products/${productId}/inventory`, { auth: false })
-      .then(setInventory)
+      .then((items) => {
+        // ✅ 수정(요청 3번) — pickLocation()을 거치면 백엔드 좌표 대신 직접 찍어둔
+        //   좌표(lib/location-pins.ts)가 있을 때 그걸 우선 적용해줌(없으면 기존과 동일).
+        const picked = pickLocation(items);
+        setInventory(picked ? [picked] : []);
+      })
       .catch(() => setInventory([]));
 
     getAlternatives(productId).then((alts) => {
@@ -145,21 +142,39 @@ export default function ProductDetailPage() {
             >
               <RiMapPinLine size={24} className="shrink-0" />
               {inventory[0]
-                ? `${inventory[0].floorNo}층 ${inventory[0].zoneId} 구역 · 매대 ${inventory[0].locationId} · 재고 ${inventory[0].qty}개`
+                ? `${formatLocationLabel(inventory[0].locationId)} · 재고 ${inventory[0].qty}개`
                 : "매장 위치 정보 없음"}
             </button>
 
             {alternatives.length > 0 && (
               <div>
                 <p className="mb-2 text-sm font-semibold">비슷한 상품</p>
+                {/* ✅ 수정(요청 — "비슷한 상품은 이름만 있는데 이미지 필요") — 이름만 있던
+                    작은 알약 대신 이미지+이름 카드로. 가로 스크롤 막대는 전역 스크롤바
+                    숨김(globals.css)으로 이미 안 보이지만, 남겨둔 scrollbar-hide는
+                    호환용으로 그대로 둠. */}
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {alternatives.slice(0, 6).map((a) => {
                     const pop = popularity.find((p) => p.skuId === a.skuId);
+                    const img = resolveImageUrl(a.imageUrl ?? null);
                     return (
-                      <span key={a.skuId} className="shrink-0 rounded-sm border border-border px-3 py-2 text-xs">
-                        {a.name ?? a.productName ?? `상품 ${a.skuId}`}
-                        {pop && <span className="ml-1 text-muted-foreground">· 구매자 {pop.purchaserCount}명</span>}
-                      </span>
+                      <button
+                        key={a.skuId}
+                        type="button"
+                        onClick={() => router.push(`/product/${a.skuId}`)}
+                        className="flex w-24 shrink-0 flex-col items-start gap-1.5 rounded-sm border border-border p-2 text-left"
+                      >
+                        <div className="flex h-20 w-full items-center justify-center overflow-hidden rounded-sm bg-muted">
+                          {img ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={img} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">이미지 없음</span>
+                          )}
+                        </div>
+                        <p className="line-clamp-2 text-xs">{a.name ?? a.productName ?? `상품 ${a.skuId}`}</p>
+                        {pop && <span className="text-[10px] text-muted-foreground">구매자 {pop.purchaserCount}명</span>}
+                      </button>
                     );
                   })}
                 </div>
@@ -168,16 +183,22 @@ export default function ProductDetailPage() {
           </div>
 
           {/* ✅ 수정(요청) — "저장하기" 버튼, 다른 화면들과 같은 h-60 텍스트 폭 맞춤 원형
-              알약으로 화면 하단 고정. */}
-          <StickyBottomBar>
-            <Button
-              className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
-              disabled={product.discontinued}
-              onClick={() => setSavePickerOpen(true)}
-            >
-              저장하기
-            </Button>
-          </StickyBottomBar>
+              알약으로 화면 하단 고정.
+              ✅ 수정(요청 — "매대위치 모달 위로 버튼이 보인다") — 이 바(StickyBottomBar,
+              기본 z-[110])가 위치 모달(LocationMapDialog, 기본 Dialog z-105)보다
+              z-index가 높아서, 매대 위치를 눌러 모달을 열어도 이 버튼이 어두운 배경
+              위로 그대로 떠 보였음 — 모달이 열려있는 동안(locationMapOpen)은 숨김. */}
+          {!locationMapOpen && (
+            <StickyBottomBar>
+              <Button
+                className="flex mx-auto h-[60px] w-fit px-5 rounded-full shadow-[0_-2px_20px_rgba(0,0,0,0.1)]"
+                disabled={product.discontinued}
+                onClick={() => setSavePickerOpen(true)}
+              >
+                저장하기
+              </Button>
+            </StickyBottomBar>
+          )}
         </>
       )}
 

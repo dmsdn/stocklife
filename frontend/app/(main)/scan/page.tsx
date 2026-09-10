@@ -35,12 +35,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { RiArrowLeftSLine, RiArrowDownSLine, RiMapLine, RiCameraLine, RiCameraOffLine, RiBankCardLine, RiSubtractLine, RiAddLine, RiCoinLine, RiLoginBoxLine, RiCloseLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StoreMapDialog } from "@/components/domain/store-map-dialog";
 import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { apiFetch, isLoggedIn, ApiError, resolveImageUrl } from "@/lib/api-client";
 import { trackConsumerEvent } from "@/lib/consumer-events";
-import { writeLastCheckout } from "@/lib/checkout-summary";
+import { writeCheckoutDraft } from "@/lib/checkout-draft";
+import { ProductInsights, useProductInsights } from "@/components/domain/product-insights";
 import {
   addProductToCartGroup,
   updateCartGroups,
@@ -49,11 +51,19 @@ import {
   createCartGroup,
   getOrCreateQuickCartGroup,
   syncUpdateServerCart,
+  moveProductsBetweenGroups,
   type CartGroup,
 } from "@/lib/cart-storage";
 import { useBarcodeScanner } from "@/lib/use-barcode-scanner";
-import { readShoppingSession, writeShoppingSession } from "@/lib/shopping-session";
-import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
+import {
+  readShoppingSession,
+  writeShoppingSession,
+  sessionFor,
+  SHOPPING_CHANGED,
+  readActiveScanGroupId,
+  writeActiveScanGroupId,
+} from "@/lib/shopping-session";
+import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 import { isGroupCompleted, markGroupCompleted } from "@/lib/completed-groups";
 
 const DEFAULT_GROUP_ID = 1;
@@ -84,13 +94,23 @@ function ScanPageInner() {
   const [groups, setGroups] = useState<CartGroup[]>([]);
   const [groupId, setGroupId] = useState<number | null>(requestedGroupId);
   const selectedGroup = groups.find((g) => g.id === groupId);
+  const insights = useProductInsights(selectedGroup?.products.map(p=>p.id)??[]);
+  const scanLock = useRef(false);
 
   // ✅ 신규(요청) — "리스트 없이 장보기도 추가해달라"에 맞춰, 특정 리스트를 지정하지 않고
   //   들어온 경우(예: 하단탭바 스캔 아이콘으로 바로 진입) 곧장 스캔을 시작하는 대신 먼저
   //   "어느 리스트에 담을지" 고르는 화면을 띄웁니다(리스트 없이 시작하기도 선택 가능).
   //   특정 리스트에서 "장보러 가기"로 들어온 경우(requestedGroupId 있음)는 그 리스트가
   //   이미 정해졌으니 이 단계를 건너뜁니다.
-  const [entryPickerOpen, setEntryPickerOpen] = useState(requestedGroupId === null);
+  // ✅ 버그 수정(2026-09) — 예전엔 초기값을 requestedGroupId===null로 잡아서, 이전에
+  //   골라둔 리스트(readActiveScanGroupId)가 있어도 일단 true로 "뜬 다음" 아래 마운트
+  //   useEffect에서야 false로 닫았습니다. 이 "열렸다가 같은 틱에 바로 닫히는" 패턴이
+  //   모달 열기/닫기 트랜지션과 겹치면서, 논리적으로는(React state상) 닫혀 있어도
+  //   화면엔 그대로 남아 X·리스트 재선택·바깥 클릭 어떤 것도 안 먹히는 상태가 됐습니다
+  //   (실제로 열린 적 없는 모달을 닫으려니 반응이 없었던 것). 이제 무조건 false로
+  //   시작하고, 마운트 useEffect가 "정말 골라야 할 때"(저장된 리스트가 없거나 이미
+  //   완료된 경우)에만 true로 켭니다 — 저장된 선택이 있으면 아예 한 프레임도 뜨지 않음.
+  const [entryPickerOpen, setEntryPickerOpen] = useState(false);
 
   // ✅ 신규 — 담은 상품 목록에도 매대 번호("444 >") 같이 보여주기(리스트 상세/카트랑 동일 패턴)
   const [locationBySkuId, setLocationBySkuId] = useState<Map<number, string>>(new Map());
@@ -102,7 +122,7 @@ function ScanPageInner() {
         const next = new Map<number, string>();
         map.forEach((items, skuId) => {
           const loc = pickLocation(items);
-          if (loc) next.set(skuId, loc.locationId);
+          if (loc) next.set(skuId, formatLocationLabel(loc.locationId));
         });
         setLocationBySkuId(next);
       })
@@ -112,6 +132,30 @@ function ScanPageInner() {
 
   useEffect(() => {
     setGroups(readCartGroups());
+  }, []);
+
+  // ✅ 신규(요청 4번) — "스캔화면 들어갈 때마다 리스트를 다시 고른다" 문제 수정. 특정
+  //   리스트 지정 없이(requestedGroupId===null) 들어왔을 때, 예전엔 무조건 리스트 선택
+  //   화면(entryPicker)부터 띄웠습니다. 이제 이전에 골라둔 리스트(readActiveScanGroupId)가
+  //   있고 아직 결제 전(완료 안 됨)이면 그 리스트를 그대로 이어서 쓰고, 선택 화면은 건너뜁니다.
+  //   결제가 끝나면(handleCheckout) 이 저장값을 지워서 다음엔 다시 고르게 됩니다.
+  // ✅ 버그 수정(2026-09) — 저장된 리스트가 있을 때는 entryPickerOpen을 아예 true로
+  //   만들지 않습니다(위 useState 쪽 설명 참고). 정말 골라야 하는 경우(저장된 값이
+  //   없거나, 저장돼 있어도 이미 결제 완료된 리스트인 경우)에만 여기서 true로 켭니다.
+  useEffect(() => {
+    if (requestedGroupId != null) {
+      // 특정 리스트를 지정해서 들어온 경우(예: 리스트 상세의 "장보러 가기")도 그 선택을
+      // 고정값으로 저장 — 이후 리스트 없이 /scan에 재진입해도 이 리스트로 이어집니다.
+      writeActiveScanGroupId(requestedGroupId);
+      return;
+    }
+    const persisted = readActiveScanGroupId();
+    if (persisted != null && !isGroupCompleted(persisted)) {
+      setGroupId(persisted);
+    } else {
+      setEntryPickerOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -197,10 +241,14 @@ function ScanPageInner() {
   //   현재 groupId와 일치하는 저장된 세션이 있으면 복원합니다.
   useEffect(() => {
     if (groupId == null) return;
-    const saved = readShoppingSession();
-    if (saved && saved.groupId === groupId) {
-      setSessionScans(new Set(saved.scannedSkuIds));
-    }
+    const update = () => {
+      const saved = readShoppingSession();
+      setSessionScans(new Set(saved?.groupId===groupId ? saved.scannedSkuIds : []));
+      loadCartGroups().then(setGroups).catch(()=>{});
+    };
+    update();
+    window.addEventListener(SHOPPING_CHANGED, update);
+    return ()=>window.removeEventListener(SHOPPING_CHANGED, update);
   }, [groupId]);
 
   const [routeOpen, setRouteOpen] = useState(false);
@@ -219,7 +267,64 @@ function ScanPageInner() {
   }, [autoOpenRoute, groupId]);
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
+  // ✅ 신규(요청 5번) — 이미 바코드를 찍은 상품이 있는 상태에서 다른 리스트로 옮기려 하면,
+  //   바로 옮기지 않고 "가져갈지/버리고 새로 찍을지" 먼저 물어봅니다. 여기 담긴 값은
+  //   확인을 기다리는 중인 "옮겨갈 리스트 id".
+  const [pendingGroupSwitch, setPendingGroupSwitch] = useState<number | null>(null);
+  const [movingScans, setMovingScans] = useState(false);
+
   const refreshGroups = () => setGroups(readCartGroups());
+
+  // ✅ 리스트 선택(처음 고르기/전환) 공통 처리. 이미 찍은 상품이 있는 채로 다른 리스트로
+  //   바꾸려는 경우엔 곧장 바꾸지 않고 확인 모달(pendingGroupSwitch)을 띄웁니다.
+  const handleSelectGroup = (id: number) => {
+    if (id === groupId) {
+      setEntryPickerOpen(false);
+      return;
+    }
+    if (groupId != null && sessionScans.size > 0) {
+      setPendingGroupSwitch(id);
+      return;
+    }
+    setGroupId(id);
+    setEntryPickerOpen(false);
+    writeActiveScanGroupId(id);
+  };
+
+  // ✅ "가져가기" — 지금까지 찍은 상품을 새 리스트로 실제로 옮기고(서버/로컬 카트 반영),
+  //   그 리스트로 전환. sessionScans(=몇 개를 찍었는지)는 그대로 유지해서 목록이 안 끊김.
+  const handleMoveScannedItems = async () => {
+    if (pendingGroupSwitch == null || groupId == null) return;
+    const targetId = pendingGroupSwitch;
+    const skuIds = Array.from(sessionScans);
+    setMovingScans(true);
+    try {
+      await moveProductsBetweenGroups(groupId, targetId, skuIds);
+      refreshGroups();
+      setGroupId(targetId);
+      setEntryPickerOpen(false);
+      writeActiveScanGroupId(targetId);
+      writeShoppingSession({ groupId: targetId, scannedSkuIds: skuIds });
+    } catch {
+      setError("상품을 옮기지 못했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setMovingScans(false);
+      setPendingGroupSwitch(null);
+    }
+  };
+
+  // ✅ "버리고 새로 찍기" — 찍은 상품은 원래 리스트에 그대로 두고(삭제하지 않음), 새
+  //   리스트에선 빈 상태로 다시 시작.
+  const handleDiscardAndSwitch = () => {
+    if (pendingGroupSwitch == null) return;
+    const targetId = pendingGroupSwitch;
+    setSessionScans(new Set());
+    writeShoppingSession(null);
+    setGroupId(targetId);
+    setEntryPickerOpen(false);
+    writeActiveScanGroupId(targetId);
+    setPendingGroupSwitch(null);
+  };
 
   // ✅ 수정(2026-09, 2차) — 이제 "몇 개 빼기"를 직접 고를 수 있어서 quantity 파라미터로
   //   받은 만큼 뺌. 남은 개수가 0 이하면 리스트에서 완전히 빼고 sessionScans에서도 제거.
@@ -256,7 +361,7 @@ function ScanPageInner() {
       setSessionScans((prev) => {
         const next = new Set(prev);
         next.delete(skuId);
-        writeShoppingSession({ groupId, scannedSkuIds: [...next] });
+        writeShoppingSession({ ...sessionFor(groupId), groupId, scannedSkuIds: [...next] });
         return next;
       });
     }
@@ -273,25 +378,23 @@ function ScanPageInner() {
   const lookupByCode = async (code: string) => {
     if (!code.trim()) return;
 
-    // ✅ 수정(2026-09) — 리스트를 고르지 않고 바로 스캔하면 예전엔 "담을 리스트를
-    //   준비하는 중이에요"만 뜨고 계속 막혀있었다. "리스트 없이 시작하기"를 누른 것과
-    //   똑같이, 뒤에서 조용히 기본 그룹을 마련해서 바로 담아준다 — 별도 안내나 대기 없음.
+    // ✅ 수정(요청 — "자동으로 만들지 않게") — 예전엔 리스트를 고르지 않고 바로 스캔하면
+    //   뒤에서 조용히 "빠른 장보기" 리스트를 만들어서 바로 담아줬는데, 이러면 사용자가
+    //   원하지도 않은 리스트가 계속 쌓입니다. 이제 리스트가 안 골라진 상태로 스캔하면
+    //   담지 않고, 리스트 선택 화면을 띄워서 직접 고르거나(또는 "리스트 없이 시작하기"를
+    //   명시적으로 눌러서) 스스로 정하게 합니다.
     let currentGroupId = groupId;
     if (!currentGroupId) {
-      try {
-        const quick = await getOrCreateQuickCartGroup();
-        currentGroupId = quick.id;
-        setGroupId(quick.id);
-        setGroups((prev) => (prev.some((g) => g.id === quick.id) ? prev : [...prev, quick]));
-      } catch {
-        setError("담을 리스트를 준비하지 못했어요. 잠시 후 다시 시도해주세요.");
-        return;
-      }
+      setError("먼저 담을 리스트를 선택해주세요.");
+      setGroupPickerOpen(true);
+      return;
     } else if (groupCompleted) {
       setError("이미 결제 완료된 리스트예요. 다른 리스트를 선택해주세요.");
       return;
     }
 
+    if (scanLock.current) return;
+    scanLock.current = true;
     setError(null);
 
     try {
@@ -330,8 +433,11 @@ function ScanPageInner() {
         return;
       }
 
-      // ✅ 조회되자마자 바로 1개 담기 — 팝업 없이 목록에만 반영됩니다.
-      await addProductToCartGroup(currentGroupId, {
+      // 기존 상품 추가 API를 사용한다. 계획 상품의 첫 스캔은 수량을 늘리지 않는다.
+      const currentGroup = (await loadCartGroups()).find(g => g.id === currentGroupId);
+      const existing = currentGroup?.products.some(p => p.id === found.skuId);
+      const scanned = sessionFor(currentGroupId).scannedSkuIds.includes(found.skuId);
+      if (!existing || scanned) await addProductToCartGroup(currentGroupId, {
         id: found.skuId,
         name: found.name,
         category: found.categoryL1 ?? "",
@@ -341,18 +447,12 @@ function ScanPageInner() {
 
       // ✅ Set은 삽입 순서를 유지합니다 — delete 후 다시 add해서 "방금 스캔한 상품"이
       //   항상 이 Set의 맨 끝(=목록 렌더 시 맨 위)으로 오게 합니다.
-      setSessionScans((prev) => {
-        const next = new Set(prev);
-        next.delete(found.skuId);
-        next.add(found.skuId);
-        writeShoppingSession({ groupId: currentGroupId, scannedSkuIds: [...next] });
-        return next;
-      });
-      // ✅ 신규(09-03 요청 ④) — 행동 신호. 이 한 줄이 없으면 에이전트는 손님이 매장에
-      //   들어온 것도, 어디 서 있는지도 모릅니다(진입 브리핑·위치 안내·망설임 개입이 전부
-      //   이 이벤트에서 깨어남). 세션 id는 채팅과 같은 값이라(getOrCreateSessionId) 브리핑이
-      //   지금 대화에 붙습니다. 위치가 없으면(pickLocationId 없음) location_id 없이 안 보내고
-      //   VIEW로 남김 — 백엔드가 SCAN_ADD는 locationId 필수라 없이 보내면 에러가 날 수 있음.
+      const saved = sessionFor(currentGroupId);
+      const next = [...saved.scannedSkuIds.filter(id=>id!==found.skuId),found.skuId];
+      writeShoppingSession({...saved,scannedSkuIds:next,
+        anchor:found.pickLocationId?{skuId:found.skuId}:saved.anchor});
+      setSessionScans(new Set(next));
+
       if (found.pickLocationId) {
         trackConsumerEvent({ event_type: "SCAN_ADD", sku_id: found.skuId, location_id: found.pickLocationId });
       } else {
@@ -366,6 +466,8 @@ function ScanPageInner() {
       //   아직 없어 원인이 안 보였음) 원인이 "찾을 수 없음"인지 다른 서버 문제인지
       //   구분이 안 됐음. apiFetch가 읽어온 실제 메시지를 그대로 보여줌.
       setError(e instanceof ApiError ? e.message : "해당 바코드의 상품을 찾을 수 없어요.");
+    } finally {
+      scanLock.current = false;
     }
   };
 
@@ -425,60 +527,14 @@ function ScanPageInner() {
   //   로그인 상태에서만 호출된다는 전제로 단순화.
   // ✅ 결제 완료 시 이 리스트(그룹)를 로컬로 "완료" 표시 — 더 이상 수정 못 하게(요청 3번).
   //   백엔드에 리스트 단위 완료 상태 컬럼이 없어서 우선 로컬 플래그(lib/completed-groups.ts).
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (!groupId || checkingOut || cartTotalCount === 0 || !isLoggedIn() || groupCompleted) return;
-    setCheckingOut(true);
-    setError(null);
-
-    try {
-      const order = await apiFetch<{ orderId: number }>(
-        `/api/orders/checkout?groupId=${groupId}`,
-        { method: "POST" }
-      );
-      updateCartGroups((gs) =>
-        gs.map((g) =>
-          g.id !== groupId
-            ? g
-            : { ...g, products: g.products.filter((p) => !sessionScans.has(p.id)) }
-        )
-      );
-      markGroupCompleted(groupId);
-      setSessionScans(new Set());
-      writeShoppingSession(null);
-      router.push(`/checkout-complete?orderId=${order.orderId}`);
-    } catch (e) {
-      // ✅ 수정(2026-09) — 원인 파악: 백엔드 결제 API가 재고 부족/미체크 등으로 실패하면
-      //   전역 예외 처리기가 없어서 500과 함께 진짜 이유(예: "PICK 위치 재고를 찾을 수
-      //   없습니다", "결제할 상품이 선택되지 않았습니다")가 바디에 담겨오는데, 예전엔 그
-      //   메시지를 안 읽고 무조건 "결제에 실패했어요"만 보여줬음. 이제 apiFetch가 그
-      //   메시지를 읽어오면(lib/api-client.ts) 그대로 보여줌 — 실제 원인이 재고/데이터
-      //   문제인지 바로 알 수 있음.
-      // ✅ 수정(요청) — "결제는 그냥 버튼 누르면 결제완료로 넘어가야 하는데" — 실제 서버
-      //   결제가 500(서버 쪽 문제, 사용자가 뭘 잘못한 게 아님)으로 계속 막히는 상태라,
-      //   그동안은 프론트만으로는 못 고치는 백엔드 데이터/설정 문제(재고 시딩 등)일 때
-      //   결제 자체가 아예 막혀버립니다. 500일 때만 로컬에서라도 "결제 완료" 처리로
-      //   넘어가게 폴백을 둡니다(400 등 사용자가 고칠 수 있는 실패는 그대로 막음).
-      //   콘솔에는 실제 실패 이유를 남겨서 나중에 서버 쪽 원인 파악은 여전히 가능하게 함.
-      if (e instanceof ApiError && e.status >= 500) {
-        console.error("[결제] 서버 오류라 로컬 완료로 대체 처리:", e.message);
-        writeLastCheckout({ totalAmount: cartTotalPrice, itemCount: cartTotalCount, serverFailed: true });
-        updateCartGroups((gs) =>
-          gs.map((g) =>
-            g.id !== groupId
-              ? g
-              : { ...g, products: g.products.filter((p) => !sessionScans.has(p.id)) }
-          )
-        );
-        markGroupCompleted(groupId);
-        setSessionScans(new Set());
-        writeShoppingSession(null);
-        router.push("/checkout-complete");
-        return;
-      }
-      setError(e instanceof ApiError ? e.message : "결제에 실패했어요. 잠시 후 다시 시도해주세요.");
-    } finally {
-      setCheckingOut(false);
-    }
+    writeCheckoutDraft({
+      groupId,
+      scannedSkuIds: Array.from(sessionScans),
+      createdAt: new Date().toISOString(),
+    });
+    router.push(`/checkout?group=${groupId}`);
   };
 
   // ✅ 수정 — "담은 상품"은 이 리스트 전체(group.products, AI/검색으로 미리 담아둔 것까지
@@ -676,6 +732,7 @@ function ScanPageInner() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base">{p.name}</p>
+                      <ProductInsights item={insights[p.id]}/>
                       {locationBySkuId.get(p.id) && (
                         <p className="text-sm text-muted-foreground">{locationBySkuId.get(p.id)}</p>
                       )}
@@ -831,26 +888,70 @@ function ScanPageInner() {
 
       <GroupPickerDialog
         open={groupPickerOpen || entryPickerOpen}
-        groups={groups}
+        // ✅ 신규(요청) — 결제 완료된 리스트는 더 이상 담을 수 없으니 선택지에서 숨김
+        groups={groups.filter((g) => g.status !== "COMPLETED" && !isGroupCompleted(g.id))}
         selectedGroupId={groupId ?? DEFAULT_GROUP_ID}
         onClose={() => {
           setGroupPickerOpen(false);
           setEntryPickerOpen(false);
         }}
-        onSelect={(id) => {
-          setGroupId(id);
-          setEntryPickerOpen(false);
-        }}
+        onSelect={handleSelectGroup}
         onGroupsChange={refreshGroups}
         onStartWithoutList={async () => {
           // ✅ 수정(2026-09) — 누를 때마다 새로 만들지 않고, 아직 결제 안 끝난 "빠른 장보기"
           //   그룹이 있으면 그걸 재사용(중복 생성 방지).
           const group = await getOrCreateQuickCartGroup();
           setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [...prev, group]));
+          if (groupId != null && sessionScans.size > 0 && group.id !== groupId) {
+            setPendingGroupSwitch(group.id);
+            setEntryPickerOpen(false);
+            return;
+          }
           setGroupId(group.id);
           setEntryPickerOpen(false);
+          writeActiveScanGroupId(group.id);
         }}
       />
+
+      {/* ✅ 신규(요청 5번) — 이미 찍은 상품이 있는 채로 다른 리스트로 옮기려 할 때,
+          그 상품들을 새 리스트로 가져갈지 그냥 두고 새로 찍을지 선택하는 모달. */}
+      <Dialog open={pendingGroupSwitch != null} onOpenChange={(v) => !v && setPendingGroupSwitch(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>다른 리스트로 옮길까요?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            지금까지 찍은 상품 {scannedProducts.length}종을 새 리스트로 가져갈지, 여기 그대로 두고
+            새 리스트에서 새로 찍을지 골라주세요.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={movingScans}
+              onClick={handleMoveScannedItems}
+              className="flex h-11 w-full items-center justify-center rounded-full bg-brand text-sm font-medium text-brand-foreground disabled:opacity-50"
+            >
+              {movingScans ? "옮기는 중..." : "가져가기"}
+            </button>
+            <button
+              type="button"
+              disabled={movingScans}
+              onClick={handleDiscardAndSwitch}
+              className="flex h-11 w-full items-center justify-center rounded-full border border-card-border text-sm font-medium disabled:opacity-50"
+            >
+              버리고 새로 찍기
+            </button>
+            <button
+              type="button"
+              disabled={movingScans}
+              onClick={() => setPendingGroupSwitch(null)}
+              className="mt-1 text-center text-sm text-muted-foreground underline disabled:opacity-50"
+            >
+              취소
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

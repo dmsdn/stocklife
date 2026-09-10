@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,7 +15,6 @@ import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 import { useAiPanel } from "@/components/layout/ai-panel-context";
 import {
   addProductToCartGroup,
-  createCartGroup,
   readCartGroups,
   loadCartGroups,
   type CartGroup,
@@ -30,11 +29,13 @@ import {
 import { readShoppingSession, type ShoppingSession } from "@/lib/shopping-session";
 import { apiFetch, getAccessToken, isLoggedIn } from "@/lib/api-client";
 import { getMyProfile } from "@/lib/consumer-api";
+import { getStoreDayInfo } from "@/lib/store-hours";
 import { getClientId } from "@/lib/client-id";
 import { useUnreadNotificationCount } from "@/lib/use-unread-notifications";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { getCategoryColor, buildCategoryPalette } from "@/lib/category-colors";
-import { CartPicker } from "@/components/home/cart-picker";
+import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
+import { getMostRecentCompletedAt, isGroupCompleted } from "@/lib/completed-groups";
 import { Footer } from "@/components/layout/footer";
 import type { DashboardChatSession } from "@/components/home/home-dashboard";
 
@@ -65,9 +66,22 @@ export default function HomePage() {
   const openAiChat = useOpenAiChat();
   const { openSession } = useAiPanel();
 
-  const [cartPickerOpen, setCartPickerOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<RecommendedProduct | null>(null);
   const [cartGroups, setCartGroups] = useState<CartGroup[]>([]);
+
+  // ✅ 재적용(이전 세션 요청 4번) — "다음 방문 날짜"를 실제 리스트 중 가장 가까운 미래
+  //   장보기 예정일로. 완료(결제 완료)된 리스트는 이미 다녀온 거라 제외.
+  const nextVisitDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcoming = cartGroups
+      .filter((g) => g.shoppingDate && !isGroupCompleted(g.id))
+      .map((g) => new Date(`${g.shoppingDate}T00:00:00`))
+      .filter((d) => !Number.isNaN(d.getTime()) && d.getTime() >= today.getTime())
+      .sort((a, b) => a.getTime() - b.getTime());
+    return upcoming[0] ?? null;
+  }, [cartGroups]);
   const [recentSession, setRecentSession] = useState<DashboardChatSession | null>(null);
   const [recentOrder, setRecentOrder] = useState<RecentOrderSummary | null>(null);
   const [wishlistCount, setWishlistCount] = useState<number | null>(null);
@@ -85,6 +99,22 @@ export default function HomePage() {
   //   /mypage/spending(전체 화면)으로 이동.
   const [spending, setSpending] = useState<CategorySpending[] | null>(null);
   const [shoppingSession, setShoppingSession] = useState<ShoppingSession | null>(null);
+
+  // 방문 중 카드에 표시할 현재 리스트와 결제 직후 감사 상태.
+  const shoppingGroup = useMemo(
+    () =>
+      shoppingSession
+        ? cartGroups.find((g) => g.id === shoppingSession.groupId) ?? null
+        : null,
+    [cartGroups, shoppingSession]
+  );
+
+  // 결제 완료 후에는 shoppingSession이 사라져도 1시간 동안 감사 문구를 유지한다.
+  const recentCompletedAt = getMostRecentCompletedAt();
+  const recentlyCompleted = Boolean(
+    recentCompletedAt &&
+      Date.now() - new Date(recentCompletedAt).getTime() < 60 * 60 * 1000
+  );
   const [loggedIn, setLoggedIn] = useState(false);
   const [profileName, setProfileName] = useState<string | null>(null);
   const unreadCount = useUnreadNotificationCount();
@@ -141,56 +171,40 @@ export default function HomePage() {
 
   const goSearch = () => router.push("/search");
 
-  const openCartPicker = async (product: RecommendedProduct) => {
+  const openSaveDialog = (product: RecommendedProduct) => {
     setSelectedProduct(product);
     setSaveError(null);
-    try {
-      setCartGroups(await loadCartGroups());
-    } catch {
-      setCartGroups(readCartGroups());
-    }
-    setCartPickerOpen(true);
+    setSaveDialogOpen(true);
   };
 
-  const closeCartPicker = () => {
-    setCartPickerOpen(false);
+  const closeSaveDialog = () => {
+    setSaveDialogOpen(false);
     setSelectedProduct(null);
   };
 
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleAddToCart = async (groupId: number) => {
+  // ✅ 수정(요청 4번) — 리브 추천 카드의 저장 아이콘이 기존 CartPicker(자체 UI)를 써서
+  //   나머지 화면(상품 상세·검색·채팅)에서 쓰는 SaveToListDialog와 다르게 보였음.
+  //   같은 컴포넌트로 통일 — 여러 리스트에 동시 저장 가능, 새 리스트 만들기도 그 안에서.
+  const handleSaveToLists = async (groupIds: number[]) => {
     if (!selectedProduct) return;
     try {
-      const nextGroups = await addProductToCartGroup(groupId, {
-        id: selectedProduct.id,
-        name: selectedProduct.name,
-        category: selectedProduct.category,
-        price: selectedProduct.price,
-        image: selectedProduct.image,
-      });
+      let nextGroups: CartGroup[] = cartGroups;
+      for (const groupId of groupIds) {
+        nextGroups = await addProductToCartGroup(groupId, {
+          id: selectedProduct.id,
+          name: selectedProduct.name,
+          category: selectedProduct.category,
+          price: selectedProduct.price,
+          image: selectedProduct.image,
+        });
+      }
       setCartGroups(nextGroups);
-      closeCartPicker();
     } catch {
       setSaveError("리스트에 담지 못했어요. 다시 시도해주세요.");
-    }
-  };
-
-  const handleCreateCart = async () => {
-    if (!selectedProduct) return;
-    try {
-      const newGroup = await createCartGroup("새 장보기");
-      const nextGroups = await addProductToCartGroup(newGroup.id, {
-        id: selectedProduct.id,
-        name: selectedProduct.name,
-        category: selectedProduct.category,
-        price: selectedProduct.price,
-        image: selectedProduct.image,
-      });
-      setCartGroups(nextGroups);
-      closeCartPicker();
-    } catch {
-      setSaveError("리스트를 만들지 못했어요. 다시 시도해주세요.");
+    } finally {
+      closeSaveDialog();
     }
   };
 
@@ -238,36 +252,34 @@ export default function HomePage() {
 
           {!loggedIn ? (
             <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-white p-5">
-              <p className="text-md text-content-quaternary">로그인하고</p>
-              <div className="mt-1 flex items-center justify-between">
-                <p className="text-xl font-medium">LIV와 함께 시작해보세요</p>
-                <img src="/icons/liv-line.svg" alt="LIV" className="h-7 w-7 shrink-0" />
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push("/auth/login")}
-                className="mt-4 rounded-full border border-[#ffcbb9] bg-[#fff0eb] px-4 py-2 text-17 font-medium text-main"
-              >
-                STOCKLIFE 시작하기 &gt;
-              </button>
-            </section>
-          ) : (
-            // ✅ 쇼핑 중(스캔 세션 있음)일 때만 "방문해주셔서 감사합니다" 카드,
-            //   평소(세션 없음)엔 "다음 방문 날짜" 카드 — 예전엔 이 둘이 뒤바뀌어 있었음.
-            <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-white p-5">
-              <p className="text-17 font-medium">{shoppingSession ? "STOCK LIFE 매장에 방문해주셔서 감사합니다." : ""}</p>
-              <p className="mt-1 text-sm text-content-tertiary">{shoppingSession ? "영업중 · 11:00 마감" : ""}</p>
-              {!shoppingSession ? (
-                <>
-                  <p className="mt-1 text-17 font-medium">다음 방문 날짜는 9월 9일이에요.</p>
-                  <p className="mt-1 text-sm text-[#555]">9월 9일 운영시간</p>
-                  <p className="text-sm text-[#555]">오전 10시 - 오후 11시</p>
-                </>
-              ) : null}
-              <div className="mt-4 flex justify-center gap-4">
-                {/* ✅ 수정(요청 3·5번) — 아이콘 24px/원형 박스 60px로 키움. 방문 중(shoppingSession)일
-                    땐 동선·스캔·리브, 아닐 땐 저장·매장지도·리브로 바뀜(예전엔 항상 저장/스캔
-                    고정이었고 두 번째 아이콘도 지도 모양인데 /scan으로 잘못 가고 있었음). */}
+              {recentlyCompleted ? (
+                <div>
+                  <p className="text-17 font-medium">결제해주셔서 감사합니다.</p>
+                  <p className="mt-1 text-sm text-content-quaternary">오늘도 STOCK LIFE와 함께해요.</p>
+                </div>
+              ) : shoppingSession ? (
+                <div>
+                  <p className="text-17 font-medium">지금 STOCK LIFE에서 쇼핑 중이에요.</p>
+                  {shoppingGroup && shoppingGroup.status !== "COMPLETED" && (() => {
+                    const info = getStoreDayInfo(new Date());
+                    return !info.closed ? (
+                      <p className="mt-1 text-sm text-content-quaternary">
+                        오늘은 {info.hours.close}까지 영업해요.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-content-quaternary">{info.closedReason}이에요.</p>
+                    );
+                  })()}
+                </div>
+              ) : nextVisitDate ? (
+                <p className="text-17 font-medium">
+                  다음 방문 날짜는 {nextVisitDate.toLocaleDateString("ko-KR", { month: "long", day: "numeric" })}이에요.
+                </p>
+              ) : (
+                <p className="text-17 font-medium">아직 예정된 장보기가 없어요.</p>
+              )}
+
+              <div className="mt-[40px] flex justify-center gap-4">
                 {shoppingSession ? (
                   <>
                     <button
@@ -312,7 +324,7 @@ export default function HomePage() {
                 </button>
               </div>
             </section>
-          )}
+          ) : null}
 
           {/* 바로가기 — 카드 그림 3개는 실제 디자인 에셋 사용 중(/public/cards/*.png).
               왼쪽 카드는 고정 높이를 안 주고 grid의 기본 stretch로 오른쪽 두 칸 합친
@@ -352,7 +364,7 @@ export default function HomePage() {
               때문에(예전엔 px-3라 -mx-3로 상쇄해야 했음) 이제 아무 여백 없이 그냥 두면
               화면 끝까지 자연스럽게 붙음. 위아래로만 my-5(20px)를 줘서 다른 섹션과 분리. */}
           {loggedIn ? (
-            <section className="relative my-[60px] h-[105px] overflow-hidden bg-[#F7AE93] p-5">
+            <section className="relative my-[60px] h-[120px] overflow-hidden bg-[#F7AE93] p-5">
               <p className="text-19 font-bold">앱으로 결제하면 포인트 두 배</p>
               <p className="mt-1 text-xs">포인트를 적립할수록 더 많은 혜택이 있어요!</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -366,7 +378,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => router.push("/auth/login")}
-              className="relative my-[60px] block h-[125px] w-full overflow-hidden bg-[#92ECBD] p-5 text-left"
+              className="relative my-[60px] block h-[120px] w-full overflow-hidden bg-[#92ECBD] p-5 text-left"
             >
               <p className="text-21 font-bold">장보기 리스트, 간편하게 만들어보세요</p>
               <p className="mt-1 text-sm text-[#2f6850]">리브에게 물어보고 3초 만에 리스트 완성!</p>
@@ -391,10 +403,17 @@ export default function HomePage() {
               <div className="mt-4 h-1.5 w-full rounded-full bg-card-border" />
             </div>
           ) : loggedIn && spending && spending.length > 0 ? (
+            /* ✅ 수정 — "카드가 오른쪽으로 빠져나감" 원인: block w-full(=100%)에
+                mx-[20px]를 함께 준 게 문제였음. w-full은 부모 폭 100%를 먼저 잡고 나서
+                margin이 그 위에 "더해지는" 방식이라, 카드 우측이 다른 카드들의 우측
+                여백(20px)보다 더 오른쪽으로 밀려나 있었음(왼쪽도 마찬가지로 어긋남,
+                다만 오른쪽 끝이 화면 밖으로 밀려서 더 눈에 띔). w-full을 빼면 block
+                요소 기본값(width:auto)이 부모 폭에서 margin만큼을 자동으로 뺀 폭으로
+                계산돼서, 다른 mx-[20px] 카드들과 동일한 좌우 여백으로 맞춰짐. */
             <button
               type="button"
               onClick={() => router.push("/mypage/spending")}
-              className="mx-[20px] my-[60px] block w-full rounded-[20px] border border-card-border bg-white p-5 text-left"
+              className="mx-[20px] my-[60px] block w-[calc(100%-40px)] rounded-[20px] border border-card-border bg-white p-5 text-left"
             >
               {(() => {
                 const sorted = [...spending].sort((a, b) => b.totalSpentKrw - a.totalSpentKrw);
@@ -458,7 +477,7 @@ export default function HomePage() {
                 <button
                   key={product.id}
                   type="button"
-                  onClick={() => openCartPicker(product)}
+                  onClick={() => openSaveDialog(product)}
                   className="min-w-0 text-left"
                 >
                   <div className="relative aspect-square overflow-hidden rounded-[14px] bg-gradient-to-b from-[#d8d8d8] to-card-border">
@@ -503,15 +522,12 @@ export default function HomePage() {
         <Footer paddingClassName="px-3 md:px-8" />
       </div>
 
-      <CartPicker
-        open={cartPickerOpen}
-        selectedProduct={selectedProduct}
-        cartGroups={cartGroups}
-        onClose={closeCartPicker}
-        onAddToCart={handleAddToCart}
-        onCreateCart={handleCreateCart}
-        error={saveError}
-      />
+      <SaveToListDialog open={saveDialogOpen} onClose={closeSaveDialog} onSelect={handleSaveToLists} />
+      {saveError && (
+        <p className="fixed inset-x-0 bottom-24 z-[130] mx-auto w-fit rounded-full bg-foreground px-4 py-2 text-sm text-background">
+          {saveError}
+        </p>
+      )}
     </div>
   );
 }

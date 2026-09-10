@@ -51,3 +51,16 @@ Agent/.demo_inject.json
 
 # 출하물(서빙이 lifespan 에 적재)은 예외 — 연구용 joblib 과 달리 이건 코드의 일부다
 !Agent/app/artifacts/*.joblib
+
+# 설정/소스 백업 파일 (09-09)
+# 두 가지 이유로 저장소에서 뺀다.
+#  1) application.yml 은 .gitignore 되어 있지만 그 백업본(application.yml.bak 등)은
+#     패턴에 안 걸려서 RDS 비밀번호가 그대로 커밋돼 있었다.
+#  2) Simulation/src/*.bak_* 들은 편집기 파일 검색에 계속 잡혀서, 옛날 버전을 실제
+#     소스로 착각하고 여는 사고가 났다.
+*.bak
+*.bak[0-9]
+*.bak_*
+
+# TypeScript incremental build cache
+*.tsbuildinfo

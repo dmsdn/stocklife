@@ -8,6 +8,7 @@ interface LocationProductDto {
   name: string;
   price: number;
   stock: number;
+  barcode?: string;
 }
 
 export async function fetchProductsAtLocation(
@@ -26,6 +27,7 @@ export async function fetchProductsAtLocation(
       name: it.name,
       price: it.price,
       stock: Math.max(0, it.stock + overlay),
+      barcode: it.barcode,
     };
   });
 }

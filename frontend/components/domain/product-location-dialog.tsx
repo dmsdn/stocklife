@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StoreMap, type MapPin } from "./store-map";
 import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
+import { notifySimulationLocation } from "@/lib/simulation-location";
 
 interface ProductLocationDialogProps {
   open: boolean;
@@ -32,6 +33,7 @@ export function ProductLocationDialog({ open, onClose, skuId, name, price }: Pro
       }
       setFloorNo(loc.floorNo);
       setPin({ id: skuId, name, price, x: loc.x, y: loc.y });
+      notifySimulationLocation({skuId, name, floorNo: loc.floorNo, x: loc.x, y: loc.y});
     });
   }, [open, skuId, name, price]);
 
@@ -47,7 +49,7 @@ export function ProductLocationDialog({ open, onClose, skuId, name, price }: Pro
         ) : pin === null ? (
           <p className="py-8 text-center text-sm text-muted-foreground">위치 정보가 없어요.</p>
         ) : (
-          <StoreMap floorNo={floorNo} pins={[pin]} routeOrder={[]} />
+          <StoreMap floorNo={floorNo} pins={[pin]} routeOrder={[]} showFloorBadge />
         )}
       </DialogContent>
     </Dialog>

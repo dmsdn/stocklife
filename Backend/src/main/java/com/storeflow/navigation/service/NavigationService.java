@@ -32,20 +32,26 @@ public class NavigationService {
     private static final int NEAREST_PASSABLE_RADIUS = 6;
 
     private final MapCellRepository mapCellRepository;
+    private final NavigationGraphCache graphCache;
     private final LocationRepository locationRepository;
     private final StockRepository stockRepository;
 
     public NavigationService(MapCellRepository mapCellRepository,
                              LocationRepository locationRepository,
-                             StockRepository stockRepository) {
+                             StockRepository stockRepository,
+                             NavigationGraphCache graphCache) {
         this.mapCellRepository = mapCellRepository;
+        this.graphCache = graphCache;
         this.locationRepository = locationRepository;
         this.stockRepository = stockRepository;
     }
 
     @Transactional(readOnly = true)
     public RouteResponse buildRoute(RouteRequest request) {
-        NavigationGraph graph = NavigationGraph.load(mapCellRepository.findAll());
+        // 09-03: 요청마다 21,375행을 읽어 그래프를 새로 짓던 것을 캐시로 (NavigationGraphCache).
+        //   실측 2.26초/요청 → 첫 요청만. 에이전트 동선이 구간 비용을 재려고 이 창구를 십수 번
+        //   부르므로 그 2.26초가 곧 "화장실 들렀다가 계란" 질문의 80초였다.
+        NavigationGraph graph = graphCache.get();
 
         GridKey current = GridKey.of(request.getStartFloor(), request.getStartX(), request.getStartY());
         List<RouteLegResponse> legs = new ArrayList<>();
@@ -72,7 +78,7 @@ public class NavigationService {
                 continue;
             }
 
-            AStarPathfinder.Result result = AStarPathfinder.findPath(graph, walkableStart, walkableTarget);
+            AStarPathfinder.Result result = AStarPathfinder.findPath(graph, walkableStart, walkableTarget, request.isEscalatorsOnly());
 
             if (result == null) {
                 legs.add(RouteLegResponse.unreachable(
@@ -88,6 +94,31 @@ public class NavigationService {
         }
 
         return new RouteResponse(legs, totalDistance);
+    }
+
+    /** 모든 지점을 한 번 해석하고 실제 보행 비용을 행렬로 반환한다.
+     * 순서 최적화는 Agent가 수행한다. null은 도달 불가이며 0m로 바꾸지 않는다.
+     * 인덱스0은 출발, 나머지는 request.stops 순서. DB를 쓰거나 구매 상태를 바꾸지 않는다. */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> buildMatrix(RouteRequest request) {
+        NavigationGraph graph = graphCache.get();
+        List<GridKey> points = new ArrayList<>();
+        points.add(graph.nearestPassable(GridKey.of(request.getStartFloor(), request.getStartX(), request.getStartY()), NEAREST_PASSABLE_RADIUS));
+        for (RouteStopRequest stop : request.getStops()) {
+            ResolvedStop resolved = resolveStop(stop);
+            points.add(resolved == null ? null : graph.nearestPassable(resolved.key(), NEAREST_PASSABLE_RADIUS));
+        }
+        Integer[][] costs = new Integer[points.size()][points.size()];
+        for (int i = 0; i < points.size(); i++) {
+            for (int j = i; j < points.size(); j++) {
+                if (points.get(i) == null || points.get(j) == null) continue;
+                AStarPathfinder.Result result = AStarPathfinder.findPath(graph, points.get(i), points.get(j), request.isEscalatorsOnly());
+                // 현 세계 ESC는 양방향이며 같은 좌표로 인접 층을 연결한다.
+                // 방향성 세계로 바뀌면 이 대칭 재사용도 함께 바꿔야 한다.
+                costs[i][j] = costs[j][i] = result == null ? null : result.cost();
+            }
+        }
+        return java.util.Map.of("costs", costs, "policy", request.isEscalatorsOnly() ? "ESC_ADJACENT" : "LEGACY");
     }
 
     // ------------------------------------------------------------------

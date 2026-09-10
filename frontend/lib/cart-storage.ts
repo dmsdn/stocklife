@@ -1,6 +1,7 @@
 "use client";
 
-import { apiFetch, isLoggedIn, resolveImageUrl } from "./api-client";
+import { apiFetch, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
+import { notifySimulationCartChanged } from "./simulation-bridge";
 
 export interface CartProduct {
   id: number; // skuId
@@ -98,6 +99,16 @@ function writeMemberCache(groups: CartGroup[]) {
   if (canUseStorage()) window.sessionStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify(groups));
 }
 
+/** ✅ 버그 수정(요청 — "리스트는 회원마다 본인 것만 보이는 게 맞는지 확인해") — 로그인 중
+ *  readCartGroups()가 동기 폴백으로 쓰는 이 세션 캐시가, 로그아웃할 때 지워지지 않고
+ *  있었습니다. 같은 브라우저 탭에서 A가 로그아웃하고 B가 로그인하면(탭을 안 닫은 채로),
+ *  네트워크가 느리거나 loadCartGroups()가 실패해서 readCartGroups() 폴백을 타는 순간
+ *  A의 리스트 캐시가 그대로 B 화면에 잠깐 보일 수 있는 구조였습니다 — logout()에서
+ *  이 함수를 불러서 지워야 합니다.*/
+export function clearMemberCartCache() {
+  if (canUseStorage()) window.sessionStorage.removeItem(MEMBER_CACHE_KEY);
+}
+
 /** 동기 UI 코드용. 회원 데이터의 영구 원본은 DB이고, 여기 값은 sessionStorage UI 캐시일 뿐이다. */
 export function readCartGroups(): CartGroup[] {
   return isLoggedIn() ? readMemberCache() : readGuestGroups();
@@ -152,6 +163,7 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
 /** 로그인 회원은 항상 DB를 다시 읽어오고, 비회원은 localStorage를 읽는다. */
 export async function loadCartGroups(): Promise<CartGroup[]> {
   if (!isLoggedIn()) return readGuestGroups();
+  const requestToken = getAccessToken();
 
   // 로그인 직후 승계가 실패했더라도 같은 페이지 렌더에서 무한 재호출하지 않는다.
   // 로그인 1회당 migrate는 최대 1번만 시도하고, 실패 데이터는 localStorage에 보존한다.
@@ -175,6 +187,9 @@ export async function loadCartGroups(): Promise<CartGroup[]> {
 
   const serverGroups = await apiFetch<ServerCartGroup[]>("/api/cart/groups");
   const groups = await hydrateServerGroups(serverGroups);
+  if (getAccessToken() !== requestToken) {
+    throw new Error("로그인 상태가 변경되었습니다. 리스트를 다시 불러와 주세요.");
+  }
   writeMemberCache(groups);
   return groups;
 }
@@ -232,6 +247,7 @@ export async function addProductToCartGroup(
     method: "POST",
     body: JSON.stringify({ skuId: product.id, quantity: 1 }),
   });
+  notifySimulationCartChanged();
   return loadCartGroups();
 }
 
@@ -272,6 +288,7 @@ export async function createCartGroup(title: string, shoppingDate?: string | nul
     body: JSON.stringify({ title, description: "새 장보기 목록", shoppingDate: shoppingDate ?? null }),
   });
   await loadCartGroups();
+  notifySimulationCartChanged();
   return {
     id: created.cartGroupId,
     title: created.title,
@@ -308,6 +325,7 @@ export async function updateCartGroupInfo(
     method: "PATCH",
     body: JSON.stringify(patch),
   });
+  notifySimulationCartChanged();
   return loadCartGroups();
 }
 
@@ -318,6 +336,7 @@ export async function deleteCartGroup(groupId: number): Promise<CartGroup[]> {
     return next;
   }
   await apiFetch(`/api/cart/groups/${groupId}`, { method: "DELETE" });
+  notifySimulationCartChanged();
   return loadCartGroups();
 }
 
@@ -334,9 +353,47 @@ export async function syncUpdateServerCart(cartItemId: number | undefined, quant
     method: "PATCH",
     body: JSON.stringify({ ...(quantity != null ? { quantity } : {}), ...(checked != null ? { checked } : {}) }),
   });
+  notifySimulationCartChanged();
 }
 
 export async function syncRemoveFromServerCart(cartItemId: number | undefined) {
   if (!isLoggedIn() || cartItemId == null) return;
   await apiFetch(`/api/cart/${cartItemId}`, { method: "DELETE" });
+  notifySimulationCartChanged();
+}
+
+// ✅ 신규 — 스캔 화면에서 다른 리스트로 옮길 때 "이미 찍은 상품을 가져갈지" 선택한 경우용.
+//   지정한 skuId들을 fromGroup에서 toGroup으로 수량 그대로 옮긴다(있는 만큼 addProductToCartGroup을
+//   반복 호출 — 이 함수가 항상 수량 1씩 늘리는 방식이라 그대로 재사용). 옮긴 뒤엔 원래
+//   리스트에서 해당 상품을 완전히 제거한다.
+export async function moveProductsBetweenGroups(
+  fromGroupId: number,
+  toGroupId: number,
+  skuIds: number[]
+): Promise<CartGroup[]> {
+  const fromGroup = readCartGroups().find((g) => g.id === fromGroupId);
+  const toMove = (fromGroup?.products ?? []).filter((p) => skuIds.includes(p.id));
+
+  for (const product of toMove) {
+    for (let i = 0; i < product.quantity; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await addProductToCartGroup(toGroupId, {
+        id: product.id,
+        name: product.name,
+        category: product.category,
+        price: product.price,
+        image: product.image,
+      });
+    }
+    if (isLoggedIn()) {
+      // eslint-disable-next-line no-await-in-loop
+      await syncRemoveFromServerCart(product.cartItemId);
+    }
+  }
+
+  return updateCartGroups((groups) =>
+    groups.map((g) =>
+      g.id !== fromGroupId ? g : { ...g, products: g.products.filter((p) => !skuIds.includes(p.id)) }
+    )
+  );
 }

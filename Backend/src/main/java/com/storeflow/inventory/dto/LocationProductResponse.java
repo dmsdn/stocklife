@@ -9,16 +9,19 @@ public class LocationProductResponse {
     private final String name;
     private final int price;
     private final int stock;
+    private final String barcode;
 
-    public LocationProductResponse(Integer skuId, String name, int price, int stock) {
+    public LocationProductResponse(Integer skuId, String name, int price, int stock, String barcode) {
         this.skuId = skuId;
         this.name = name;
         this.price = price;
         this.stock = stock;
+        this.barcode = barcode;
     }
 
     public Integer getSkuId() { return skuId; }
     public String getName() { return name; }
     public int getPrice() { return price; }
     public int getStock() { return stock; }
+    public String getBarcode() { return barcode; }
 }

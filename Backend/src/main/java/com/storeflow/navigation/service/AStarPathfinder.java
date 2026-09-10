@@ -29,6 +29,11 @@ public final class AStarPathfinder {
 
     /** @return 경로를 못 찾으면 null */
     public static Result findPath(NavigationGraph graph, GridKey start, GridKey goal) {
+        return findPath(graph, start, goal, false);
+    }
+
+    /** 장보기 비용 행렬과 최종 경로가 같은 이동 정책을 사용한다. */
+    public static Result findPath(NavigationGraph graph, GridKey start, GridKey goal, boolean escalatorsOnly) {
         if (start.equals(goal)) {
             return new Result(List.of(start), 0);
         }
@@ -42,7 +47,7 @@ public final class AStarPathfinder {
         PriorityQueue<QueueEntry> open = new PriorityQueue<>(Comparator.comparingInt(QueueEntry::fScore));
 
         gScore.put(start, 0);
-        open.add(new QueueEntry(start, heuristic(start, goal)));
+        open.add(new QueueEntry(start, (escalatorsOnly ? heuristic(start, goal) : 0)));
 
         while (!open.isEmpty()) {
             GridKey current = open.poll().key();
@@ -55,7 +60,7 @@ public final class AStarPathfinder {
             }
 
             int currentScore = gScore.get(current);
-            for (NavigationGraph.Edge edge : graph.neighbors(current)) {
+            for (NavigationGraph.Edge edge : graph.neighbors(current, escalatorsOnly)) {
                 if (visited.contains(edge.to())) {
                     continue;
                 }
@@ -63,7 +68,7 @@ public final class AStarPathfinder {
                 if (tentative < gScore.getOrDefault(edge.to(), Integer.MAX_VALUE)) {
                     gScore.put(edge.to(), tentative);
                     cameFrom.put(edge.to(), current);
-                    open.add(new QueueEntry(edge.to(), tentative + heuristic(edge.to(), goal)));
+                    open.add(new QueueEntry(edge.to(), tentative + (escalatorsOnly ? heuristic(edge.to(), goal) : 0)));
                 }
             }
         }
@@ -73,10 +78,8 @@ public final class AStarPathfinder {
 
     /** 층이 다르면 실거리를 모르므로 0을 써서 admissible(과대추정 없음)하게 유지한다. */
     private static int heuristic(GridKey a, GridKey b) {
-        if (a.floorNo() != b.floorNo()) {
-            return 0;
-        }
-        return Math.abs(a.x() - b.x()) + Math.abs(a.y() - b.y());
+        return Math.abs(a.x() - b.x()) + Math.abs(a.y() - b.y())
+                + 3 * Math.abs(a.floorNo() - b.floorNo());
     }
 
     private static List<GridKey> reconstruct(Map<GridKey, GridKey> cameFrom, GridKey goal) {

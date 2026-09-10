@@ -22,10 +22,8 @@ interface AppNotification {
 
 const TABS: Tab[] = ["전체", "공지", "혜택", "주문", "리브"];
 
-// ⚠ 백엔드에서 아직 아무도 createNotification()을 안 불러서(주문완료/프로모션 등 알림을
-//   실제로 만드는 로직 자체가 없음), type에 어떤 문자열이 들어올지 확정된 게 없습니다.
-//   일단 상식적인 값(GENERAL/PROMO/ORDER/AI_CHAT)으로 가정해서 매핑해뒀고, 실제 값
-//   확인되면 이 매핑만 고치면 됩니다. "전체" 탭은 이 매핑이랑 무관하게 항상 정상 동작합니다.
+// 백엔드는 리스트 보유자의 재입고 알림(RESTOCK)을 생성합니다.
+// 실제 백엔드 type이 추가되면 이 매핑만 확장하면 됩니다.
 function mapBackendType(type: string): NotificationType {
   if (type === "PROMO" || type === "BENEFIT") return "혜택";
   if (type === "ORDER") return "주문";
@@ -61,42 +59,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}일 전`;
 }
 
-// TODO: 백엔드 알림 API 연동 전 목업 데이터
-const MOCK_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: "1",
-    type: "주문",
-    title: "품절이었던 상품이 재입고됐어요",
-    message: "찜한 우유 1L가 다시 들어왔어요.",
-    createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
-    read: false,
-  },
-  {
-    id: "2",
-    type: "혜택",
-    title: "이번 주 할인 정보",
-    message: "소진 임박 신선식품 최대 50% 할인 중이에요.",
-    createdAt: new Date(Date.now() - 3 * 3600000).toISOString(),
-    read: false,
-  },
-  {
-    id: "3",
-    type: "공지",
-    title: "정기 점검 안내",
-    message: "8월 20일 새벽 서비스 점검이 예정되어 있어요.",
-    createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-    read: true,
-  },
-  {
-    id: "4",
-    type: "리브",
-    title: "리브가 답변을 보냈어요",
-    message: "\"이번 주 장보기\" 리스트에 계란과 삼겹살을 담아드렸어요.",
-    createdAt: new Date(Date.now() - 20 * 60000).toISOString(),
-    read: false,
-  },
-];
-
 import { readProactiveNotifications, markProactiveNotificationRead, type ProactiveNotificationRecord } from "@/lib/proactive-notifications";
 
 function toAppNotification(n: ProactiveNotificationRecord): AppNotification {
@@ -113,11 +75,19 @@ function toAppNotification(n: ProactiveNotificationRecord): AppNotification {
 export default function NotificationsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("전체");
-  const [notifications, setNotifications] = useState<AppNotification[]>(MOCK_NOTIFICATIONS);
-  // ✅ 신규(요청 2번) — 자발형 메시지는 백엔드 알림 API가 아니라 로컬 저장소
-  //   (lib/proactive-notifications.ts, lib/realtime.ts가 실시간으로 채움)에 있어서 따로
-  //   불러와 합칩니다. 이 화면이 열려있는 동안 새로 도착해도(storeflow:proactive-
-  //   notifications-changed) 바로 반영되게 이벤트도 구독.
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // ✅ 재적용(요청 2번 — "목업 알림 없애고 실제 ai가 던져주는 내용만") — 예전엔 항상
+  //   가짜 알림 4개(MOCK_NOTIFICATIONS)로 시작해서, 백엔드 조회가 비어있어도 그 4개가
+  //   계속 보였습니다. 이제 빈 배열로 시작하고, 아래 두 실제 소스만 채웁니다:
+  //   1) GET /api/notifications(백엔드 알림) — 있으면 그걸로 교체
+  //   2) 리브가 실제로 먼저 건넨 말(AI_PROACTIVE, lib/realtime.ts의 SSE) — 로컬에
+  //      저장해뒀다가(lib/proactive-notifications.ts) 아래서 합침
+  //   둘 다 없으면 정말로 "알림이 없어요"가 뜹니다(가짜로 채우지 않음).
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // ✅ 자발형 메시지는 백엔드 알림 API가 아니라 로컬 저장소(lib/proactive-notifications.ts,
+  //   lib/realtime.ts가 실시간으로 채움)에 있어서 따로 불러와 합칩니다. 이 화면이 열려있는
+  //   동안 새로 도착해도(storeflow:proactive-notifications-changed) 바로 반영되게 이벤트도 구독.
   const [proactiveNotifications, setProactiveNotifications] = useState<ProactiveNotificationRecord[]>([]);
   useEffect(() => {
     const load = () => setProactiveNotifications(readProactiveNotifications());
@@ -133,20 +103,22 @@ export default function NotificationsPage() {
       { notificationId: number; type: string; title: string; message: string; linkUrl: string | null; read: boolean; createdAt: string }[]
     >("/api/notifications")
       .then((list) => {
-        if (list.length === 0) return;
         setNotifications(
           list.map((n) => ({
             id: String(n.notificationId),
             type: mapBackendType(n.type),
             title: n.title,
-            message: n.message,
+            message: n.type === "RESTOCK"
+              ? n.message.replace("장바구니에 담아두신 상품이에요!", "리스트에 담아둔 상품이에요!")
+              : n.message,
             createdAt: n.createdAt,
             read: n.read,
-            href: n.linkUrl ?? undefined,
+            href: n.linkUrl ?? (n.type === "RESTOCK" ? "/saved" : undefined),
           }))
         );
       })
-      .catch(() => {});
+      .catch(() => setError("알림을 불러오지 못했어요. 로그인 상태를 확인하고 새로고침해 주세요."))
+      .finally(() => setLoading(false));
   }, []);
 
   // ✅ 백엔드/목업 알림 + 로컬 자발형 알림을 합쳐서 최신순으로.
@@ -198,7 +170,10 @@ export default function NotificationsPage() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {error && <p role="alert" className="py-4 text-sm">{error}</p>}
+      {loading && filtered.length === 0 ? (
+        <p className="py-16 text-center text-sm">알림을 불러오는 중이에요.</p>
+      ) : filtered.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">알림이 없어요.</p>
       ) : (
         <div className="divide-y divide-border">

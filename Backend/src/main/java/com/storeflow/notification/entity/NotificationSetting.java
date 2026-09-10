@@ -87,6 +87,7 @@ public class NotificationSetting {
             case "COUPON" -> couponEnabled;
             case "POINT" -> pointEnabled;
             case "RESTOCK", "STOCK" -> restockEnabled;
+            case "STOCKOUT" -> restockEnabled; // 재고 알림 토글 하나로 재입고/품절 둘 다 제어
             case "MARKETING", "PROMOTION", "PROMO" -> marketingEnabled;
             default -> true;
         };

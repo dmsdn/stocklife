@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Modal from './Modal';
+import BarcodeModal from './BarcodeModal';
 import type { LocationInfo, ProductInfo } from '../game/types';
 
 interface LevelGroup {
@@ -37,6 +38,9 @@ export default function ProductPopup({
 
     const [restockingKey, setRestockingKey] =
         useState<string | null>(null);
+
+    const [barcodeProduct, setBarcodeProduct] =
+        useState<ProductInfo | null>(null);
 
     const handleRestock = async (
         location: LocationInfo,
@@ -76,9 +80,10 @@ export default function ProductPopup({
     };
 
     return (
-        <Modal
+        <>
+        {!barcodeProduct && <Modal
             title={`${baseLabel} 진열 상품`}
-            onClose={onClose}
+            onClose={barcodeProduct ? undefined : onClose}
         >
             <div
                 style={{
@@ -199,6 +204,32 @@ export default function ProductPopup({
                                             </button>
 
                                             <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setBarcodeProduct(p)
+                                                }
+                                                disabled={!p.barcode}
+                                                title={p.barcode
+                                                    ? `${p.barcode} 바코드 보기`
+                                                    : '바코드 정보 없음'}
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    borderRadius: 6,
+                                                    border: 'none',
+                                                    background: p.barcode
+                                                        ? '#7c3aed'
+                                                        : '#374151',
+                                                    color: '#fff',
+                                                    cursor: p.barcode
+                                                        ? 'pointer'
+                                                        : 'not-allowed',
+                                                    fontSize: 12,
+                                                }}
+                                            >
+                                                바코드
+                                            </button>
+
+                                            <button
                                                 onClick={() =>
                                                     handleRestock(
                                                         group.location,
@@ -243,6 +274,15 @@ export default function ProductPopup({
                     </div>
                 )}
             </div>
-        </Modal>
+        </Modal>}
+
+        {barcodeProduct?.barcode && (
+            <BarcodeModal
+                productName={barcodeProduct.name}
+                barcode={barcodeProduct.barcode}
+                onClose={() => setBarcodeProduct(null)}
+            />
+        )}
+        </>
     );
 }
