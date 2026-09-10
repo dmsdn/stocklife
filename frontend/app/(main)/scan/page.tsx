@@ -290,6 +290,7 @@ function ScanPageInner() {
   // ✅ 신규(요청) — 바코드 찍는 거 아래 "현재 위치만 확인" 체크. 켜져 있으면 스캔해도
   //   장바구니에 안 담기고(수량 그대로), 그 상품 위치를 현재 위치로만 갱신함.
   const [locateOnly, setLocateOnly] = useState(false);
+  const [putBack, setPutBack] = useState(false);
   // ✅ 신규(요청) — "계획 추가" 버튼. 누르면 리스트에 없는 상품 검색해서 계획에 추가하거나,
   //   화장실 등 시설을 먼저 들르도록 하는 모달이 뜸(예전 ShoppingRouteActions 내용 그대로).
   const [planOpen, setPlanOpen] = useState(false);
@@ -430,13 +431,21 @@ function ScanPageInner() {
   const decrementScannedProduct = async (skuId: number, productName: string, quantity: number) => {
     if (!groupId) return;
     const current = groups.find((g) => g.id === groupId)?.products.find((p) => p.id === skuId);
-    if (!current) return;
+    if (!current || !sessionScans.has(skuId)) {
+      setError(`${productName}은(는) 아직 담지 않은 상품이에요.`);
+      return;
+    }
+
+    const nextQty = Math.max(0, current.quantity - quantity);
+    if (isLoggedIn()) {
+      if (current.cartItemId == null) throw new Error("상품 정보를 다시 불러온 뒤 시도해주세요.");
+      await syncUpdateServerCart(current.cartItemId, nextQty);
+    }
 
     // ✅ 신규(09-03 요청 ④) — 스캔 취소(카트에서 빼기)도 행동 신호. 같은 카테고리를
     //   담았다 뺐다 반복하는 것이 망설임 감시의 재료라 SCAN_ADD와 짝을 맞춰 보냄.
     trackConsumerEvent({ event_type: "SCAN_REMOVE", sku_id: skuId });
 
-    const nextQty = current.quantity - quantity;
 
     updateCartGroups((gs) =>
       gs.map((g) =>
@@ -452,9 +461,6 @@ function ScanPageInner() {
       )
     );
 
-    if (isLoggedIn()) {
-      void syncUpdateServerCart(current.cartItemId, nextQty <= 0 ? 0 : nextQty);
-    }
 
     if (nextQty <= 0) {
       setSessionScans((prev) => {
@@ -534,17 +540,16 @@ function ScanPageInner() {
         pickFloorNo?: number | null;
       }>(`/api/products/barcode/${code.trim()}`, { auth: false });
 
-      // ✅ "몇 개 뺄지" 골라서 무장해둔 상태(pendingAction)에서 그 상품 바코드를 다시
-      //   스캔했는지 확인. 맞으면 여기서 빼기를 실행하고 끝. 다른 바코드면 무장만 풀고
-      //   그 바코드는 아래 평소 담기 로직으로 그대로 이어짐(엉뚱한 상품이 안 빠지게).
-      if (pendingAction != null) {
-        const isMatch = found.skuId === pendingAction.skuId;
-        const action = pendingAction;
-        setPendingAction(null);
-        if (isMatch) {
-          await decrementScannedProduct(found.skuId, found.name, action.quantity);
+      // 내려놓기에서는 절대로 담기 분기로 내려가지 않는다.
+      if (putBack || pendingAction != null) {
+        if (pendingAction && found.skuId !== pendingAction.skuId) {
+          setError("빼기로 선택한 상품의 바코드를 스캔해주세요.");
           return;
         }
+        await decrementScannedProduct(found.skuId, found.name, pendingAction?.quantity ?? 1);
+        setPendingAction(null);
+        setBarcode("");
+        return;
       }
 
       // ✅ 단종 상품 — 백엔드는 조회 자체는 성공시키고 discontinued 플래그만 내려주므로,
@@ -1042,7 +1047,7 @@ function ScanPageInner() {
                 체크 안 됐을 때는 실제로 담기니까 "담기", 체크됐을 때는 안 담고 위치만
                 보는 거니까 "조회"로 라벨이 바뀝니다. */}
             <Button type="submit" variant="outline" className="shrink-0" disabled={groupCompleted}>
-              {locateOnly ? "조회" : "담기"}
+              {locateOnly ? "조회" : putBack || pendingAction ? "내려놓기" : "담기"}
             </Button>
           </form>
 
@@ -1050,10 +1055,14 @@ function ScanPageInner() {
               체크박스랑 통일") — 버튼 대신 공용 Checkbox 컴포넌트로 되돌림. 체크되어
               있으면: 스캔해도 안 담기고, 그 상품 위치를 지도에 표시하면서 동선보기
               화면(지도)으로 넘어감. */}
-          <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={locateOnly} onChange={() => setLocateOnly((v) => !v)} />
+              <Checkbox checked={locateOnly} onChange={() => { setLocateOnly((v) => !v); setPutBack(false); setPendingAction(null); }} />
               현재 위치만 확인 (담지 않음)
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={putBack} onChange={() => { setPutBack((v) => !v); setLocateOnly(false); setPendingAction(null); }} />
+              내려놓기 (1개 빼기)
             </label>
             {/* ✅ "계획 추가" 버튼은 리스트에 없는 상품 추가·시설 먼저 들르기를 모아둔
                 모달을 엽니다. */}
@@ -1216,6 +1225,7 @@ function ScanPageInner() {
                       <button
                         type="button"
                         onClick={() => {
+                          setPutBack(true); setLocateOnly(false);
                           setPendingAction({ skuId: p.id, quantity: removeQuantityDraft });
                           setSelectedRemoveSkuId(null);
                         }}
