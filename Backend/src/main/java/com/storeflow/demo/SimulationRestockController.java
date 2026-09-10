@@ -36,7 +36,7 @@ public class SimulationRestockController {
             .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"선택한 상품의 매대가 변경됐습니다. 팝업을 다시 열어 주세요."));
         var bulk=rows.stream().filter(r->"BULK".equals(r.get("tier_role")) && ((Number)r.get("qty")).intValue()>=5).findFirst()
             .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"창고 재고가 5개 미만이어서 보충할 수 없습니다."));
-        String task="simulation-restock-"+UUID.randomUUID();
+        String task=UUID.randomUUID().toString();
         inventory.applyChange(request.skuId(),(String)bulk.get("location_id"),-5,ShelfEvent.EventType.ITEM_CONFIRMED,task);
         inventory.applyChange(request.skuId(),request.locationId(),5,ShelfEvent.EventType.RESTOCK_IN,task);
         return Map.of("skuId",request.skuId(),"locationId",request.locationId(),"qty",5,"stock",((Number)pick.get("qty")).intValue()+5);
