@@ -91,7 +91,7 @@ const menuGroups = [
   },
   {
     title: "알림센터",
-    items: [{ href: "/mypage/notifications/inbox", label: "알림함" }],
+    items: [{ href: "/notifications", label: "알림함" }],
   },
   {
     title: "고객지원",
