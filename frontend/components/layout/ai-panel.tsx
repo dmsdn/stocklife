@@ -10,6 +10,7 @@
 //   보내는 버그가 됨. 세션 전환(openSession)도 라우팅 없이 이 컨텍스트만으로 동작.
 "use client";
 
+import { useMediaQuery } from "@/lib/use-media-query";
 import { useState } from "react";
 import { RiCloseLine, RiMenuLine, RiAddLine } from "@remixicon/react";
 import { useAiPanel } from "./ai-panel-context";
@@ -23,7 +24,8 @@ export function AiPanel() {
   //   없었습니다(모바일 시트에만 있었음). 같은 SessionListDrawer를 그대로 붙임.
   const [sessionListOpen, setSessionListOpen] = useState(false);
 
-  if (!isOpen) return null;
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+  if (!isOpen || !isDesktop) return null;
 
   return (
     <aside className="fixed right-0 top-16 bottom-0 z-[90] hidden w-[420px] flex-col overflow-hidden border-l border-border bg-background md:flex">

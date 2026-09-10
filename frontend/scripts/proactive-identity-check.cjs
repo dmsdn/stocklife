@@ -16,6 +16,10 @@ test('로그인 신원이 바뀌면 이전 자발형 알림을 지우고 다음 
   api.saveProactiveNotification({messageId: 7, content: '회원 A의 알림'});
   api.saveProactiveNotification({messageId: 7, content: '중복 수신'});
   assert.equal(api.readProactiveNotifications().length, 1);
+  api.saveProactiveNotification({messageId:7,content:'회원 A의 알림'}, true);
+  assert.equal(api.readProactiveNotifications()[0].read,true);
+  api.saveProactiveNotification({messageId:7,content:'재연결 수신'});
+  assert.equal(api.readProactiveNotifications()[0].read,true);
   let changed = 0;
   events.addEventListener('storeflow:proactive-notifications-changed', () => changed++);
   events.dispatchEvent(new Event('storeflow:auth-changed'));

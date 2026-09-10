@@ -73,9 +73,9 @@ test('계정 변경 시 열린 패널의 리스트·과거 대화·배지도 함
     useState:v=>{const i=state.length;state.push(v);return[v,x=>state[i]=typeof x==='function'?x(state[i]):x];},useEffect:fn=>effects.push(fn)};
   const module={exports:{}};
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../components/layout/ai-panel-context.tsx'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  vm.runInNewContext(code,{module,exports:module.exports,window,require:id=>id==='react'?react:id==='react/jsx-runtime'?{jsx:(type,props)=>({type,props})}:{AUTH_CHANGED_EVENT:'storeflow:auth-changed'}});
+  vm.runInNewContext(code,{module,exports:module.exports,window,require:id=>id==='react'?react:id==='react/jsx-runtime'?{jsx:(type,props)=>({type,props})}:{AUTH_CHANGED_EVENT:'storeflow:auth-changed',readProactiveNotifications:()=>[{read:false}],getSessionId:()=>null,SESSION_CHANGED_EVENT:'storeflow:session-changed'}});
   const tree=module.exports.AiPanelProvider({children:null});effects.forEach(fn=>fn());
-  tree.props.value.open('old question',55);tree.props.value.openSession('old-session',7);tree.props.value.bumpUnread();
+  tree.props.value.open('old question',55);tree.props.value.openSession('old-session',7);assert.equal(state[5],1);
   window.dispatchEvent(new Event('storeflow:auth-changed'));
   assert.deepEqual(state,[false,'',null,null,null,0]);
 });

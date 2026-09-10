@@ -16,17 +16,10 @@ import { saveProactiveNotification } from "@/lib/proactive-notifications";
 // ✅ 수정(2026-09) — "리브 페이지"(구 /ai 라우트) 완전 삭제로 pathname 기준 active 판정이
 //   더 이상 의미가 없어짐(그 라우트 자체가 없음). 데스크톱 상단 헤더는 항상 "home" 모습.
 function AppShellBody({ children }: { children: React.ReactNode }) {
-  const { isOpen, bumpUnread } = useAiPanel();
-  // ✅ 신규(09-03 요청 ①②) — 자발형(AI_PROACTIVE) 말풍선 실시간 구독. 앱 어디에 있든
-  //   하나만 열려있으면 됨(패널이 열려있으면 AiChatBody가 이 이벤트를 직접 받아서
-  //   바로 붙이니까, 여기서는 "닫혀 있을 때만" 헤더 배지를 올림).
-  // ✅ 신규(09-03 요청 ①②, 이번 요청 2번) — 자발형(AI_PROACTIVE) 말풍선 실시간 구독.
-  //   앱 어디에 있든 하나만 열려있으면 됨(패널이 열려있으면 AiChatBody가 이 이벤트를
-  //   직접 받아서 바로 붙이니까, 여기서는 "닫혀 있을 때만" 헤더 배지를 올림). 알림함
-  //   저장은 패널이 열려있든 닫혀있든 항상 함 — 나중에 알림함에서 다시 볼 수 있게.
+  const { isOpen } = useAiPanel();
+  // 수신·복구 알림은 보관함과 배지가 같은 읽음 상태를 사용한다.
   useProactiveStream((m) => {
     saveProactiveNotification(m);
-    if (!isOpen) bumpUnread();
   });
   // ✅ 하단탭바를 동적으로 숨기는 화면(스캔, 리스트 상세, 매장지도 등)에서 main의 고정
   //   여백(pb-16)까지 같이 없애야 그 밑에 빈 공간이 안 남는다.

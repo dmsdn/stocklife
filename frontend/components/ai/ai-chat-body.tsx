@@ -78,6 +78,7 @@ import {
   getSessionMetadata,
 } from "@/lib/session";
 import { getClientId } from "@/lib/client-id";
+import { saveProactiveNotification } from "@/lib/proactive-notifications";
 import { PROACTIVE_EVENT } from "@/lib/realtime";
 import { AttachListPickerDialog } from "@/components/domain/attach-list-picker-dialog";
 import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
@@ -588,6 +589,20 @@ export function AiChatBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionIdOverride, groupId]);
 
+  // 버튼 클릭만으로 읽음 처리하지 않는다. 대화를 불러와 화면에 표시한 뒤에만 처리한다.
+  useEffect(() => {
+    const markDisplayed = () => {
+      if (loading || document.visibilityState !== "visible" || !boundSession.current) return;
+      turns.filter(t => t.proactive).slice(-50).forEach(t => saveProactiveNotification({
+        sessionId: boundSession.current!, messageId: t.messageId, sender: "AI_PROACTIVE",
+        content: t.content, createdAt: t.createdAt,
+      }, true));
+    };
+    markDisplayed();
+    document.addEventListener("visibilitychange", markDisplayed);
+    return () => document.removeEventListener("visibilitychange", markDisplayed);
+  }, [loading, turns]);
+
   // ✅ 메시지가 다 로드된 뒤 하이라이트 대상으로 스크롤 이동 + 2초 후 하이라이트 해제
   useEffect(() => {
     if (loading || highlightedMessageId == null) return;
@@ -608,7 +623,7 @@ export function AiChatBody({
       // ✅ 버그 수정(요청) — 다른 세션 구독에서 온 이벤트가 이 화면에 섞여 들어오지 않게,
       //   이 화면이 고정한 세션과 일치할 때만 반영.
       if (!data?.content || data.sessionId !== boundSession.current) return;
-      setTurns((prev) => [
+      setTurns((prev) => data.messageId != null && prev.some(t => t.messageId === data.messageId) ? prev : [
         ...prev,
         { role: "assistant", content: data.content, messageId: data.messageId, createdAt: data.createdAt ?? new Date().toISOString(), proactive: true },
       ]);
