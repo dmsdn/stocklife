@@ -29,6 +29,7 @@
 //   뺄지" 선택 패널(n개 빼기 스테퍼 / 다 빼기)이 뜸 → 개수를 고르면 그제서야 무장되고
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
+import { ShoppingLivToggle } from "@/components/layout/shopping-liv-toggle";
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -866,11 +867,12 @@ function ScanPageInner() {
           <button
             type="button"
             onClick={() => setGroupPickerOpen(true)}
-            className="flex min-w-0 max-w-[55%] items-center gap-1 text-md font-medium"
+            className="flex min-w-0 max-w-[calc(100%-11rem)] items-center gap-1 text-md font-medium"
           >
             <span className="truncate">{selectedGroup ? selectedGroup.title : "리스트 선택"}</span>
             <RiArrowDownSLine size={20} className="shrink-0 text-muted-foreground" />
           </button>
+          <ShoppingLivToggle />
           {/* ✅ 수정(요청 — "오른쪽 위 동선보기 페이지를 없애고") — 별도 버튼/페이지
               삭제. 아래 카메라·지도 영역 안의 토글 아이콘으로 대체됨. */}
         </div>
