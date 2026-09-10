@@ -64,6 +64,35 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     // false로 바꾸면 된다.
     const INVERT_VERTICAL = true;
 
+    /**
+     * 캔버스의 "비트맵 크기"를 컨테이너 크기와 맞춘다.
+     *
+     * [왜 ResizeObserver 만으로는 부족한가] 캔버스의 CSS 크기는 부모 100%로 못박아 뒀고,
+     * 비트맵 크기는 아래 ResizeObserver 가 game.scale.resize() 로 맞춰 준다. 그런데 브라우저는
+     * ResizeObserver 알림이 한 프레임에 연쇄로 발생하면 무한루프 방지 장치가 그 프레임의 알림을
+     * **통째로 버린다**. 알림이 버려지면 CSS 크기만 새 값이고 비트맵은 옛 값이라 매장이 눌려
+     * 보이는데, 그 뒤로는 크기가 더 바뀌지 않으니 ResizeObserver 가 다시 울릴 일도 없다.
+     * **스스로 회복하지 못하는 상태**로 남는 것이다 — '웹 UI 숨기기'를 껐다 켤 때 가끔 비율이
+     * 깨지고 그대로 있는 증상의 진짜 이유다.
+     *
+     * 그래서 이미 매 프레임 도는 스크롤바 루프에서 실제 값을 대조한다. 값이 같으면 아무 일도
+     * 하지 않으므로 평소 비용은 비교 두 번이고, 알림이 한 번 씹혀도 다음 프레임에 회복된다.
+     */
+    const syncCanvasSize = () => {
+        const el = containerRef.current;
+        const game = gameRef.current;
+        if (!el || !game) return;
+        const w = el.clientWidth;
+        const h = el.clientHeight;
+        // 패널이 접히는 도중 0으로 잡히는 순간의 값을 넣으면 캔버스가 0x0이 됐다 살아나며 깜빡인다.
+        if (w === 0 || h === 0) return;
+        if (game.scale.width === w && game.scale.height === h) return;
+        game.scale.resize(w, h);
+        // Phaser 가 resize 처리 중 style.width/height 를 픽셀값으로 덮어쓰므로 다시 못박는다.
+        game.canvas.style.width = '100%';
+        game.canvas.style.height = '100%';
+    };
+
     const getSceneScrollInfo = () => {
         const scene = gameRef.current?.scene.getScene('StoreScene') as StoreScene | null;
         return scene?.getScrollInfo() ?? null;
@@ -101,6 +130,7 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
 
         let raf = 0;
         const tick = () => {
+            syncCanvasSize();
             const info = getSceneScrollInfo();
             const wrap = scrollBarWrapRef.current;
             const slider = sliderRef.current;
@@ -261,27 +291,10 @@ const GameCanvas = forwardRef<GameCanvasHandle, Props>(function GameCanvas({ flo
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
+        // 즉시 반응은 여전히 ResizeObserver 가 맡는다(다음 프레임까지 기다리지 않는다).
+        // 알림이 씹혔을 때의 회복은 위 rAF 루프의 syncCanvasSize() 가 책임진다.
         const ro = new ResizeObserver(() => {
-            const game = gameRef.current;
-            if (!game) return;
-            const w = el.clientWidth;
-            const h = el.clientHeight;
-            // 패널이 접히는 도중 등 크기가 0으로 잡히는 순간이 있는데, 그 값을 그대로 넣으면
-            // 캔버스가 0x0이 됐다가 다시 살아나면서 화면이 한 번 깜빡인다.
-            if (w === 0 || h === 0) return;
-            // 크기가 그대로면 아무것도 하지 않는다. 값이 안 바뀌었는데도 resize를 부르면 그게
-            // 다시 레이아웃을 건드려서 ResizeObserver 알림이 연쇄로 발생하고, 브라우저의 무한루프
-            // 방지 장치("ResizeObserver loop completed with undelivered notifications")가 그
-            // 프레임의 알림을 통째로 버린다. 그렇게 알림이 씹히면 캔버스의 CSS 크기(부모 100%)만
-            // 새 값으로 바뀌고 비트맵 크기는 옛날 값에 머물러서, 브라우저가 옛 비트맵을 새 상자에
-            // 늘려 넣느라 매장이 가로로만 눌려 보인다("웹 UI 숨기기를 껐다 켜면 비율이 이상해진다"
-            // 버그의 원인). 같은 값 호출을 걸러내는 이 한 줄이 그 연쇄를 끊는다.
-            if (game.scale.width === w && game.scale.height === h) return;
-            game.scale.resize(w, h);
-            // Phaser는 resize를 처리하면서 캔버스 style.width/height 를 픽셀값으로 덮어쓴다.
-            // 생성 시점에 한 번 넣어둔 '100%'가 그때 지워지므로 여기서 매번 다시 못박아준다.
-            game.canvas.style.width = '100%';
-            game.canvas.style.height = '100%';
+            syncCanvasSize();
         });
         ro.observe(el);
         return () => ro.disconnect();

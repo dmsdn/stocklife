@@ -82,8 +82,20 @@ public class OrderService {
                                       List<Integer> skuIds) {
                 if (skuIds != null && (skuIds.isEmpty() || skuIds.size() > 100))
                         throw new IllegalStateException("결제할 스캔 상품을 확인해 주세요.");
+                // 09-10(프론트 요청서 4번): 결제 대상은 "매장에서 실제로 찍은 것"이다.
+                //
+                // [두 갈래인 이유] 부르는 쪽이 두 종류다.
+                //   · skuIds 를 준다  = Scan & Go 화면. 프론트가 이미 자기 스캔 목록으로
+                //     걸러서 보낸다. 여기서 서버가 scanned_at 으로 또 거르면 같은 걸 두 번
+                //     거르는 셈이고, 둘이 한 칸이라도 어긋나면(PATCH 한 번이 실패했다든지)
+                //     아래 개수 대조에 걸려 결제가 통째로 막힌다. 그래서 준 목록을 믿는다.
+                //   · skuIds 가 없다 = 옛 장바구니 화면 등. 무엇을 살지 서버가 정해야 하므로
+                //     여기서 "찍은 것만" 규칙을 적용한다. 계획만 해두고 매장에서 못 찾은
+                //     상품이 조용히 결제되던 게 이 경로였다.
                 List<CartItem> allCheckedItems = cartItemRepository.findByConsumerId(consumerId).stream()
-                                .filter(item -> skuIds == null ? item.isChecked() : skuIds.contains(item.getSkuId()))
+                                .filter(item -> skuIds == null
+                                                ? (item.isChecked() && item.getScannedAt() != null)
+                                                : skuIds.contains(item.getSkuId()))
                                 .toList();
 
                 List<CartItem> checkedItems;

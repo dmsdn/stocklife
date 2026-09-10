@@ -656,68 +656,68 @@ export default class StoreScene extends Phaser.Scene {
    * 어느 것이 방금 누른 것인지 알 수 없다.
    */
   /**
-   * 매대 몸체 그리기 — 2x2 베이 단위로 묶어서 큰 사각형 하나로 그린다(09-09 성원님 요청).
+   * 매대 몸체 그리기 — 인접한 칸을 2x2 로 묶어서 큰 사각형 하나로 그린다(09-09).
    *
-   * [왜] 예전엔 칸(1x1)마다 사각형을 하나씩 그려서, 4칸 두께 매대가 자잘한 네모 16개로
-   * 보였다. 세계 데이터(map_cells)는 손대면 안 되므로(상품 위치·통행 판정이 전부 거기서
-   * 나온다) **차지하는 칸은 그대로 두고 그리는 단위만** 2x2로 키운다.
+   * [왜] 칸(1x1)마다 사각형을 그리면 4칸 두께 매대가 자잘한 네모 열여섯 개로 보인다.
+   * 세계 데이터(map_cells)는 손대면 안 되므로(상품 위치와 통행 판정이 전부 거기서 나온다)
+   * **차지하는 칸은 그대로 두고 그리는 단위만** 키운다.
    *
-   * [불변식] 이 함수는 칸을 더 칠하지도, 덜 칠하지도 않는다. 2x2 네 칸이 "모두" 같은 존의
-   * 매대일 때만 묶고, 하나라도 비었으면 남은 칸을 예전처럼 1x1로 그린다. 그래서 매대의
-   * 겉모양(footprint)은 픽셀 단위로 이전과 같고, 클릭 판정(locationByCell)과도 어긋나지
-   * 않는다 — 판정은 부르는 쪽에서 칸 단위로 이미 다 만들어 두었다.
+   * [09-10 수정] 처음에는 "베이는 항상 짝수 좌표에서 시작한다"고 보고 좌표를 2로 내림한
+   * 자리에서만 묶었다. 그런데 실제 DB 시드에는 폭이 1, 3, 7, 23 처럼 홀수인 매대 줄이
+   * 섞여 있어서, 짝수 격자에 안 맞는 칸이 전부 1x1 로 남아 큰 네모와 작은 네모가 섞여
+   * 보였다(성원님 보고). 그래서 **고정 격자를 버리고** 왼쪽 위부터 훑으며 그 자리에서
+   * 묶일 수 있는 만큼 묶는 방식으로 바꿨다. 2x2 가 안 되면 2x1, 1x2, 마지막으로 1x1 로
+   * 물러난다 — 남는 칸이 있어도 가느다란 막대라 자잘한 점처럼 보이지 않는다.
    *
-   * [격자 기준] 베이는 map_layout.py의 BAY_CELLS=2 규칙에 따라 항상 짝수 좌표에서 시작한다.
-   * 그래서 묶음의 기준점은 좌표를 2로 내림한 값(x - x%2)이다. 이 규칙이 바뀌면 여기도 같이
-   * 바뀌어야 한다 — 안 그러면 베이 경계를 가로질러 묶여서 이음매가 어긋나 보인다.
+   * [불변식] 칸을 더 칠하지도 덜 칠하지도 않는다. 모든 칸은 정확히 한 번 그려지고,
+   * 묶는 상대는 **같은 존의 아직 안 그린 매대 칸**뿐이다. 그래서 매대의 겉모양은
+   * 픽셀 단위로 이전과 같고, 클릭 판정(locationByCell)과도 어긋나지 않는다.
    */
   private drawShelfCellsMerged(
       cells: { x: number; y: number; zoneId: string }[],
       colorForZone: (zoneId: string) => number,
   ) {
-    const BLOCK = 2; // 묶는 단위(칸). map_layout.py의 BAY_CELLS와 같은 값이어야 한다.
-
-    // 같은 존의 매대 칸인지 빠르게 확인하기 위한 색인. 존까지 키에 넣는 이유는, 서로 다른
-    // 존의 매대가 등을 맞대고 붙어 있을 때 색이 다른 두 존을 한 사각형으로 묶어버리면
-    // 존 경계가 사라지기 때문이다.
+    // 같은 존의 매대 칸인지 빠르게 확인하기 위한 색인. 존까지 키에 넣는 이유는, 색이 다른
+    // 두 존이 등을 맞대고 붙어 있을 때 한 사각형으로 묶어버리면 존 경계가 사라지기 때문이다.
     const present = new Set<string>();
     for (const c of cells) present.add(`${c.x},${c.y},${c.zoneId}`);
 
     const drawn = new Set<string>();
-    const paint = (cx: number, cy: number, size: number, color: number) => {
-      this.shelfLayer.add(this.add.rectangle(cx, cy, size, size, color));
+    const free = (x: number, y: number, zoneId: string) =>
+        present.has(`${x},${y},${zoneId}`) && !drawn.has(`${x},${y}`);
+
+    /** 왼쪽 위(x,y)에서 w x h 크기로 묶을 수 있으면 그리고 true. */
+    const tryPaint = (
+        x: number, y: number, w: number, h: number, zoneId: string,
+    ): boolean => {
+      for (let dx = 0; dx < w; dx++) {
+        for (let dy = 0; dy < h; dy++) {
+          if (!free(x + dx, y + dy, zoneId)) return false;
+        }
+      }
+      for (let dx = 0; dx < w; dx++) {
+        for (let dy = 0; dy < h; dy++) drawn.add(`${x + dx},${y + dy}`);
+      }
+      this.shelfLayer.add(this.add.rectangle(
+          x * TILE + (w * TILE) / 2,
+          y * TILE + (h * TILE) / 2,
+          w * TILE * SHELF_INSET,
+          h * TILE * SHELF_INSET,
+          colorForZone(zoneId)));
+      return true;
     };
 
-    for (const cell of cells) {
-      const key = `${cell.x},${cell.y}`;
-      if (drawn.has(key)) continue;
+    // 왼쪽 위에서부터 훑는다 — 순서가 고정돼야 같은 층을 다시 그려도 같은 모양이 나온다.
+    const ordered = [...cells].sort((a, b) => (a.y - b.y) || (a.x - b.x));
 
-      const bx = cell.x - (cell.x % BLOCK);
-      const by = cell.y - (cell.y % BLOCK);
-      const quad: [number, number][] = [];
-      for (let dx = 0; dx < BLOCK; dx++) {
-        for (let dy = 0; dy < BLOCK; dy++) quad.push([bx + dx, by + dy]);
-      }
-
-      const canMerge = quad.every(
-          ([qx, qy]) => present.has(`${qx},${qy},${cell.zoneId}`) && !drawn.has(`${qx},${qy}`));
-
-      if (canMerge) {
-        for (const [qx, qy] of quad) drawn.add(`${qx},${qy}`);
-        paint(
-            bx * TILE + (TILE * BLOCK) / 2,
-            by * TILE + (TILE * BLOCK) / 2,
-            TILE * BLOCK * SHELF_INSET,
-            colorForZone(cell.zoneId));
-      } else {
-        // 묶이지 않는 자투리 칸(존 경계, 홀수 폭 매대 등) — 예전 방식 그대로 한 칸으로.
-        drawn.add(key);
-        paint(
-            cell.x * TILE + TILE / 2,
-            cell.y * TILE + TILE / 2,
-            TILE * SHELF_INSET,
-            colorForZone(cell.zoneId));
-      }
+    for (const cell of ordered) {
+      if (drawn.has(`${cell.x},${cell.y}`)) continue;
+      const { x, y, zoneId } = cell;
+      // 큰 것부터 시도하고 안 되면 한 단계씩 물러난다.
+      if (tryPaint(x, y, 2, 2, zoneId)) continue;
+      if (tryPaint(x, y, 2, 1, zoneId)) continue;
+      if (tryPaint(x, y, 1, 2, zoneId)) continue;
+      tryPaint(x, y, 1, 1, zoneId);
     }
   }
 
