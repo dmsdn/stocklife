@@ -372,3 +372,36 @@ def list_insights(body: InsightsBody, x_internal_service_key: str = Header(defau
         return {"items": list(rows.values()), "personalized": body.consumerId is not None}
     finally:
         query._CURRENT_MEMBER_ID.reset(token)
+
+
+class RecommendationsBody(BaseModel):
+    consumerId: int | None = Field(default=None, gt=0)
+    limit: int = Field(default=8, ge=1, le=8)
+
+
+@router.post("/api/ai/recommendations")
+def recommendations(body: RecommendationsBody, x_internal_service_key: str = Header(default="")) -> dict:
+    import secrets
+    from app.recommendations import recommend
+    expected = os.environ.get("INTERNAL_SERVICE_KEY", "")
+    if not expected or not secrets.compare_digest(expected, x_internal_service_key):
+        raise HTTPException(status_code=403, detail="서버 간 인증이 필요합니다.")
+    return recommend(body.consumerId, body.limit)
+
+
+class RepurchaseCandidatesRequest(BaseModel):
+    consumerId: int = Field(gt=0)
+
+@router.post("/api/ai/repurchase-candidates")
+def repurchase_candidates(body: RepurchaseCandidatesRequest,
+        x_internal_service_key: str = Header(default="")):
+    import hmac
+    expected = os.environ.get("INTERNAL_SERVICE_KEY", "")
+    if not expected or not hmac.compare_digest(x_internal_service_key, expected):
+        raise HTTPException(status_code=401, detail="internal authentication required")
+    from app.watchers import schedule
+    from app import config as cfg
+    items = schedule._due_items(cfg.to_member_id(body.consumerId), None)
+    products = {p["sku_id"]:p for p in sot_client.get_products_by_skus([x["sku_id"] for x in items])}
+    return {"items":[dict(x, name=products[x["sku_id"]]["name"]) for x in items if x["sku_id"] in products],
+            "now":cfg.business_now().isoformat(), "liveClock":cfg.LIVE_INFERENCE_CLOCK}

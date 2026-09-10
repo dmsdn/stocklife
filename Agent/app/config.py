@@ -5,7 +5,7 @@
 # 튜닝 대상이 코드 곳곳에 흩어지면 실험 한 번에 파일 다섯 개를 고치게 된다.
 # 설정이 한 파일이면 "이 실험에서 바꾼 것"이 diff 한 곳에 모인다.
 # ============================================================================
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import os
 
@@ -23,6 +23,15 @@ import os
 DEMO_NOW = datetime(2026, 8, 8, 14, 20, 0)
 # 실물 구매를 만드는 시연만 벽시계를 사용한다. 오라클 평가의 고정 시계는 유지한다.
 LIVE_INFERENCE_CLOCK = os.environ.get("STOREFLOW_LIVE_CLOCK", "0") == "1"
+STORE_ZONE = timezone(timedelta(hours=9))
+
+def business_now():
+    """UTC instant for business facts; elapsed-time throttles keep their own clock."""
+    return datetime.now(timezone.utc) if LIVE_INFERENCE_CLOCK else DEMO_NOW.replace(tzinfo=STORE_ZONE).astimezone(timezone.utc)
+
+def store_now():
+    return business_now().astimezone(STORE_ZONE).replace(tzinfo=None)
+
 
 # ── 서버 ────────────────────────────────────────────────────────────────────
 # FastAPI가 자동 생성하는 문서(/docs · /openapi.json)에 뜨는 이름.

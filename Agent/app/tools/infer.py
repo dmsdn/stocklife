@@ -431,7 +431,7 @@ def predict_availability(sku_id: int) -> dict:
     VERT_SEC, HORIZ_SEC = 130.0, 400.0     # 학습 세계의 대략적 평균 소요(초)
     q_work = q_vert * VERT_SEC + q_horiz * HORIZ_SEC
 
-    now = datetime.now() if config.LIVE_INFERENCE_CLOCK else config.DEMO_NOW
+    now = config.store_now()
     path = "VERTICAL" if mine["has_bulk"] else (
         "HORIZONTAL" if mine.get("floor_no") == pick.get("floor_no") else "FLOOR")
 
@@ -604,7 +604,7 @@ def _repurchase_one(sku_id: int, hist: list | None = None) -> dict:
 
     # 마지막 구매로부터 며칠 지났나 — 이것이 곡선을 읽는 x축의 원점이다.
     from datetime import timezone
-    now_at = datetime.now(timezone.utc) if config.LIVE_INFERENCE_CLOCK else config.DEMO_NOW
+    now_at = config.business_now() if config.LIVE_INFERENCE_CLOCK else config.DEMO_NOW
     now = _to_day(now_at.isoformat())
     elapsed = now - days[-1]
 

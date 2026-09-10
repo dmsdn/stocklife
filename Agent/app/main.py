@@ -106,6 +106,7 @@ from contextlib import asynccontextmanager     # noqa: E402
 from fastapi import FastAPI                    # noqa: E402
 from pydantic import BaseModel, Field          # noqa: E402
 
+from app import navigation_links
 from app import guard, loop                    # noqa: E402
 from app import searchterm                     # noqa: E402
 from app.tools import definitions, infer       # noqa: E402
@@ -122,6 +123,7 @@ class HistoryItem(BaseModel):                                  # ㊹
 class ChatRequest(BaseModel):
     sessionId: str
     consumerId: int | None = None        # 비회원이면 null로 온다
+    groupId: int | None = Field(default=None, gt=0) # Backend가 소유권을 확인한 채팅 연결 리스트
     message: str
     history: list[HistoryItem] = Field(default_factory=list)   # ㊹ 변할 수 있는 기본값
     # ── 현재 위치 (2026-08-25 추가) ──────────────────────────────────────
@@ -293,11 +295,11 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     result = loop.run_chat(body.message, consumer_id=body.consumerId,
                            session_id=body.sessionId, history=history,
-                           position=pos)
+                           position=pos, group_id=body.groupId)
 
     verdict = guard.check(result["reply"], result["ledgers"])
     if verdict["ok"]:
-        return ChatResponse(reply=result["reply"], actions=result["actions"])
+        return ChatResponse(reply=navigation_links.with_references(result["reply"], result["ledgers"]), actions=result["actions"])
 
     # ── 여기부터 정책 ⓒ ────────────────────────────────────────────────────
     # 위반 사유들을 집합으로 모은다. **고칠 재료가 원장에 있는 실패**만 재생성한다.
@@ -321,9 +323,9 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
         # 둘 다 걸렸으면 web_only 쪽을 쓴다(사실 출처 문제가 더 무겁다).
         msg = _RETRY_MSG["web_only"] if "web_only" in reasons else _RETRY_MSG["contradicts_ledger"]
         retry = loop.run_chat(msg, consumer_id=body.consumerId, position=pos,
-                              session_id=body.sessionId, history=retry_history)
+                              session_id=body.sessionId, history=retry_history, group_id=body.groupId)
         if guard.check(retry["reply"], retry["ledgers"])["ok"]:
-            return ChatResponse(reply=retry["reply"], actions=retry["actions"])
+            return ChatResponse(reply=navigation_links.with_references(retry["reply"], retry["ledgers"]), actions=retry["actions"])
         result = retry            # 재생성도 실패 → 아래 안전 문구로 (그 패스의
                                   # actions를 보존해야 프론트 화면이 실상과 맞는다)
 

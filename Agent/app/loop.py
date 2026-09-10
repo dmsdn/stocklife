@@ -318,7 +318,8 @@ def run_chat(message: str,
              history: list[dict] | None = None,
              allow_actions: bool = True,
              position: tuple[int, int, int] | None = None,
-             member_id: int | None = None) -> dict:
+             member_id: int | None = None,
+             group_id: int | None = None) -> dict:
     """자연어 입력 하나를 대화 한 번으로 완주시킨다. main.py가 부르는 유일한 입구.
 
     ⚠ 09-03 신원 축 정정 — `member_id` 인자. 반응형(main.py)은 로그인 손님의
@@ -369,7 +370,7 @@ def run_chat(message: str,
         consumer_id = config.to_consumer_id(member_id)   # 시드 회원이면 None
     else:                                                # 반응형 — 백엔드 축이 먼저 온다
         world_member = config.to_member_id(consumer_id)
-    action.set_consumer_id(consumer_id)                  # 백엔드 축 (장바구니)
+    action.set_consumer_id(consumer_id, group_id)                  # 백엔드 축 (장바구니)
     query.set_identity(world_member, session_id)         # 세계 축
     # 위치도 같은 부류다(08-25). LLM이 좌표를 옮겨 적게 두지 않는다 —
     # optimize_route의 start_* 칸은 남아 있지만 **비우는 것이 기본**이고
@@ -406,6 +407,7 @@ def run_chat(message: str,
     # 시스템 프롬프트도 캐시 표시를 찍는다(모듈 위 _CACHED_TOOLS 주석 참조).
     # 문자열 대신 "블록 리스트" 형태로 넘겨야 표시를 찍을 자리가 생긴다.
     # 프롬프트는 (회원 여부 × 세션 여부) 4가지 판뿐이라 판마다 따로 캐시가 잡힌다.
+    system_prompt += "\n장바구니가 여럿일 수 있습니다. 손님이 리스트 이름을 명시하면 get_session_cart로 groups를 확인하고 해당 group_id를 지정하세요. 이 채팅의 연결 리스트와 다른 이름이라도 손님이 명시한 대상을 따릅니다. 같은 이름이 여럿이거나 선택이 불명확하면 담기 전에 확인하세요. 과거 대화의 번호를 추측하여 쓰지 마세요."
     system_blocks = [{"type": "text", "text": system_prompt,
                       "cache_control": {"type": "ephemeral"}}]
 
@@ -531,7 +533,7 @@ def run_chat(message: str,
             # result["ok"]로 꺼내면 조회 도구 결과처럼 그 키가 아예 없는 dict에서
             # KeyError로 죽는다. .get은 "있으면 값, 없으면 없음"이라 안전하다.
             if call.name in action.MUTATING_TOOLS and result.get("ok"):
-                actions_done.append({"type": call.name, "input": dict(call.input)})
+                actions_done.append({"type": call.name, "input": dict(call.input), "groupId": result.get("group_id")})
             results_content.append({
                 "type": "tool_result",
                 "tool_use_id": call.id,     # 어느 호출의 답인지 짝을 맞추는 표
