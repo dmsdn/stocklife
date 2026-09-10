@@ -787,75 +787,30 @@ export default function App() {
     // Backend 동선 → Simulation 선
     // ============================================================
 
+    /**
+     * 09-10: 매장 바닥에 파란 경로선을 그리던 기능을 뺐다.
+     *
+     * [왜] 예전에는 경로를 그려놓고 캐릭터는 따로 움직였다. 지금은 '이 리스트로 길찾기'가
+     * 캐릭터를 실제로 그 순서대로 걷게 하므로, 선은 같은 정보를 두 번 보여주는 셈이었다.
+     * 게다가 안내가 멈춰 있는 동안 사용자가 직접 돌아다니면 선과 실제 위치가 어긋나서
+     * 오히려 틀린 안내처럼 보였다.
+     *
+     * 함수를 지우지 않고 남긴 이유는 층을 바꾸거나 새 안내를 시작할 때 **이전에 남아 있던
+     * 선을 확실히 지우기** 위해서다. 되살리려면 canvas.drawRoute(points, stops)를 다시
+     * 부르면 된다(StoreScene 쪽 구현은 그대로 있다).
+     */
     const drawRouteForFloor =
         useCallback(
             (
-                route: CartRoute,
-                floor: number
+                _route: CartRoute,
+                _floor: number
             ) => {
-
-                const canvas =
-                    canvasRef.current;
-
-                if (!canvas) {
-                    return;
-                }
-
-
-                const points =
-                    pathPointsOnFloor(
-                        route.path,
-                        floor
-                    );
-
-
-                if (
-                    points.length === 0
-                ) {
-
-                    canvas.clearRoute();
-                    return;
-                }
-
-
-                const stops =
-                    route.stops
-                        .filter(
-                            (s) =>
-                                s.floor ===
-                                floor
-                        )
-                        .map((s) => ({
-                            x: s.x,
-                            y: s.y,
-                        }));
-
-
-                canvas.drawRoute(
-                    points,
-                    stops
-                );
+                canvasRef.current?.clearRoute();
             },
             []
         );
 
 
-    useEffect(() => {
-
-        if (!activeRoute) {
-            return;
-        }
-
-        drawRouteForFloor(
-            activeRoute,
-            viewFloor
-        );
-
-    }, [
-        activeRoute,
-        viewFloor,
-        drawRouteForFloor,
-    ]);
 
 
     const handleShowCartRoute =
@@ -1152,17 +1107,6 @@ export default function App() {
         );
 
 
-    const handleClearRoute =
-        useCallback(() => {
-
-            setActiveRoute(null);
-
-            canvasRef.current?.clearRoute();
-            canvasRef.current?.clearRouteEndpoints();
-
-            setStatusMessage('');
-
-        }, []);
 
 
     // ============================================================
@@ -2855,33 +2799,6 @@ export default function App() {
                     )}
 
 
-                    {activeRoute && (
-                        <button
-                            onClick={
-                                handleClearRoute
-                            }
-                            style={{
-                                padding:
-                                    '4px 10px',
-                                borderRadius:
-                                    6,
-                                border:
-                                    '1px solid #3a3f4b',
-                                background:
-                                    '#1e2128',
-                                color:
-                                    '#60a5fa',
-                                fontSize:
-                                    11,
-                                fontWeight:
-                                    700,
-                                cursor:
-                                    'pointer',
-                            }}
-                        >
-                            🧭 동선 지우기
-                        </button>
-                    )}
                 </div>
             </header>
 
