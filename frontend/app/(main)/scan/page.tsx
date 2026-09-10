@@ -6,7 +6,8 @@
 //     상품 1개만 보이는 "peek" 높이) 탭하면 화면 대부분까지 펼쳐져서 스크롤로 전체 목록을
 //     보는 방식으로 바꿈. 펼쳐지면 카메라는 자동으로 꺼지고(뒤에 계속 켜둘 이유가 없음),
 //     전역 하단탭바도 가려서(BottomBarVisibilityContext) 그 자리에 결제 버튼만 남게 함.
-//   - "동선 보기"는 실제 지도 이미지 위에 핀+경로선(StoreMapDialog)
+//   - "동선 보기"는 카메라 영역 자체가 지도로 바뀌는 방식(별도 모달 없음, 아래
+//     viewMode 참고)으로 실제 지도 이미지 위에 핀+경로선을 한 번에 표시
 // ✅ 수정(2026-09) —
 //   1) "담은 상품" 목록이 리스트(group.products) 전체를 그대로 보여주고 있었음. 이 리스트는
 //      AI/검색으로 미리 담아둔 것까지 섞여 있는 "장보기 리스트"라서, 매장에서 실제로 바코드를
@@ -32,17 +33,19 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RiArrowLeftSLine, RiArrowDownSLine, RiMapLine, RiCameraLine, RiCameraOffLine, RiBankCardLine, RiSubtractLine, RiAddLine, RiCoinLine, RiLoginBoxLine, RiCloseLine } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowDownSLine, RiRoadMapLine, RiCameraLine, RiCameraOffLine, RiBankCardLine, RiSubtractLine, RiAddLine, RiCoinLine, RiLoginBoxLine, RiCloseLine, RiMapPin2Fill, RiCalendarCheckLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { StoreMapDialog } from "@/components/domain/store-map-dialog";
+import { StoreMap, type MapPin } from "@/components/domain/store-map";
+import { getOptimizedRoute, type OptimizedRouteResult, type PathPoint } from "@/lib/navigation";
+import { buildRequestKey, readRouteProgress, saveRouteProgress, planFacilityDetour, rebaseRouteFrom } from "@/lib/shopping-route-progress";
 import { GroupPickerDialog } from "@/components/domain/group-picker-dialog";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 import { apiFetch, isLoggedIn, ApiError, resolveImageUrl } from "@/lib/api-client";
 import { trackConsumerEvent } from "@/lib/consumer-events";
 import { writeCheckoutDraft } from "@/lib/checkout-draft";
-import { ProductInsights, useProductInsights } from "@/components/domain/product-insights";
 import {
   addProductToCartGroup,
   updateCartGroups,
@@ -62,6 +65,7 @@ import {
   SHOPPING_CHANGED,
   readActiveScanGroupId,
   writeActiveScanGroupId,
+  type RouteAnchor,
 } from "@/lib/shopping-session";
 import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 import { isGroupCompleted, markGroupCompleted } from "@/lib/completed-groups";
@@ -94,7 +98,6 @@ function ScanPageInner() {
   const [groups, setGroups] = useState<CartGroup[]>([]);
   const [groupId, setGroupId] = useState<number | null>(requestedGroupId);
   const selectedGroup = groups.find((g) => g.id === groupId);
-  const insights = useProductInsights(selectedGroup?.products.map(p=>p.id)??[]);
   const scanLock = useRef(false);
 
   // ✅ 신규(요청) — "리스트 없이 장보기도 추가해달라"에 맞춰, 특정 리스트를 지정하지 않고
@@ -113,20 +116,32 @@ function ScanPageInner() {
   const [entryPickerOpen, setEntryPickerOpen] = useState(false);
 
   // ✅ 신규 — 담은 상품 목록에도 매대 번호("444 >") 같이 보여주기(리스트 상세/카트랑 동일 패턴)
+  // ✅ 수정(요청 — "동선 지도에도 방금 찍은 매대 위에 현위치 핀") — 텍스트 라벨만 뽑던 걸,
+  //   지도에 핀을 찍는 데 필요한 좌표(x/y/floorNo)까지 같이 저장해서, 이미 찍은 상품도
+  //   지도 위에 표시할 수 있게 함(coordsBySkuId).
   const [locationBySkuId, setLocationBySkuId] = useState<Map<number, string>>(new Map());
+  const [coordsBySkuId, setCoordsBySkuId] = useState<Map<number, { x: number; y: number; floorNo: number }>>(new Map());
   useEffect(() => {
     const ids = selectedGroup?.products.map((p) => p.id) ?? [];
     if (ids.length === 0) return;
     fetchInventoryBatch(ids)
       .then((map) => {
         const next = new Map<number, string>();
+        const nextCoords = new Map<number, { x: number; y: number; floorNo: number }>();
         map.forEach((items, skuId) => {
           const loc = pickLocation(items);
-          if (loc) next.set(skuId, formatLocationLabel(loc.locationId));
+          if (loc) {
+            next.set(skuId, formatLocationLabel(loc.locationId));
+            nextCoords.set(skuId, { x: loc.x, y: loc.y, floorNo: loc.floorNo });
+          }
         });
         setLocationBySkuId(next);
+        setCoordsBySkuId(nextCoords);
       })
-      .catch(() => setLocationBySkuId(new Map()));
+      .catch(() => {
+        setLocationBySkuId(new Map());
+        setCoordsBySkuId(new Map());
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroup?.products.map((p) => p.id).join(",")]);
 
@@ -239,19 +254,99 @@ function ScanPageInner() {
 
   // ✅ 홈 화면에서 돌아왔거나 새로고침했을 때도 이미 스캔한 개수가 유지되도록,
   //   현재 groupId와 일치하는 저장된 세션이 있으면 복원합니다.
+  // ✅ 수정(요청 — "리스트=F, 실제 스캔=T") — 로그인 회원은 서버(scannedAt)가 진짜
+  //   출처가 되도록, 세션스토리지뿐 아니라 서버에서 불러온 값도 합쳐서 복원합니다.
+  //   백엔드가 아직 scannedAt을 안 내려주면(docs/scanned-at-redesign-backend-request.md
+  //   반영 전) 이 부분은 그냥 빈 배열이라 기존처럼 세션스토리지만 씀 — 백엔드 배포되면
+  //   코드 변경 없이 자동으로 새로고침해도 유지되게 바뀝니다.
   useEffect(() => {
     if (groupId == null) return;
     const update = () => {
       const saved = readShoppingSession();
-      setSessionScans(new Set(saved?.groupId===groupId ? saved.scannedSkuIds : []));
-      loadCartGroups().then(setGroups).catch(()=>{});
+      const localScans = saved?.groupId===groupId ? saved.scannedSkuIds : [];
+      loadCartGroups().then((loaded) => {
+        setGroups(loaded);
+        const serverScanned = loaded.find(g=>g.id===groupId)?.products.filter(p=>p.scannedAt!=null).map(p=>p.id) ?? [];
+        setSessionScans(new Set([...localScans, ...serverScanned]));
+      }).catch(()=>{
+        setSessionScans(new Set(localScans));
+      });
     };
     update();
     window.addEventListener(SHOPPING_CHANGED, update);
     return ()=>window.removeEventListener(SHOPPING_CHANGED, update);
   }, [groupId]);
 
-  const [routeOpen, setRouteOpen] = useState(false);
+  // ✅ 수정(요청 — "오른쪽 위 동선보기 페이지를 없애고, 카메라 버튼 누르면 카메라로
+  //   바뀌고 지도 아이콘 누르면 지도로") — 별도 모달(StoreMapDialog) 대신, 카메라
+  //   영역 자체가 카메라/지도 두 상태를 오가는 하나의 뷰가 됨.
+  const [viewMode, setViewMode] = useState<"camera" | "map">("camera");
+  const [route, setRoute] = useState<OptimizedRouteResult | null>(null);
+  const [mapFloor, setMapFloor] = useState(1);
+  // ✅ 신규(요청) — 바코드 찍는 거 아래 "현재 위치만 확인" 체크. 켜져 있으면 스캔해도
+  //   장바구니에 안 담기고(수량 그대로), 그 상품 위치를 현재 위치로만 갱신함.
+  const [locateOnly, setLocateOnly] = useState(false);
+  // ✅ 신규(요청) — "계획 추가" 버튼. 누르면 리스트에 없는 상품 검색해서 계획에 추가하거나,
+  //   화장실 등 시설을 먼저 들르도록 하는 모달이 뜸(예전 ShoppingRouteActions 내용 그대로).
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planQuery, setPlanQuery] = useState("");
+  const [planResults, setPlanResults] = useState<{ skuId: number; name: string; categoryL1?: string; finalPriceKrw?: number; priceKrw: number; imageUrl?: string; discontinued?: boolean }[]>([]);
+  const [planFacility, setPlanFacility] = useState("");
+  const [planBusy, setPlanBusy] = useState(false);
+  const [planMessage, setPlanMessage] = useState("");
+
+  // ✅ 신규 — 남은(아직 안 스캔한) 상품 기준으로 최적 동선을 계산해둠. 지도 보기로
+  //   전환할 때뿐 아니라, 목록을 동선 순서로 정렬하는 데도 씀.
+  // ✅ 수정(버그 인계 — "동선이 처음으로 돌아감") — 매번 무조건 새로 최적화하지 않고,
+  //   requestKey(리스트+남은 상품+현재 위치+경유 시설+결제여부)가 지난번과 같으면
+  //   저장해둔 진행 상태를 그대로 재사용합니다. "먼저 들르기"·"현재 위치만 확인"은
+  //   각자 자기 핸들러에서 순서를 유지한 채로 진행 상태를 직접 갱신하고 여기 저장하므로,
+  //   이 effect가 다시 돌아도(같은 key) 전체 재최적화를 또 부르지 않습니다. 실제 스캔이나
+  //   상품 추가/삭제로 남은 상품 집합 자체가 바뀌면 key가 달라져서 정상적으로 재계산됩니다.
+  const [routeError, setRouteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!groupId || !selectedGroup) { setRoute(null); return; }
+    let active = true;
+    const remainingIds = selectedGroup.products.filter((p) => !sessionScans.has(p.id)).map((p) => p.id);
+    const session = sessionFor(groupId);
+    const key = buildRequestKey({ groupId, skuIds: remainingIds, anchor: session.anchor, detourLocationId: session.detourLocationId, paid: session.paid });
+
+    const cached = readRouteProgress(groupId);
+    if (cached && cached.requestKey === key) {
+      setRoute(cached.route);
+      setMapFloor(cached.route.start.floorNo);
+      setRouteError(null);
+      return;
+    }
+
+    if (remainingIds.length === 0) {
+      // ✅ 담긴 상품이 없거나 전부 스캔 완료 — API를 부를 필요가 없고, 부르면 오히려
+      //   "빈 목록" 에러가 날 수 있어서 여기서 명확한 안내로 갈음.
+      setRoute(null);
+      setRouteError("담긴 상품이 없거나 전부 스캔했어요.");
+      return;
+    }
+
+    setRouteError(null);
+    getOptimizedRoute(remainingIds, { anchor: session.anchor, detourLocationId: session.detourLocationId, paid: session.paid })
+      .then((r) => {
+        if (!active) return;
+        setRoute(r);
+        setMapFloor(r.start.floorNo);
+        saveRouteProgress({ groupId, requestKey: key, route: r });
+      })
+      .catch((e) => {
+        if (!active) return;
+        setRoute(null);
+        // ✅ 수정(요청 — "동선이 하나도 안 보이잖아") — 예전엔 실패하면 그냥 setRoute(null)만
+        //   하고 조용히 넘어가서, 지도로 전환해도 "계산하고 있어요..."가 원인도 모른 채
+        //   계속 떠 있었음. 실제 실패 이유(백엔드 에러 메시지 등)를 화면에 보여줌.
+        setRouteError(e instanceof Error ? e.message : "동선을 계산하지 못했어요.");
+      });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId, selectedGroup?.products.map(p=>p.id).join(","), sessionScans]);
 
   // ✅ 상품 목록이 이제 화면 대부분을 항상 차지하는 기본 레이아웃이라, 이 페이지에서는
   //   전역 하단탭바를 계속 숨기고 그 자리에 이 페이지 자체의 결제 버튼을 둡니다.
@@ -262,7 +357,7 @@ function ScanPageInner() {
   }, [setBottomBarHidden]);
 
   useEffect(() => {
-    if (autoOpenRoute && groupId != null) setRouteOpen(true);
+    if (autoOpenRoute && groupId != null) setViewMode("map");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenRoute, groupId]);
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
@@ -433,17 +528,51 @@ function ScanPageInner() {
         return;
       }
 
-      // 기존 상품 추가 API를 사용한다. 계획 상품의 첫 스캔은 수량을 늘리지 않는다.
-      const currentGroup = (await loadCartGroups()).find(g => g.id === currentGroupId);
-      const existing = currentGroup?.products.some(p => p.id === found.skuId);
-      const scanned = sessionFor(currentGroupId).scannedSkuIds.includes(found.skuId);
-      if (!existing || scanned) await addProductToCartGroup(currentGroupId, {
+      // ✅ 신규(요청 — "현재 위치만 확인") — 켜져 있으면 담지 않고(수량 그대로) 이
+      //   상품 위치를 현재 위치로만 갱신. ShoppingRouteActions의 locateOnly와 같은 개념.
+      // ✅ 수정(버그 인계 — "동선이 처음으로 돌아감") — 위치만 바뀐 거라 남은 상품
+      //   방문 순서(route.orderedSkuIds)는 그대로 두고 걷는 길만 다시 계산합니다
+      //   (rebaseRouteFrom). 아직 계산해둔 route가 없으면(첫 진입 등) 그냥 세션만
+      //   갱신해서 평소처럼 전체 최적화 effect가 계산하게 둡니다.
+      if (locateOnly) {
+        const saved = sessionFor(currentGroupId);
+        const newAnchor: RouteAnchor = { skuId: found.skuId };
+        if (route) {
+          try {
+            const invMap = await fetchInventoryBatch([found.skuId]);
+            const loc = pickLocation(invMap.get(found.skuId));
+            if (loc) {
+              const remainingIds = (selectedGroup?.products ?? []).filter((p) => !sessionScans.has(p.id)).map((p) => p.id);
+              const nextRoute = await rebaseRouteFrom(route, { floorNo: loc.floorNo, x: loc.x, y: loc.y }, remainingIds);
+              const key = buildRequestKey({ groupId: currentGroupId, skuIds: remainingIds, anchor: newAnchor, detourLocationId: saved.detourLocationId, paid: saved.paid });
+              saveRouteProgress({ groupId: currentGroupId, requestKey: key, route: nextRoute });
+              setRoute(nextRoute);
+              setMapFloor(nextRoute.start.floorNo);
+            }
+          } catch {
+            // 실패해도 아래에서 세션은 갱신되니, 다음 effect 실행 때 전체 최적화로 복구됨
+          }
+        }
+        writeShoppingSession({ ...saved, anchor: newAnchor }, { preserveRoute: true });
+        trackConsumerEvent({ event_type: "VIEW", sku_id: found.skuId });
+        setViewMode("map");
+        return;
+      }
+
+      // ✅ 수정(요청 — "백엔드 수정된거 확인하고 프론트 마저 수정") — 백엔드가
+      //   addItemToGroup()에서 scanned:true면 새 상품/이미 계획된(F) 상품/이미 스캔한(T)
+      //   상품을 전부 알아서 구분해서 처리하도록 바뀌었습니다(새 상품·F 상품 첫 스캔은
+      //   수량 1로, 이미 T인 걸 또 스캔하면 +1). 그래서 프론트가 먼저 "있는지, 이미
+      //   스캔했는지" 나눠서 add/PATCH를 골라 부르던 로직이 더 이상 필요 없어졌습니다 —
+      //   항상 이 add API 하나만 scanned:true로 부르면 됩니다. 판단을 프론트·백엔드
+      //   양쪽에서 각자 하면 둘이 어긋날 수 있다는 게 백엔드 쪽 이유이기도 합니다.
+      await addProductToCartGroup(currentGroupId, {
         id: found.skuId,
         name: found.name,
         category: found.categoryL1 ?? "",
         price: found.finalPriceKrw ?? found.priceKrw,
         image: resolveImageUrl(found.imageUrl) ?? undefined,
-      });
+      }, true);
 
       // ✅ Set은 삽입 순서를 유지합니다 — delete 후 다시 add해서 "방금 스캔한 상품"이
       //   항상 이 Set의 맨 끝(=목록 렌더 시 맨 위)으로 오게 합니다.
@@ -457,6 +586,16 @@ function ScanPageInner() {
         trackConsumerEvent({ event_type: "SCAN_ADD", sku_id: found.skuId, location_id: found.pickLocationId });
       } else {
         trackConsumerEvent({ event_type: "VIEW", sku_id: found.skuId });
+      }
+
+      // 시뮬레이션(부모 창)에 "이 상품을 방금 찍었다"고 알린다.
+      // 시뮬레이션이 이 상품 매대를 출발점으로 잡아 길찾기를 다시 계산한다.
+      if (typeof window !== "undefined" && window.parent !== window) {
+        const parentOrigin = document.referrer ? new URL(document.referrer).origin : window.location.origin;
+        window.parent.postMessage(
+          { source: "storeflow-frontend", type: "SCANNED_PRODUCT", skuId: found.skuId, name: found.name },
+          parentOrigin
+        );
       }
 
       refreshGroups();
@@ -476,6 +615,65 @@ function ScanPageInner() {
     lookupByCode(barcode);
   };
 
+  // ✅ 신규(요청 — "계획 추가 버튼") — 예전 ShoppingRouteActions의 검색·추가·먼저 들르기
+  //   로직을 그대로 가져옴. 리스트에 없는 상품을 찾아 계획에만 추가(실물 수집 아님)하거나,
+  //   화장실 등 시설을 먼저 들르도록 동선을 바꿈.
+  const planSearch = async () => {
+    if (!planQuery.trim()) return;
+    setPlanBusy(true); setPlanMessage("");
+    try {
+      setPlanResults((await apiFetch<typeof planResults>(`/api/products/search?keyword=${encodeURIComponent(planQuery.trim())}`, { auth: false })).slice(0, 8));
+    } catch { setPlanMessage("상품 검색을 불러오지 못했어요."); }
+    finally { setPlanBusy(false); }
+  };
+  const planAdd = async (p: (typeof planResults)[number]) => {
+    if (!groupId) return;
+    setPlanBusy(true);
+    try {
+      const group = (await loadCartGroups()).find((g) => g.id === groupId);
+      if (!group) throw new Error("리스트를 찾을 수 없어요.");
+      if (!group.products.some((x) => x.id === p.skuId)) {
+        await addProductToCartGroup(groupId, { id: p.skuId, name: p.name, category: p.categoryL1 ?? "", price: p.finalPriceKrw ?? p.priceKrw, image: resolveImageUrl(p.imageUrl) ?? undefined });
+      }
+      writeShoppingSession(sessionFor(groupId)); // 현재 위치는 안 바꾸고 동선만 다시 계산되게
+      setPlanResults([]); setPlanQuery("");
+      setPlanMessage(`${p.name}을 구매 계획에 반영했어요. 매대에서 스캔하면 수집 완료돼요.`);
+      refreshGroups();
+    } catch (e) { setPlanMessage(e instanceof Error ? e.message : "추가하지 못했어요."); }
+    finally { setPlanBusy(false); }
+  };
+  // ✅ 수정(버그 인계 — "동선이 처음으로 돌아감") — 예전엔 detourLocationId만 세션에
+  //   써두고 전체 재최적화(getOptimizedRoute)에 맡겼는데, 그러면 이미 정해둔 나머지
+  //   상품 순서가 매번 새로 섞였습니다. 이제 지금 route가 이미 알고 있는 순서를 유지한
+  //   채로, 그 앞에 시설만 끼워 넣어서 걷는 길만 다시 계산(planFacilityDetour)하고,
+  //   그 결과를 진행 상태로 직접 저장해둡니다 — writeShoppingSession의 기본 동작(진행
+  //   상태 초기화)을 막으려고 preserveRoute:true를 씀. 계산이 끝나기 전에 모달을 닫거나
+  //   상황이 바뀌면 오래된 응답이 지금 상태를 덮지 않도록 groupId/시설 값을 다시 확인합니다.
+  const planVisitFacility = async () => {
+    if (!groupId || !planFacility || !route) return;
+    const facility = planFacility;
+    setPlanBusy(true);
+    try {
+      const remainingIds = (selectedGroup?.products ?? []).filter((p) => !sessionScans.has(p.id)).map((p) => p.id);
+      const nextRoute = await planFacilityDetour(route, facility, remainingIds);
+      // ✅ 계산 중 다른 시설로 바뀌었거나 리스트가 바뀌었으면 이 오래된 결과는 버림.
+      if (groupId == null || planFacility !== facility) return;
+      const session = sessionFor(groupId);
+      const key = buildRequestKey({ groupId, skuIds: remainingIds, anchor: session.anchor, detourLocationId: facility, paid: session.paid });
+      saveRouteProgress({ groupId, requestKey: key, route: nextRoute });
+      writeShoppingSession({ ...session, detourLocationId: facility }, { preserveRoute: true });
+      setRoute(nextRoute);
+      setMapFloor(nextRoute.start.floorNo);
+      setViewMode("map");
+      setPlanMessage("그 시설까지 먼저 안내할게요. 이후 상품 순서는 그대로예요.");
+      setPlanFacility("");
+    } catch {
+      setPlanMessage("경로를 다시 계산하지 못했어요.");
+    } finally {
+      setPlanBusy(false);
+    }
+  };
+
   // ✅ Scan 화면 진입 시 바로 카메라 시작.
   // 브라우저가 아직 카메라 권한을 요청하지 않았다면
   // 여기서 브라우저 기본 권한 팝업이 표시됩니다.
@@ -492,16 +690,9 @@ function ScanPageInner() {
 
   // ✅ 신규 — 카메라를 앱 안에서 사용자가 직접 켜고 끌 수 있게. 권한은 있어도
   //   "지금은 카메라 화면 안 보고 싶다"는 경우를 위한 수동 토글입니다.
+  // ✅ 수정(요청 — "버튼 2개인 느낌") — 예전엔 이 상태를 별도 카메라 버튼(toggleCamera)이
+  //   껐다 켰다 했는데, 이제 지도⇄카메라 전환 버튼(viewMode)이 직접 관리합니다.
   const [cameraEnabled, setCameraEnabled] = useState(false);
-
-  const toggleCamera = () => {
-    if (cameraEnabled) {
-      stop();
-      setCameraEnabled(false);
-    } else {
-      setCameraEnabled(true);
-    }
-  };
 
   // ✅ 버그 수정 — 예전엔 setCameraEnabled(true) 바로 다음 줄에서 start()를 불렀는데,
   //   <video>가 {cameraEnabled && ...} 조건부라 그 시점엔 아직 리렌더 전이라 videoRef.current가
@@ -551,6 +742,113 @@ function ScanPageInner() {
   const cartTotalPrice = scannedProducts.reduce((s, p) => s + p.price * p.quantity, 0);
   const estimatedPoints = Math.floor(cartTotalPrice * ESTIMATED_POINT_RATE);
 
+  // ✅ 신규 — 지도 보기에서 "모든 동선을 한 번에" 보여주기 위해, journeySteps 전체를
+  //   이어붙임(예전엔 한 단계씩만 보여주고 이전/다음으로 넘겼는데 이제 그게 없음).
+  const routeMapPath: (PathPoint & { floorNo: number })[] =
+    route?.journeySteps.flatMap((s) => s.path) ?? [];
+  const routeMapPins: (MapPin & { floorNo: number })[] =
+    route?.journeySteps
+      .filter((s) => s.kind === "PRODUCT" && s.path.length > 0)
+      .map((s, i) => {
+        const last = s.path[s.path.length - 1];
+        const product = selectedGroup?.products.find((p) => p.id === s.skuId);
+        return { id: s.skuId ?? i, name: s.label, price: product?.price ?? 0, x: last.x, y: last.y, floorNo: last.floorNo, image: product?.image };
+      }) ?? [];
+
+  // ✅ 신규(요청 — "동선 지도에도 방금 찍은 매대 위에 현위치 핀") — 이미 찍은 상품도
+  //   좌표(coordsBySkuId)가 있으면 지도 핀으로 같이 그림(collected: true → 체크 배지).
+  //   그 중 가장 마지막으로 찍은 것만 isCurrentLocation: true로 표시해서, 지도에서
+  //   체크 배지 대신 흰 원+그림자+주황 핀 아이콘으로 특별하게 보이게 함.
+  const checkedMapPins: (MapPin & { floorNo: number })[] = Array.from(sessionScans)
+    .map((skuId, i, arr) => {
+      const coord = coordsBySkuId.get(skuId);
+      const product = selectedGroup?.products.find((p) => p.id === skuId);
+      if (!coord || !product) return null;
+      return {
+        id: skuId,
+        name: product.name,
+        price: product.price,
+        x: coord.x,
+        y: coord.y,
+        floorNo: coord.floorNo,
+        image: product.image,
+        collected: true,
+        isCurrentLocation: i === arr.length - 1,
+      };
+    })
+    .filter((p): p is MapPin & { floorNo: number } => !!p);
+
+  // 이미 찍은 핀 + 앞으로 찍을 핀을 합쳐서 지도에 같이 그림. routeOrder는 "앞으로 찍을"
+  // 핀들의 id만 담아서, 이미 찍은 핀은 routeOrder에 안 잡혀 order===-1이 되고(체크 배지),
+  // 그 중 마지막 한 개만 위 isCurrentLocation으로 별도 스타일을 덮어씀.
+  const allMapPins: (MapPin & { floorNo: number })[] = [...checkedMapPins, ...routeMapPins];
+
+  // ✅ 수정(요청 — "이동경로 한 줄 / 목록 한 줄이 번갈아 나오게, 찍은 건 위로 모으고
+  //   이동경로는 빠지고, 마지막으로 찍은 매대에 현위치 핀") — 예전엔 "이동 경로" 요약을
+  //   목록 위에 박스 하나로 뭉쳐서 보여주고, 그 아래엔 전체 상품을 동선 순서로 쭉
+  //   나열(담은 건 진하게·안 담은 건 흐리게)만 했습니다. 이제
+  //     [찍은 상품들(찍은 순서대로, 이동경로 없이 연달아)]
+  //     → [이동경로 한 줄] → [안 찍은 상품 1] → [이동경로 한 줄] → [안 찍은 상품 2] → ...
+  //   순서로 번갈아 보여줍니다. 찍은 상품 구간은 이미 지나온 길이라 이동경로를 안 보여주고,
+  //   그 다음(=아직 안 찍은 첫 상품 앞) 이동경로에만 "(현위치)"를 붙여서 지금 여기서부터
+  //   출발한다는 걸 표시합니다.
+  // ✅ route(동선 계산)는 애초에 "아직 안 찍은 상품"(remainingIds, 위쪽 useEffect 참고)만
+  //   대상으로 돌기 때문에, route.journeySteps는 이미 찍은 상품을 포함하지 않습니다 — 그래서
+  //   여기서 이동경로를 다시 걸러낼 필요 없이, PRODUCT 단계 사이사이에 낀 WALK/ESCALATOR 등의
+  //   라벨을 모아서 그 상품 앞에 붙는 "이동경로" 한 줄로 만들면 됩니다.
+  const checkedSkuIds = Array.from(sessionScans); // Set 삽입 순서 = 실제로 찍은(=걸어온) 순서
+  const checkedListProducts = checkedSkuIds
+    .map((id) => selectedGroup?.products.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => !!p);
+
+  const remainingSegments: { routeText: string; product: NonNullable<typeof selectedGroup>["products"][number] }[] = [];
+  if (route) {
+    let pendingLabels: string[] = [];
+    for (const step of route.journeySteps) {
+      if (step.kind === "PRODUCT") {
+        const product = selectedGroup?.products.find((pp) => pp.id === step.skuId);
+        if (product && !sessionScans.has(product.id)) {
+          remainingSegments.push({
+            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : `${step.label}까지 가는 길`,
+            product,
+          });
+        }
+        pendingLabels = [];
+      } else {
+        pendingLabels.push(`${step.label}로 가는 길`);
+      }
+    }
+  }
+  // 동선 계산에서 제외된(excluded) 상품 등 — 위 segment로 못 묶인 미수집 상품은 이동경로
+  // 없이 맨 뒤에 그대로 붙임(예전 "동선에 없는 건 맨 뒤로" 동작 유지).
+  const segmentedIds = new Set(remainingSegments.map((s) => s.product.id));
+  const strandedProducts = (selectedGroup?.products ?? []).filter(
+    (p) => !sessionScans.has(p.id) && !segmentedIds.has(p.id)
+  );
+
+  type ListBlock =
+    | { kind: "product"; product: NonNullable<typeof selectedGroup>["products"][number]; collected: boolean; isCurrentLocation: boolean }
+    | { kind: "route"; text: string; showCurrentLocation: boolean };
+
+  const listBlocks: ListBlock[] = [
+    ...checkedListProducts.map((p, i) => ({
+      kind: "product" as const,
+      product: p,
+      collected: true,
+      isCurrentLocation: i === checkedListProducts.length - 1,
+    })),
+    ...remainingSegments.flatMap((seg, i) => [
+      { kind: "route" as const, text: seg.routeText, showCurrentLocation: i === 0 },
+      { kind: "product" as const, product: seg.product, collected: false, isCurrentLocation: false },
+    ]),
+    ...strandedProducts.map((p) => ({
+      kind: "product" as const,
+      product: p,
+      collected: false,
+      isCurrentLocation: false,
+    })),
+  ];
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-background md:static md:h-[calc(100dvh-4rem)]">
       <div className="relative mx-auto flex h-full w-full flex-col overflow-hidden md:max-w-4xl">
@@ -573,18 +871,8 @@ function ScanPageInner() {
             <span className="truncate">{selectedGroup ? selectedGroup.title : "리스트 선택"}</span>
             <RiArrowDownSLine size={20} className="shrink-0 text-muted-foreground" />
           </button>
-          {/* ✅ 수정(요청) — 담은 상품 목록을 위로 끌어올리면(listExpanded) "동선 보기"는
-              숨김(목록에 집중하는 상태라 필요 없다고 판단). */}
-          {!listExpanded && (
-            <button
-              type="button"
-              onClick={() => setRouteOpen(true)}
-              className="absolute right-4 flex h-10 items-center gap-1 rounded-full border border-card-border px-4 text-sm font-medium"
-            >
-              <RiMapLine size={18} />
-              동선 보기
-            </button>
-          )}
+          {/* ✅ 수정(요청 — "오른쪽 위 동선보기 페이지를 없애고") — 별도 버튼/페이지
+              삭제. 아래 카메라·지도 영역 안의 토글 아이콘으로 대체됨. */}
         </div>
 
         {/* ✅ 신규 — 이미 결제 완료된 리스트를 선택한 상태. 스캔/결제 다 막고 다른 리스트로
@@ -598,15 +886,64 @@ function ScanPageInner() {
           </div>
         )}
 
-        {/* ✅ 카메라 — 화면 좌우 끝까지 꽉 채우고(마진 없음), 켜짐/꺼짐 상관없이 항상
-            "화면 윗부분 전체"(flex-1, 남는 공간 다 차지)를 씀. 켜져 있으면 실시간 영상,
-            꺼져 있으면 그냥 꺼짐 안내만 같은 자리에 표시 — 자리 자체는 그대로 유지되니까
-            아래 입력창/목록/결제 버튼이 화면 중간에 붕 뜨지 않고 항상 하단에 붙어있음.
-            ✅ 수정(2026-09) — 담은 상품 목록을 위로 끌어올리면(listExpanded) 카메라·바코드
-            입력을 통째로 숨김. */}
+        {/* ✅ 수정(요청 — "카메라 버튼 누르면 카메라로, 지도 아이콘 누르면 지도로") —
+            이 영역이 카메라와 지도, 두 상태를 오가는 하나의 뷰가 됨. 자리 자체는 그대로
+            유지(카메라 켜짐/꺼짐이든 지도든 항상 이 높이). */}
+        {/* ✅ 버그 수정(요청 — "스캔 화면에 스캔한 개수, 금액, 결제 버튼 안 보임") — 카메라가
+            화면 절반(50dvh)을 고정으로 차지한 채로, 바코드 입력·이동경로 요약·상품
+            목록이 전부 shrink-0라 안 줄어들다 보니, 화면이 작은 기기에서는 맨 아래
+            결제 영역이 뷰포트 밖으로 밀려서(바깥 컨테이너가 overflow-hidden이라
+            스크롤도 안 됨) 안 보였습니다. 카메라 높이를 줄여서 아래쪽에 확실히
+            공간을 확보했습니다. */}
         {!listExpanded && (
-        <div className="relative h-[50dvh] shrink-0 overflow-hidden bg-[#666666]">
-          {cameraEnabled && cameraStreamState !== "denied" && cameraStreamState !== "insecure" ? (
+        <div className="relative h-[38dvh] shrink-0 overflow-hidden bg-[#666666]">
+          {/* ✅ 신규 — 우상단 토글 아이콘. 카메라 보는 중엔 지도 아이콘, 지도 보는 중엔
+              카메라 아이콘이 떠서 서로 넘어갈 수 있음. */}
+          {/* ✅ 수정(요청 — "번갈아 쓸 수 있게, 동선이 하나도 안 보이잖아") — 아이콘만
+              있던 버튼에 글자를 같이 넣어서 뭘 하는 버튼인지 더 잘 보이게 함. */}
+          <button
+            type="button"
+            onClick={() => {
+              // ✅ 수정(요청 — "굳이 버튼이 2개 있는 기분") — 지도⇄카메라 전환 버튼이
+              //   실제 카메라 On/Off까지 같이 제어하도록 합침. 카메라로 전환하면 바로
+              //   스트림이 켜지고, 지도로 전환하면 꺼집니다 — 더 이상 별도의 카메라
+              //   버튼이 입력창 옆에 안 필요합니다.
+              setViewMode((v) => {
+                const next = v === "camera" ? "map" : "camera";
+                if (next === "camera") {
+                  setCameraEnabled(true);
+                } else {
+                  stop();
+                  setCameraEnabled(false);
+                }
+                return next;
+              });
+            }}
+            aria-label={viewMode === "camera" ? "지도 보기" : "카메라 보기"}
+            className="absolute right-3 top-3 z-20 flex h-10 items-center gap-1.5 rounded-full bg-black/60 px-3 text-sm text-white backdrop-blur"
+          >
+            {viewMode === "camera" ? <RiRoadMapLine size={18} /> : <RiCameraLine size={18} />}
+            {viewMode === "camera" ? "동선 보기" : "카메라"}
+          </button>
+
+          {viewMode === "map" ? (
+            route ? (
+              <StoreMap
+                floorNo={mapFloor}
+                pins={allMapPins.filter((p) => p.floorNo === mapFloor)}
+                routeOrder={routeMapPins.map((p) => p.id)}
+                precomputedPath={routeMapPath.filter((p) => p.floorNo === mapFloor)}
+                onFloorChange={setMapFloor}
+                heightClassName="h-full"
+                hideHelpText
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+                <p className="text-sm text-white">{routeError ?? "동선을 계산하고 있어요..."}</p>
+              </div>
+            )
+          ) : (
+          cameraEnabled && cameraStreamState !== "denied" && cameraStreamState !== "insecure" ? (
             <>
               {cameraStreamState !== "granted" && (
                 <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
@@ -656,6 +993,7 @@ function ScanPageInner() {
               </p>
               <p className="text-xs text-white/60">아래 바코드 숫자로도 담을 수 있어요.</p>
             </div>
+          )
           )}
         </div>
         )}
@@ -671,20 +1009,35 @@ function ScanPageInner() {
               inputMode="numeric"
               disabled={groupCompleted}
             />
+            {/* ✅ 수정(요청 — "현위치 체크되어 있을 때는 담기 버튼 > 조회 버튼으로") —
+                체크 안 됐을 때는 실제로 담기니까 "담기", 체크됐을 때는 안 담고 위치만
+                보는 거니까 "조회"로 라벨이 바뀝니다. */}
             <Button type="submit" variant="outline" className="shrink-0" disabled={groupCompleted}>
-              조회
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={cameraEnabled ? "카메라 끄기" : "카메라 켜기"}
-              onClick={toggleCamera}
-              disabled={groupCompleted}
-              className="shrink-0"
-            >
-              {cameraEnabled ? <RiCameraOffLine size={18} /> : <RiCameraLine size={18} />}
+              {locateOnly ? "조회" : "담기"}
             </Button>
           </form>
+
+          {/* ✅ 수정(요청 — "현위치는 버튼 말고 아래에 체크박스로 다시. 스타일은 다른
+              체크박스랑 통일") — 버튼 대신 공용 Checkbox 컴포넌트로 되돌림. 체크되어
+              있으면: 스캔해도 안 담기고, 그 상품 위치를 지도에 표시하면서 동선보기
+              화면(지도)으로 넘어감. */}
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={locateOnly} onChange={() => setLocateOnly((v) => !v)} />
+              현재 위치만 확인 (담지 않음)
+            </label>
+            {/* ✅ "계획 추가" 버튼은 리스트에 없는 상품 추가·시설 먼저 들르기를 모아둔
+                모달을 엽니다. */}
+            <button
+              type="button"
+              onClick={() => setPlanOpen(true)}
+              disabled={groupCompleted}
+              className="flex shrink-0 items-center gap-1 rounded-full border border-card-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+            >
+              <RiCalendarCheckLine size={14} />
+              계획 추가
+            </button>
+          </div>
         </div>
         )}
 
@@ -712,18 +1065,56 @@ function ScanPageInner() {
             ✅ 수정(2026-09, 3차) — listExpanded면 max-h-48 대신 flex-1로 남는 공간을 다
             차지해서 전체 목록이 쭉 나열되게(요청: 목록을 위로 올리면 카메라·입력을 숨기고
             목록만 화면 가득 나열). */}
+        {/* ✅ 수정(요청 — "이동경로 한 줄 / 목록 한 줄이 번갈아 나오게") — 예전엔 여기에
+            전체 이동경로를 하나로 뭉쳐서 보여주는 요약 박스가 따로 있었는데, 이제 그
+            내용은 목록 안(listBlocks)에서 상품 사이사이에 끼는 "이동경로" 카드로
+            들어가 있어서 이 별도 박스는 없앰. */}
+
         <div className={`${listExpanded ? "flex-1" : "max-h-48 shrink-0"} overflow-y-auto px-3`}>
-          {scannedProducts.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">아직 찍은 상품이 없어요.</p>
+          {listBlocks.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">리스트에 담긴 상품이 없어요.</p>
           ) : (
-            <div className="divide-y divide-border">
-              {scannedProducts.map((p) => (
-                <div key={p.id}>
+            <div>
+              {listBlocks.map((block, blockIdx) => {
+                if (block.kind === "route") {
+                  return (
+                    <div
+                      key={`route-${blockIdx}`}
+                      className="my-2 rounded-[14px] border border-card-border bg-muted px-3 py-2"
+                    >
+                      {/* ✅ 수정(요청 — "위치 아이콘은 배경 다 빼고, 메인 주황색으로 이동경로
+                          텍스트 왼쪽에") — 예전엔 상품 썸네일 위에 원형 배경(bg-brand)을
+                          깐 배지로 붙어 있었는데, 그건 없애고 "이동경로" 라벨 바로 왼쪽에
+                          배경 없는 주황 아이콘만 인라인으로 둠. 지금 서 있는 자리를 나타내는
+                          카드(showCurrentLocation)에만 표시. */}
+                      <p className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                        {block.showCurrentLocation && <RiMapPin2Fill size={14} className="text-brand" />}
+                        이동경로
+                      </p>
+                      <p className="text-sm leading-relaxed">
+                        {block.showCurrentLocation ? `(현위치) → ${block.text}` : `→ ${block.text}`}
+                      </p>
+                    </div>
+                  );
+                }
+
+                const p = block.product;
+                const collected = block.collected;
+                // ✅ 찍은 상품끼리는(이동경로 없이 바로 연달아 나오니까) 구분선을 보여주고,
+                //   바로 위가 이동경로 카드였던 경우엔(이미 카드 자체로 구분되니) 생략.
+                const prevIsProduct = blockIdx > 0 && listBlocks[blockIdx - 1].kind === "product";
+                return (
+                <div key={p.id} className={`${collected ? "" : "opacity-40"} ${prevIsProduct ? "border-t border-border" : ""}`}>
                   <div
                     className={`flex items-center gap-3 rounded-sm px-1 py-3 ${
                       selectedRemoveSkuId === p.id ? "bg-danger-bg" : ""
                     }`}
                   >
+                    {/* ✅ 수정(요청 — "이동경로 위에 있는 위치 아이콘은... 이동경로 텍스트
+                        왼쪽에 넣고") — 상품 썸네일 위에 얹었던 현위치 핀 배지는 없앰(엉뚱한
+                        자리에 떠 보이는 문제). 현위치 표시는 이제 위 "이동경로" 카드
+                        라벨 옆 아이콘과, 지도 위 전용 핀(StoreMap의 isCurrentLocation)
+                        두 곳에서만 함. */}
                     {p.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.image} alt="" className="h-14 w-14 shrink-0 rounded-sm border border-border object-cover" />
@@ -732,16 +1123,17 @@ function ScanPageInner() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base">{p.name}</p>
-                      <ProductInsights item={insights[p.id]}/>
                       {locationBySkuId.get(p.id) && (
                         <p className="text-sm text-muted-foreground">{locationBySkuId.get(p.id)}</p>
                       )}
                       <div className="mt-1 flex items-center justify-between text-base">
-                        <span className="text-muted-foreground">{p.quantity}개</span>
-                        <span className="font-semibold">{(p.price * p.quantity).toLocaleString()}원</span>
+                        <span className="text-muted-foreground">{collected ? `${p.quantity}개` : "아직 안 담음"}</span>
+                        {collected && <span className="font-semibold">{(p.price * p.quantity).toLocaleString()}원</span>}
                       </div>
                     </div>
-                    {/* ✅ "−" 누르면 이 상품 바로 아래에 몇 개 뺄지 고르는 패널이 뜸(요청 2번) */}
+                    {/* ✅ "−" 누르면 이 상품 바로 아래에 몇 개 뺄지 고르는 패널이 뜸(요청 2번).
+                        아직 안 담은 상품은 뺄 게 없으니 버튼 자체를 안 보여줌. */}
+                    {collected && (
                     <button
                       type="button"
                       disabled={groupCompleted}
@@ -760,6 +1152,7 @@ function ScanPageInner() {
                     >
                       <RiSubtractLine size={18} />
                     </button>
+                    )}
                   </div>
 
                   {/* ✅ 수정(2026-09, 3차) — 예전엔 목록 전체 아래에 별도 패널로 떨어져
@@ -804,7 +1197,8 @@ function ScanPageInner() {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -879,12 +1273,66 @@ function ScanPageInner() {
         </div>
       </div>
 
-      <StoreMapDialog
-        open={routeOpen}
-        onClose={() => setRouteOpen(false)}
-        groupId={groupId ?? DEFAULT_GROUP_ID}
-        collectedIds={sessionScans}
-      />
+      {/* ✅ 신규(요청 — "계획 추가 버튼") — 리스트에 없는 상품 검색해서 추가 + 시설 먼저
+          들르기. 예전 ShoppingRouteActions 내용을 그대로 옮김. */}
+      <Dialog open={planOpen} onOpenChange={setPlanOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>계획 추가</DialogTitle>
+          </DialogHeader>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">리스트에 없는 상품 찾기</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder="상품 이름 검색"
+                value={planQuery}
+                onChange={(e) => setPlanQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") planSearch(); }}
+              />
+              <Button type="button" variant="outline" disabled={planBusy} onClick={planSearch} className="shrink-0">
+                검색
+              </Button>
+            </div>
+            {planResults.map((p) => (
+              <div key={p.skuId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="min-w-0 truncate">{p.name}</span>
+                <button
+                  type="button"
+                  disabled={planBusy || p.discontinued}
+                  onClick={() => planAdd(p)}
+                  className="shrink-0 rounded border border-card-border px-2 py-1 text-xs disabled:opacity-40"
+                >
+                  구매 계획에 추가
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 border-t pt-4">
+            <p className="mb-2 text-sm font-medium">먼저 들르기</p>
+            <div className="flex gap-2">
+              <select
+                aria-label="들를 시설"
+                value={planFacility}
+                onChange={(e) => setPlanFacility(e.target.value)}
+                className="min-w-0 flex-1 rounded border border-card-border p-2 text-sm"
+              >
+                <option value="">화장실·휴식 공간 선택</option>
+                {route?.facilities.map((f) => (
+                  <option key={f.locationId} value={f.locationId}>{f.label}</option>
+                ))}
+              </select>
+              <Button type="button" variant="outline" disabled={!planFacility || planBusy} onClick={planVisitFacility} className="shrink-0">
+                먼저 들르기
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">시설까지 먼저 안내한 뒤 장보기를 이어가요.</p>
+          </div>
+
+          {planMessage && <p role="status" className="mt-3 text-sm">{planMessage}</p>}
+        </DialogContent>
+      </Dialog>
 
       <GroupPickerDialog
         open={groupPickerOpen || entryPickerOpen}

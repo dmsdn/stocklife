@@ -134,11 +134,10 @@ export default function OrdersPage() {
       .sort((a, b) => new Date(b.orderedAt!).getTime() - new Date(a.orderedAt!).getTime());
   }, [orders, startYear, startMonth, endYear, endMonth]);
 
-  // 방문 날짜(중복 제거, 최신순) — 주문 1건 = 방문 1회
-  const visitDates = useMemo(() => {
-    const set = new Set(ordersInRange.map((o) => new Date(o.orderedAt!).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })));
-    return Array.from(set);
-  }, [ordersInRange]);
+  // ✅ 수정(요청 — "날짜로 방문 횟수 파악하는 것 같은데 결제 개수로 파악해야 함") —
+  //   예전엔 날짜를 중복 제거한 개수로 셌는데, 같은 날 두 번 결제해도 1번으로 잡혀서
+  //   실제 방문(결제) 횟수보다 적게 나왔음. 이제 그 기간의 주문(결제) 건수를 그대로 씀.
+  const visitCount = ordersInRange.length;
 
   const handleSaveConfirm = (groupIds: number[]) => {
     if (!saveTarget) return;
@@ -168,21 +167,12 @@ export default function OrdersPage() {
         <YearMonthSelect year={endYear} month={endMonth} years={yearOptions} onChange={(y, m) => { setEndYear(y); setEndMonth(m); }} />
       </div>
 
-      {/* ✅ 신규(요청) — 해당 기간 방문 날짜와 개수 */}
+      {/* ✅ 수정(요청 — "날짜 표시 지우고, border도 지워") — 결제 개수만 간단히 표시. */}
       {!loading && (
-        <div className="mt-4 rounded-sm border border-border p-4">
+        <div className="mt-4 p-4">
           <p className="text-sm">
-            이 기간 동안 <span className="font-semibold text-brand">{visitDates.length}번</span> 방문했어요
+            이 기간 동안 <span className="font-semibold text-brand">{visitCount}번</span> 방문했어요
           </p>
-          {visitDates.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {visitDates.map((d) => (
-                <span key={d} className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                  {d}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       )}
 

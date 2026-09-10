@@ -10,20 +10,42 @@
 //   보내는 버그가 됨. 세션 전환(openSession)도 라우팅 없이 이 컨텍스트만으로 동작.
 "use client";
 
-import { RiCloseLine } from "@remixicon/react";
+import { useState } from "react";
+import { RiCloseLine, RiMenuLine, RiAddLine } from "@remixicon/react";
 import { useAiPanel } from "./ai-panel-context";
 import { AiChatBody } from "@/components/ai/ai-chat-body";
+import { SessionListDrawer } from "@/components/ai/session-list-drawer";
+import { startNewSession } from "@/lib/session";
 
 export function AiPanel() {
-  const { isOpen, initialMessage, sessionId, highlightMessageId, close } = useAiPanel();
+  const { isOpen, initialMessage, sessionId, highlightMessageId, close, openSession } = useAiPanel();
+  // ✅ 신규(요청 — "채팅 새로 시작하기가 없음") — 데스크탑 패널엔 대화 목록 자체가 아예
+  //   없었습니다(모바일 시트에만 있었음). 같은 SessionListDrawer를 그대로 붙임.
+  const [sessionListOpen, setSessionListOpen] = useState(false);
 
   if (!isOpen) return null;
 
   return (
     <aside className="fixed right-0 top-16 bottom-0 z-[90] hidden w-[420px] flex-col overflow-hidden border-l border-border bg-background md:flex">
-      <div className="flex items-center justify-between border-b border-border px-4 py-4">
-        <span className="text-lg font-semibold">AI에게 물어보기</span>
-        <button type="button" onClick={close} aria-label="AI 패널 닫기">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
+        <button
+          type="button"
+          onClick={() => setSessionListOpen(true)}
+          aria-label="지난 대화 목록"
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
+        >
+          <RiMenuLine size={20} />
+        </button>
+        <span className="min-w-0 flex-1 truncate text-center text-lg font-semibold">AI에게 물어보기</span>
+        <button
+          type="button"
+          onClick={async () => openSession(await startNewSession())}
+          aria-label="새 대화"
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
+        >
+          <RiAddLine size={20} />
+        </button>
+        <button type="button" onClick={close} aria-label="AI 패널 닫기" className="shrink-0">
           <RiCloseLine size={24} />
         </button>
       </div>
@@ -31,6 +53,13 @@ export function AiPanel() {
         sessionIdOverride={sessionId ?? undefined}
         initialMessage={initialMessage}
         highlightMessageId={highlightMessageId ?? undefined}
+      />
+      <SessionListDrawer
+        open={sessionListOpen}
+        onClose={() => setSessionListOpen(false)}
+        currentSessionId={sessionId}
+        onSelect={(id) => openSession(id)}
+        onNewSession={(id) => openSession(id)}
       />
     </aside>
   );

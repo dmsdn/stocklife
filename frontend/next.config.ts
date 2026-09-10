@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
       { source: "/img/:path*", destination: `${backend}/img/:path*` },
     ];
   },
-  allowedDevOrigins: ["192.168.45.46", "192.168.0.80"],
+  allowedDevOrigins: ["192.168.45.46", "192.168.0.80", "175.127.234.38"],
 };
 
 export default nextConfig;

@@ -39,7 +39,7 @@ import { fetchNotices, type Notice } from "@/lib/notices";
 const quickLinks = [
   {
     href: "/saved",
-    label: "저장",
+    label: "계획",
     icon: RiBookmarkLine,
   },
   {
@@ -60,7 +60,7 @@ const menuGroups = [
     loggedInOnly: true,
     items: [
       { href: "/mypage/orders", label: "구매내역" },
-      { href: "/mypage/refunds", label: "교환/반품/환불 내역" },
+      { href: "/mypage/refunds", label: "취소/반품/환불" },
       { href: "/mypage/spending", label: "소비 분석" },
     ],
   },
@@ -77,7 +77,7 @@ const menuGroups = [
     loggedInOnly: true,
     items: [
       { href: "/mypage/account", label: "회원정보" },
-      { href: "/saved", label: "저장한 리스트" },
+      { href: "/saved", label: "계획한 리스트" },
       { href: "/mypage/recent", label: "최근 본 상품" },
       { href: "/mypage/frequent", label: "자주 구매한 상품" },
     ],
@@ -209,7 +209,7 @@ export default function MyPage() {
              ========================= */}
 
           {loggedIn && profile && (
-            <div className="mt-3 rounded-[20px] border border-card-border bg-white px-5 pt-4 pb-5">
+            <div className="mt-2 rounded-[20px] border border-card-border bg-white px-5 pt-4 pb-5">
               <div className="flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={gradeIconSrc(currentTier.key)} alt="" className="h-6 w-6 shrink-0" />
@@ -235,7 +235,7 @@ export default function MyPage() {
               저장 / 최근 본 / 전자영수증
              ========================= */}
 
-          <div className="mt-3 flex h-[75px] items-center justify-around rounded-[20px] border border-card-border bg-white">
+          <div className="mt-2 flex h-[75px] items-center justify-around rounded-[20px] border border-card-border bg-white">
             {quickLinks.map((q) => (
               <Link key={q.href} href={q.href} className="flex flex-col items-center gap-2">
                 <q.icon size={24} className="text-[#111]" />

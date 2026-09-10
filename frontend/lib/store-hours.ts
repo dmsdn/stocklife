@@ -4,7 +4,7 @@
 // 세 가지를 구분해서 다룹니다:
 //   1. 정기 영업시간(평일 / 주말·공휴일) — 값 자체가 거의 안 바뀌므로 상수로 고정
 //      ⚠ 실제 오픈/마감 시각은 아직 확정받은 적이 없어서 예시값입니다 — 실제 시간으로 교체 필요.
-//   2. 정기휴무일(매월 둘째·넷째 주 수요일) — "날짜"가 아니라 "규칙"이라 계산 함수로 처리.
+//   2. 정기휴무일(매월 둘째·넷째 주 월요일) — "날짜"가 아니라 "규칙"이라 계산 함수로 처리.
 //      연도가 바뀌어도 코드를 안 건드려도 항상 정확합니다.
 //   3. 법정공휴일 — 대체공휴일 규정이 휴일마다 다르고(예: 현충일은 대체공휴일 자체가 없음,
 //      설/추석은 일요일과 겹칠 때만 대체), 선거일 같은 임시공휴일은 아예 규칙으로 예측이
@@ -67,10 +67,10 @@ function findHoliday(date: Date): { date: string; name: string } | null {
   return ALL_PUBLIC_HOLIDAYS.find((h) => h.date === key) ?? null;
 }
 
-// 2. 정기휴무일 — "매월 둘째·넷째 주 수요일". 특정 날짜를 저장하지 않고 매번 계산합니다.
-function isSecondOrFourthWednesday(date: Date): boolean {
-  if (date.getDay() !== 3) return false; // 수요일(0=일 ... 3=수)이 아니면 바로 false
-  const nth = Math.ceil(date.getDate() / 7); // 이번 달의 몇 번째 수요일인지
+// 2. 정기휴무일 — "매월 둘째·넷째 주 월요일". 특정 날짜를 저장하지 않고 매번 계산합니다.
+function isSecondOrFourthMonday(date: Date): boolean {
+  if (date.getDay() !== 1) return false; // 월요일(0=일 ... 1=월)이 아니면 바로 false
+  const nth = Math.ceil(date.getDate() / 7); // 이번 달의 몇 번째 월요일인지
   return nth === 2 || nth === 4;
 }
 
@@ -89,7 +89,7 @@ export function getStoreDayInfo(date: Date): StoreDayInfo {
   if (holiday) {
     return { closed: true, closedReason: holiday.name, hours: WEEKEND_OR_HOLIDAY_HOURS };
   }
-  if (isSecondOrFourthWednesday(date)) {
+  if (isSecondOrFourthMonday(date)) {
     return { closed: true, closedReason: "정기휴무일", hours: WEEKDAY_HOURS };
   }
 

@@ -6,65 +6,23 @@
 //   박스가 잔뜩 겹쳐 보여서 지저분했고("이상한 박스"), 매대 시드 데이터가 없으면 아예
 //   안 눌리기도 했습니다. 이제 색칠된 구역(zone) 전체를 누르면 그 구역이 어떤
 //   카테고리인지만 지도 위에 핀처럼 뜹니다(StoreMap 내부에서 처리, 외부 모달 없음).
+// ✅ 수정(요청 — "매장 지도에 핀 박히는거 다 빼기") — 예전엔 내가 담은 상품들을 실제
+//   재고 위치로 지도 위에 핀으로 모아 보여주는 기능이 있었는데, 그 핀(과 그걸 불러오는
+//   fetchInventoryBatch/loadCartGroups 로직) 자체를 없앴습니다. 이제 이 화면은 순수하게
+//   구역(zone)만 둘러보는 용도입니다.
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RiArrowLeftSLine } from "@remixicon/react";
-import { StoreMap, type MapPin } from "@/components/domain/store-map";
-import { MOCK_PROMO_PINS } from "@/lib/promo-mock";
+import { StoreMap } from "@/components/domain/store-map";
 import { FLOOR_MAPS } from "@/lib/map-config";
-import { fetchInventoryBatch, pickLocation } from "@/lib/product-location";
-import { loadCartGroups, readCartGroups } from "@/lib/cart-storage";
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 import { useBottomBarVisibility } from "@/components/layout/bottom-bar-visibility-context";
 
 export default function StoreMapPage() {
   const [floorNo, setFloorNo] = useState(FLOOR_MAPS[0]?.floorNo ?? 1);
   const openAiChat = useOpenAiChat();
-
-  // ✅ "실제 제품 좌표로 모아보기": 내가 담아둔(전체 리스트) 상품들을 실제 재고 위치(x,y)로
-  //   지도 위에 핀으로 표시. 특정 리스트 동선(StoreMapDialog)과 달리 여기는 "둘러보기"라
-  //   경로는 안 그리고 핀만 표시한다(로그인 회원 전용 리스트라 비회원은 항상 빈 배열).
-  const [pinsByFloor, setPinsByFloor] = useState<Map<number, MapPin[]>>(new Map());
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      // ✅ loadCartGroups()는 로그인 회원이면 서버에서 최신 목록을 받아옴(saved/[groupId]와
-      //   동일 패턴). 실패하면 로컬 캐시(readCartGroups)로 폴백.
-      const groups = await loadCartGroups().catch(() => readCartGroups());
-      const products = groups.flatMap((g) => g.products);
-      const uniqueProducts = Array.from(new Map(products.map((p) => [p.id, p])).values());
-      if (uniqueProducts.length === 0) return;
-
-      const inventoryMap = await fetchInventoryBatch(uniqueProducts.map((p) => p.id));
-      if (cancelled) return;
-
-      const next = new Map<number, MapPin[]>();
-      for (const product of uniqueProducts) {
-        const loc = pickLocation(inventoryMap.get(product.id));
-        if (!loc) continue; // 배치 조회에 위치가 없는 상품(품절 등)은 지도에 안 띄움
-        const pin: MapPin = {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          image: product.image,
-          x: loc.x,
-          y: loc.y,
-        };
-        next.set(loc.floorNo, [...(next.get(loc.floorNo) ?? []), pin]);
-      }
-      setPinsByFloor(next);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const floorPins = pinsByFloor.get(floorNo) ?? [];
-  // routeOrder는 실제 동선이 아니라 핀 번호 매기기 용도(방문 순서 계산 없이 담은 순서 그대로)
-  const floorRouteOrder = useMemo(() => floorPins.map((p) => p.id), [floorPins]);
 
   // ✅ 매장 지도 화면은 항상 하단탭바 없이 꽉 차게
   const { setHidden: setBottomBarHidden } = useBottomBarVisibility();
@@ -86,14 +44,13 @@ export default function StoreMapPage() {
 
       <StoreMap
         floorNo={floorNo}
-        pins={floorPins}
-        routeOrder={floorRouteOrder}
+        pins={[]}
+        routeOrder={[]}
         showZones
         onFloorChange={setFloorNo}
         onLivClick={() => openAiChat()}
         heightClassName="h-[calc(100dvh-8rem)]"
         hideHelpText
-        promoPins={MOCK_PROMO_PINS}
       />
     </div>
   );
