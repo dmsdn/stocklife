@@ -36,6 +36,8 @@ export interface CartRoute {
 }
 
 interface FetchCartRouteArgs {
+    anchor?: {skuId:number};
+    groupId?: number;
     floor: number; // 캐릭터가 지금 있는 층
     x: number;
     y: number;
@@ -64,50 +66,26 @@ interface BackendRouteResponse {
     totalDistance: number;
 }
 
-export async function fetchCartRoute({ floor, x, y, items }: FetchCartRouteArgs): Promise<CartRoute> {
-    const res = await fetch('/api/navigation/route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            startFloor: floor,
-            startX: x,
-            startY: y,
-            stops: items.map((it) => ({ skuId: it.skuId, label: it.name })),
-        }),
-    });
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`동선 조회 실패(${res.status}): ${text}`);
-    }
-    const data: BackendRouteResponse = await res.json();
-
-    const stops: RouteStop[] = [];
-    const path: RoutePathPoint[] = [];
-    let unresolvedCount = 0;
-
-    for (const leg of data.legs) {
-        if (leg.status !== 'OK' || leg.path.length === 0) {
-            unresolvedCount++;
-            continue;
-        }
-        // 첫 칸은 이전 leg의 마지막 칸과 겹치므로(이미 그려진 좌표) 두 번째 leg부터는 제외한다.
-        const startIdx = path.length === 0 ? 0 : 1;
-        for (let i = startIdx; i < leg.path.length; i++) {
-            const p = leg.path[i];
-            path.push({ floor: p.floorNo, x: p.x, y: p.y });
-        }
-        const last = leg.path[leg.path.length - 1];
-        stops.push({
-            skuId: leg.skuId,
-            name: leg.label,
-            locationId: leg.locationId,
-            floor: last.floorNo,
-            x: last.x,
-            y: last.y,
-        });
-    }
-
-    return { totalDistance: data.totalDistance, stops, path, unresolvedCount };
+export function routeFromPlan(data: {journeySteps: {kind:string;skuId?:number;locationId?:string;label:string;path:BackendPathPoint[]}[];totalDistance:number;excluded?:unknown[]}): CartRoute {
+ const stops: RouteStop[]=[]; const path: RoutePathPoint[]=[];
+ for(const step of data.journeySteps) {
+  for(const p of step.path) { const last=path[path.length-1]; if(!last || last.floor!==p.floorNo || last.x!==p.x || last.y!==p.y) path.push({floor:p.floorNo,x:p.x,y:p.y}); }
+  const end=step.path[step.path.length-1];
+  if(end && step.kind!=='WALK' && step.kind!=='ESCALATOR') stops.push({skuId:step.skuId??null,name:step.label,locationId:step.locationId??null,floor:end.floorNo,x:end.x,y:end.y});
+ }
+ return {stops,path,totalDistance:data.totalDistance,unresolvedCount:data.excluded?.length??0};
+}
+export async function fetchCartRoute({items, anchor, groupId}: FetchCartRouteArgs): Promise<CartRoute> {
+ const skuIds=[...new Set(items.map(i=>i.skuId))];
+ try {
+  const saved=JSON.parse(sessionStorage.getItem('storeflow_shopping_route_progress')??'null');
+  const ids=[...(saved?.route?.orderedSkuIds??[]),...(saved?.route?.excluded??[]).map((e:{skuId:number})=>e.skuId)];
+  if(saved?.route && saved.groupId===groupId && !anchor && ids.length===skuIds.length && ids.every((id:number)=>skuIds.includes(id))) return routeFromPlan(saved.route);
+ } catch { /* No shared plan yet. */ }
+ const res=await fetch('/api/ai/route-optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skuIds,anchor})});
+ if(!res.ok) throw new Error(`동선 조회 실패(${res.status})`);
+ const data=await res.json(); if(data.error) throw new Error(data.message??data.error);
+ return routeFromPlan(data);
 }
 
 /** path 전체 중 지금 로드된 층(currentFloor)에 해당하는 연속 구간만 뽑아낸다. */

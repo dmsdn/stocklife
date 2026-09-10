@@ -48,7 +48,7 @@ interface RequestKeyParams {
 /** ✅ 지금 조건을 문자열 하나로 요약. 같은 값이면 "같은 계획"으로 보고 재계산을 건너뜁니다. */
 export function buildRequestKey({ groupId, skuIds, anchor, detourLocationId, paid }: RequestKeyParams): string {
   const sortedIds = [...skuIds].sort((a, b) => a - b).join(",");
-  return JSON.stringify({ groupId, sortedIds, anchor: anchor ?? null, detourLocationId: detourLocationId ?? null, paid: !!paid });
+  return JSON.stringify({ routeRevision: 2, groupId, sortedIds, anchor: anchor ?? null, detourLocationId: detourLocationId ?? null, paid: !!paid });
 }
 
 export function readRouteProgress(groupId: number): ShoppingRouteProgress | null {
@@ -66,6 +66,7 @@ export function readRouteProgress(groupId: number): ShoppingRouteProgress | null
 export function saveRouteProgress(progress: ShoppingRouteProgress) {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(KEY, JSON.stringify(progress));
+  if (window.parent !== window) window.parent.postMessage({source:"storeflow-frontend",type:"PLANNED_ROUTE",groupId:progress.groupId,route:progress.route}, document.referrer ? new URL(document.referrer).origin : window.location.origin);
 }
 
 export function clearRouteProgress(groupId?: number) {

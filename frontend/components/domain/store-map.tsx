@@ -113,6 +113,7 @@ export interface StoreMapProps {
    *  그림. 확대/축소해도 항상 화면 기준 4px(vector-effect: non-scaling-stroke). */
   precomputedPath?: GridPoint[];
   pathSegments?: GridPoint[][];
+  activePathSegments?: GridPoint[][];
   routeOrigin?: GridPoint & { label: string };
   /** ✅ 신규(요청 — "바코드 찍으면 가장 최근 찍은 상품 위치를 현재 위치로") — 있으면 그
    *  좌표에 "현재 위치" 전용 아이콘(파란 점, 살짝 펄스)을 띄움. */
@@ -141,7 +142,7 @@ function dist(a: React.Touch, b: React.Touch) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName, hideHelpText, showFloorBadge, promoPins, precomputedPath, currentLocationPin, pathSegments, routeOrigin }: StoreMapProps) {
+export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName, hideHelpText, showFloorBadge, promoPins, precomputedPath, currentLocationPin, pathSegments, activePathSegments, routeOrigin }: StoreMapProps) {
   const arrowId = useId().replace(/:/g, "");
   const config = getFloorMap(floorNo);
   const [zoom, setZoom] = useState(1);
@@ -156,7 +157,9 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
   const [realMapReady, setRealMapReady] = useState(false);
 
   useEffect(() => {
-    fetchRealFloorMap(floorNo).then(() => setRealMapReady(true));
+    let active=true;setRealMapReady(false);
+    fetchRealFloorMap(floorNo).then(() => {if(active)setRealMapReady(true);});
+    return ()=>{active=false;};
   }, [floorNo]);
 
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
@@ -288,10 +291,10 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
     //   flex+h-full로 바꿔서, 바깥 래퍼가 실제로 자기 부모(호출한 화면 쪽 컨테이너)의
     //   높이를 그대로 물려받아 안쪽까지 제대로 내려가게 했습니다. 고정 높이(h-[70vh] 등)를
     //   쓰는 다른 화면들은 이 변경과 무관하게 그대로 동작합니다.
-    <div className="flex h-full flex-col gap-2">
+    <div className={`flex flex-col gap-2 ${heightClassName === "h-full" ? "h-full min-h-0" : "shrink-0"}`}>
       <div
         ref={containerRef}
-        className={`relative w-full flex-1 touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
+        className={`relative w-full shrink-0 touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -324,8 +327,9 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
             <defs><marker id={arrowId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--brand, #e65c16)" /></marker></defs>
             {(pathSegments ?? (precomputedPath ? [precomputedPath] : [])).map((segment, index) => {
               const points = segment.map((point) => { const p = navigationPercent(point.x, point.y); return `${p.left},${p.top}`; }).join(" ");
-              return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={`url(#${arrowId})`} opacity={0.85} /> : null;
+              return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={`url(#${arrowId})`} opacity={activePathSegments ? 0.35 : 0.85} /> : null;
             })}
+            {(activePathSegments ?? []).map((segment,index) => segment.length>1 ? <polyline key={`active-${index}`} points={segment.map(point=>{const p=navigationPercent(point.x,point.y);return `${p.left},${p.top}`;}).join(" ")} fill="none" stroke="#2563eb" strokeWidth={5} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /> : null)}
           </svg>
           {routeOrigin && (
             <span className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full border border-orange-600 bg-white px-2 py-1 text-xs text-orange-700" style={{ left: `${navigationPercent(routeOrigin.x, routeOrigin.y).left}%`, top: `${navigationPercent(routeOrigin.x, routeOrigin.y).top}%` }}>
@@ -428,6 +432,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
               //   배열 순서(=DOM 순서)에 맡겨져 있었습니다. 누른(active) 핀만 zIndex를
               //   크게 올려서, 팝업 카드와 핀 본체가 이웃 핀 위로 항상 올라오게 합니다.
               <div key={pin.id} className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: `${left}%`, top: `${top}%`, zIndex: isActive ? 20 : 2 }}>
+                {pin.facility && !isActive && <span className="absolute bottom-full mb-1 whitespace-nowrap rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white" style={{transform:`scale(${1/zoom})`,transformOrigin:"bottom center"}}>목적지 · {pin.name}</span>}
                 {isActive && (
                   <div
                     className="pointer-events-auto absolute bottom-full mb-2 flex items-center gap-3 whitespace-nowrap rounded-[20px] border border-[#F4F4F4] bg-white p-3 shadow-[0_4px_20px_rgba(0,0,0,0.12)]"
@@ -448,6 +453,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                     )}
                     <div className="pr-1 text-left">
                       <p className="text-sm">{pin.name}</p>
+                      {pin.facility && <p className="text-xs font-semibold text-blue-700">목적지</p>}
                       {!pin.facility && <p className="text-base font-bold">{pin.price.toLocaleString()}원</p>}
                     </div>
                   </div>

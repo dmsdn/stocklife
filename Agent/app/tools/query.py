@@ -472,6 +472,9 @@ def _get_session_cart(session_id: str, group_id: int | None = None) -> dict:
         if err:
             return err
         cart_context.set_group(selected)
+    from app import cart_context
+    if cart_context.has_guest():
+        return cart_context.read_cart(session_id)
     return sot_client.get_session_cart(session_id)
 
 

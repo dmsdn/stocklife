@@ -97,6 +97,7 @@ export function setTokens(accessToken: string, refreshToken: string, persist: bo
   other.removeItem(REFRESH_TOKEN_KEY);
   storage.setItem(ACCESS_TOKEN_KEY, accessToken);
   storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  for (const key of ["storeflow_shopping_session", "storeflow_shopping_route_progress", "storeflow_active_scan_group_id"]) window.sessionStorage.removeItem(key);
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
@@ -105,6 +106,7 @@ export function clearTokens() {
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  for (const key of ["storeflow_shopping_session", "storeflow_shopping_route_progress", "storeflow_active_scan_group_id"]) window.sessionStorage.removeItem(key);
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 

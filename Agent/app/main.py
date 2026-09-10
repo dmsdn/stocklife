@@ -122,6 +122,7 @@ class HistoryItem(BaseModel):                                  # ㊹
 
 class ChatRequest(BaseModel):
     sessionId: str
+    guestCart: dict | None = None
     consumerId: int | None = None        # 비회원이면 null로 온다
     groupId: int | None = Field(default=None, gt=0) # Backend가 소유권을 확인한 채팅 연결 리스트
     message: str
@@ -295,7 +296,7 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     result = loop.run_chat(body.message, consumer_id=body.consumerId,
                            session_id=body.sessionId, history=history,
-                           position=pos, group_id=body.groupId)
+                           position=pos, group_id=body.groupId, guest_cart=body.guestCart)
 
     verdict = guard.check(result["reply"], result["ledgers"])
     if verdict["ok"]:
@@ -323,7 +324,7 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
         # 둘 다 걸렸으면 web_only 쪽을 쓴다(사실 출처 문제가 더 무겁다).
         msg = _RETRY_MSG["web_only"] if "web_only" in reasons else _RETRY_MSG["contradicts_ledger"]
         retry = loop.run_chat(msg, consumer_id=body.consumerId, position=pos,
-                              session_id=body.sessionId, history=retry_history, group_id=body.groupId)
+                              session_id=body.sessionId, history=retry_history, group_id=body.groupId, guest_cart=body.guestCart)
         if guard.check(retry["reply"], retry["ledgers"])["ok"]:
             return ChatResponse(reply=navigation_links.with_references(retry["reply"], retry["ledgers"]), actions=retry["actions"])
         result = retry            # 재생성도 실패 → 아래 안전 문구로 (그 패스의

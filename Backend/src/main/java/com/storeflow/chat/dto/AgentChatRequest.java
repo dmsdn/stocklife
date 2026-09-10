@@ -4,6 +4,10 @@ import java.util.List;
 
 /** Backend -> Agent(/agent/chat) 요청 바디. Agent는 이 안에서만 판단하고 DB에 직접 쓰지 않는다. */
 public class AgentChatRequest {
+    @jakarta.validation.Valid
+    private GuestCartContext guestCart;
+    public GuestCartContext getGuestCart() { return guestCart; }
+    public void setGuestCart(GuestCartContext value) { guestCart = value; }
 
     private String sessionId;
     private Long groupId;

@@ -20,6 +20,23 @@ class ShoppingNavigationTest {
         ReflectionTestUtils.setField(c,"passable",true);ReflectionTestUtils.setField(c,"transitId",transit);
         return c;
     }
+    @Test void equalShortestPathsPreferOneTurnAndAvoidBlockedCells() throws Exception {
+        List<MapCell> cells=new ArrayList<>();
+        for(int x=0;x<=8;x++)for(int y=0;y<=6;y++)cells.add(cell(1,x,y,null));
+        var graph=NavigationGraph.load(cells);
+        var result=AStarPathfinder.findPath(graph,GridKey.of(1,0,0),GridKey.of(1,8,6),true);
+        assertEquals(14,result.cost());
+        int turns=0,dx=0,dy=0;
+        for(int i=1;i<result.path().size();i++){
+            var a=result.path().get(i-1);var b=result.path().get(i);int nx=b.x()-a.x(),ny=b.y()-a.y();
+            if(i>1&&(nx!=dx||ny!=dy))turns++;dx=nx;dy=ny;
+        }
+        assertEquals(1,turns);
+        cells.removeIf(c->c.getX()==4&&c.getY()<6);
+        result=AStarPathfinder.findPath(NavigationGraph.load(cells),GridKey.of(1,0,0),GridKey.of(1,8,0),true);
+        assertEquals(20,result.cost());
+        assertTrue(result.path().stream().noneMatch(k->k.x()==4&&k.y()<6));
+    }
     @Test void onlyAdjacentEscalatorsAndNoSameFloorTeleport() throws Exception {
         List<MapCell> cells=new ArrayList<>();
         for(int f=1;f<=3;f++)for(int x=0;x<=4;x++)for(int y=0;y<=4;y++)

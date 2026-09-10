@@ -15,7 +15,7 @@ import { isLoggedIn } from "./api-client";
 export type SimulationAuthMessage =
     | { source: "storeflow-frontend"; type: "LOGIN"; consumerId: number; name: string; phoneNumber: string }
     | { source: "storeflow-frontend"; type: "LOGOUT" }
-    | { source: "storeflow-frontend"; type: "CART_CHANGED" };
+    | { source: "storeflow-frontend"; type: "CART_CHANGED"; guestGroups?: unknown[] };
 
 function isEmbeddedInIframe(): boolean {
     try {
@@ -35,7 +35,7 @@ function postToParent(message: SimulationAuthMessage) {
         return; // 단독 탭으로 열려있으면 알려줄 부모가 없음
     }
     console.log("[simulation-bridge] 부모(시뮬레이션)에 메시지 전송:", message);
-    window.parent.postMessage(message, "*");
+    window.parent.postMessage(message, document.referrer ? new URL(document.referrer).origin : window.location.origin);
 }
 
 /** 로그인 성공 직후 호출 — Simulation 캐릭터를 이 회원 계정으로 전환시킨다. */
@@ -67,6 +67,7 @@ export function notifySimulationLogout(): void {
 export function notifySimulationOfCurrentAuthOnce(): void {
     if (!isLoggedIn()) {
         notifySimulationLogout();
+        notifySimulationCartChanged();
         return;
     }
     void notifySimulationLogin();
@@ -78,5 +79,9 @@ export function notifySimulationOfCurrentAuthOnce(): void {
  * 실패해도 화면 동작에는 영향이 없으므로 await 하지 않아도 된다.
  */
 export function notifySimulationCartChanged(): void {
-    postToParent({ source: "storeflow-frontend", type: "CART_CHANGED" });
+    let guestGroups: unknown[] | undefined;
+    if (!isLoggedIn() && typeof window !== "undefined") {
+      try { guestGroups = JSON.parse(window.localStorage.getItem("storeflow_cart_groups") ?? "[]"); } catch { guestGroups = []; }
+    }
+    postToParent({ source: "storeflow-frontend", type: "CART_CHANGED", guestGroups });
 }

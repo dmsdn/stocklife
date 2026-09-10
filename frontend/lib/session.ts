@@ -3,6 +3,11 @@
 import { apiFetch, getAccessToken, ApiError, AUTH_CHANGED_EVENT } from "./api-client";
 import { getClientId } from "./client-id";
 
+const GUEST_GROUP_KEY = "storeflow_guest_chat_groups";
+function guestGroup(id:string): number|null {
+  if(getAccessToken() || typeof window === "undefined") return null;
+  try{return JSON.parse(window.sessionStorage.getItem(GUEST_GROUP_KEY)??"{}")[id]??null;}catch{return null;}
+}
 const SESSION_KEY = "storeflow_active_session_id";
 export const SESSION_CHANGED_EVENT = "storeflow:session-changed";
 let revision = 0;
@@ -41,6 +46,12 @@ export async function startNewSession(groupId?: number | null): Promise<string> 
     body: groupId ? JSON.stringify({ groupId }) : undefined,
   });
   check();
+  if(!getAccessToken()) {
+    let groups:Record<string,number|null>={};
+    try{groups=JSON.parse(window.sessionStorage.getItem(GUEST_GROUP_KEY)??"{}");}catch{}
+    groups[res.sessionId]=groupId??null;
+    window.sessionStorage.setItem(GUEST_GROUP_KEY,JSON.stringify(groups));
+  }
   writeSessionId(res.sessionId);
   return res.sessionId;
 }
@@ -57,7 +68,7 @@ export async function getOrCreateSessionId(groupId?: number | null): Promise<str
         const metadata = await apiFetch<{groupId?: number | null}>(`/api/chat/sessions/${encodeURIComponent(existing)}`, { headers: headers() });
         check();
         // A chat for another list is not reusable merely because the account owns it.
-        if (groupId != null && metadata.groupId !== groupId) return startNewSession(groupId);
+        if (groupId != null && (metadata.groupId ?? guestGroup(existing)) !== groupId) return startNewSession(groupId);
         return existing;
       } catch (e) {
         check();

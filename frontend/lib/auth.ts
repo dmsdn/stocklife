@@ -85,6 +85,7 @@ export async function signup(payload: SignupPayload): Promise<void> {
     body: JSON.stringify(payload),
     auth: false,
   });
+  if (typeof window !== "undefined") window.sessionStorage.setItem("storeflow_signup_cart_phone", payload.phoneNumber);
 }
 
 export async function login(
@@ -134,7 +135,10 @@ export async function login(
   // 5. 로그인 성공 직후 비회원 localStorage 장바구니를 회원 DB로 승계
   // 승계 실패 시 localStorage는 남겨두고 로그인 자체는 유지
   try {
-    await migrateGuestCartToAccount();
+    if (window.sessionStorage.getItem("storeflow_signup_cart_phone") === phoneNumber) {
+      window.sessionStorage.removeItem("storeflow_signup_cart_phone");
+      await migrateGuestCartToAccount();
+    }
   } catch (error) {
     console.error("[auth] guest cart migration failed", error);
     // localStorage는 보존되고, 다음 로그인 때 다시 시도

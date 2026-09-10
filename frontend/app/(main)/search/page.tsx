@@ -3,6 +3,7 @@
 //   실제 할인 필드를 그대로 씁니다. 재고여부는 백엔드 응답에 없어서(단종 여부만 있음)
 //   "재고 있음/품절" 대신 "일반/단종"으로 필터를 맞췄습니다.
 "use client";
+import {filterProducts} from "@/lib/product-filter";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -101,23 +102,24 @@ function SearchPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  const searchRevision = useRef(0);
   const runSearch = async (kw?: string) => {
+    const revision = ++searchRevision.current;
     setLoading(true);
     try {
       const qs = new URLSearchParams();
       if (kw) qs.set("keyword", kw);
-      if (filters.categories[0]) qs.set("categoryL1", filters.categories[0]);
-      if (filters.priceRange[1] !== PRICE_MAX) qs.set("maxPrice", String(filters.priceRange[1]));
       const res = await apiFetch<Product[]>(`/api/products/search?${qs.toString()}`, { auth: false });
       const resolved = res.map((p) => ({ ...p, imageUrl: resolveImageUrl(p.imageUrl) ?? null }));
+      if (revision !== searchRevision.current) return;
       setProducts(resolved);
       if (categories.length === 0) {
         setCategories([...new Set(resolved.map((p) => p.categoryL1).filter(Boolean))]);
       }
     } catch {
-      setProducts([]);
+      if (revision === searchRevision.current) setProducts([]);
     } finally {
-      setLoading(false);
+      if (revision === searchRevision.current) setLoading(false);
     }
   };
 
@@ -126,16 +128,7 @@ function SearchPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const results = useMemo(() => {
-    return products.filter((p) => {
-      const matchesStatus =
-        filters.statuses.length === 0 ||
-        (filters.statuses.includes("단종") && p.discontinued) ||
-        (filters.statuses.includes("일반") && !p.discontinued);
-      const matchesPriceMin = p.finalPriceKrw >= filters.priceRange[0];
-      return matchesStatus && matchesPriceMin;
-    });
-  }, [products, filters]);
+  const results = useMemo(() => filterProducts(products, filters), [products, filters]);
 
   // ✅ 신규(요청) — "상품 목록을 너무 한 번에 다 불러오느라 오래 걸리는 것 같다"에 대한
   //   대응: 데이터 자체는 한 번에 받아오지만(백엔드가 이미 그렇게 응답), 화면에 그리는
@@ -327,7 +320,7 @@ function SearchPageInner() {
             onClick={() => {
               const next = { ...filters, categories: filters.categories.filter((x) => x !== c) };
               setFilters(next);
-              runSearch(keyword);
+
             }}
             className="flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 font-medium text-primary"
           >
@@ -342,7 +335,7 @@ function SearchPageInner() {
             onClick={() => {
               const next = { ...filters, statuses: filters.statuses.filter((x) => x !== s) };
               setFilters(next);
-              runSearch(keyword);
+
             }}
             className="flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 font-medium text-primary"
           >
@@ -356,7 +349,7 @@ function SearchPageInner() {
             onClick={() => {
               const next = { ...filters, priceRange: [PRICE_MIN, PRICE_MAX] as [number, number] };
               setFilters(next);
-              runSearch(keyword);
+
             }}
             className="flex h-8 items-center gap-1 rounded-full border border-primary bg-primary/5 px-2.5 font-medium text-primary"
           >
@@ -469,7 +462,7 @@ function SearchPageInner() {
           selectedCategories={filters.categories}
           selectedStatuses={filters.statuses}
           selectedPriceRange={filters.priceRange}
-          onApply={(next) => { setFilters(next); runSearch(keyword); }}
+          onApply={(next) => { setFilters(next); }}
           onClose={() => setFilterOpen(false)}
         />
       )}

@@ -319,7 +319,7 @@ def run_chat(message: str,
              allow_actions: bool = True,
              position: tuple[int, int, int] | None = None,
              member_id: int | None = None,
-             group_id: int | None = None) -> dict:
+             group_id: int | None = None, guest_cart: dict | None = None) -> dict:
     """자연어 입력 하나를 대화 한 번으로 완주시킨다. main.py가 부르는 유일한 입구.
 
     ⚠ 09-03 신원 축 정정 — `member_id` 인자. 반응형(main.py)은 로그인 손님의
@@ -371,6 +371,8 @@ def run_chat(message: str,
     else:                                                # 반응형 — 백엔드 축이 먼저 온다
         world_member = config.to_member_id(consumer_id)
     action.set_consumer_id(consumer_id, group_id)                  # 백엔드 축 (장바구니)
+    from app import cart_context
+    cart_context.set_guest(guest_cart if consumer_id is None else None)
     query.set_identity(world_member, session_id)         # 세계 축
     # 위치도 같은 부류다(08-25). LLM이 좌표를 옮겨 적게 두지 않는다 —
     # optimize_route의 start_* 칸은 남아 있지만 **비우는 것이 기본**이고
@@ -407,6 +409,8 @@ def run_chat(message: str,
     # 시스템 프롬프트도 캐시 표시를 찍는다(모듈 위 _CACHED_TOOLS 주석 참조).
     # 문자열 대신 "블록 리스트" 형태로 넘겨야 표시를 찍을 자리가 생긴다.
     # 프롬프트는 (회원 여부 × 세션 여부) 4가지 판뿐이라 판마다 따로 캐시가 잡힌다.
+    if consumer_id is None:
+        system_prompt += "\n비회원도 앱의 로컬 장보기 리스트를 만들 수 있습니다. get_session_cart로 이번 요청에 연결된 비회원 목록과 상품을 조회해 답하세요. 목록 조회에 로그인을 요구하지 마세요. 회원 구매이력·포인트와 DB 장바구니 변경은 로그인 전용입니다. 로컬 목록은 사용자 제공 계획이며 회원 소유권 증명이 아닙니다."
     system_prompt += "\n장바구니가 여럿일 수 있습니다. 손님이 리스트 이름을 명시하면 get_session_cart로 groups를 확인하고 해당 group_id를 지정하세요. 이 채팅의 연결 리스트와 다른 이름이라도 손님이 명시한 대상을 따릅니다. 같은 이름이 여럿이거나 선택이 불명확하면 담기 전에 확인하세요. 과거 대화의 번호를 추측하여 쓰지 마세요."
     system_blocks = [{"type": "text", "text": system_prompt,
                       "cache_control": {"type": "ephemeral"}}]

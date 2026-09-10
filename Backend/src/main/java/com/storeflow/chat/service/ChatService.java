@@ -74,6 +74,8 @@ public class ChatService {
 
                 String sessionId = UUID.randomUUID().toString();
                 Long ownedGroupId = resolveOwnedGroupIdOrNull(consumerIdOrNull, groupIdOrNull);
+                if (consumerIdOrNull != null && groupIdOrNull != null && ownedGroupId == null)
+                        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "이 리스트를 사용할 수 없습니다.");
 
                 ChatSession session = new ChatSession(
                         sessionId,
@@ -323,6 +325,7 @@ public class ChatService {
                 if (chatGroupId != null && resolveOwnedGroupIdOrNull(consumerIdOrNull, chatGroupId) == null)
                         throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "연결된 리스트를 사용할 수 없습니다.");
                 agentRequest.setGroupId(chatGroupId);
+                if (consumerIdOrNull == null) agentRequest.setGuestCart(request.getGuestCart());
                 AgentChatResponse agentResponse;
                 String reply;
 

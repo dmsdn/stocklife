@@ -122,33 +122,11 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
       EXPERIENCE: '가전 체험존',
       LOUNGE: '휴게 라운지',
     };
-    // 09-03 (성원님 확정): 에스컬레이터는 x=94 칸이 상행, x=92 칸이 하행이다.
-    // 1층은 상행만, 3층은 하행만, 2층은 둘 다 인터랙션(층 이동)을 연다 — 나머지 한쪽은
-    // 블록 자체는 그대로 보이되(실제 통행 가능 칸이라 시각적으로 존재) 이름표만 붙이고
-    // 층 이동은 안 걸어준다(눌러도 반응 없음, 기존에도 그 층엔 그 방향이 없었다).
-    // 09-03(2차 조정, 성원님 확정): x=92/94 -> x=91/93 로 한 칸씩 안쪽(왼쪽)으로 이동.
-    const ESCALATOR_UP_X = 93;
-    const ESCALATOR_DOWN_X = 91;
-    const allowEscalatorUp = floor !== 3;
-    const allowEscalatorDown = floor !== 1;
-
     const dbMapped: typeof facilities = [];
     const dbAreas: NonNullable<typeof serviceAreas> = [];
     for (const f of dbFacilities) {
       const kind = f.locationId.split('-')[2] ?? '';
-      if (kind === 'ESCALATOR') {
-        if (f.x === ESCALATOR_UP_X && allowEscalatorUp) {
-          dbMapped.push({ type: 'escalator_up', x: f.x, y: f.y });
-        } else if (f.x === ESCALATOR_DOWN_X && allowEscalatorDown) {
-          dbMapped.push({ type: 'escalator_down', x: f.x, y: f.y });
-        }
-        // 09-03(성원님 피드백): 그 층에서 안 쓰는 방향(예: 1층의 하행 칸)은 예전엔 "에스컬레이터"
-        // 라벨을 따로 붙였는데, 바로 옆 칸(2칸 거리)에 실제 인터랙션 되는 에스컬레이터가 이미
-        // "에스컬레이터(상행)" 같은 제대로 된 이름표를 달고 있어서 중복이었고, 좁은 1칸 상자에
-        // 억지로 줄바꿈되면서 글자가 잘려 보이는 원인이었다 — 그래서 그냥 라벨을 안 붙인다.
-        // 블록 자체(회색 칸)는 facilityCells가 그대로 그려주니 자리는 계속 보인다.
-        continue;
-      }
+      if (kind === 'ESCALATOR') continue; // 실제 이동 격자에서 아래에 구성한다.
       const type = KIND_TO_TYPE[kind];
       if (type) {
         dbMapped.push({ type, x: f.x, y: f.y });
@@ -158,6 +136,17 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
     }
     facilities = dbMapped;
     serviceAreas = dbAreas;
+  }
+
+  // 시설 locations의 과거 좌표 대신 서버 길찾기와 같은 통행 가능한 ESC 격자를 사용한다.
+  const escalators = dto.cells.filter(c => c.transitId === 'ESC' && c.passable)
+    .sort((a, b) => a.x - b.x || a.y - b.y);
+  if (escalators.length) {
+    facilities = facilities.filter(f => f.type !== 'escalator_up' && f.type !== 'escalator_down');
+    const left = escalators[0];
+    const right = escalators.find(c => c.x === escalators[escalators.length - 1].x)!;
+    if (floor < 3) facilities.push({ type: 'escalator_up', x: right.x, y: right.y });
+    if (floor > 1) facilities.push({ type: 'escalator_down', x: left.x, y: left.y });
   }
 
   // 09-02 (로컬 검증안): 칸의 정체를 백엔드가 주면 그대로 넘긴다 — StoreScene 이

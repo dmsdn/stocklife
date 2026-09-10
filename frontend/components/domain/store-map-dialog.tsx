@@ -1,4 +1,5 @@
 "use client";
+import {floorSegments,nextDestinationSteps} from "@/lib/route-display";
 import {useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {useOpenAiChat} from "@/lib/use-open-ai-chat";
@@ -115,14 +116,14 @@ export function StoreMapDialog({open,onClose,groupId,collectedIds}:Props) {
             층 버튼으로만 이뤄짐. (참고: 여러 층을 하나로 이어 붙인 지도는 층별 지도 이미지가
             분리돼 있어서 지금 구조로는 어려움 — 같은 층 구간은 이미 segments로 하나의
             연결된 선으로 표시하고 있음.) */}
-        <div className="border-y bg-orange-50 px-4 py-3"><p className="text-xs text-orange-700">안내 {step+1}/{route.journeySteps.length}</p><p className="mt-1 font-semibold">{current?.label}</p><p className="mt-1 text-xs">{current?.coldLabel??(current?.kind==="ESCALATOR"?"도착 층에서도 에스컬레이터 앞부터 이어서 안내해요.":"주황색 선을 따라 이동하세요.")}</p>{current?.skuId&&<ProductInsights item={insights[current.skuId]}/>}</div>
-        <StoreMap floorNo={floor} pins={pins} routeOrder={route.journeySteps.map((_,i)=>i+1)} pathSegments={segments} routeOrigin={segments[0]?.[0]?{...segments[0][0],label:current?.path[0]?.floorNo===floor?"이 구간 출발":"에스컬레이터 도착"}:undefined} onFloorChange={setFloor} onLivClick={()=>openAiChat(group ? `"${group.title}" 리스트 동선 관련해서 물어볼게` : undefined, groupId)} heightClassName="h-[40vh] min-h-[230px]"/>
+        <div className="border-y bg-orange-50 px-4 py-3"><p className="text-xs text-orange-700">안내 {step+1}/{route.journeySteps.length}</p><p className="mt-1 font-semibold">{current?.label}</p><p className="mt-1 text-xs">{current?.coldLabel??(current?.kind==="ESCALATOR"?"도착 층에서도 에스컬레이터 앞부터 이어서 안내해요.":"파란색 선이 다음 목적지까지의 경로예요.")}</p>{current?.skuId&&<ProductInsights item={insights[current.skuId]}/>}</div>
+        <StoreMap floorNo={floor} pins={pins} routeOrder={route.journeySteps.map((_,i)=>i+1)} pathSegments={floorSegments(route.journeySteps.slice(step),floor)} activePathSegments={floorSegments(nextDestinationSteps(route.journeySteps.slice(step)),floor)} routeOrigin={segments[0]?.[0]?{...segments[0][0],label:current?.path[0]?.floorNo===floor?"이 구간 출발":"에스컬레이터 도착"}:undefined} onFloorChange={setFloor} onLivClick={()=>openAiChat(group ? `"${group.title}" 리스트 동선 관련해서 물어볼게` : undefined, groupId)} heightClassName="h-[40vh] min-h-[230px]"/>
         {current?.kind==="ESCALATOR"&&<div className="flex justify-center gap-3 p-2">{current.path.map(p=><button key={p.floorNo} className="rounded border px-3 py-2 text-xs" onClick={()=>setFloor(p.floorNo)}>{p.floorNo}층 {p===current.path[0]?"탑승":"도착"} 위치</button>)}</div>}
         <div className="flex justify-end gap-2 px-4 py-2">
         {current&&["FACILITY","ESCALATOR","CHECKOUT","EXIT"].includes(current.kind)&&<button disabled={current.kind==="EXIT"&&!route.paid} onClick={arrive} className="rounded bg-orange-600 px-3 py-2 text-sm text-white disabled:opacity-40">{current.kind==="CHECKOUT"?"계산대 도착 · 결제 화면":current.kind==="EXIT"?(route.paid?"퇴장 완료":"결제 후 퇴장 완료할 수 있어요"):"여기 도착했어요 · 재계산"}</button>}</div>
         <ShoppingRouteActions groupId={groupId} route={route}/>
         {route.excluded.length>0&&<div className="mx-4 mt-3 rounded border p-3 text-sm"><strong>현재 구매 경로에서 제외</strong>{route.excluded.map(e=><div key={e.skuId} className="mt-2">{itemFor(e.skuId)?.name??e.skuId} · {e.reason}<ProductInsights item={insights[e.skuId]}/></div>)}</div>}
-        <p className="mx-4 mt-3 pb-3 text-xs text-muted-foreground">선택한 구간만 지도에 표시해요. 실제 담은 상품을 스캔하면 남은 상품만 다시 계산해요. 중간에 일반 상품을 추가하면 이미 담은 냉장품을 되돌릴 수 없으므로 남은 상품에 한해 순서를 적용해요.</p></div>
+        <p className="mx-4 mt-3 pb-3 text-xs text-muted-foreground">전체 동선과 다음 목적지까지의 파란색 경로를 함께 표시해요. 실제 담은 상품을 스캔하면 남은 상품만 다시 계산해요. 중간에 일반 상품을 추가하면 이미 담은 냉장품을 되돌릴 수 없으므로 남은 상품에 한해 순서를 적용해요.</p></div>
       }
     </DialogContent>
   </Dialog>;

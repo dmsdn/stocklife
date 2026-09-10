@@ -8,7 +8,6 @@
 //   미리 작성해뒀습니다. 실제로 붙여보고 필드명 등이 다르면 손봐야 할 수 있습니다.
 import { apiFetch } from "./api-client";
 import { getZoneName, fetchRealFloorMap } from "./map-config";
-import { resolvePinCoord } from "./location-pins";
 
 export interface InventoryItem {
   skuId: number;
@@ -90,11 +89,10 @@ export async function fetchInventoryBatch(skuIds: number[]): Promise<Map<number,
  *  없으면 BULK(창고성 진열) 중 첫 번째. */
 export function pickLocation(items: InventoryItem[] | undefined): InventoryItem | null {
   if (!items || items.length === 0) return null;
-  const picked = items.find((i) => i.tierRole === "PICK") ?? items[0];
+  const picked = items.find((i) => i.tierRole === "PICK" && i.qty > 0) ?? items.find((i) => i.tierRole === "PICK") ?? items[0];
   // ✅ 신규(요청) — 백엔드 좌표 대신 직접 찍어둔 좌표(lib/location-pins.ts)가 있으면
   //   그걸 우선으로. 못 찾으면 백엔드 좌표 그대로(기존 동작과 동일).
-  const resolved = resolvePinCoord(picked.locationId, { floorNo: picked.floorNo, x: picked.x, y: picked.y });
-  return { ...picked, floorNo: resolved.floorNo, x: resolved.x, y: resolved.y };
+  return { ...picked };
 }
 
 /** InventoryItem을 "3층 유제품 코너" 같은 사람이 읽을 텍스트로 바꿉니다.

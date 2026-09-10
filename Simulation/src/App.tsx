@@ -1,3 +1,5 @@
+import {acceptGuestGroups} from './api/guestCart';
+import { routeFromPlan } from './api/route';
 import { getMemberToken } from './api/memberAuth';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import GameCanvas, { type GameCanvasHandle } from './game/GameCanvas';
@@ -257,7 +259,6 @@ export default function App() {
                     getCurrentConsumerId();
 
                 const token = getMemberToken();
-                if (!token) { setCart([]); return; }
                 fetchCartFromDb(id)
                     .then((items) => {
                         if (getMemberToken() !== token) return;
@@ -307,7 +308,6 @@ export default function App() {
                     getCurrentConsumerId();
 
                 const token = getMemberToken();
-                if (!token) { setCartGroups([]); return; }
                 fetchCartGroups(id)
                     .then((groups) => {
                         if (getMemberToken() === token) setCartGroups(groups);
@@ -364,6 +364,7 @@ export default function App() {
             setActiveRoute(null); canvasRef.current?.clearRoute();
             if (!observedToken) {
                 setLoggedInName(null); setLoggedInPhone(null);
+                reloadCartFromDb(); reloadCartGroups();
                 return;
             }
             reloadCartFromDb(); reloadCartGroups();
@@ -429,7 +430,7 @@ export default function App() {
                 floor: number;
                 x: number;
                 y: number;
-            }[], goToEntranceFirst?: boolean) => Promise<void>) | null
+            }[], goToEntranceFirst?: boolean, origin?: {floor:number;x:number;y:number}) => Promise<void>) | null
         >(null);
 
     /**
@@ -632,7 +633,11 @@ export default function App() {
                     data.type === 'CART_CHANGED'
                 ) {
 
+                    if (!getMemberToken()) acceptGuestGroups(data.guestGroups);
                     requestCartReload();
+                } else if (data.type === "PLANNED_ROUTE" && data.route && Array.isArray(data.route.journeySteps)) {
+                    setSelectedGroupId(data.groupId);
+                    setActiveRoute(routeFromPlan(data.route));
                 }
             };
 
@@ -809,10 +814,14 @@ export default function App() {
                 _route: CartRoute,
                 _floor: number
             ) => {
-                canvasRef.current?.clearRoute();
+                const segments: {x:number;y:number}[][]=[]; let segment:{x:number;y:number}[]=[];
+                for(const p of _route.path){if(p.floor===_floor)segment.push(p);else if(segment.length){segments.push(segment);segment=[];}}
+                if(segment.length)segments.push(segment);
+                canvasRef.current?.drawRouteSegments(segments,_route.stops.filter(s=>s.floor===_floor));
             },
             []
         );
+    useEffect(()=>{if(activeRoute)drawRouteForFloor(activeRoute,viewFloor);else canvasRef.current?.clearRoute();},[activeRoute,viewFloor,drawRouteForFloor]);
 
 
 
@@ -1015,6 +1024,7 @@ export default function App() {
                             x: ENTRANCE.x,
                             y: ENTRANCE.y,
                             items: ordered,
+                            groupId,
                         });
 
 
@@ -1065,7 +1075,7 @@ export default function App() {
                     // 돈다. await 하지 않는다 — 이 안내는 매대마다 사용자가 버튼을 누를
                     // 때까지 멈춰 있어서 몇 분이 걸릴 수 있는데, 여기서 기다리면 아래
                     // finally 가 늦게 돌아 버튼이 계속 "동선 계산 중"으로 남는다.
-                    void runGuidedRouteRef.current?.(route.stops);
+                    void runGuidedRouteRef.current?.(route.stops, true, route.path[0]);
 
                 } catch (err) {
 
@@ -1667,7 +1677,8 @@ export default function App() {
                  * 이미 그 매대 앞에 서 있으므로 false 로 부른다 — 굳이 입구까지 내려갔다가
                  * 다시 올라오면 사용자가 방금 지정한 출발점이 무의미해진다.
                  */
-                goToEntranceFirst: boolean = true
+                goToEntranceFirst: boolean = true,
+                origin: {floor:number;x:number;y:number} = ENTRANCE
             ): Promise<void> => {
 
                 const canvas = canvasRef.current;
@@ -1734,20 +1745,20 @@ export default function App() {
 
                     if (!goToEntranceFirst) {
                         setStatusMessage('지금 위치에서 안내를 시작합니다.');
-                    } else if (currentFloor !== ENTRANCE.floor) {
-                        setStatusMessage('1층 입구로 내려가는 중...');
+                    } else if (currentFloor !== origin.floor) {
+                        setStatusMessage('계획 출발점으로 이동 중...');
                         const ok = await startTrip(
-                            currentFloor, ENTRANCE.floor,
-                            { x: ENTRANCE.x, y: ENTRANCE.y }, 'elevator');
+                            currentFloor, origin.floor,
+                            { x: origin.x, y: origin.y }, 'escalator');
                         if (!ok) {
-                            fail('1층 입구까지 내려가지 못했습니다. (엘리베이터 경로를 찾지 못했어요)');
+                            fail('1층 입구까지 내려가지 못했습니다. (에스컬레이터 경로를 찾지 못했어요)');
                             return;
                         }
-                        currentFloor = ENTRANCE.floor;
+                        currentFloor = origin.floor;
                         setBusy(true);
                     } else {
-                        setStatusMessage('1층 입구에서 출발합니다.');
-                        if (!(await walk({ x: ENTRANCE.x, y: ENTRANCE.y }))) {
+                        setStatusMessage('계획 출발점에서 안내를 시작합니다.');
+                        if (!(await walk({ x: origin.x, y: origin.y }))) {
                             fail('1층 입구까지 경로를 찾지 못했습니다.');
                             return;
                         }
@@ -1770,9 +1781,9 @@ export default function App() {
                         } else {
                             const ok = await startTrip(
                                 currentFloor, stop.floor,
-                                { x: stop.x, y: stop.y }, 'elevator');
+                                { x: stop.x, y: stop.y }, 'escalator');
                             if (!ok) {
-                                fail(`${stop.floor}층으로 이동하지 못했습니다. (엘리베이터 경로를 찾지 못했어요)`);
+                                fail(`${stop.floor}층으로 이동하지 못했습니다. (에스컬레이터 경로를 찾지 못했어요)`);
                                 return;
                             }
                             currentFloor = stop.floor;
@@ -1795,7 +1806,7 @@ export default function App() {
                     if (currentFloor !== ENTRANCE.floor) {
                         const ok = await startTrip(
                             currentFloor, ENTRANCE.floor,
-                            { x: ENTRANCE.x, y: ENTRANCE.y }, 'elevator');
+                            { x: ENTRANCE.x, y: ENTRANCE.y }, 'escalator');
                         if (!ok) {
                             fail('1층 입구로 돌아가지 못했습니다.');
                             return;
@@ -1923,6 +1934,7 @@ export default function App() {
                         x: start.x,
                         y: start.y,
                         items: ordered.map((o) => ({ skuId: o.skuId, name: o.name })),
+                        anchor: {skuId},
                     });
 
                     setActiveRoute(route);

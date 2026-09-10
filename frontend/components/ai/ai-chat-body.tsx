@@ -7,6 +7,7 @@
 //   "음성 메모" 오디오 첨부만 되는 방식으로 자연스럽게 폴백된다.
 
 "use client";
+import { readCartGroups } from "@/lib/cart-storage";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -553,7 +554,7 @@ export function AiChatBody({
             const metadata = await getSessionMetadata(sessionId);
             if (!current()) throw new Error("대화가 변경되었습니다.");
             boundSession.current = sessionId;
-            setBoundGroupId(metadata.groupId ?? null);
+            setBoundGroupId(owner ? (metadata.groupId ?? null) : (groupId ?? null));
             onSessionReady?.(sessionId);
             return apiFetch<{ messageId: number; sender: string; content: string; createdAt?: string }[]>(
               `/api/chat/sessions/${sessionId}/messages`,
@@ -652,6 +653,7 @@ export function AiChatBody({
             body: JSON.stringify({
               sessionId,
               message: content,
+              guestCart: owner ? undefined : {groupId: boundGroupId, groups: readCartGroups().map(g => ({cartGroupId:g.id,title:g.title,items:g.products.map(p => ({skuId:p.id,quantity:p.quantity}))}))},
               attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
             }),
           }),

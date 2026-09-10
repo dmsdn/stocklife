@@ -1,6 +1,7 @@
 // Member cart API: identity is derived by the backend from the JWT.
 import { getCurrentConsumerId } from '../state/currentConsumer';
-import { memberFetch } from './memberAuth';
+import { memberFetch, getMemberToken } from './memberAuth';
+import {guestOptions, guestItems} from './guestCart';
 
 /** @deprecated 로그인 전 기본값 확인용. 실제 요청은 getCurrentConsumerId()를 사용한다. */
 export const SIMULATION_CONSUMER_ID = 0;
@@ -89,6 +90,7 @@ interface CartGroupDto {
 export async function fetchCartGroups(
     _consumerId: number
 ): Promise<CartGroupOption[]> {
+    if (!getMemberToken()) return guestOptions();
     const res = await memberFetch(
         '/api/cart/groups'
     );
@@ -137,6 +139,7 @@ interface SessionCartResponseDto {
 export async function fetchCartFromDb(_consumerId: number): Promise<
     { cartItemId: number; skuId: number; name: string; price: number; stock: number; qty: number; locationId: string }[]
 > {
+    if (!getMemberToken()) return guestItems();
     const res = await memberFetch(
         '/api/cart/session'
     );

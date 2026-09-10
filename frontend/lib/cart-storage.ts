@@ -122,7 +122,7 @@ export function readCartGroups(): CartGroup[] {
 export function writeCartGroups(groups: CartGroup[]) {
   if (!canUseStorage()) return;
   if (isLoggedIn()) writeMemberCache(groups);
-  else window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(groups));
+  else { window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(groups)); notifySimulationCartChanged(); }
 }
 
 async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<CartGroup[]> {
@@ -185,26 +185,6 @@ export async function loadCartGroups(): Promise<CartGroup[]> {
   }
   const requestToken = getAccessToken();
 
-  // 로그인 직후 승계가 실패했더라도 같은 페이지 렌더에서 무한 재호출하지 않는다.
-  // 로그인 1회당 migrate는 최대 1번만 시도하고, 실패 데이터는 localStorage에 보존한다.
-  if (canUseStorage() && window.sessionStorage.getItem(MIGRATION_ATTEMPTED_KEY) !== "1") {
-    const raw = window.localStorage.getItem(CART_STORAGE_KEY);
-    if (raw) {
-      window.sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "1");
-      try {
-        const parsedRaw = JSON.parse(raw);
-        const guestGroups = stripUntouchedGroups(Array.isArray(parsedRaw) ? parsedRaw : []);
-        if (guestGroups.length > 0) {
-          await apiFetch("/api/cart/migrate", { method: "POST", body: JSON.stringify({ groups: guestGroups }) });
-        }
-        window.localStorage.removeItem(CART_STORAGE_KEY);
-      } catch (error) {
-        console.error("[cart] guest cart migration failed", error);
-        // 실패 시 localStorage는 유지한다. 다음 로그인에서 다시 시도한다.
-      }
-    }
-  }
-
   const serverGroups = await apiFetch<ServerCartGroup[]>("/api/cart/groups");
   const groups = await hydrateServerGroups(serverGroups);
   if (getAccessToken() !== requestToken) {
@@ -222,6 +202,7 @@ export async function migrateGuestCartToAccount(): Promise<CartGroup[]> {
   // migrate 요청을 먼저 attempted 처리해 loadCartGroups()가 중복 요청하지 않게 한다.
   window.sessionStorage.setItem(MIGRATION_ATTEMPTED_KEY, "1");
 
+  const migrationOwner = getAccessToken();
   const raw = window.localStorage.getItem(CART_STORAGE_KEY);
   const parsedRaw = raw ? JSON.parse(raw) : [];
   const guestGroups: CartGroup[] = stripUntouchedGroups(Array.isArray(parsedRaw) ? parsedRaw : []);
@@ -231,6 +212,7 @@ export async function migrateGuestCartToAccount(): Promise<CartGroup[]> {
       method: "POST",
       body: JSON.stringify({ groups: guestGroups }),
     });
+    if (getAccessToken() !== migrationOwner) throw new Error("로그인 상태가 변경되었습니다.");
     // DB 승계가 성공했을 때만 비회원 장바구니를 삭제한다.
     window.localStorage.removeItem(CART_STORAGE_KEY);
   }
@@ -264,7 +246,7 @@ export async function addProductToCartGroup(
       }
       return { ...group, products: [...group.products, { id: product.id, name: product.name, category: product.category ?? "상품", price: product.price, quantity: 1, checked: true, image: resolveImageUrl(product.image) }] };
     });
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
+    writeCartGroups(next);
     return next;
   }
 
@@ -304,7 +286,7 @@ export async function createCartGroup(title: string, shoppingDate?: string | nul
       store: "스토어플로우 마트",
       products: [],
     };
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([...groups, group]));
+    writeCartGroups([...groups, group]);
     return group;
   }
 
@@ -357,7 +339,7 @@ export async function updateCartGroupInfo(
 export async function deleteCartGroup(groupId: number): Promise<CartGroup[]> {
   if (!isLoggedIn()) {
     const next = readGuestGroups().filter((g) => g.id !== groupId);
-    window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
+    writeCartGroups(next);
     return next;
   }
   await apiFetch(`/api/cart/groups/${groupId}`, { method: "DELETE" });

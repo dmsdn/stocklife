@@ -45,6 +45,7 @@ export function LocationMapDialog({
           floorNo={floorNo}
           pins={[{ id: 0, name: productName, price, x, y }]}
           routeOrder={[]}
+          heightClassName="h-[65dvh] min-h-[260px]"
           showFloorBadge
         />
       </DialogContent>

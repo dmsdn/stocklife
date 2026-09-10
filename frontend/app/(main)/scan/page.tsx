@@ -30,6 +30,7 @@
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
 import { ShoppingLivToggle } from "@/components/layout/shopping-liv-toggle";
+import {floorSegments, nextDestinationSteps} from "@/lib/route-display";
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -749,11 +750,11 @@ function ScanPageInner() {
     route?.journeySteps.flatMap((s) => s.path) ?? [];
   const routeMapPins: (MapPin & { floorNo: number })[] =
     route?.journeySteps
-      .filter((s) => s.kind === "PRODUCT" && s.path.length > 0)
+      .filter((s) => ["PRODUCT","FACILITY"].includes(s.kind) && s.path.length > 0)
       .map((s, i) => {
         const last = s.path[s.path.length - 1];
         const product = selectedGroup?.products.find((p) => p.id === s.skuId);
-        return { id: s.skuId ?? i, name: s.label, price: product?.price ?? 0, x: last.x, y: last.y, floorNo: last.floorNo, image: product?.image };
+        return { id: s.skuId ?? -(i+1), facility:s.kind==="FACILITY", name: s.label, price: product?.price ?? 0, x: last.x, y: last.y, floorNo: last.floorNo, image: product?.image };
       }) ?? [];
 
   // ✅ 신규(요청 — "동선 지도에도 방금 찍은 매대 위에 현위치 핀") — 이미 찍은 상품도
@@ -934,7 +935,8 @@ function ScanPageInner() {
                 floorNo={mapFloor}
                 pins={allMapPins.filter((p) => p.floorNo === mapFloor)}
                 routeOrder={routeMapPins.map((p) => p.id)}
-                precomputedPath={routeMapPath.filter((p) => p.floorNo === mapFloor)}
+                pathSegments={floorSegments(route?.journeySteps ?? [], mapFloor)}
+                activePathSegments={floorSegments(nextDestinationSteps(route?.journeySteps ?? []),mapFloor)}
                 onFloorChange={setMapFloor}
                 heightClassName="h-full"
                 hideHelpText

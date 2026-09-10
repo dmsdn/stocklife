@@ -2,6 +2,16 @@
 from contextvars import ContextVar
 
 _GROUP = ContextVar("chat_group", default=None)
+_GUEST = ContextVar("guest_cart", default=None)
+
+def set_guest(value):
+    _GUEST.set(value)
+    if value is not None:
+        _GROUP.set(value.get("groupId"))
+
+def has_guest():
+    return _GUEST.get() is not None
+
 
 
 def set_group(group_id):
@@ -13,7 +23,7 @@ def groups(consumer_id=None):
     from app.tools import action
     cid = consumer_id if consumer_id is not None else action.current_consumer_id()
     if cid is None:
-        return []
+        return [{**g, "status":"ACTIVE"} for g in (_GUEST.get() or {}).get("groups", [])]
     rows = sot_client._http_get("/internal/cart/groups", {"consumerId": cid},
                                 headers=sot_client._internal_headers())
     if not isinstance(rows, list):

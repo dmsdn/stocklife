@@ -589,6 +589,11 @@ export default class StoreScene extends Phaser.Scene {
     this.drawRouteLine(pathPoints, stops);
   }
 
+  drawRouteSegments(segments: GridPoint[][], stops: GridPoint[] = []) {
+    this.routeGraphics.clear();
+    segments.forEach((segment,i) => {if(segment.length>1)this.drawRouteLine(segment,i===0?stops:[]);});
+  }
+
   clearRoute() {
     this.routeGraphics.clear();
   }
