@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:integration": "node --test scripts/integration-check.cjs scripts/member-cache-check.cjs scripts/api-origin-check.cjs scripts/chat-session-check.cjs scripts/chat-links-recommendations-check.cjs scripts/proactive-identity-check.cjs",
+    "test:integration": "node --test scripts/integration-check.cjs scripts/member-cache-check.cjs scripts/api-origin-check.cjs scripts/chat-session-check.cjs scripts/chat-links-recommendations-check.cjs scripts/proactive-identity-check.cjs scripts/guest-image-check.cjs",
     "test:routes": "node --test tests/shopping-route-progress.test.mjs"
   },
   "dependencies": {

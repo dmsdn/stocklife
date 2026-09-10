@@ -168,7 +168,21 @@ async function hydrateServerGroups(serverGroups: ServerCartGroup[]): Promise<Car
 
 /** 로그인 회원은 항상 DB를 다시 읽어오고, 비회원은 localStorage를 읽는다. */
 export async function loadCartGroups(): Promise<CartGroup[]> {
-  if (!isLoggedIn()) return readGuestGroups();
+  if (!isLoggedIn()) {
+    const owner = getAccessToken();
+    const ids = [...new Set(readGuestGroups().flatMap(g => g.products.map(p => p.id)))];
+    const details = ids.length
+      ? await apiFetch<ProductDetail[]>(`/api/products/by-skus?skuIds=${ids.join(",")}`, { auth: false }).catch(() => [])
+      : [];
+    if (getAccessToken() !== owner) throw new Error("로그인 상태가 변경되었습니다.");
+    const byId = new Map(details.map(p => [p.skuId, p]));
+    // 이미지 조회 도중 바뀐 수량·삭제·추가를 과거 목록으로 덮지 않는다.
+    const groups = readGuestGroups().map(g => ({ ...g, products: g.products.map(p => ({
+      ...p, image: resolveImageUrl(byId.get(p.id)?.imageUrl ?? p.image) ?? undefined,
+    })) }));
+    writeCartGroups(groups);
+    return groups;
+  }
   const requestToken = getAccessToken();
 
   // 로그인 직후 승계가 실패했더라도 같은 페이지 렌더에서 무한 재호출하지 않는다.
