@@ -24,9 +24,12 @@ export type FacilityType =
     | 'restroom_male'
     | 'restroom_female'
     | 'family_restroom'
-    | 'water';
+    | 'water'
+    | 'checkpoint';
 
 export interface FacilityInfo {
+    locationId?: string;
+    label?: string;
   type: FacilityType;
   x: number;
   y: number;

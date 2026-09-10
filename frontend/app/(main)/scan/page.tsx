@@ -29,6 +29,7 @@
 //   뺄지" 선택 패널(n개 빼기 스테퍼 / 다 빼기)이 뜸 → 개수를 고르면 그제서야 무장되고
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
+import { facilityBarcode } from "@/lib/facility-barcode";
 import { ShoppingLivToggle } from "@/components/layout/shopping-liv-toggle";
 import {floorSegments, nextDestinationSteps} from "@/lib/route-display";
 
@@ -206,6 +207,7 @@ function ScanPageInner() {
   }, []);
 
   const [barcode, setBarcode] = useState("");
+  const [arrivalNotice, setArrivalNotice] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const [sessionScans, setSessionScans] = useState<Set<number>>(new Set());
@@ -495,6 +497,28 @@ function ScanPageInner() {
     setError(null);
 
     try {
+      // 시설 코드는 상품 조회·담기·빼기 전에 처리한다.
+      if (code.trim().startsWith("29")) {
+        const plan = route ?? await getOptimizedRoute([]);
+        const facility = plan.facilities.find(f => facilityBarcode(f.locationId) === code.trim());
+        if (facility) {
+          const saved = sessionFor(currentGroupId);
+          const anchor = {locationId: facility.locationId};
+          const remainingIds = (selectedGroup?.products ?? []).filter(p => !saved.scannedSkuIds.includes(p.id)).map(p=>p.id);
+          const nextDetour = saved.detourLocationId === facility.locationId ? undefined : saved.detourLocationId;
+          const nextRoute = route
+            ? await rebaseRouteFrom(route, facility, remainingIds)
+            : await getOptimizedRoute(remainingIds, {anchor,detourLocationId:nextDetour,paid:saved.paid});
+          nextRoute.start = {...facility,label:"현재 위치"};
+          const key = buildRequestKey({groupId:currentGroupId,skuIds:remainingIds,anchor,detourLocationId:nextDetour,paid:saved.paid});
+          saveRouteProgress({groupId:currentGroupId,requestKey:key,route:nextRoute,step:0});
+          writeShoppingSession({...saved,anchor,detourLocationId:nextDetour},{preserveRoute:true});
+          setPendingAction(null);setBarcode("");
+          setArrivalNotice(`${facility.label} 도착을 확인했어요. 이 위치에서 남은 동선을 이어갑니다.`);
+          if(window.parent!==window) window.parent.postMessage({source:"storeflow-frontend",type:"SCANNED_FACILITY",route:nextRoute},document.referrer?new URL(document.referrer).origin:window.location.origin);
+          return;
+        }
+      }
       const found = await apiFetch<{
         skuId: number;
         name: string;
@@ -974,6 +998,7 @@ function ScanPageInner() {
               <span className="absolute bottom-[35%] left-[10%] h-8 w-8 border-b-2 border-l-2 border-white" />
               <span className="absolute bottom-[35%] right-[10%] h-8 w-8 border-b-2 border-r-2 border-white" />
 
+              {arrivalNotice && <p role="status" className="text-sm text-green-700">{arrivalNotice}</p>}
               {error && (
                 <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-danger">
                   {error}

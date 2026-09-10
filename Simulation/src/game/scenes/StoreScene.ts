@@ -122,6 +122,7 @@ const NPC_CHAR: CharacterAnimConfig = {
 };
 
 const FACILITY_ICON: Record<string, string> = {
+  checkpoint: "▥",
   escalator_up: '⬆️',
   escalator_down: '⬇️',
   elevator: '🛗',
@@ -1151,7 +1152,7 @@ export default class StoreScene extends Phaser.Scene {
       const LABEL_TIER: Record<string, number> = { elevator: -2, escalator_up: -1, escalator_down: 1 };
       const tier = LABEL_TIER[fac.type] ?? 1; // 기본: 바로 아래
       const labelY = fy + Math.sign(tier) * (iconRadius + 2 + (Math.abs(tier) - 1) * 12);
-      const label = this.add.text(fx, labelY, FACILITY_LABEL[fac.type] ?? fac.type, {
+      const label = this.add.text(fx, labelY, fac.label ?? FACILITY_LABEL[fac.type] ?? fac.type, {
         fontSize: '25px',
         color: '#1f2937',
         backgroundColor: '#ffffffcc',
@@ -1520,7 +1521,8 @@ export default class StoreScene extends Phaser.Scene {
 
   private handleSpacePress() {
     if (!this.controlsEnabled) return;
-    const fac = this.facilityByCell.get(`${this.playerGrid.x},${this.playerGrid.y}`);
+    const fac = this.facilityByCell.get(`${this.playerGrid.x},${this.playerGrid.y}`)
+      ?? [...this.facilityByCell.values()].find(f => f.type === 'checkpoint' && Math.abs(f.x-this.playerGrid.x)+Math.abs(f.y-this.playerGrid.y)<=1);
     if (fac) {
       this.events2.onFacilityInteract?.(fac);
       return;

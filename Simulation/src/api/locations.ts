@@ -9,6 +9,14 @@ import { FLOOR_AMENITIES, ZONE_COLORS, fallbackZoneColor, OCCUPIED_CELL_OVERRIDE
 import { fetchProductsAtLocation } from './products';
 import { memberFetch } from './memberAuth';
 
+let facilityPoints: Promise<{locationId:string;label:string;floorNo:number;x:number;y:number}[]> | undefined;
+function getFacilityPoints() {
+ if(!facilityPoints) facilityPoints=fetch('/api/ai/route-optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skuIds:[]})})
+ .then(async r=>{if(!r.ok)throw new Error('시설 위치 조회 실패');return (await r.json()).facilities ?? [];})
+ .catch(e=>{facilityPoints=undefined;throw e;});
+ return facilityPoints;
+}
+
 const FLOOR_LABELS: Record<number, string> = { 0: 'B1', 1: '1F', 2: '2F', 3: '3F' };
 
 interface MapCellDto {
@@ -148,6 +156,10 @@ export async function fetchFloorData(floor: number): Promise<FloorData> {
     if (floor < 3) facilities.push({ type: 'escalator_up', x: right.x, y: right.y });
     if (floor > 1) facilities.push({ type: 'escalator_down', x: left.x, y: left.y });
   }
+
+  // 안내 목적지와 같은 접근 칸에 스캔 지점을 둔다(시설 중심의 막힌 칸이 아님).
+  const scanFacilities = (await getFacilityPoints()).filter(f => f.floorNo === floor);
+  for (const f of scanFacilities) facilities.push({type:'checkpoint',locationId:f.locationId,label:f.label,x:f.x,y:f.y});
 
   // 09-02 (로컬 검증안): 칸의 정체를 백엔드가 주면 그대로 넘긴다 — StoreScene 이
   // 최근접 존 추측 대신 이것으로 칠한다. 옛 백엔드(kind 없음)면 둘 다 비어 폴백.

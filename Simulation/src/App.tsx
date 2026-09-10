@@ -1,3 +1,5 @@
+import BarcodeModal from './components/BarcodeModal';
+import { facilityBarcode } from './api/facilityBarcode';
 import {acceptGuestGroups} from './api/guestCart';
 import { routeFromPlan } from './api/route';
 import { getMemberToken } from './api/memberAuth';
@@ -115,6 +117,7 @@ interface TransferPrompt {
 
 
 export default function App() {
+    const [facilityScan, setFacilityScan] = useState<FacilityInfo | null>(null);
     const canvasRef = useRef<GameCanvasHandle>(null);
 
     const [playerFloor, setPlayerFloor] = useState(1);
@@ -635,9 +638,20 @@ export default function App() {
 
                     if (!getMemberToken()) acceptGuestGroups(data.guestGroups);
                     requestCartReload();
+                } else if (data.type === "SCANNED_FACILITY" && data.route?.start && Array.isArray(data.route.journeySteps)) {
+                    const start=data.route.start, cell=canvasRef.current?.getPlayerGrid();
+                    if(cell && playerFloorRef.current===start.floorNo && Math.abs(cell.x-start.x)+Math.abs(cell.y-start.y)<=1) {
+                        setFacilityScan(null);
+                        setStatusMessage('시설 도착 확인 — 현재 위치에서 남은 동선을 이어갑니다.');
+                        if(pendingScanRouteRef.current) {
+                            pendingScanRouteRef.current=null;setWaitingForScan(false);
+                            void runGuidedRouteRef.current?.(routeFromPlan(data.route).stops,false);
+                        }
+                    }
                 } else if (data.type === "PLANNED_ROUTE" && data.route && Array.isArray(data.route.journeySteps)) {
                     setSelectedGroupId(data.groupId);
                     setActiveRoute(routeFromPlan(data.route));
+                    setFacilityScan(f => f && data.route.start?.floorNo === Number(f.locationId?.[1]) && data.route.start?.x === f.x && data.route.start?.y === f.y ? null : f);
                 }
             };
 
@@ -746,7 +760,7 @@ export default function App() {
 
                 canvasRef.current?.loadFloor(
                     data,
-                    {
+            {
                         startCell:
                             isPlayerFloor
                                 ? (
@@ -1469,6 +1483,8 @@ export default function App() {
                         'escalator'
                     );
 
+                } else if (facility.type === 'checkpoint' && facility.locationId) {
+                    setFacilityScan(facility);
                 } else if (
                     facility.type ===
                     'elevator'
@@ -2619,6 +2635,7 @@ export default function App() {
                 height: '100%',
             }}
         >
+                    {facilityScan?.locationId && facilityBarcode(facilityScan.locationId) && <BarcodeModal productName={`${facilityScan.label ?? '시설'} · 도착 확인`} barcode={facilityBarcode(facilityScan.locationId)!} onClose={()=>setFacilityScan(null)} />}
             <header
                 style={{
                     display: 'flex',
