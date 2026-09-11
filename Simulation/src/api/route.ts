@@ -77,12 +77,23 @@ export function routeFromPlan(data: {journeySteps: {kind:string;skuId?:number;lo
 }
 export async function fetchCartRoute({items, anchor, groupId}: FetchCartRouteArgs): Promise<CartRoute> {
  const skuIds=[...new Set(items.map(i=>i.skuId))];
+ let paid=false;
+ let currentAnchor: unknown=anchor;
+ let detourLocationId: string | undefined;
+ try {
+  const session=JSON.parse(sessionStorage.getItem('storeflow_shopping_session')??'null');
+  if(groupId!=null && session?.groupId===groupId) {
+   paid=session.paid===true;
+   currentAnchor=anchor??session.anchor;
+   detourLocationId=session.detourLocationId??undefined;
+  }
+ } catch { /* No matching active session. */ }
  try {
   const saved=JSON.parse(sessionStorage.getItem('storeflow_shopping_route_progress')??'null');
   const ids=[...(saved?.route?.orderedSkuIds??[]),...(saved?.route?.excluded??[]).map((e:{skuId:number})=>e.skuId)];
-  if(saved?.route && saved.groupId===groupId && !anchor && ids.length===skuIds.length && ids.every((id:number)=>skuIds.includes(id))) return routeFromPlan(saved.route);
+  if(saved?.route && saved.groupId===groupId && !anchor && saved.route.paid===paid && !currentAnchor && ids.length===skuIds.length && ids.every((id:number)=>skuIds.includes(id))) return routeFromPlan(saved.route);
  } catch { /* No shared plan yet. */ }
- const res=await fetch('/api/ai/route-optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skuIds,anchor})});
+ const res=await fetch('/api/ai/route-optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skuIds,anchor:currentAnchor,paid,detourLocationId})});
  if(!res.ok) throw new Error(`동선 조회 실패(${res.status})`);
  const data=await res.json(); if(data.error) throw new Error(data.message??data.error);
  return routeFromPlan(data);
