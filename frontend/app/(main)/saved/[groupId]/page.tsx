@@ -35,6 +35,10 @@ export default function SavedGroupDetailPage() {
 
   const [group, setGroup] = useState<CartGroup | null>(null);
   const [routeOpen, setRouteOpen] = useState(false);
+  // ✅ 신규(요청 — "장 볼 날짜 모달이 열려있을 때 동선/리브 버튼이 위로 겹쳐 보임") —
+  //   날짜 모달이 열려있는 동안엔 routeOpen일 때와 똑같이 이 화면의 동선/리브
+  //   StickyBottomBar를 숨겨서, 날짜 모달 자체의 "선택하기" 버튼만 아래 보이게 함.
+  const [dateOpen, setDateOpen] = useState(false);
   useEffect(()=>{
     const update=()=>loadCartGroups().then(gs=>setGroup(gs.find(g=>g.id===groupId)??null)).catch(()=>{});
     window.addEventListener(SHOPPING_CHANGED,update);
@@ -240,6 +244,7 @@ export default function SavedGroupDetailPage() {
               title="장 볼 날짜"
               variant="bare"
               disablePast
+              onOpenChange={setDateOpen}
             />
           </div>
         </div>
@@ -403,13 +408,13 @@ export default function SavedGroupDetailPage() {
           ✅ 수정(요청) — 이 바(z-[110])가 동선 모달(StoreMapDialog, 기본 Dialog z-105)보다
           z-index가 더 높아서, 동선을 눌러 모달을 열어도 이 바가 모달 위에 그대로 떠
           보였음 — 모달이 열려있는 동안(routeOpen)은 이 바 자체를 숨김. */}
-      {!routeOpen && (
+      {!routeOpen && !dateOpen && (
         <StickyBottomBar>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setRouteOpen(true)}
-              className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background text-sm font-medium shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
+              className="flex h-[60px] flex-1 items-center justify-center gap-1.5 rounded-full border border-border bg-background text-sm font-medium shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
             >
               <RiRoadMapLine size={20} />
               동선
@@ -418,9 +423,16 @@ export default function SavedGroupDetailPage() {
               type="button"
               onClick={() => openAiChat(group ? `"${group.title}" 리스트 관련해서 물어볼게` : undefined, groupId)}
               aria-label={linkedSessionId ? "이어서 물어보기" : "리브에게 물어보기"}
-              className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/80 text-[10px] shadow-[0_4px_16px_rgba(0,0,0,0.15)] backdrop-blur-2xl"
+              // ✅ 버그 수정(요청 — "리스트 안 리브 버튼이 하단바 리브 버튼과 다름") —
+              //   하단바(components/layout/bottom-tab-bar.tsx)의 리브 버튼은
+              //   bg-white/20 + backdrop-blur-2xl + border-border + 아이콘 22px +
+              //   text-xs인데, 여기는 bg-white/80(불투명도 다름) + 아이콘 18px +
+              //   text-[10px] + 별도 그림자까지 붙어 있어서 따로 놀아 보였음. 크기(60px)는
+              //   이 화면 요청대로 유지하고, 나머지 스타일(배경 투명도·아이콘/글자 크기·
+              //   그림자 없음)을 하단바와 동일하게 맞춤.
+              className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
             >
-              <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />
+              <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
               리브
             </button>
           </div>
@@ -432,6 +444,7 @@ export default function SavedGroupDetailPage() {
         onClose={() => setRouteOpen(false)}
         groupId={groupId}
         collectedIds={new Set()}
+        plan
       />
 
       {locationDialogProduct && (

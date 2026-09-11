@@ -38,6 +38,7 @@ import { SaveToListDialog } from "@/components/domain/save-to-list-dialog";
 import { getMostRecentCompletedAt, isGroupCompleted } from "@/lib/completed-groups";
 import { Footer } from "@/components/layout/footer";
 import type { DashboardChatSession } from "@/components/home/home-dashboard";
+import { HomeLoginBanner } from "@/components/home/home-login-banner";
 
 function chatHeaders(): Record<string, string> {
   return getAccessToken() ? {} : { "X-Chat-Client-Id": getClientId() };
@@ -266,8 +267,21 @@ export default function HomePage() {
             <div className="pt-[20px]" />
           )}
 
-          {
-            <section className="mx-[20px] my-[20px] rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5">
+          {/* ✅ 버그 수정(요청 — "로그인 전엔 로그인 카드가 떠야 하는데 다음 방문 카드가
+              뜬다 / 로그아웃해도 쇼핑중 카드가 뜬다") — 이 카드 블록이 `{ <section>...
+              }`로 조건 없이 항상 렌더링되고 있었습니다(loggedIn 체크가 아예 없었음).
+              HomeLoginBanner 컴포넌트는 이미 "비로그인 상태에서만 노출"용으로 만들어져
+              있었는데 정작 이 페이지 어디서도 import/렌더링되지 않고 있었습니다 — 그래서
+              로그아웃 상태에서도 계속 이 카드(쇼핑중/다음 방문 날짜/예정 없음)가 보였던
+              것. loggedIn일 때만 이 카드를, 아니면 HomeLoginBanner를 보여주도록 분기.
+              (로그아웃 시 loggedIn이 false가 되므로, 로그아웃 전에 쇼핑 중이었어도 이제
+              자동으로 로그인 배너로 바뀝니다.) */}
+          {/* ✅ 버그 수정(요청 — "메인 카드는 하단 마진만 mb-2로, 아래 3개 카드 섹션은
+              상단 마진만 mt-2로") — 둘 다 상하좌우 my-[20px]로 위아래 여백이 같이
+              잡혀 있어서 사이 간격이 두 배(20+20px)로 벌어져 있었음. 위 카드는 mb-2만,
+              아래 바로가기 섹션은 mt-2만 남김. */}
+          {loggedIn ? (
+            <section className="mx-[20px] mb-2 rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5">
               {recentlyCompleted ? (
                 <div>
                   <p className="text-17 font-medium">결제해주셔서 감사합니다.</p>
@@ -340,13 +354,17 @@ export default function HomePage() {
                 </button>
               </div>
             </section>
-          }
+          ) : (
+            <div className="mb-2">
+              <HomeLoginBanner />
+            </div>
+          )}
 
           {/* 바로가기 — 카드 그림 3개는 실제 디자인 에셋 사용 중(/public/cards/*.png).
               왼쪽 카드는 고정 높이를 안 주고 grid의 기본 stretch로 오른쪽 두 칸 합친
               높이에 맞춰 늘어나게 함 — 오른쪽 칸 높이가 바뀌어도 항상 자동으로 맞음.
               이미지 3개 전부 카드 우측 하단에서 20px(=bottom-5 right-5) 띄워서 고정. */}
-          <section className="mx-[20px] my-[20px] grid grid-cols-2 items-stretch gap-2">
+          <section className="mx-[20px] mt-2 grid grid-cols-2 items-stretch gap-2">
             <button type="button" onClick={recentSession ? () => openSession(recentSession.sessionId) : () => openAiChat()} className="relative h-[288px] rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)] p-5 text-left">
               <div className="absolute left-5 top-5 text-left">
                 <p className="text-17 font-medium">리브와 함께</p>

@@ -7,7 +7,6 @@ import { Suspense } from "react";
 import {
   RiArrowLeftSLine,
   RiBankCardLine,
-  RiCheckboxCircleLine,
   RiCoinLine,
 } from "@remixicon/react";
 import { apiFetch, resolveImageUrl } from "@/lib/api-client";
@@ -197,7 +196,6 @@ function CheckoutInner() {
             </option>
           ))}
         </select>
-        <p className="mt-2 text-xs text-muted-foreground">쿠폰 결제 적용은 준비 중이에요. 현재 결제에는 포인트만 사용할 수 있어요.</p>
       </section>
 
       <section className="mt-4 rounded-[20px] border border-border bg-white p-5">
@@ -242,10 +240,6 @@ function CheckoutInner() {
               {card}
             </button>
           ))}
-        </div>
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-          <RiCheckboxCircleLine size={16} />
-          목업 결제수단이에요. 실제 카드 정보는 입력하지 않아요.
         </div>
       </section>
 

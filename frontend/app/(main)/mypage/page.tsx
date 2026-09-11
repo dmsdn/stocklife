@@ -208,8 +208,14 @@ export default function MyPage() {
               멤버십 등급 카드 (로그인 시에만, Figma "Basic" 카드 스타일)
              ========================= */}
 
+          {/* ✅ 버그 수정(재수정 — "등급/계획·최근본·전자영수증 카드 2개 보더색이 다름,
+              홈화면 카드랑 통일") — 지난 수정 때 참고했던 components/ui/card.tsx의 Card는
+              실제로는 홈 화면 어디에도 쓰이지 않는 죽은 코드였음(rounded-lg+ring-1
+              ring-foreground/10). 진짜 홈 화면 카드(app/(main)/page.tsx의 실제 렌더링되는
+              카드들)는 rounded-[20px] + border border-card-border + bg-card + 그림자
+              shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)]를 씀 — 이걸로 맞춤. */}
           {loggedIn && profile && (
-            <div className="mt-2 rounded-[20px] border border-card-border bg-white px-5 pt-4 pb-5">
+            <div className="mt-2 rounded-[20px] border border-card-border bg-card px-5 pt-4 pb-5 shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)]">
               <div className="flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={gradeIconSrc(currentTier.key)} alt="" className="h-6 w-6 shrink-0" />
@@ -235,7 +241,7 @@ export default function MyPage() {
               저장 / 최근 본 / 전자영수증
              ========================= */}
 
-          <div className="mt-2 flex h-[75px] items-center justify-around rounded-[20px] border border-card-border bg-white">
+          <div className="mt-2 flex h-[75px] items-center justify-around rounded-[20px] border border-card-border bg-card shadow-[0px_1px_10px_0px_rgba(126,126,126,0.05)]">
             {quickLinks.map((q) => (
               <Link key={q.href} href={q.href} className="flex flex-col items-center gap-2">
                 <q.icon size={24} className="text-[#111]" />
@@ -248,10 +254,12 @@ export default function MyPage() {
               공지
              ========================= */}
 
+          {/* ✅ 버그 수정(요청 — "공지 배경 흰색으로, mt-2로") — bg-surface-subtle(회색) →
+              bg-white, mt-3 → mt-2. */}
           {latestNotice && (
             <Link
               href={`/mypage/notices/${latestNotice.id}`}
-              className="mt-3 flex h-10 items-center gap-2 overflow-hidden rounded-[20px] border border-card-border bg-surface-subtle px-4"
+              className="mt-2 flex h-10 items-center gap-2 overflow-hidden rounded-[20px] border border-card-border bg-white px-4"
             >
               <RiMegaphoneLine size={16} className="shrink-0 text-[#111]" />
               <span className="truncate text-[14px] text-black">

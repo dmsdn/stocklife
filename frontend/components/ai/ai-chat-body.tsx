@@ -12,7 +12,7 @@ import { readCartGroups } from "@/lib/cart-storage";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { chatDetailHref } from "@/lib/chat-detail-links";
-import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine, RiCornerDownLeftLine } from "@remixicon/react";
+import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine, RiCornerDownLeftLine, RiCornerDownRightLine } from "@remixicon/react";
 
 // ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
 //   비슷한 상품을 찾아옵니다.
@@ -1212,7 +1212,7 @@ export function AiChatBody({
                           onClick={() => handleReplyToMessage(turn.content)}
                           className="mt-1 flex items-center gap-1 text-xs text-muted-foreground opacity-100 md:opacity-0 md:transition-opacity md:group-hover:opacity-100"
                         >
-                          <RiCornerDownLeftLine size={13} />
+                          <RiCornerDownRightLine size={13} />
                           {summarize(turn.content)}에 대해 다시 묻기
                         </button>
                       )}

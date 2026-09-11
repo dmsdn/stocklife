@@ -90,7 +90,9 @@ export default function SignupConfirmPage() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-scrim md:static md:z-auto md:bg-transparent md:pt-10">
-      <div className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-t-2xl bg-background p-5 pb-[42px] md:max-h-none md:rounded-sm md:border md:border-border">
+      {/* ✅ 버그 수정(요청 — "입력한 정보 확인하는 모달 라운드가 너무 많음, 8px 정도로") —
+          rounded-t-2xl(16px)이 과했던 걸 rounded-t-lg(8px)로 줄임. */}
+      <div className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-t-lg bg-background p-5 pb-[42px] md:max-h-none md:rounded-sm md:border md:border-border">
         <h1 className="text-lg font-bold leading-7">입력한 정보를 확인해주세요</h1>
         <p className="mt-1 text-xs text-muted-foreground">선택하지 않은 항목은 저장되지 않아요.</p>
 
