@@ -113,6 +113,11 @@ export interface StoreMapProps {
    *  그림. 확대/축소해도 항상 화면 기준 4px(vector-effect: non-scaling-stroke). */
   precomputedPath?: GridPoint[];
   pathSegments?: GridPoint[][];
+  /** ✅ 신규(요청 — "현재 경로로 잡히는 길만 메인 주황색으로, 다른 부분은 연하게") —
+   *  pathSegments와 같은 형태지만 옅은 색으로 그려지는 별도 구간. 전체 동선을 한 번에
+   *  보여주는 화면(리스트 상세의 "동선 보기")에서, 지금 당장 갈 구간은 pathSegments(진한
+   *  주황)로, 그 뒤에 이어지는 나머지 구간은 이걸로 넘기면 옅게 표시됨. */
+  mutedPathSegments?: GridPoint[][];
   routeOrigin?: GridPoint & { label: string };
   /** ✅ 신규(요청 — "바코드 찍으면 가장 최근 찍은 상품 위치를 현재 위치로") — 있으면 그
    *  좌표에 "현재 위치" 전용 아이콘(파란 점, 살짝 펄스)을 띄움. */
@@ -141,9 +146,17 @@ function dist(a: React.Touch, b: React.Touch) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName, hideHelpText, showFloorBadge, promoPins, precomputedPath, currentLocationPin, pathSegments, routeOrigin }: StoreMapProps) {
+export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, onLivClick, heightClassName, hideHelpText, showFloorBadge, promoPins, precomputedPath, currentLocationPin, pathSegments, mutedPathSegments, routeOrigin }: StoreMapProps) {
   const arrowId = useId().replace(/:/g, "");
   const config = getFloorMap(floorNo);
+  // ✅ 버그 수정(요청 — "빈 공간이 더 늘어남") — shrink-0로 안쪽 지도 div 자체 높이는
+  //   바로잡았는데, 바깥 래퍼(다음 줄)가 여전히 h-full이라 부모(다이얼로그) 쪽이 내려주는
+  //   큰 높이를 그대로 떠안고 있었음. 예전엔 지도 div가 flex-grow로 그 공간을 같이
+  //   채워서(회색 배경) 안 보였을 뿐, 실제로는 늘 이만큼 빈 공간이 있었던 것. 이제 지도
+  //   div가 자기 명시 높이만 쓰니, 바깥 래퍼도 h-full 대신 내용물(지도 높이)만큼만
+  //   차지하게 해야 진짜로 줄어듦. heightClassName="h-full"(스캔 화면의 카메라/지도
+  //   전환처럼 부모 높이를 그대로 이어받아야 하는 경우)만 예외로 h-full 유지.
+  const wrapFullHeight = heightClassName === "h-full";
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [activePinId, setActivePinId] = useState<number | null>(null);
@@ -288,10 +301,20 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
     //   flex+h-full로 바꿔서, 바깥 래퍼가 실제로 자기 부모(호출한 화면 쪽 컨테이너)의
     //   높이를 그대로 물려받아 안쪽까지 제대로 내려가게 했습니다. 고정 높이(h-[70vh] 등)를
     //   쓰는 다른 화면들은 이 변경과 무관하게 그대로 동작합니다.
-    <div className="flex h-full flex-col gap-2">
+    <div className={`flex ${wrapFullHeight ? "h-full" : ""} flex-col gap-2`}>
       <div
         ref={containerRef}
-        className={`relative w-full flex-1 touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
+        // ✅ 버그 수정(요청 — "지도 아래 보라색(빈 공간)만큼 이동경로가 떨어져 있음")
+        //   — 원인: 이 div가 `flex-1`(=flex: 1 1 0%)이라 flex-basis가 0%로 강제돼서,
+        //   바로 뒤에 붙인 heightClassName(h-[88vw] 등 명시적 높이)이 사실상 무시되고
+        //   있었습니다. flex-basis가 0%면 flex 레이아웃에서 height 속성보다 flex-basis가
+        //   우선이라, 이 요소는 항상 부모(h-full 래퍼)가 내려주는 만큼 flex-grow로 늘어나
+        //   버립니다 — heightClassName을 h-[34vh]든 h-[88vw]든 뭘 줘도 실제로는 안 먹혀서,
+        //   화면(다이얼로그) 안에서 부모가 허락하는 만큼 계속 커졌던 것. flex-1을
+        //   shrink-0으로 바꿔서 명시적 height가 항상 실제로 적용되게 함. (scan/page.tsx가
+        //   쓰는 heightClassName="h-full" 케이스는 shrink-0이어도 부모 h-full 체인을 따라
+        //   그대로 100% 높이를 받으므로 문제없음.)
+        className={`relative w-full shrink-0 touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -299,6 +322,15 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onClick={() => {
+          // ✅ 버그 수정(요청 — "번호/구역 눌러서 본 팝업, 끌 때도 같은 버튼을 다시
+          //   눌러야만 꺼짐 → 아무 데나 눌러도 꺼지게") — 지도 배경(빈 공간)을 누르면
+          //   열려있는 구역/핀 팝업을 모두 닫는다. 구역·핀 버튼 자체의 클릭은
+          //   stopPropagation으로 여기까지 안 올라오게 막아뒀으니, 다른 팝업을 새로
+          //   열 때 이 핸들러가 곧바로 다시 닫아버리는 일은 없다.
+          setActiveZoneId(null);
+          setActivePinId(null);
+        }}
       >
         <div
           className="absolute inset-0"
@@ -322,6 +354,14 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
           {/* 서버가 계산한 동선만 표시합니다. 층이 다른 구간은 호출 측에서 분리합니다. */}
           <svg aria-label="계산된 동선" className="pointer-events-none absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ zIndex: 1 }}>
             <defs><marker id={arrowId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--brand, #e65c16)" /></marker></defs>
+            {/* ✅ 신규(요청 — "현재 경로로 잡히는 길만 메인 주황색으로, 다른 부분은
+                연하게") — mutedPathSegments를 먼저(=아래) 그려서 옅은 회색-주황 선으로
+                깔고, 그 위에 실제 pathSegments(진한 주황+화살표)를 그림. 화살표는 지금
+                당장 가는 구간에만 붙임. */}
+            {(mutedPathSegments ?? []).map((segment, index) => {
+              const points = segment.map((point) => { const p = navigationPercent(point.x, point.y); return `${p.left},${p.top}`; }).join(" ");
+              return segment.length > 1 ? <polyline key={`muted-${index}`} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={3} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" opacity={0.25} /> : null;
+            })}
             {(pathSegments ?? (precomputedPath ? [precomputedPath] : [])).map((segment, index) => {
               const points = segment.map((point) => { const p = navigationPercent(point.x, point.y); return `${p.left},${p.top}`; }).join(" ");
               return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={`url(#${arrowId})`} opacity={0.85} /> : null;
@@ -344,7 +384,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                 <button
                   key={`${z.zoneId}-${idx}`}
                   type="button"
-                  onClick={() => handleZoneClick(z.zoneId, isActive)}
+                  onClick={(e) => { e.stopPropagation(); handleZoneClick(z.zoneId, isActive); }}
                   aria-label={`${getZoneName(floorNo, z.zoneId) ?? z.zoneId} 구역 정보`}
                   className="absolute bg-transparent"
                   style={{
@@ -388,10 +428,10 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                     </div>
                   )}
                   <div
-                    className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-white text-foreground shadow"
+                    className="pointer-events-none flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-white text-foreground shadow"
                     style={{ transform: `scale(${1 / zoom})` }}
                   >
-                    <ZoneIcon size={16} />
+                    <ZoneIcon size={14} />
                   </div>
                 </div>
               );
@@ -418,6 +458,9 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
             );
           })()}
 
+          {/* ✅ 수정(요청 — "원이랑 아이콘 크기 좀 더 줄여도 될 듯") — 구역 아이콘 원(h-8→h-7,
+              아이콘 16→14), 현위치 핀 원(h-8→h-7, 아이콘 18→16), 순번 핀 원(h-6→h-5,
+              숫자 text-base→text-sm) 전부 한 단계씩 축소. */}
           {pins.map((pin) => {
             const { left, top } = navigationPercent(pin.x, pin.y);
             const order = routeOrder.indexOf(pin.id);
@@ -457,18 +500,18 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                   //   구분되게 흰 원 배경 + 은은한 그림자 + 메인 오렌지 아이콘만(배경색 없이).
                   <button
                     type="button"
-                    onClick={() => setActivePinId(isActive ? null : pin.id)}
+                    onClick={(e) => { e.stopPropagation(); setActivePinId(isActive ? null : pin.id); }}
                     aria-label="현재 위치"
-                    className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
                     style={{ transform: `scale(${1 / zoom})` }}
                   >
-                    <RiMapPin2Fill size={18} className="text-brand" />
+                    <RiMapPin2Fill size={16} className="text-brand" />
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setActivePinId(isActive ? null : pin.id)}
-                    className={`pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border-2 border-background text-base font-semibold shadow ${
+                    onClick={(e) => { e.stopPropagation(); setActivePinId(isActive ? null : pin.id); }}
+                    className={`pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border-2 border-background text-sm font-semibold shadow ${
                       pin.collected ? "bg-muted-foreground text-background" : "bg-primary text-primary-foreground"
                     }`}
                     style={{ transform: `scale(${1 / zoom})` }}

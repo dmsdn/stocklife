@@ -69,6 +69,7 @@ import {
 } from "@/lib/shopping-session";
 import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 import { isGroupCompleted, markGroupCompleted } from "@/lib/completed-groups";
+import { useOpenAiChat } from "@/lib/use-open-ai-chat";
 
 const DEFAULT_GROUP_ID = 1;
 // 결제 금액 대비 예상 적립 포인트율 — 백엔드 OrderService.checkout()의 실제 적립 로직
@@ -80,6 +81,7 @@ const ESTIMATED_POINT_RATE = 0.02;
 //   내부 로직을 별도 컴포넌트로 분리하고 아래 default export에서 Suspense로 감쌌습니다.
 function ScanPageInner() {
   const router = useRouter();
+  const openAiChat = useOpenAiChat();
   const searchParams = useSearchParams();
   const requestedGroupId = searchParams.get("group")
     ? Number(searchParams.get("group"))
@@ -266,8 +268,22 @@ function ScanPageInner() {
       const localScans = saved?.groupId===groupId ? saved.scannedSkuIds : [];
       loadCartGroups().then((loaded) => {
         setGroups(loaded);
-        const serverScanned = loaded.find(g=>g.id===groupId)?.products.filter(p=>p.scannedAt!=null).map(p=>p.id) ?? [];
-        setSessionScans(new Set([...localScans, ...serverScanned]));
+        // ✅ 버그 수정(요청 — "현위치 핀이 엉뚱한 데 그대로 있다") — 원인은 여기였습니다.
+        //   serverScanned를 products 배열 순서(실제 스캔 순서와 무관한, 리스트 저장 순서) 그대로
+        //   썼고, 게다가 merge 순서가 [localScans, ...serverScanned]라서 serverScanned가 하나라도
+        //   있으면 Set의 "마지막 원소"(=checkedMapPins/checkedListProducts가 현위치로 찍는 기준)가
+        //   항상 serverScanned 쪽 마지막 항목이 됐습니다 — 방금 로컬에서 막 찍은 상품이 있어도
+        //   그게 "가장 마지막"으로 인정 안 되고, 리스트 순서상 우연히 끝에 있던 예전 스캔 상품이
+        //   계속 현위치로 잡혀서 정작 방금 찍은 상품은 평범한 회색 체크 핀으로 보였던 것.
+        //   serverScanned는 scannedAt(실제 스캔 시각) 기준으로 정렬해서 진짜 순서를 맞추고,
+        //   로컬 스캔(방금 이 세션에서 찍은 것 = 가장 최신)은 항상 맨 뒤에 오도록 순서를 바꿨습니다.
+        const groupProducts = loaded.find(g=>g.id===groupId)?.products ?? [];
+        const serverScanned = groupProducts
+          .filter((p): p is typeof p & { scannedAt: string } => p.scannedAt != null)
+          .sort((a, b) => new Date(a.scannedAt).getTime() - new Date(b.scannedAt).getTime())
+          .map((p) => p.id);
+        const merged = [...serverScanned.filter((id) => !localScans.includes(id)), ...localScans];
+        setSessionScans(new Set(merged));
       }).catch(()=>{
         setSessionScans(new Set(localScans));
       });
@@ -394,12 +410,20 @@ function ScanPageInner() {
     const skuIds = Array.from(sessionScans);
     setMovingScans(true);
     try {
-      await moveProductsBetweenGroups(groupId, targetId, skuIds);
+      const { warnings } = await moveProductsBetweenGroups(groupId, targetId, skuIds);
       refreshGroups();
       setGroupId(targetId);
       setEntryPickerOpen(false);
       writeActiveScanGroupId(targetId);
       writeShoppingSession({ groupId: targetId, scannedSkuIds: skuIds });
+      // ✅ 버그 수정(요청 — "진열대 재고보다 많이 옮기려다 PATCH 409로 조용히 실패") —
+      //   재고 부족으로 일부만 옮겨졌거나 아예 못 옮긴 상품이 있으면, 콘솔 에러로만
+      //   남기지 않고 화면에 구체적으로 알려준다.
+      if (warnings.length > 0) {
+        setError(
+          `${warnings.map((w) => w.name).join(", ")} — 재고 확인 문제로 못 옮겼어요. 원래 리스트에 그대로 있어요.`
+        );
+      }
     } catch {
       setError("상품을 옮기지 못했어요. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -746,9 +770,25 @@ function ScanPageInner() {
   //   이어붙임(예전엔 한 단계씩만 보여주고 이전/다음으로 넘겼는데 이제 그게 없음).
   const routeMapPath: (PathPoint & { floorNo: number })[] =
     route?.journeySteps.flatMap((s) => s.path) ?? [];
+
+  // ✅ 버그 수정(요청 — "동선이 이상한 방향으로 그려짐") — 원인: routeMapPath를 그냥
+  //   floorNo만으로 filter해서 StoreMap에 하나의 선(precomputedPath)으로 넘기고 있었습니다.
+  //   그런데 예를 들어 1층→에스컬레이터→2층→다시 1층(반품/화장실 등)처럼 같은 층을 두 번
+  //   지나가는 동선이면, filter는 "중간에 다른 층을 거쳐서 끊겼다"는 사실을 무시하고 1층
+  //   포인트만 순서대로 쭉 이어붙여 버립니다 — 그러면 서로 이어져 있지 않은 두 지점이 매장을
+  //   가로지르는 직선으로 연결돼서(실제로 안 걸어간 방향으로) 동선이 이상해 보였습니다.
+  //   아래 currentMapSegments/mutedMapSegments가 층이 바뀌는 지점마다 구간을 끊어서
+  //   배열의 배열로 만들고, StoreMap엔 pathSegments/mutedPathSegments로 넘겨서 끊어진
+  //   구간끼리는 선으로 안 이어지게 합니다.
+  // ✅ 버그 수정(요청 — "스캔 동선에서 이미 찍은 상품에 순번 배지(예: '2')랑 체크 배지가
+  //   같이 겹쳐서 뜸") — 원인: route(남은 상품 기준으로 계산)가 방금 스캔을 아직
+  //   반영하기 전(재계산 잠깐 지연되는 사이)엔, 방금 찍은 skuId가 routeMapPins(순번
+  //   배지)에도 남아있고 checkedMapPins(체크 배지)에도 동시에 들어가서 같은 자리에
+  //   두 배지가 겹쳐 보였음. sessionScans에 이미 있는 skuId는 routeMapPins에서
+  //   확실히 빼서, 그 사이에도 체크 배지 하나만 보이게 함.
   const routeMapPins: (MapPin & { floorNo: number })[] =
     route?.journeySteps
-      .filter((s) => s.kind === "PRODUCT" && s.path.length > 0)
+      .filter((s) => s.kind === "PRODUCT" && s.path.length > 0 && !(s.skuId != null && sessionScans.has(s.skuId)))
       .map((s, i) => {
         const last = s.path[s.path.length - 1];
         const product = selectedGroup?.products.find((p) => p.id === s.skuId);
@@ -777,11 +817,67 @@ function ScanPageInner() {
       };
     })
     .filter((p): p is MapPin & { floorNo: number } => !!p);
+  const currentLocationPin = checkedMapPins.find((p) => p.isCurrentLocation);
 
-  // 이미 찍은 핀 + 앞으로 찍을 핀을 합쳐서 지도에 같이 그림. routeOrder는 "앞으로 찍을"
-  // 핀들의 id만 담아서, 이미 찍은 핀은 routeOrder에 안 잡혀 order===-1이 되고(체크 배지),
-  // 그 중 마지막 한 개만 위 isCurrentLocation으로 별도 스타일을 덮어씀.
-  const allMapPins: (MapPin & { floorNo: number })[] = [...checkedMapPins, ...routeMapPins];
+  // ✅ 버그 수정(요청 — "얘가 현위치 핀을 못 잡고 있는거 아니야?") — 맞았다. anchorIdx를
+  //   좌표 완전 일치(===)로 찾고 있었는데, currentLocationPin의 좌표는 coordsBySkuId(상품
+  //   재고 위치 API)에서 온 값이고 routeMapPath의 좌표는 경로 계산(A* 등) 엔진이 만든
+  //   경유점 좌표라, 같은 매대를 가리켜도 소수점 단위로 미세하게 다를 수 있다. 그래서
+  //   완전 일치 비교는 항상 실패(-1)해서 매번 "못 찾음 → 전체 경로(입구부터) 사용"으로
+  //   빠졌던 것. 완전 일치 대신, 같은 층에서 가장 가까운 점을 찾도록 바꿈.
+  const anchorIdx = (() => {
+    if (!currentLocationPin) return -1;
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    routeMapPath.forEach((p, i) => {
+      if (p.floorNo !== currentLocationPin.floorNo) return;
+      const dist = Math.hypot(p.x - currentLocationPin.x, p.y - currentLocationPin.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    });
+    return bestIdx;
+  })();
+  const routeMapPathFromAnchor = anchorIdx >= 0 ? routeMapPath.slice(anchorIdx) : routeMapPath;
+
+  // ✅ 신규(요청 — "현재 경로로 잡히는 길만 메인 주황색으로, 다른 부분은 연하게") — 스캔
+  //   화면(실제 매장에서 다음에 갈 곳)에 적용. 다음 목적지 핀(routeMapPins[0])의 좌표를
+  //   전체 경로(routeMapPathFromAnchor)에서 찾아, 거기까지(포함)는 진하게(currentMapSegments),
+  //   그 다음 상품들로 이어지는 나머지는 옅게(mutedMapSegments) 나눈다. journeySteps
+  //   내부 구조를 추측하지 않고 이미 화면에 맞게 뜨는 핀 좌표를 기준으로 삼아서 안전하다.
+  const firstMapPin = routeMapPins[0];
+  const firstMapPinIdx = firstMapPin
+    ? routeMapPathFromAnchor.findIndex((p) => p.x === firstMapPin.x && p.y === firstMapPin.y && p.floorNo === firstMapPin.floorNo)
+    : -1;
+  const mapSplitAt = firstMapPinIdx >= 0 ? firstMapPinIdx + 1 : routeMapPathFromAnchor.length;
+  const splitPathByFloor = (path: (PathPoint & { floorNo: number })[]): PathPoint[][] => {
+    const segments: PathPoint[][] = [];
+    let current: PathPoint[] = [];
+    for (const p of path) {
+      if (p.floorNo === mapFloor) {
+        current.push(p);
+      } else if (current.length) {
+        segments.push(current);
+        current = [];
+      }
+    }
+    if (current.length) segments.push(current);
+    return segments;
+  };
+  const currentMapSegments: PathPoint[][] = splitPathByFloor(routeMapPathFromAnchor.slice(0, mapSplitAt));
+  const mutedMapSegments: PathPoint[][] = splitPathByFloor(routeMapPathFromAnchor.slice(mapSplitAt));
+
+  // ✅ 버그 수정(요청 — "이 화면에는 체크 아이콘이 있을건데 확인해서 없애야해") — 이미
+  //   찍은 상품 전부를 체크 배지 핀으로 그리고 있었는데(마지막 한 개만 현위치 스타일),
+  //   이 지도는 "다음에 어디로 가야 하는지"를 보여주는 화면이라 지나온 상품들의 체크
+  //   배지는 불필요한 잡음이었다. 가장 마지막으로 찍은 것(현위치 표시용) 하나만 남기고
+  //   나머지 체크 배지는 지도에서 뺀다.
+
+  // 현위치 핀(있으면 1개) + 앞으로 찍을 핀을 합쳐서 지도에 같이 그림. routeOrder는 "앞으로
+  // 찍을" 핀들의 id만 담아서, 현위치 핀은 routeOrder에 안 잡혀도 isCurrentLocation
+  // 스타일이 따로 있어 문제없다.
+  const allMapPins: (MapPin & { floorNo: number })[] = [...(currentLocationPin ? [currentLocationPin] : []), ...routeMapPins];
 
   // ✅ 수정(요청 — "이동경로 한 줄 / 목록 한 줄이 번갈아 나오게, 찍은 건 위로 모으고
   //   이동경로는 빠지고, 마지막으로 찍은 매대에 현위치 핀") — 예전엔 "이동 경로" 요약을
@@ -809,13 +905,16 @@ function ScanPageInner() {
         const product = selectedGroup?.products.find((pp) => pp.id === step.skuId);
         if (product && !sessionScans.has(product.id)) {
           remainingSegments.push({
-            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : `${step.label}까지 가는 길`,
+            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : step.label,
             product,
           });
         }
         pendingLabels = [];
       } else {
-        pendingLabels.push(`${step.label}로 가는 길`);
+        // ✅ 수정(요청 — "~로 가는 길"이 너무 길어져서 접미사 없이 label을 그대로 보여줌) —
+        //   WALK/ESCALATOR/FACILITY 등 종류와 무관하게 백엔드가 준 label을 그대로(가공 없이)
+        //   보여줍니다.
+        pendingLabels.push(step.label);
       }
     }
   }
@@ -932,7 +1031,8 @@ function ScanPageInner() {
                 floorNo={mapFloor}
                 pins={allMapPins.filter((p) => p.floorNo === mapFloor)}
                 routeOrder={routeMapPins.map((p) => p.id)}
-                precomputedPath={routeMapPath.filter((p) => p.floorNo === mapFloor)}
+                pathSegments={currentMapSegments}
+                mutedPathSegments={mutedMapSegments}
                 onFloorChange={setMapFloor}
                 heightClassName="h-full"
                 hideHelpText
@@ -1240,12 +1340,12 @@ function ScanPageInner() {
             <span>{cartTotalPrice.toLocaleString()}원</span>
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}
-          {/* ✅ 신규(요청 1번) — 비회원은 결제 API 자체가 로그인 전용이라 결제를 못 함.
-              버튼을 로그인 유도로 바꾸고, 로그인 후 이 화면(이 리스트)으로 돌아오게
-              ?next=로 현재 경로를 넘김. */}
+          {/* ✅ 수정(요청 — "리스트 상세 페이지처럼 결제하기 버튼 길게 만들고, 오른쪽에
+              리브 버튼") — 기존엔 w-fit mx-auto로 가운데 작게 떠 있던 버튼을
+              saved/[groupId]/page.tsx의 동선/리브 버튼 줄과 같은 구조(flex-1 긴
+              버튼 + 60px 원형 리브 버튼)로 맞춤. */}
           {!loggedIn ? (
-            <>
-              <p className="text-center text-sm text-muted-foreground">결제하려면 로그인이 필요해요.</p>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -1253,22 +1353,42 @@ function ScanPageInner() {
                     `/auth/login?next=${encodeURIComponent(`/scan${groupId ? `?group=${groupId}` : ""}`)}`
                   )
                 }
-                className="flex mx-auto h-[60px] w-fit items-center justify-center gap-1.5 rounded-full bg-brand px-5 text-md font-medium text-brand-foreground"
+                className="flex h-[60px] flex-1 items-center justify-center gap-1.5 rounded-full bg-brand text-md font-medium text-brand-foreground"
               >
                 <RiLoginBoxLine size={20} />
                 로그인하고 결제하기
               </button>
-            </>
+              <button
+                type="button"
+                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
+                aria-label="리브에게 물어보기"
+                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+              >
+                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+                리브
+              </button>
+            </div>
           ) : (
-            <button
-              type="button"
-              disabled={cartTotalCount === 0 || checkingOut || groupCompleted}
-              onClick={handleCheckout}
-              className="flex mx-auto h-[60px] w-fit items-center justify-center gap-1.5 rounded-full bg-brand px-5 text-md font-medium text-brand-foreground disabled:opacity-50"
-            >
-              <RiBankCardLine size={20} />
-              {checkingOut ? "결제 중..." : "결제하기"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={cartTotalCount === 0 || checkingOut || groupCompleted}
+                onClick={handleCheckout}
+                className="flex h-[60px] flex-1 items-center justify-center gap-1.5 rounded-full bg-brand text-md font-medium text-brand-foreground disabled:opacity-50"
+              >
+                <RiBankCardLine size={20} />
+                {checkingOut ? "결제 중..." : "결제하기"}
+              </button>
+              <button
+                type="button"
+                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
+                aria-label="리브에게 물어보기"
+                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+              >
+                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+                리브
+              </button>
+            </div>
           )}
         </div>
       </div>

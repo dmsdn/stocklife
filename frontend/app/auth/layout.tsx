@@ -16,6 +16,17 @@ import { BottomBarVisibilityProvider } from "@/components/layout/bottom-bar-visi
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLogin = pathname === "/auth/login";
+  // ✅ 버그 수정(요청 — "추가정보 입력 화면 마진이 너무 많이 잡혀있음") — 원인: 추가정보
+  //   6단계(생년월일/성별/가구원수/반려동물/자녀/차량)는 components/domain/profile-step.tsx
+  //   (ProfileStep)를 쓰는데, 이 컴포넌트가 이미 자체적으로 좌우 px-6을 갖고 있습니다.
+  //   그런데 이 auth 레이아웃이 모든 자식을 또 mx-auto max-w-sm px-5로 한 번 더 감싸고
+  //   있어서, 좌우 여백이 px-5(20px)+px-6(24px)=44px로 두 배 가까이 겹쳐 보였습니다.
+  //   마이페이지 쪽(내 정보 수정 — 같은 ProfileStep 재사용)은 이런 바깥 래퍼가 없어서
+  //   ProfileStep의 px-6 하나만 적용되는 게 맞는 기준이었습니다. 그래서 여기서는 이
+  //   px-5를 빼서 맞추되, max-w-sm(데스크톱 폭 제한)은 그대로 유지합니다. 회원가입의
+  //   나머지 화면(전화번호/비밀번호/약관 등)은 자체 좌우 패딩이 없어서 이 px-5에
+  //   그대로 의존하므로 그 화면들은 건드리지 않습니다.
+  const isProfileStep = pathname?.startsWith("/auth/signup/profile") ?? false;
 
   // ✅ 수정(2026-09) — "화면 아래에 흰 여백이 남는" 원인: min-h-full(=min-height:100%)은
   //   부모(body)의 높이가 "확정된 값"이어야 퍼센트가 제대로 풀리는데, body는 height가
@@ -39,7 +50,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <BottomBarVisibilityProvider>
       <div className="min-h-dvh bg-surface-subtle">
-        <div className="mx-auto w-full max-w-sm px-5 md:max-w-md">{children}</div>
+        <div className={`mx-auto w-full max-w-sm md:max-w-md ${isProfileStep ? "" : "px-5"}`}>{children}</div>
       </div>
     </BottomBarVisibilityProvider>
   );

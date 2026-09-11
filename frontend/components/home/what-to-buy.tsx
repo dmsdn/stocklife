@@ -11,7 +11,7 @@ import { RiBookmarkLine } from "@remixicon/react";
 
 import {
   fetchFrequentProducts,
-  fetchRecommendedProducts,
+  fetchLivRecommendations,
   fetchDiscoveredProducts,
   fetchPopularProducts,
   formatPrice,
@@ -41,13 +41,22 @@ export function WhatToBuy({ onProductClick, onSave }: WhatToBuyProps) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [frequent, setFrequent] = useState<WhatToBuyProduct[]>([]);
   const [recommended, setRecommended] = useState<WhatToBuyProduct[]>([]);
+  // ✅ 버그 확인(요청 — "리브 추천이 안 불러와지는 것 같은데 백엔드에 연결 안 되어있는건지
+  //   확인해봐") — 원인은 백엔드(AiProxyController)에 GET /api/ai/recommendations 라우트
+  //   자체가 없어서 항상 404였던 것(백엔드 저장소에서 추가함). 프론트는 실패해도 그냥
+  //   빈 배열만 받아서 "보여드릴 상품이 없어요"로 뭉뚱그려 보였는데, fetchLivRecommendations가
+  //   이미 만들어둔 status/message(login_required/unavailable)를 이제 실제로 보여준다.
+  const [recommendedMessage,setRecommendedMessage]=useState<string|null>(null);
   const [discount, setDiscount] = useState<WhatToBuyProduct[]>([]);
   const [popular, setPopular] = useState<WhatToBuyProduct[]>([]);
 
   useEffect(() => {
     setLoggedIn(isLoggedIn());
     fetchFrequentProducts().then(setFrequent);
-    fetchRecommendedProducts().then((list) => setRecommended(list));
+    fetchLivRecommendations().then((result) => {
+      setRecommended(result.items);
+      setRecommendedMessage(result.status === "ready" ? null : result.message);
+    });
     fetchDiscoveredProducts().then((list) =>
       setDiscount(
         list.map((p) => ({
@@ -103,7 +112,11 @@ export function WhatToBuy({ onProductClick, onSave }: WhatToBuyProps) {
         </p>
       ) : activeProducts.length === 0 ? (
         <p className="mt-6 rounded-sm border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          {tab === "frequent" ? "아직 구매 이력이 없어요." : "지금은 보여드릴 상품이 없어요."}
+          {tab === "frequent"
+            ? "아직 구매 이력이 없어요."
+            : tab === "recommended" && recommendedMessage
+              ? recommendedMessage
+              : "지금은 보여드릴 상품이 없어요."}
         </p>
       ) : (
         <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

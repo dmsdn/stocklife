@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
+import { apiFetch, ApiError, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
 import { notifySimulationCartChanged } from "./simulation-bridge";
 
 export interface CartProduct {
@@ -377,37 +377,122 @@ export async function syncRemoveFromServerCart(cartItemId: number | undefined) {
 }
 
 // ✅ 신규 — 스캔 화면에서 다른 리스트로 옮길 때 "이미 찍은 상품을 가져갈지" 선택한 경우용.
-//   지정한 skuId들을 fromGroup에서 toGroup으로 수량 그대로 옮긴다(있는 만큼 addProductToCartGroup을
-//   반복 호출 — 이 함수가 항상 수량 1씩 늘리는 방식이라 그대로 재사용). 옮긴 뒤엔 원래
+//   지정한 skuId들을 fromGroup에서 toGroup으로 수량 그대로 옮긴다. 옮긴 뒤엔 원래
 //   리스트에서 해당 상품을 완전히 제거한다.
+// ✅ 버그 수정(요청 — "상품 목록이 안 옮겨짐", 콘솔에 POST .../items 409 Conflict) —
+//   원인: addProductToCartGroup(POST)을 product.quantity만큼 반복 호출하고 있었는데,
+//   서버는 POST를 "그 그룹에 그 skuId를 처음 생성"할 때만 쓰고 이미 있으면 409를
+//   돌려줌(수량을 늘리는 건 PATCH의 역할). 그래서 수량이 2개 이상인 상품을 옮기면
+//   두 번째 반복부터 항상 409가 나서 실패했고, 옮기려는 상품이 대상 리스트에 이미
+//   있던 경우엔 첫 시도부터 409가 났다. 이제 대상 리스트에 이미 그 skuId가 있으면
+//   PATCH로 수량만 더하고, 없으면 POST 1번으로 만든 뒤(수량 1) 필요하면 그 항목을
+//   PATCH로 실제 옮길 수량까지 올린다 — POST를 여러 번 반복하지 않는다.
+// ✅ 버그 수정(요청 — "그래도 PATCH .../cart/342에서 409") 및 재수정(요청 — "이미
+//   담았다는 건 그만큼 재고가 있다는 거잖아. 스캔으로 이미 내가 들고 있는 물건인데
+//   재고 부족으로 깎이면 안 되지") — 처음엔 응답 바디의 "현재 남은 수량은 N개"를
+//   읽어 그 수량만큼만 옮기도록 캡을 씌웠는데, 이건 틀린 처리였다. 옮기려는 상품은
+//   이미 스캔해서 실제로 손에 들고 있는(=원래 리스트에 이미 담겨 재고가 이미
+//   차감/확보된) 것들이라, 재진열대 재고 기준으로 다시 깎이면 사용자가 실제로 들고
+//   있는 개수보다 적게 반영되는 오류가 생긴다(수량을 몰래 잃어버리는 셈). 이건
+//   프론트에서 "적당히 맞춰서" 해결할 문제가 아니라, 백엔드가 같은 사용자의 그룹→
+//   그룹 이동(순수 재분류, 순재고 변화 없음)까지 신규 재고 소비처럼 검증하고 있는
+//   게 원인으로 보인다 — 백엔드 쪽 확인이 필요하다(memory: 백엔드 코드는 직접
+//   수정하지 않음). 프론트가 할 수 있는 최선은: 이 특정 에러가 나면 수량을 임의로
+//   깎아서 재시도하지 않고, 그 상품은 통째로 건너뛰어 원래 리스트에 그대로 남기고
+//   (=사용자가 들고 있는 개수를 잃지 않음) 어떤 상품이 왜 안 옮겨졌는지만 warnings로
+//   알려준다. 실제로 옮기려면 백엔드가 이 재고 검증을 동일 사용자의 그룹 간 이동에는
+//   적용하지 않도록 고쳐야 한다.
+const STOCK_LIMIT_RE = /남은 수량은\s*(\d+)\s*개/;
+
+async function patchQuantityOrSkip(
+  cartItemId: number,
+  desiredQuantity: number
+): Promise<{ applied: boolean }> {
+  try {
+    await syncUpdateServerCart(cartItemId, desiredQuantity);
+    return { applied: true };
+  } catch (e) {
+    const isStockLimit = e instanceof ApiError && e.status === 409 && STOCK_LIMIT_RE.test(e.message);
+    if (!isStockLimit) throw e;
+    return { applied: false };
+  }
+}
+
 export async function moveProductsBetweenGroups(
   fromGroupId: number,
   toGroupId: number,
   skuIds: number[]
-): Promise<CartGroup[]> {
+): Promise<{ groups: CartGroup[]; warnings: { name: string }[] }> {
   const fromGroup = readCartGroups().find((g) => g.id === fromGroupId);
   const toMove = (fromGroup?.products ?? []).filter((p) => skuIds.includes(p.id));
+  const warnings: { name: string }[] = [];
+  const movedSkuIds = new Set<number>();
 
   for (const product of toMove) {
-    for (let i = 0; i < product.quantity; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const currentGroups = isLoggedIn() ? await loadCartGroups() : readCartGroups();
+    const existing = currentGroups.find((g) => g.id === toGroupId)?.products.find((p) => p.id === product.id);
+    let applied = true;
+
+    if (existing) {
+      if (isLoggedIn() && existing.cartItemId != null) {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await patchQuantityOrSkip(existing.cartItemId, existing.quantity + product.quantity);
+        applied = result.applied;
+      } else {
+        updateCartGroups((groups) =>
+          groups.map((g) =>
+            g.id !== toGroupId
+              ? g
+              : { ...g, products: g.products.map((p) => (p.id === product.id ? { ...p, quantity: p.quantity + product.quantity } : p)) }
+          )
+        );
+      }
+    } else {
       // eslint-disable-next-line no-await-in-loop
-      await addProductToCartGroup(toGroupId, {
+      const groupsAfterCreate = await addProductToCartGroup(toGroupId, {
         id: product.id,
         name: product.name,
         category: product.category,
         price: product.price,
         image: product.image,
       });
+      if (product.quantity > 1) {
+        const created = groupsAfterCreate.find((g) => g.id === toGroupId)?.products.find((p) => p.id === product.id);
+        if (isLoggedIn() && created?.cartItemId != null) {
+          // eslint-disable-next-line no-await-in-loop
+          const result = await patchQuantityOrSkip(created.cartItemId, product.quantity);
+          // ✅ 수량 올리기(PATCH)만 막혔어도 항목 생성(POST, 수량 1)은 이미 성공했으므로
+          //   최소 1개는 실제로 옮겨진 상태다. 원래 리스트에서 완전히 안 빼면 그 1개가
+          //   양쪽에 중복으로 남으므로, applied는 그대로 true로 두고 경고만 남긴다.
+          if (!result.applied) warnings.push({ name: product.name });
+        } else if (!isLoggedIn()) {
+          updateCartGroups((groups) =>
+            groups.map((g) =>
+              g.id !== toGroupId
+                ? g
+                : { ...g, products: g.products.map((p) => (p.id === product.id ? { ...p, quantity: product.quantity } : p)) }
+            )
+          );
+        }
+      }
     }
+
+    if (!applied) {
+      warnings.push({ name: product.name });
+      continue;
+    }
+    movedSkuIds.add(product.id);
     if (isLoggedIn()) {
       // eslint-disable-next-line no-await-in-loop
       await syncRemoveFromServerCart(product.cartItemId);
     }
   }
 
-  return updateCartGroups((groups) =>
+  const groups = updateCartGroups((groups) =>
     groups.map((g) =>
-      g.id !== fromGroupId ? g : { ...g, products: g.products.filter((p) => !skuIds.includes(p.id)) }
+      g.id !== fromGroupId ? g : { ...g, products: g.products.filter((p) => !movedSkuIds.has(p.id)) }
     )
   );
+  return { groups, warnings };
 }

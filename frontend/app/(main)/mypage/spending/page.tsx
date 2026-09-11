@@ -243,7 +243,7 @@ export default function SpendingAnalysisPage() {
   }, [draggingId]);
 
   return (
-    <div className="mx-auto max-w-lg p-4 pb-10 sm:max-w-xl md:max-w-3xl md:p-8">
+    <div className="mx-auto min-h-full max-w-lg bg-surface-subtle p-4 pb-10 sm:max-w-xl md:max-w-3xl md:p-8">
       <SubpageHeader title="소비 분석" />
 
       <div className="flex items-center justify-between gap-2">
@@ -279,7 +279,7 @@ export default function SpendingAnalysisPage() {
       ) : metrics.totalOrders === 0 && !editing ? (
         <p className="py-16 text-center text-sm text-muted-foreground">이 기간엔 구매 내역이 없어요.</p>
       ) : (
-        <div className="relative mt-4 grid grid-cols-2 gap-3">
+        <div className="relative mt-4 grid grid-cols-2 gap-2">
           {layout.map((item) => {
             const card = SPENDING_CARDS_BY_ID.get(item.id);
             if (!card || !metrics) return null;
