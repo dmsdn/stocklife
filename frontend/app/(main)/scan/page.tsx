@@ -73,6 +73,8 @@ import {
 import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 import { isGroupCompleted, markGroupCompleted } from "@/lib/completed-groups";
 
+import { useOpenAiChat } from "@/lib/use-open-ai-chat";
+
 const DEFAULT_GROUP_ID = 1;
 // 결제 금액 대비 예상 적립 포인트율 — 백엔드 OrderService.checkout()의 실제 적립 로직
 // (netCashPaid의 2%, consumer.earnPoints)과 동일한 기본율. 등급 보너스 등으로 실제
@@ -83,6 +85,7 @@ const ESTIMATED_POINT_RATE = 0.02;
 //   내부 로직을 별도 컴포넌트로 분리하고 아래 default export에서 Suspense로 감쌌습니다.
 function ScanPageInner() {
   const router = useRouter();
+  const openAiChat = useOpenAiChat();
   const searchParams = useSearchParams();
   const requestedGroupId = searchParams.get("group")
     ? Number(searchParams.get("group"))
@@ -1205,8 +1208,7 @@ function ScanPageInner() {
               버튼을 로그인 유도로 바꾸고, 로그인 후 이 화면(이 리스트)으로 돌아오게
               ?next=로 현재 경로를 넘김. */}
           {!loggedIn ? (
-            <>
-              <p className="text-center text-sm text-muted-foreground">결제하려면 로그인이 필요해요.</p>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -1214,22 +1216,42 @@ function ScanPageInner() {
                     `/auth/login?next=${encodeURIComponent(`/scan${groupId ? `?group=${groupId}` : ""}`)}`
                   )
                 }
-                className="flex mx-auto h-[60px] w-fit items-center justify-center gap-1.5 rounded-full bg-brand px-5 text-md font-medium text-brand-foreground"
+                className="flex h-[60px] flex-1 items-center justify-center gap-1.5 rounded-full bg-brand text-md font-medium text-brand-foreground"
               >
                 <RiLoginBoxLine size={20} />
                 로그인하고 결제하기
               </button>
-            </>
+              <button
+                type="button"
+                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
+                aria-label="리브에게 물어보기"
+                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+              >
+                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+                리브
+              </button>
+            </div>
           ) : (
-            <button
-              type="button"
-              disabled={cartTotalCount === 0 || checkingOut || groupCompleted}
-              onClick={handleCheckout}
-              className="flex mx-auto h-[60px] w-fit items-center justify-center gap-1.5 rounded-full bg-brand px-5 text-md font-medium text-brand-foreground disabled:opacity-50"
-            >
-              <RiBankCardLine size={20} />
-              {checkingOut ? "결제 중..." : "결제하기"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={cartTotalCount === 0 || checkingOut || groupCompleted}
+                onClick={handleCheckout}
+                className="flex h-[60px] flex-1 items-center justify-center gap-1.5 rounded-full bg-brand text-md font-medium text-brand-foreground disabled:opacity-50"
+              >
+                <RiBankCardLine size={20} />
+                {checkingOut ? "결제 중..." : "결제하기"}
+              </button>
+              <button
+                type="button"
+                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
+                aria-label="리브에게 물어보기"
+                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+              >
+                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+                리브
+              </button>
+            </div>
           )}
         </div>
       </div>
