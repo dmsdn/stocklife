@@ -598,14 +598,13 @@ export default class StoreScene extends Phaser.Scene {
   drawRoute(pathPoints: GridPoint[], stops: GridPoint[] = []) {
     this.displayedSegments=[pathPoints.map(p=>({...p}))];
     this.routeGraphics.clear();
-    if (pathPoints.length < 2) return;
-    this.drawRouteLine(pathPoints, stops);
+    // Keep the server path for movement; never repaint the entire visited route.
   }
 
   drawRouteSegments(segments: GridPoint[][], stops: GridPoint[] = []) {
     this.displayedSegments=segments.map(s=>s.map(p=>({...p})));
     this.routeGraphics.clear();
-    segments.forEach((segment,i) => {if(segment.length>1)this.drawRouteLine(segment,i===0?stops:[]);});
+    // Only the current unwalked leg is rendered by drawPath().
   }
 
   clearRoute() {
@@ -1595,6 +1594,7 @@ export default class StoreScene extends Phaser.Scene {
       duration: Math.max(duration, 8), // 09-03: 40ms->8ms로 낮춤(성원님 요청) — 이유는 위 NPC 쪽 주석과 동일
       onComplete: () => {
         this.playerGrid = next;
+        this.drawPath([this.playerGrid, ...this.currentPath]);
         if(this.pendingWalk){
           const request=this.pendingWalk;this.pendingWalk=undefined;this.moving=false;
           const previous=this.pendingArriveCallback;this.pendingArriveCallback=undefined;
