@@ -50,7 +50,7 @@ public class AiProxyController {
     /** 신원은 JWT에서만 읽는다. 클라이언트가 body에 넣은 consumerId는 폐기한다. */
     @PostMapping("/list-insights")
     public ResponseEntity<Object> listInsights(@RequestBody Map<String, Object> body,
-            @RequestHeader(value = "Authorization", required = false) String authorization) {
+                                               @RequestHeader(value = "Authorization", required = false) String authorization) {
         Long consumerId = null;
         if (authorization != null) {
             if (!authorization.startsWith("Bearer ") || !jwtUtil.validateToken(authorization.substring(7)))
@@ -65,6 +65,32 @@ public class AiProxyController {
         headers.set("X-Internal-Service-Key", internalKey);
         return ResponseEntity.ok(restTemplate.postForObject(agentBaseUrl + "/api/ai/list-insights",
                 new HttpEntity<>(safe, headers), Object.class));
+    }
+
+    /**
+     * 홈 화면 "OO님을 위한 추천" 카드. 신원은 JWT에서만 읽고, limit은 쿼리 파라미터로 받는다.
+     * frontend/lib/home-data.ts의 fetchLivRecommendations()가 로그인 상태에서만 호출한다.
+     */
+    @GetMapping("/recommendations")
+    public ResponseEntity<Object> getRecommendations(
+            @RequestParam(value = "limit", defaultValue = "8") Integer limit,
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")
+                || !jwtUtil.validateToken(authorization.substring(7))) {
+            return ResponseEntity.status(401).build();
+        }
+        Long consumerId = jwtUtil.getConsumerIdFromToken(authorization.substring(7));
+
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("consumerId", consumerId);
+        body.put("limit", limit);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Internal-Service-Key", internalKey);
+
+        return ResponseEntity.ok(restTemplate.postForObject(agentBaseUrl + "/api/ai/recommendations",
+                new HttpEntity<>(body, headers), Object.class));
     }
 
     @GetMapping("/products/{skuId}/alternatives")

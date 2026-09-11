@@ -109,6 +109,8 @@ export default function ProductPopup({
                     >
                         <span>{baseLabel} 진열 상품</span>
 
+
+
                         {/* 담을 리스트 선택 — 웹의 "어느 리스트를 불러올까요?"와 동일한 개념.
                         기본값(빈 값)은 "리스트 없이 시작하기" — 백엔드가 "빠른 장보기"를
                         자동으로 찾거나 만들어준다(웹 lib/cart-storage.ts의
