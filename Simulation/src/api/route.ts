@@ -91,7 +91,7 @@ export async function fetchCartRoute({items, anchor, groupId}: FetchCartRouteArg
  try {
   const saved=JSON.parse(sessionStorage.getItem('storeflow_shopping_route_progress')??'null');
   const ids=[...(saved?.route?.orderedSkuIds??[]),...(saved?.route?.excluded??[]).map((e:{skuId:number})=>e.skuId)];
-  if(saved?.route && saved.groupId===groupId && !anchor && saved.route.paid===paid && !currentAnchor && ids.length===skuIds.length && ids.every((id:number)=>skuIds.includes(id))) return routeFromPlan(saved.route);
+  if(saved?.route && saved.groupId===groupId && !anchor && (saved.route.paid===true)===paid && !currentAnchor && ids.length===skuIds.length && ids.every((id:number)=>skuIds.includes(id))) return routeFromPlan(saved.route);
  } catch { /* No shared plan yet. */ }
  const res=await fetch('/api/ai/route-optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({skuIds,anchor:currentAnchor,paid,detourLocationId})});
  if(!res.ok) throw new Error(`동선 조회 실패(${res.status})`);
