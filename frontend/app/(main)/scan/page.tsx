@@ -1049,7 +1049,7 @@ function ScanPageInner() {
               type="button"
               onClick={() => setPlanOpen(true)}
               disabled={groupCompleted}
-              className="flex shrink-0 items-center gap-1 rounded-full border border-card-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              className="ml-auto flex shrink-0 items-center gap-1 rounded-full border border-card-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
             >
               <RiCalendarCheckLine size={14} />
               계획 추가
