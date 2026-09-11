@@ -2,6 +2,7 @@ package com.storeflow.inventory.service;
 
 import com.storeflow.inventory.dto.BelowParTimestamp;
 import com.storeflow.inventory.dto.ChangeEventResponse;
+import com.storeflow.inventory.dto.WorldHealthResponse;
 import com.storeflow.inventory.dto.InventoryItemResponse;
 import com.storeflow.inventory.dto.PendingReplenishmentResponse;
 import com.storeflow.inventory.dto.PendingReplenishmentRow;
@@ -10,6 +11,7 @@ import com.storeflow.inventory.entity.ShelfEvent;
 import com.storeflow.inventory.entity.Stock;
 import com.storeflow.inventory.repository.ShelfConfigRepository;
 import com.storeflow.inventory.repository.ShelfEventRepository;
+import com.storeflow.inventory.repository.MapCellRepository;
 import com.storeflow.inventory.repository.StockRepository;
 import com.storeflow.cart.repository.CartItemRepository;
 import com.storeflow.notification.service.NotificationService;
@@ -48,6 +50,7 @@ public class InventoryService {
     private final EventBroadcastService eventBroadcastService;
     private final CartItemRepository cartItemRepository;
     private final NotificationService notificationService;
+    private final MapCellRepository mapCellRepository;
 
     public InventoryService(StockRepository stockRepository,
                             ShelfConfigRepository shelfConfigRepository,
@@ -55,7 +58,8 @@ public class InventoryService {
                             ProductRepository productRepository,
                             EventBroadcastService eventBroadcastService,
                             CartItemRepository cartItemRepository,
-                            NotificationService notificationService) {
+                            NotificationService notificationService,
+                            MapCellRepository mapCellRepository) {
         this.stockRepository = stockRepository;
         this.shelfConfigRepository = shelfConfigRepository;
         this.shelfEventRepository = shelfEventRepository;
@@ -63,6 +67,7 @@ public class InventoryService {
         this.eventBroadcastService = eventBroadcastService;
         this.cartItemRepository = cartItemRepository;
         this.notificationService = notificationService;
+        this.mapCellRepository = mapCellRepository;
     }
 
     /** 요구사항 21: shelf_event는 저장한 걸 그대로 Agent 스트림에 흘려보낸다. */
@@ -208,6 +213,27 @@ public class InventoryService {
             throw new IllegalStateException("존재하지 않는 상품입니다. skuId=" + skuId);
         }
         return stockRepository.findInventoryBySkuId(skuId);
+    }
+
+    /**
+     * 세계 데이터가 실려 있는지 알려준다 (09-10).
+     *
+     * [왜] 보충 대기 큐가 빈 배열로 나갈 때, 그게 "정말 0건"인지 "데이터가 없어서 0건"인지
+     * 받는 쪽은 구분할 수 없다. Agent 는 후자를 "매장이 한산하다"로 읽어 잘못된 보충 확률을
+     * 냈고, 에러가 아니라 그럴듯한 오답이라 응답 검증으로도 안 걸렸다. 그 판단 근거를
+     * 데이터를 공급하는 이쪽에서 내려준다.
+     *
+     * 세 종류를 함께 주는 이유는 실패 모양이 다르기 때문이다. 재고와 매대 설정이 없으면
+     * 큐를 계산할 수 없고, 격자가 없으면 재고를 알아도 갈 수가 없다.
+     */
+    @Transactional(readOnly = true)
+    public WorldHealthResponse getWorldHealth() {
+        return new WorldHealthResponse(
+                stockRepository.count(),
+                shelfConfigRepository.count(),
+                mapCellRepository.count(),
+                getPendingReplenishments().size(),
+                shelfEventRepository.findLatestOccurredAt());
     }
 
     /** get_change_events(14번). */
