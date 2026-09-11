@@ -293,6 +293,10 @@ interface BirthDatePickerProps {
    *  날짜처럼 미래 날짜만 의미 있는 필드용). 년도 범위(minYear)는 호출부에서 이미
    *  올해로 좁혀서 넘기는 걸 전제로, 여기서는 그 해의 "오늘 이전 월/일"만 추가로 막음. */
   disablePast?: boolean;
+  /** ✅ 신규(요청 — "장 볼 날짜 모달이 열려있는 동안 화면 하단 동선/리브 버튼이 위로
+   *  겹쳐 보임") — 이 모달의 열림/닫힘을 호출부(예: 저장 리스트 상세)에 알려서, 호출부가
+   *  자기 화면의 다른 하단 고정 버튼을 모달이 떠 있는 동안 숨길 수 있게 함. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function BirthDatePicker({
@@ -306,9 +310,14 @@ export function BirthDatePicker({
   variant = "box",
   align = "left",
   disablePast = false,
+  onOpenChange,
 }: BirthDatePickerProps) {
-  const [open, setOpen] =
+  const [open, setOpenState] =
     useState(mode === "modal" ? false : true);
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    onOpenChange?.(v);
+  };
 
   const years = useMemo(
     () =>

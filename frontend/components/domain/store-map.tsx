@@ -294,6 +294,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
     <div className={`flex flex-col gap-2 ${heightClassName === "h-full" ? "h-full min-h-0" : "shrink-0"}`}>
       <div
         ref={containerRef}
+        onClick={(e)=>{ if (!(e.target as HTMLElement).closest("button")) {setActivePinId(null);setActiveZoneId(null);} }}
         className={`relative w-full shrink-0 touch-none overflow-hidden bg-muted select-none ${heightClassName ?? "h-[70vh]"}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -327,9 +328,9 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
             <defs><marker id={arrowId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--brand, #e65c16)" /></marker></defs>
             {(pathSegments ?? (precomputedPath ? [precomputedPath] : [])).map((segment, index) => {
               const points = segment.map((point) => { const p = navigationPercent(point.x, point.y); return `${p.left},${p.top}`; }).join(" ");
-              return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={`url(#${arrowId})`} opacity={activePathSegments ? 0.35 : 0.85} /> : null;
+              return segment.length > 1 ? <polyline key={index} points={points} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" markerEnd={activePathSegments ? undefined : `url(#${arrowId})`} opacity={activePathSegments ? 0.25 : 0.85} /> : null;
             })}
-            {(activePathSegments ?? []).map((segment,index) => segment.length>1 ? <polyline key={`active-${index}`} points={segment.map(point=>{const p=navigationPercent(point.x,point.y);return `${p.left},${p.top}`;}).join(" ")} fill="none" stroke="#2563eb" strokeWidth={5} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /> : null)}
+            {(activePathSegments ?? []).map((segment,index) => segment.length>1 ? <polyline key={`active-${index}`} points={segment.map(point=>{const p=navigationPercent(point.x,point.y);return `${p.left},${p.top}`;}).join(" ")} fill="none" stroke="var(--brand, #e65c16)" strokeWidth={4} markerEnd={`url(#${arrowId})`} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /> : null)}
           </svg>
           {routeOrigin && (
             <span className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full border border-orange-600 bg-white px-2 py-1 text-xs text-orange-700" style={{ left: `${navigationPercent(routeOrigin.x, routeOrigin.y).left}%`, top: `${navigationPercent(routeOrigin.x, routeOrigin.y).top}%` }}>
@@ -392,7 +393,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                     </div>
                   )}
                   <div
-                    className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-white text-foreground shadow"
+                    className="pointer-events-none flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-white text-foreground shadow"
                     style={{ transform: `scale(${1 / zoom})` }}
                   >
                     <ZoneIcon size={16} />
@@ -465,7 +466,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                     type="button"
                     onClick={() => setActivePinId(isActive ? null : pin.id)}
                     aria-label="현재 위치"
-                    className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border-2 border-background bg-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                    className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
                     style={{ transform: `scale(${1 / zoom})` }}
                   >
                     <RiMapPin2Fill size={18} className="text-brand" />
@@ -474,7 +475,7 @@ export function StoreMap({ floorNo, pins, routeOrder, showZones, onFloorChange, 
                   <button
                     type="button"
                     onClick={() => setActivePinId(isActive ? null : pin.id)}
-                    className={`pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border-2 border-background text-base font-semibold shadow ${
+                    className={`pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border-2 border-background text-base font-semibold shadow ${
                       pin.collected ? "bg-muted-foreground text-background" : "bg-primary text-primary-foreground"
                     }`}
                     style={{ transform: `scale(${1 / zoom})` }}

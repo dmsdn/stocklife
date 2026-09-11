@@ -425,6 +425,7 @@ export default function App() {
      * 의존성 배열은 렌더 시점에 평가되므로 직접 참조하면 TDZ 로 터진다 — 이 파일이
      * showProductPinRef 에서 쓰던 것과 같은 우회다.
      */
+    const pendingGuidedPlan = useRef<ReturnType<typeof routeFromPlan> | null>(null);
     const runGuidedRouteRef =
         useRef<
             ((stops: {
@@ -650,7 +651,9 @@ export default function App() {
                     }
                 } else if (data.type === "PLANNED_ROUTE" && data.route && Array.isArray(data.route.journeySteps)) {
                     setSelectedGroupId(data.groupId);
-                    setActiveRoute(routeFromPlan(data.route));
+                    const updated = routeFromPlan(data.route);
+                    pendingGuidedPlan.current = updated;
+                    setActiveRoute(updated);
                     setFacilityScan(f => f && data.route.start?.floorNo === Number(f.locationId?.[1]) && data.route.start?.x === f.x && data.route.start?.y === f.y ? null : f);
                 }
             };
@@ -1692,6 +1695,7 @@ export default function App() {
                     return;
                 }
 
+                pendingGuidedPlan.current = null;
                 const walk = (goal: GridPoint) =>
                     new Promise<boolean>((resolve) =>
                         canvas.walkTo(goal, resolve));
@@ -1801,30 +1805,21 @@ export default function App() {
                             `(${i + 1}/${stops.length}) "${label}" 도착 — 바코드를 찍고 '다음 상품으로 이동'을 누르세요.`);
 
                         await pauseAt(i, stop);
+                        // 스캔으로 받은 최신 남은 계획을 사용한다. 캡처된 이전 상품/출구를 반복하지 않는다.
+                        const nextPlan = pendingGuidedPlan.current as ReturnType<typeof routeFromPlan> | null;
+                        if (nextPlan) {
+                            stops = nextPlan.stops;
+                            pendingGuidedPlan.current = null;
+                            i = -1;
+                        }
 
                         // 멈춰 있는 동안 사용자가 다른 층으로 갔을 수 있다.
                         currentFloor = playerFloorRef.current ?? currentFloor;
                     }
 
-                    // ── 3) 입구 복귀 ──
-                    setStatusMessage('쇼핑 완료 — 1층 입구로 나가는 중...');
-
-                    if (currentFloor !== ENTRANCE.floor) {
-                        const ok = await startTrip(
-                            currentFloor, ENTRANCE.floor,
-                            { x: ENTRANCE.x, y: ENTRANCE.y }, 'escalator');
-                        if (!ok) {
-                            fail('1층 입구로 돌아가지 못했습니다.');
-                            return;
-                        }
-                        setBusy(true);
-                    } else if (!(await walk({ x: ENTRANCE.x, y: ENTRANCE.y }))) {
-                        fail('1층 입구까지 경로를 찾지 못했습니다.');
-                        return;
-                    }
-
+                    // 서버가 제공한 마지막 목적지에서 끝낸다. 입구/출구를 다시 덧붙이지 않는다.
                     setPlayerCell(canvas.getPlayerGrid());
-                    setStatusMessage('쇼핑을 마치고 매장을 나섰습니다. 결제는 스캔한 상품 기준입니다.');
+                    setStatusMessage('계획된 목적지 안내를 마쳤습니다.');
                     setTimeout(() => setStatusMessage(''), 4000);
 
                 } catch (err) {

@@ -266,8 +266,8 @@ function ScanPageInner() {
       const localScans = saved?.groupId===groupId ? saved.scannedSkuIds : [];
       loadCartGroups().then((loaded) => {
         setGroups(loaded);
-        const serverScanned = loaded.find(g=>g.id===groupId)?.products.filter(p=>p.scannedAt!=null).map(p=>p.id) ?? [];
-        setSessionScans(new Set([...localScans, ...serverScanned]));
+        const serverScanned = (loaded.find(g=>g.id===groupId)?.products ?? []).filter(p=>p.scannedAt!=null).sort((a,b)=>Date.parse(a.scannedAt!)-Date.parse(b.scannedAt!)).map(p=>p.id);
+        setSessionScans(new Set([...serverScanned.filter(id=>!localScans.includes(id)), ...localScans]));
       }).catch(()=>{
         setSessionScans(new Set(localScans));
       });
@@ -394,12 +394,13 @@ function ScanPageInner() {
     const skuIds = Array.from(sessionScans);
     setMovingScans(true);
     try {
-      await moveProductsBetweenGroups(groupId, targetId, skuIds);
+      const { warnings, movedSkuIds } = await moveProductsBetweenGroups(groupId, targetId, skuIds);
       refreshGroups();
       setGroupId(targetId);
       setEntryPickerOpen(false);
       writeActiveScanGroupId(targetId);
-      writeShoppingSession({ groupId: targetId, scannedSkuIds: skuIds });
+      writeShoppingSession({ groupId: targetId, scannedSkuIds: movedSkuIds });
+      if(warnings.length) setError(`${warnings.map(w=>w.name).join(", ")} — 옮기지 못해 원래 리스트에 유지했어요.`);
     } catch {
       setError("상품을 옮기지 못했어요. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -763,7 +764,7 @@ function ScanPageInner() {
     route?.journeySteps.flatMap((s) => s.path) ?? [];
   const routeMapPins: (MapPin & { floorNo: number })[] =
     route?.journeySteps
-      .filter((s) => ["PRODUCT","FACILITY"].includes(s.kind) && s.path.length > 0)
+      .filter((s) => ["PRODUCT","FACILITY"].includes(s.kind) && s.path.length > 0 && !(s.skuId != null && sessionScans.has(s.skuId)))
       .map((s, i) => {
         const last = s.path[s.path.length - 1];
         const product = selectedGroup?.products.find((p) => p.id === s.skuId);
@@ -774,7 +775,7 @@ function ScanPageInner() {
   //   좌표(coordsBySkuId)가 있으면 지도 핀으로 같이 그림(collected: true → 체크 배지).
   //   그 중 가장 마지막으로 찍은 것만 isCurrentLocation: true로 표시해서, 지도에서
   //   체크 배지 대신 흰 원+그림자+주황 핀 아이콘으로 특별하게 보이게 함.
-  const checkedMapPins: (MapPin & { floorNo: number })[] = Array.from(sessionScans)
+  const checkedMapPins: (MapPin & { floorNo: number })[] = Array.from(sessionScans).slice(-1)
     .map((skuId, i, arr) => {
       const coord = coordsBySkuId.get(skuId);
       const product = selectedGroup?.products.find((p) => p.id === skuId);
@@ -824,13 +825,13 @@ function ScanPageInner() {
         const product = selectedGroup?.products.find((pp) => pp.id === step.skuId);
         if (product && !sessionScans.has(product.id)) {
           remainingSegments.push({
-            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : `${step.label}까지 가는 길`,
+            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : step.label,
             product,
           });
         }
         pendingLabels = [];
       } else {
-        pendingLabels.push(`${step.label}로 가는 길`);
+        pendingLabels.push(step.label);
       }
     }
   }

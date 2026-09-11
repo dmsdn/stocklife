@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
+import { apiFetch, ApiError, getAccessToken, isLoggedIn, resolveImageUrl } from "./api-client";
 import { notifySimulationCartChanged } from "./simulation-bridge";
 
 export interface CartProduct {
@@ -376,34 +376,98 @@ export async function syncRemoveFromServerCart(cartItemId: number | undefined) {
 //   지정한 skuId들을 fromGroup에서 toGroup으로 수량 그대로 옮긴다(있는 만큼 addProductToCartGroup을
 //   반복 호출 — 이 함수가 항상 수량 1씩 늘리는 방식이라 그대로 재사용). 옮긴 뒤엔 원래
 //   리스트에서 해당 상품을 완전히 제거한다.
+const STOCK_LIMIT_RE = /남은 수량은\s*(\d+)\s*개/;
+
+async function patchQuantityOrSkip(
+  cartItemId: number,
+  desiredQuantity: number
+): Promise<{ applied: boolean }> {
+  try {
+    await syncUpdateServerCart(cartItemId, desiredQuantity);
+    return { applied: true };
+  } catch (e) {
+    const isStockLimit = e instanceof ApiError && e.status === 409 && STOCK_LIMIT_RE.test(e.message);
+    if (!isStockLimit) throw e;
+    return { applied: false };
+  }
+}
+
 export async function moveProductsBetweenGroups(
   fromGroupId: number,
   toGroupId: number,
   skuIds: number[]
-): Promise<CartGroup[]> {
+): Promise<{ groups: CartGroup[]; warnings: { name: string }[]; movedSkuIds: number[] }> {
   const fromGroup = readCartGroups().find((g) => g.id === fromGroupId);
   const toMove = (fromGroup?.products ?? []).filter((p) => skuIds.includes(p.id));
+  const warnings: { name: string }[] = [];
+  const movedSkuIds = new Set<number>();
 
   for (const product of toMove) {
-    for (let i = 0; i < product.quantity; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const currentGroups = isLoggedIn() ? await loadCartGroups() : readCartGroups();
+    const existing = currentGroups.find((g) => g.id === toGroupId)?.products.find((p) => p.id === product.id);
+    let applied = true;
+
+    if (existing) {
+      if (isLoggedIn() && existing.cartItemId != null) {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await patchQuantityOrSkip(existing.cartItemId, existing.quantity + product.quantity);
+        applied = result.applied;
+      } else {
+        updateCartGroups((groups) =>
+          groups.map((g) =>
+            g.id !== toGroupId
+              ? g
+              : { ...g, products: g.products.map((p) => (p.id === product.id ? { ...p, quantity: p.quantity + product.quantity } : p)) }
+          )
+        );
+      }
+    } else {
       // eslint-disable-next-line no-await-in-loop
-      await addProductToCartGroup(toGroupId, {
+      const groupsAfterCreate = await addProductToCartGroup(toGroupId, {
         id: product.id,
         name: product.name,
         category: product.category,
         price: product.price,
         image: product.image,
       });
+      if (product.quantity > 1) {
+        const created = groupsAfterCreate.find((g) => g.id === toGroupId)?.products.find((p) => p.id === product.id);
+        if (isLoggedIn() && created?.cartItemId != null) {
+          // eslint-disable-next-line no-await-in-loop
+          const result = await patchQuantityOrSkip(created.cartItemId, product.quantity);
+          if (!result.applied) {
+            // 신규 대상 항목을 취소하고 원래 리스트의 전체 수량을 보존한다.
+            await syncRemoveFromServerCart(created.cartItemId);
+            applied = false;
+          }
+        } else if (!isLoggedIn()) {
+          updateCartGroups((groups) =>
+            groups.map((g) =>
+              g.id !== toGroupId
+                ? g
+                : { ...g, products: g.products.map((p) => (p.id === product.id ? { ...p, quantity: product.quantity } : p)) }
+            )
+          );
+        }
+      }
     }
+
+    if (!applied) {
+      warnings.push({ name: product.name });
+      continue;
+    }
+    movedSkuIds.add(product.id);
     if (isLoggedIn()) {
       // eslint-disable-next-line no-await-in-loop
       await syncRemoveFromServerCart(product.cartItemId);
     }
   }
 
-  return updateCartGroups((groups) =>
+  const groups = updateCartGroups((groups) =>
     groups.map((g) =>
-      g.id !== fromGroupId ? g : { ...g, products: g.products.filter((p) => !skuIds.includes(p.id)) }
+      g.id !== fromGroupId ? g : { ...g, products: g.products.filter((p) => !movedSkuIds.has(p.id)) }
     )
   );
+  return { groups: isLoggedIn() ? await loadCartGroups() : groups, warnings, movedSkuIds: [...movedSkuIds] };
 }

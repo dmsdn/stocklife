@@ -34,14 +34,20 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
   //   동작합니다 — 그래도 카메라 API(getUserMedia) 자체가 없는 아주 오래된 브라우저 대비용으로
   //   플래그는 남겨뒀습니다.
   const [supported] = useState(true);
-  // ✅ console.warn을 잠깐 바꿔치기했다가 스캐너가 꺼지면 원래대로 되돌리기 위한 참조.
+  // ✅ console.warn/console.log를 잠깐 바꿔치기했다가 스캐너가 꺼지면 원래대로 되돌리기
+  //   위한 참조.
   const originalWarnRef = useRef<typeof console.warn | null>(null);
+  const originalLogRef = useRef<typeof console.log | null>(null);
 
   const stop = () => {
     readerRef.current?.reset();
     if (originalWarnRef.current) {
       console.warn = originalWarnRef.current;
       originalWarnRef.current = null;
+    }
+    if (originalLogRef.current) {
+      console.log = originalLogRef.current;
+      originalLogRef.current = null;
     }
   };
 
@@ -80,21 +86,28 @@ export function useBarcodeScanner(onDetected: (code: string) => void) {
       }
     };
 
-    // ✅ 신규 — "카메라 열면 콘솔에 ChecksumException 경고가 계속 뜸" 원인: @zxing/library
-    //   내부(MultiFormatReader.decodeInternal)가 바코드 일부만 보이거나 흔들려서 체크섬이
-    //   안 맞는(=아주 흔한, 정상적인) 프레임마다 console.warn을 직접 호출합니다. 이 경고를
-    //   끄는 옵션이 라이브러리에 따로 없어서, 스캐너가 켜져 있는 동안만 이 특정 문구의
-    //   console.warn을 걸러내고(그 외 경고는 그대로), stop()에서 원래 console.warn으로
-    //   되돌립니다. 실제 동작(카메라 자체)엔 원래도 영향이 없었던 경고고, "요청 실패
-    //   500"으로 보였던 건 이거랑은 별개로 바코드 조회 API 쪽 문제라 거긴 따로
-    //   고쳤습니다(lookupByCode의 에러 메시지를 그대로 보여주도록).
+    // ✅ 수정(요청 — "갑자기 ChecksumException/FormatException/Micro QR 로그들이 뜬다") —
+    //   기존엔 "MultiFormatReader: non-ReaderException" 문구 하나만 걸러냈는데, 그건
+    //   ChecksumException/FormatException/"No Micro QR finder pattern found" 같은
+    //   다른 문구들은 안 잡았습니다(라이브러리가 이런 건 console.log로도 찍기 때문에
+    //   console.warn만 바꿔치기해서는 못 막는 경우도 있었음). 전부 "이번 프레임엔
+    //   바코드가 없었다/못 읽었다"는 정상적인 매 프레임 상황이라, 아래 키워드 중
+    //   하나라도 포함되면 console.warn·console.log 둘 다에서 걸러냅니다.
+    const isScannerNoise = (msg: unknown): boolean =>
+      typeof msg === "string" &&
+      /MultiFormatReader: non-ReaderException|NotFoundException|ChecksumException|FormatException|finder pattern/i.test(msg);
     if (!originalWarnRef.current) {
       originalWarnRef.current = console.warn;
       console.warn = (...args: unknown[]) => {
-        if (typeof args[0] === "string" && args[0].includes("MultiFormatReader: non-ReaderException")) {
-          return;
-        }
+        if (isScannerNoise(args[0])) return;
         originalWarnRef.current?.(...args);
+      };
+    }
+    if (!originalLogRef.current) {
+      originalLogRef.current = console.log;
+      console.log = (...args: unknown[]) => {
+        if (isScannerNoise(args[0])) return;
+        originalLogRef.current?.(...args);
       };
     }
 

@@ -280,7 +280,7 @@ function SavedPageInner() {
               {query ? "검색 결과가 없어요." : "아직 만든 리스트가 없어요."}
             </p>
           ) : (
-            <div className="pb-20">
+            <div>
               {(() => {
                 const activeGroups = filteredGroups.filter(
                   (g) => !(g.status === "COMPLETED" || isGroupCompleted(g.id))
@@ -290,7 +290,7 @@ function SavedPageInner() {
                 );
 
                 const renderGroups = (list: CartGroup[]) => (
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                     {list.map((group) => {
                 const isSelected = selectedIds.has(group.id);
                 // ✅ 신규(요청 3번) — 결제 완료된 리스트를 저장 화면에서도 알아볼 수 있게 표시
@@ -374,9 +374,12 @@ function SavedPageInner() {
                         깔고, 결제완료 크게 넣되 그림자는 빼라") — 작은 배지 대신 카드 전체를
                         덮는 어두운 오버레이 + 가운데 큰 텍스트로 되돌림. text-shadow는
                         없앰(그림자 없이 깔끔하게). */}
+                    {/* ✅ 수정(요청 — "결제완료 글씨 굵기 좀 더 얇게, 회색으로") —
+                        font-bold+text-white → font-normal+text-gray-300(어두운 오버레이
+                        위에서도 읽히는 밝은 회색). */}
                     {completed && !selectMode && (
                       <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55">
-                        <span className="text-xl font-bold text-white">결제완료</span>
+                        <span className="text-xl font-normal text-gray-300">결제완료</span>
                       </div>
                     )}
                   </div>
@@ -385,13 +388,20 @@ function SavedPageInner() {
                   </div>
                 );
 
+                // ✅ 버그 수정(요청 — "홀수여도 아래에 결제완료가 모여있는게 아니라 빈
+                //   곳부터 최근 결제완료 내역이 바로 채워지게") — 예전엔 activeGroups와
+                //   completedGroups를 각각 별도 그리드(renderGroups 두 번 호출)로
+                //   그려서, activeGroups 개수가 홀수면 그 줄 마지막 칸이 빈 채로 남고
+                //   completedGroups는 mt-8로 아예 새 줄부터 시작했음. 이제 두 목록을
+                //   하나로 이어붙여([...activeGroups, ...completedGroups]) 그리드 하나만
+                //   그리므로, completed 카드가 active 마지막 줄의 빈 칸부터 자연스럽게
+                //   채워진다.
+                // ✅ 되돌림(요청 — "결제완료는 그냥 홀수여도 따로 아래에 두는 게 낫겠다,
+                //   대신 마진은 그대로") — 진행중/완료를 한 그리드로 합쳤던 걸 다시
+                //   두 그리드로 분리. gap-2와 중복 하단 패딩 제거는 그대로 유지.
                 return (
                   <>
                     {activeGroups.length > 0 && renderGroups(activeGroups)}
-                    {/* ✅ 수정(요청 — "결제 완료 몇 개 이렇게 텍스트로 구분해둔 거 빼") —
-                        아래에 배치하는 순서는 그대로 유지하되, "결제 완료 N" 제목/개수
-                        텍스트는 없앰. 각 카드 자체에 이미 "결제완료" 오버레이가 있어서
-                        구분은 충분함. */}
                     {completedGroups.length > 0 && (
                       <section className={activeGroups.length > 0 ? "mt-8" : ""}>
                         {renderGroups(completedGroups)}
