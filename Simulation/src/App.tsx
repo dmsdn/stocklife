@@ -649,6 +649,10 @@ export default function App() {
                             void runGuidedRouteRef.current?.(routeFromPlan(data.route).stops,false);
                         }
                     }
+                } else if (data.type === "PLANNED_ROUTE" && data.route === null) {
+                    pendingGuidedPlan.current = {stops:[],path:[],totalDistance:0,unresolvedCount:0};
+                    setActiveRoute(null);
+                    canvasRef.current?.clearRoute();
                 } else if (data.type === "PLANNED_ROUTE" && data.route && Array.isArray(data.route.journeySteps)) {
                     setSelectedGroupId(data.groupId);
                     const updated = routeFromPlan(data.route);
@@ -813,8 +817,7 @@ export default function App() {
     // Backend 동선 → Simulation 선
     // ============================================================
 
-    // 서버 경로는 캐릭터 이동에 사용하되 전체 경로 잔상은 그리지 않는다.
-    // 현재 이동 구간만 StoreScene.drawPath에서 지나간 칸을 제외해 표시한다.
+    // 프론트가 보낸 남은 경로를 표시한다. 새 계획으로 교체할 때 이전 선을 먼저 지운다.
     const drawRouteForFloor =
         useCallback(
             (

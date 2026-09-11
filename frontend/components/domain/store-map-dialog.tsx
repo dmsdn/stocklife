@@ -60,7 +60,7 @@ export function StoreMapDialog({open,onClose,groupId,collectedIds,plan=false}:Pr
       const key=buildRequestKey({groupId,skuIds:ids,anchor:session.anchor,detourLocationId:session.detourLocationId,paid:session.paid});
       const cached=readRouteProgress(groupId);
       if(cached&&cached.requestKey===key){
-        if(active){setRoute(cached.route);setStep(cached.step??0);setFloor(cached.route.start.floorNo);}
+        if(active){saveRouteProgress(cached);setRoute(cached.route);setStep(cached.step??0);setFloor(cached.route.start.floorNo);}
         return;
       }
       const result=await getOptimizedRoute(ids,{anchor:session.anchor,detourLocationId:session.detourLocationId,paid:session.paid});

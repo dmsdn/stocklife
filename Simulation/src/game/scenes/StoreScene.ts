@@ -599,19 +599,20 @@ export default class StoreScene extends Phaser.Scene {
     this.displayedSegments=[pathPoints.map(p=>({...p}))];
     this.routeGraphics.clear();
     this.pathGraphics.clear();
-    // Keep the server path for movement; never repaint the entire visited route.
+    if (pathPoints.length > 1) this.drawRouteLine(pathPoints, stops);
   }
 
   drawRouteSegments(segments: GridPoint[][], stops: GridPoint[] = []) {
     this.displayedSegments=segments.map(s=>s.map(p=>({...p})));
     this.routeGraphics.clear();
     this.pathGraphics.clear();
-    // Only the current unwalked leg is rendered by drawPath().
+    segments.forEach((segment, i) => { if (segment.length > 1) this.drawRouteLine(segment, i === 0 ? stops : []); });
   }
 
   clearRoute() {
     this.displayedSegments=[];
     this.routeGraphics.clear();
+    this.pathGraphics.clear();
   }
 
   /**

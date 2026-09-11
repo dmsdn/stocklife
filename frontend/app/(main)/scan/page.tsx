@@ -318,6 +318,7 @@ function ScanPageInner() {
 
     const cached = readRouteProgress(groupId);
     if (cached && cached.requestKey === key) {
+      saveRouteProgress(cached);
       setRoute(cached.route);
       setMapFloor(cached.route.start.floorNo);
       setRouteError(null);
@@ -328,6 +329,7 @@ function ScanPageInner() {
       // ✅ 담긴 상품이 없거나 전부 스캔 완료 — API를 부를 필요가 없고, 부르면 오히려
       //   "빈 목록" 에러가 날 수 있어서 여기서 명확한 안내로 갈음.
       setRoute(null);
+      if(window.parent!==window) window.parent.postMessage({source:"storeflow-frontend",type:"PLANNED_ROUTE",groupId,route:null},document.referrer?new URL(document.referrer).origin:window.location.origin);
       setRouteError("담긴 상품이 없거나 전부 스캔했어요.");
       return;
     }
