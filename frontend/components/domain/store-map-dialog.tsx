@@ -1,4 +1,5 @@
 "use client";
+import {collapseEscalatorLabels} from "@/lib/journey-labels";
 import {floorSegments,nextDestinationSteps} from "@/lib/route-display";
 import {useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
@@ -102,38 +103,6 @@ export function StoreMapDialog({open,onClose,groupId,collectedIds,plan=false}:Pr
   //   백엔드가 준 정확한 데이터)의 시작/끝 층번호를 직접 읽어서 판단한다 — 몇 번을
   //   갈아타든, 라벨 문구가 뭐든 상관없이 처음 시작층과 마지막 도착층만 정확히 뽑힌다.
   type PendingItem=NonNullable<typeof route>["journeySteps"][number];
-  const collapseEscalatorLabels=(items:PendingItem[]):string[]=>{
-    const isVertical=(it:PendingItem)=>{
-      if(it.kind==="ESCALATOR"||it.label.includes("에스컬레이터")||it.label.includes("엘리베이터"))return true;
-      const f0=it.path[0]?.floorNo,f1=it.path[it.path.length-1]?.floorNo;
-      return f0!=null&&f1!=null&&f0!==f1;
-    };
-    const isBareFloor=(it:PendingItem)=>/^\s*\d+\s*층\s*$/.test(it.label);
-    const startFloorOf=(it:PendingItem)=>it.path[0]?.floorNo;
-    const endFloorOf=(it:PendingItem)=>it.path[it.path.length-1]?.floorNo;
-    const out:string[]=[];
-    let i=0;
-    while(i<items.length){
-      if(!isVertical(items[i])){out.push(items[i].label);i++;continue;}
-      let j=i;
-      let startFloor:number|undefined;
-      let lastFloor:number|undefined;
-      const kindLabel=items[i].label.includes("엘리베이터")?"엘리베이터":"에스컬레이터";
-      while(j<items.length&&(isVertical(items[j])||isBareFloor(items[j]))){
-        const s0=startFloorOf(items[j]),e0=endFloorOf(items[j]);
-        if(startFloor==null)startFloor=s0;
-        if(e0!=null)lastFloor=e0; else if(s0!=null)lastFloor=s0;
-        j++;
-      }
-      if(startFloor!=null&&lastFloor!=null&&startFloor!==lastFloor){
-        out.push(`${kindLabel}로 ${startFloor}층 → ${lastFloor}층 이동`);
-      } else {
-        for(let k=i;k<j;k++)out.push(items[k].label);
-      }
-      i=j;
-    }
-    return out;
-  };
   // ✅ 신규(요청 — "계획에서 리스트의 동선보기 내용도 스캔의 동선보기처럼. 지도 아래로
   //   이동경로, 리스트, 이동경로, 리스트 이런식으로") — 스캔 화면(app/(main)/scan/page.tsx)의
   //   listBlocks와 같은 방식: PRODUCT 단계 사이사이에 낀 이동 단계(WALK/ESCALATOR 등)

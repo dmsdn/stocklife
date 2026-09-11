@@ -29,6 +29,7 @@
 //   뺄지" 선택 패널(n개 빼기 스테퍼 / 다 빼기)이 뜸 → 개수를 고르면 그제서야 무장되고
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
+import {collapseEscalatorLabels} from "@/lib/journey-labels";
 import { facilityBarcode } from "@/lib/facility-barcode";
 import {floorSegments, nextDestinationSteps} from "@/lib/route-display";
 
@@ -822,19 +823,19 @@ function ScanPageInner() {
 
   const remainingSegments: { routeText: string; product: NonNullable<typeof selectedGroup>["products"][number] }[] = [];
   if (route) {
-    let pendingLabels: string[] = [];
+    let pendingSteps: NonNullable<typeof route>["journeySteps"] = [];
     for (const step of route.journeySteps) {
       if (step.kind === "PRODUCT") {
         const product = selectedGroup?.products.find((pp) => pp.id === step.skuId);
         if (product && !sessionScans.has(product.id)) {
           remainingSegments.push({
-            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : step.label,
+            routeText: pendingSteps.length > 0 ? collapseEscalatorLabels(pendingSteps).join(" → ") : step.label,
             product,
           });
         }
-        pendingLabels = [];
+        pendingSteps = [];
       } else {
-        pendingLabels.push(step.label);
+        pendingSteps.push(step);
       }
     }
   }
