@@ -30,7 +30,6 @@
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
 import { facilityBarcode } from "@/lib/facility-barcode";
-import { ShoppingLivToggle } from "@/components/layout/shopping-liv-toggle";
 import {floorSegments, nextDestinationSteps} from "@/lib/route-display";
 
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -215,12 +214,8 @@ function ScanPageInner() {
 
   const [sessionScans, setSessionScans] = useState<Set<number>>(new Set());
 
-  // ✅ 수정(2026-09, 2차) — "−" 누르면 그 상품이 선택 표시만 되고(selectedRemoveSkuId),
-  //   목록 아래에 뜨는 선택 패널에서 몇 개 뺄지(removeQuantityDraft) 고른 뒤에야
-  //   pendingAction으로 무장됨 — 그 상품 바코드를 다시 스캔해야 실제로 반영됩니다.
-  const [selectedRemoveSkuId, setSelectedRemoveSkuId] = useState<number | null>(null);
-  const [removeQuantityDraft, setRemoveQuantityDraft] = useState(1);
-  const [pendingAction, setPendingAction] = useState<{ skuId: number; quantity: number } | null>(null);
+  const removeLock = useRef(false);
+  const [removing, setRemoving] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   // ✅ 신규 — 담은 상품 목록 위 손잡이를 위로 끌어올리면(또는 탭하면) 카메라·바코드
   //   입력을 숨기고 목록만 화면 가득 채워서 쭉 나열되게 함. 아래로 다시 끌면 원상복구.
@@ -307,7 +302,6 @@ function ScanPageInner() {
   // ✅ 신규(요청) — 바코드 찍는 거 아래 "현재 위치만 확인" 체크. 켜져 있으면 스캔해도
   //   장바구니에 안 담기고(수량 그대로), 그 상품 위치를 현재 위치로만 갱신함.
   const [locateOnly, setLocateOnly] = useState(false);
-  const [putBack, setPutBack] = useState(false);
   // ✅ 신규(요청) — "계획 추가" 버튼. 누르면 리스트에 없는 상품 검색해서 계획에 추가하거나,
   //   화장실 등 시설을 먼저 들르도록 하는 모달이 뜸(예전 ShoppingRouteActions 내용 그대로).
   const [planOpen, setPlanOpen] = useState(false);
@@ -545,7 +539,7 @@ function ScanPageInner() {
           const key = buildRequestKey({groupId:currentGroupId,skuIds:remainingIds,anchor,detourLocationId:nextDetour,paid:saved.paid});
           saveRouteProgress({groupId:currentGroupId,requestKey:key,route:nextRoute,step:0});
           writeShoppingSession({...saved,anchor,detourLocationId:nextDetour},{preserveRoute:true});
-          setPendingAction(null);setBarcode("");
+          setBarcode("");
           setArrivalNotice(`${facility.label} 도착을 확인했어요. 이 위치에서 남은 동선을 이어갑니다.`);
           if(window.parent!==window) window.parent.postMessage({source:"storeflow-frontend",type:"SCANNED_FACILITY",route:nextRoute},document.referrer?new URL(document.referrer).origin:window.location.origin);
           return;
@@ -565,18 +559,6 @@ function ScanPageInner() {
         pickLocationId?: string | null;
         pickFloorNo?: number | null;
       }>(`/api/products/barcode/${code.trim()}`, { auth: false });
-
-      // 내려놓기에서는 절대로 담기 분기로 내려가지 않는다.
-      if (putBack || pendingAction != null) {
-        if (pendingAction && found.skuId !== pendingAction.skuId) {
-          setError("빼기로 선택한 상품의 바코드를 스캔해주세요.");
-          return;
-        }
-        await decrementScannedProduct(found.skuId, found.name, pendingAction?.quantity ?? 1);
-        setPendingAction(null);
-        setBarcode("");
-        return;
-      }
 
       // ✅ 단종 상품 — 백엔드는 조회 자체는 성공시키고 discontinued 플래그만 내려주므로,
       //   "인식 안 됨" 취급은 여기서 프론트가 직접 막습니다. 장바구니에 안 담고 안내만 표시.
@@ -1003,7 +985,6 @@ function ScanPageInner() {
             <span className="truncate">{selectedGroup ? selectedGroup.title : "리스트 선택"}</span>
             <RiArrowDownSLine size={20} className="shrink-0 text-muted-foreground" />
           </button>
-          <ShoppingLivToggle />
           {/* ✅ 수정(요청 — "오른쪽 위 동선보기 페이지를 없애고") — 별도 버튼/페이지
               삭제. 아래 카메라·지도 영역 안의 토글 아이콘으로 대체됨. */}
         </div>
@@ -1148,7 +1129,7 @@ function ScanPageInner() {
                 체크 안 됐을 때는 실제로 담기니까 "담기", 체크됐을 때는 안 담고 위치만
                 보는 거니까 "조회"로 라벨이 바뀝니다. */}
             <Button type="submit" variant="outline" className="shrink-0" disabled={groupCompleted}>
-              {locateOnly ? "조회" : putBack || pendingAction ? "내려놓기" : "담기"}
+              {locateOnly ? "조회" : "담기"}
             </Button>
           </form>
 
@@ -1158,12 +1139,8 @@ function ScanPageInner() {
               화면(지도)으로 넘어감. */}
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={locateOnly} onChange={() => { setLocateOnly((v) => !v); setPutBack(false); setPendingAction(null); }} />
+              <Checkbox checked={locateOnly} onChange={() => { setLocateOnly((v) => !v);  }} />
               현재 위치만 확인 (담지 않음)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={putBack} onChange={() => { setPutBack((v) => !v); setLocateOnly(false); setPendingAction(null); }} />
-              내려놓기 (1개 빼기)
             </label>
             {/* ✅ "계획 추가" 버튼은 리스트에 없는 상품 추가·시설 먼저 들르기를 모아둔
                 모달을 엽니다. */}
@@ -1245,9 +1222,7 @@ function ScanPageInner() {
                 return (
                 <div key={p.id} className={`${collected ? "" : "opacity-40"} ${prevIsProduct ? "border-t border-border" : ""}`}>
                   <div
-                    className={`flex items-center gap-3 rounded-sm px-1 py-3 ${
-                      selectedRemoveSkuId === p.id ? "bg-danger-bg" : ""
-                    }`}
+                    className="flex items-center gap-3 rounded-sm px-1 py-3"
                   >
                     {/* ✅ 수정(요청 — "이동경로 위에 있는 위치 아이콘은... 이동경로 텍스트
                         왼쪽에 넣고") — 상품 썸네일 위에 얹었던 현위치 핀 배지는 없앰(엉뚱한
@@ -1275,67 +1250,22 @@ function ScanPageInner() {
                     {collected && (
                     <button
                       type="button"
-                      disabled={groupCompleted}
+                      disabled={groupCompleted || removing}
                       aria-label={`${p.name} 빼기`}
-                      onClick={() => {
-                        if (selectedRemoveSkuId === p.id) {
-                          setSelectedRemoveSkuId(null);
-                        } else {
-                          setSelectedRemoveSkuId(p.id);
-                          setRemoveQuantityDraft(1);
-                        }
+                      onClick={async () => {
+                        if (removeLock.current || groupCompleted) return;
+                        removeLock.current = true; setRemoving(true); setError(null);
+                        try { await decrementScannedProduct(p.id, p.name, 1); }
+                        catch (e) { setError(e instanceof Error ? e.message : "수량을 줄이지 못했어요."); }
+                        finally { removeLock.current = false; setRemoving(false); }
                       }}
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full border disabled:opacity-40 ${
-                        selectedRemoveSkuId === p.id ? "border-danger text-danger" : "border-card-border text-muted-foreground"
-                      }`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full border border-card-border text-muted-foreground disabled:opacity-40"
                     >
                       <RiSubtractLine size={18} />
                     </button>
                     )}
                   </div>
 
-                  {/* ✅ 수정(2026-09, 3차) — 예전엔 목록 전체 아래에 별도 패널로 떨어져
-                      있어서 "지금 어느 상품 얘기인지" 한 번 더 확인해야 했고, "몇 개
-                      뺄까요?" 질문 텍스트 + X + [스테퍼(왼쪽)][빼기/다빼기 버튼 2개(오른쪽)]
-                      로 읽는 방향이 여러 갈래라 헷갈렸음. 이제 그 상품 바로 아래에 붙고,
-                      질문 문구·X 없이 스테퍼(가운데) → 버튼(그 아래, 가로 꽉 채움) 순서로
-                      위→아래 한 방향으로만 읽히게 함. "다 빼기" 버튼도 없앰 — 스테퍼를
-                      최대치(전체 수량)까지 올리면 버튼 글자가 자동으로 "전부 빼기"로
-                      바뀌어서 버튼이 하나만 있어도 됨. */}
-                  {selectedRemoveSkuId === p.id && (
-                    <div className="mb-3 space-y-3 rounded-[14px] border border-border bg-muted p-4">
-                      <div className="flex items-center justify-center gap-4">
-                        <button
-                          type="button"
-                          aria-label="개수 줄이기"
-                          onClick={() => setRemoveQuantityDraft((n) => Math.max(1, n - 1))}
-                          className="flex h-10 w-10 items-center justify-center rounded-full border border-card-border bg-white"
-                        >
-                          <RiSubtractLine size={16} />
-                        </button>
-                        <span className="w-8 text-center text-lg font-semibold">{removeQuantityDraft}</span>
-                        <button
-                          type="button"
-                          aria-label="개수 늘리기"
-                          onClick={() => setRemoveQuantityDraft((n) => Math.min(p.quantity, n + 1))}
-                          className="flex h-10 w-10 items-center justify-center rounded-full border border-card-border bg-white"
-                        >
-                          <RiAddLine size={16} />
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPutBack(true); setLocateOnly(false);
-                          setPendingAction({ skuId: p.id, quantity: removeQuantityDraft });
-                          setSelectedRemoveSkuId(null);
-                        }}
-                        className="flex h-11 w-full items-center justify-center rounded-full bg-danger text-sm font-medium text-white"
-                      >
-                        {removeQuantityDraft >= p.quantity ? "전부 빼기" : `${removeQuantityDraft}개 빼기`}
-                      </button>
-                    </div>
-                  )}
                 </div>
                 );
               })}
@@ -1343,18 +1273,7 @@ function ScanPageInner() {
           )}
         </div>
 
-        {/* ✅ 개수를 골라 무장된 상태 — 이 상품 바코드를 다시 스캔해야 실제로 빠짐. */}
-        {pendingAction != null && (
-          <div className="mx-4 mb-3 flex shrink-0 items-center justify-between gap-2 rounded-[14px] border border-danger/30 bg-danger-bg px-4 py-3 text-sm text-danger">
-            <span>
-              {scannedProducts.find((p) => p.id === pendingAction.skuId)?.name ?? "이 상품"}의 바코드를 다시
-              스캔하면 {pendingAction.quantity}개가 빠져요.
-            </span>
-            <button type="button" onClick={() => setPendingAction(null)} className="shrink-0 underline">
-              취소
-            </button>
-          </div>
-        )}
+
 
         {/* ✅ 수정(요청) — 목록이 접혀있을 때(max-h-48) 이 아래로 결제 푸터가 바로
             붙어버려서 화면 하단에 빈 여백이 남았음. 목록을 펼치면(listExpanded, flex-1)
