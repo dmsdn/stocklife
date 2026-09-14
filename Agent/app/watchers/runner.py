@@ -127,9 +127,10 @@ async def _listen_forever() -> None:
     backoff = 1.0
     url = config.BACKEND_BASE_URL + "/internal/events/stream"
     headers = {"X-Internal-Service-Key": os.environ.get("INTERNAL_SERVICE_KEY", "")}
-    # read=None = 수신 타임아웃 없음. SSE 는 "다음 이벤트까지 무한정 기다리는"
-    # 것이 정상이라, 조회용 타임아웃을 걸면 조용한 매장에서 주기적으로 끊긴다.
-    timeout = httpx.Timeout(connect=5.0, read=None, write=5.0, pool=5.0)
+    # heartbeat가 없는 스트림은 반쯤 끊겨도 EOF가 오지 않을 수 있다.
+    # 60초 무수신이면 연결만 갱신한다. 세션·진입 판정·개입 예산은 유지한다.
+    # 정상적인 한산한 시간에도 갱신하며, 이 구간의 이벤트 재생은 서버 계약 밖이다.
+    timeout = httpx.Timeout(connect=5.0, read=60.0, write=5.0, pool=5.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
         while not _STOP.is_set():
             try:
@@ -157,6 +158,10 @@ async def _listen_forever() -> None:
                             lines.append(line[5:].strip())
             except asyncio.CancelledError:
                 raise                                   # 종료 신호는 삼키면 안 된다
+            except httpx.ReadTimeout:
+                # 정상 무활동과 유실 연결을 구별할 heartbeat가 없으므로 즉시 재구독.
+                # 연결 자체가 실패하면 아래 기존 backoff를 따른다.
+                print("[runner] SSE 60초 무수신 — 연결 갱신")
             except Exception as e:                      # noqa: BLE001
                 print(f"[runner] SSE 끊김: {type(e).__name__}: {e} "
                       f"({backoff:.0f}초 뒤 재연결)")

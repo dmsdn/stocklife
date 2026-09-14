@@ -1,0 +1,40 @@
+# Existing server environment values are required; never commit real credentials.
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:never}
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:none}
+    show-sql: ${SPRING_JPA_SHOW_SQL:true}
+    properties:
+      hibernate:
+        format_sql: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:true}
+jwt:
+  consumer-secret: ${JWT_CONSUMER_SECRET}
+  consumer-access-expiration: ${JWT_CONSUMER_ACCESS_EXPIRATION}
+  consumer-refresh-expiration: ${JWT_CONSUMER_REFRESH_EXPIRATION}
+agent:
+  base-url: ${AGENT_BASE_URL}
+internal:
+  service-key: ${INTERNAL_SERVICE_KEY}
+ncp:
+  sms:
+    access-key: ${NCP_SMS_ACCESS_KEY}
+    secret-key: ${NCP_SMS_SECRET_KEY}
+    service-id: ${NCP_SMS_SERVICE_ID}
+    from: ${NCP_SMS_FROM}
+  object-storage:
+    endpoint: ${NCP_OBJECT_STORAGE_ENDPOINT:}
+    region: ${NCP_OBJECT_STORAGE_REGION:}
+    access-key: ${NCP_OBJECT_STORAGE_ACCESS_KEY:}
+    secret-key: ${NCP_OBJECT_STORAGE_SECRET_KEY:}
+    bucket: ${NCP_OBJECT_STORAGE_BUCKET:}
+chat:
+  attachments:
+    directory: ${CHAT_ATTACHMENTS_DIRECTORY:./chat-uploads}

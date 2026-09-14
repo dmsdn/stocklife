@@ -126,6 +126,7 @@ class ChatRequest(BaseModel):
     consumerId: int | None = None        # 비회원이면 null로 온다
     groupId: int | None = Field(default=None, gt=0) # Backend가 소유권을 확인한 채팅 연결 리스트
     message: str
+    attachmentUrls: list[str] = Field(default_factory=list, max_length=3)
     history: list[HistoryItem] = Field(default_factory=list)   # ㊹ 변할 수 있는 기본값
     # ── 현재 위치 (2026-08-25 추가) ──────────────────────────────────────
     # 마지막 스캔 좌표. 경로 도구의 **기본 출발점**으로 주입된다(compute.set_position).
@@ -284,6 +285,8 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
     # pydantic 모델 → 평범한 dict 리스트로. 루프는 프레임워크를 모르는 순수
     # 파이썬이라(그래야 골든셋 러너가 직접 부른다) 모델 객체를 넘기지 않는다.
     history = [h.model_dump() for h in body.history]
+    from app.chat_photos import identify_attachments
+    photo_results = identify_attachments(body.attachmentUrls)
 
     # 위치 셋이 다 있을 때만 튜플로 넘긴다. 하나라도 없으면 None —
     # 판정을 여기서 한 번에 하고 아래로는 "있다/없다"만 내려보낸다.
@@ -296,7 +299,7 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
 
     result = loop.run_chat(body.message, consumer_id=body.consumerId,
                            session_id=body.sessionId, history=history,
-                           position=pos, group_id=body.groupId, guest_cart=body.guestCart)
+                           position=pos, group_id=body.groupId, guest_cart=body.guestCart, photo_results=photo_results)
 
     verdict = guard.check(result["reply"], result["ledgers"])
     if verdict["ok"]:
@@ -324,7 +327,7 @@ def agent_chat(body: ChatRequest) -> ChatResponse:             # ㊻ def — 동
         # 둘 다 걸렸으면 web_only 쪽을 쓴다(사실 출처 문제가 더 무겁다).
         msg = _RETRY_MSG["web_only"] if "web_only" in reasons else _RETRY_MSG["contradicts_ledger"]
         retry = loop.run_chat(msg, consumer_id=body.consumerId, position=pos,
-                              session_id=body.sessionId, history=retry_history, group_id=body.groupId, guest_cart=body.guestCart)
+                              session_id=body.sessionId, history=retry_history, group_id=body.groupId, guest_cart=body.guestCart, photo_results=photo_results)
         if guard.check(retry["reply"], retry["ledgers"])["ok"]:
             return ChatResponse(reply=navigation_links.with_references(retry["reply"], retry["ledgers"]), actions=retry["actions"])
         result = retry            # 재생성도 실패 → 아래 안전 문구로 (그 패스의

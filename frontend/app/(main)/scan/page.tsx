@@ -75,6 +75,7 @@ import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/pr
 import { isGroupCompleted, markGroupCompleted } from "@/lib/completed-groups";
 
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
+import { ShoppingLivButton } from "@/components/layout/shopping-liv-button";
 
 const DEFAULT_GROUP_ID = 1;
 // 결제 금액 대비 예상 적립 포인트율 — 백엔드 OrderService.checkout()의 실제 적립 로직
@@ -1224,15 +1225,7 @@ function ScanPageInner() {
                 <RiLoginBoxLine size={20} />
                 로그인하고 결제하기
               </button>
-              <button
-                type="button"
-                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
-                aria-label="리브에게 물어보기"
-                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
-              >
-                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
-                리브
-              </button>
+              <ShoppingLivButton onAsk={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)} />
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -1245,15 +1238,7 @@ function ScanPageInner() {
                 <RiBankCardLine size={20} />
                 {checkingOut ? "결제 중..." : "결제하기"}
               </button>
-              <button
-                type="button"
-                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
-                aria-label="리브에게 물어보기"
-                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
-              >
-                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
-                리브
-              </button>
+              <ShoppingLivButton onAsk={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)} />
             </div>
           )}
         </div>

@@ -319,7 +319,8 @@ def run_chat(message: str,
              allow_actions: bool = True,
              position: tuple[int, int, int] | None = None,
              member_id: int | None = None,
-             group_id: int | None = None, guest_cart: dict | None = None) -> dict:
+             group_id: int | None = None, guest_cart: dict | None = None,
+             photo_results: list[dict] | None = None) -> dict:
     """자연어 입력 하나를 대화 한 번으로 완주시킨다. main.py가 부르는 유일한 입구.
 
     ⚠ 09-03 신원 축 정정 — `member_id` 인자. 반응형(main.py)은 로그인 손님의
@@ -418,6 +419,14 @@ def run_chat(message: str,
     # ③ 이번 대화의 장부들. 함수 안 지역 변수인 이유: 요청마다 새로 시작해야
     #    한다. 모듈 전역에 두면 앞 사람의 원장이 다음 사람에게 새어 들어간다.
     ledgers = {"sot": [], "compute": [], "infer": [], "web": []}
+    # Server-supplied retrieval results enter the same tool/result and infer-ledger contract.
+    for index, result in enumerate(photo_results or []):
+        call_id = f"chat_photo_{index}"
+        messages.append({"role": "assistant", "content": [{"type": "tool_use", "id": call_id,
+            "name": "identify_product_photo", "input": {"image_ref": f"attached_photo_{index + 1}"}}]})
+        messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": call_id,
+            "content": json.dumps(result, ensure_ascii=False)}]})
+        ledgers["infer"].append({"tool": "identify_product_photo", "input": {}, "result": result})
     actions_done = []           # 실행된 액션 (프론트에 돌려줄 것)
     trace = []                  # 턴별 기록
     reply = None

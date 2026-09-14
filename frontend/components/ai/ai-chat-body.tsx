@@ -14,17 +14,6 @@ import Link from "next/link";
 import { chatDetailHref } from "@/lib/chat-detail-links";
 import { RiCloseLine, RiAddLine, RiMicLine, RiSendPlaneLine, RiCameraLine, RiImageLine, RiFileTextLine, RiBillLine, RiListCheck, RiCheckboxBlankLine, RiErrorWarningLine, RiCornerDownRightLine } from "@remixicon/react";
 
-// ✅ 실제 POST /api/ai/photo-search 연동 — 카메라/이미지 첨부 시 사진을 그대로 서버로 보내서
-//   비슷한 상품을 찾아옵니다.
-interface PhotoSearchResult {
-  tier?: "confident" | "category" | "unsure";
-  categoryL2?: string;
-  productName?: string;
-  message?: string;
-  error?: string;
-  results?: { skuId: number; productName: string }[];
-}
-
 // 09-04: 폰 사진은 3~8MB 다. 백엔드 multipart 기본 상한이 1MB 라 그대로 보내면 413 이고,
 //   더 나쁜 것은 **그 413 이 브라우저에 안 보인다**는 점이다 — 스프링이 CORS 필터보다
 //   먼저 끊어서 응답에 CORS 헤더가 없고, 브라우저는 상태 코드 없이 net::ERR_FAILED 만 준다.
@@ -61,16 +50,6 @@ async function shrinkIfNeeded(file: File): Promise<File> {
   } finally { bmp.close(); }
 }
 
-async function sendPhotoSearch(file: File): Promise<PhotoSearchResult | null> {
-  const form = new FormData();
-  form.append("photo", file);
-  // apiFetch 가 API_BASE_URL 을 붙이고 토큰도 싣는다. FormData 면 Content-Type 을
-  // 스스로 비운다(boundary 는 브라우저 몫 — api-client.ts 주석).
-  return await apiFetch<PhotoSearchResult>("/api/ai/photo-search", {
-    method: "POST",
-    body: form,
-  });
-}
 import { apiFetch, getAccessToken, resolveImageUrl } from "@/lib/api-client";
 import {
   setActiveSessionId,
@@ -120,6 +99,42 @@ async function uploadChatAttachment(
   } catch {
     return null;
   }
+}
+
+interface SavedPhoto {
+  attachmentId: number;
+  originalFilename: string;
+  contentType?: string;
+  preview?: string;
+}
+
+function ChatPhoto({ photo, sessionId }: { photo: SavedPhoto; sessionId: string | null }) {
+  const [src, setSrc] = useState(photo.preview ?? "");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (photo.preview || !sessionId) return;
+    let cancelled = false;
+    const owner = getAccessToken();
+    apiFetch<{ dataUrl: string }>(`/api/chat/sessions/${sessionId}/attachments/${photo.attachmentId}/content`,
+      { headers: chatAttachmentHeaders() }).then(result => {
+        if (!cancelled && owner === getAccessToken()) setSrc(result.dataUrl);
+      }).catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [photo.attachmentId, photo.preview, sessionId]);
+  return <div className="mb-2">
+    {src ? <img src={src} alt={`첨부 사진: ${photo.originalFilename}`} className="max-h-64 max-w-full rounded-lg object-contain" />
+      : <span className="text-xs text-muted-foreground">{failed ? "사진을 불러오지 못했어요." : "사진 불러오는 중…"}</span>}
+    <span className="block max-w-full truncate text-xs text-muted-foreground">{photo.originalFilename}</span>
+  </div>;
+}
+
+function photoPreview(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("사진을 읽지 못했어요."));
+    reader.readAsDataURL(file);
+  });
 }
 
 // ✅ 신규(요청) — 리브 응답에 딸려오는 actions(POST /api/chat)에서 상품 카드로
@@ -395,6 +410,9 @@ function formatMessageTime(iso: string): string {
 }
 
 interface ChatTurn {
+  photos?: SavedPhoto[];
+  attachmentIds?: number[];
+  sentContent?: string;
   role: "user" | "assistant";
   content: string;
   /** ✅ 대화 검색(기록 > 리브)에서 특정 메시지로 스크롤 이동하기 위한 식별자.
@@ -422,6 +440,7 @@ interface ChatTurn {
 interface Attachment {
   /** 배열 위치는 삭제하면 바뀐다. 업로드 완료는 이 파일 고유 ID로 찾아 반영한다. */
   localId?: string;
+  preview?: string;
   label: string;
   kind:
     | "camera"
@@ -492,6 +511,8 @@ export function AiChatBody({
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
   // ✅ 신규(요청) — 대화 하나하나 누르면(모바일) / 마우스 올리면(데스크톱) 보낸 시각 표시.
   const [shownTimeIndex, setShownTimeIndex] = useState<number | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -538,6 +559,7 @@ export function AiChatBody({
 
     (async () => {
       setLoading(true);
+      setConnectionError(null);
 
       try {
         if (sessionIdOverride) {
@@ -557,7 +579,7 @@ export function AiChatBody({
             boundSession.current = sessionId;
             setBoundGroupId(owner ? (metadata.groupId ?? null) : (groupId ?? null));
             onSessionReady?.(sessionId);
-            return apiFetch<{ messageId: number; sender: string; content: string; createdAt?: string }[]>(
+            return apiFetch<{ messageId: number; sender: string; content: string; createdAt?: string; attachments?: SavedPhoto[] }[]>(
               `/api/chat/sessions/${sessionId}/messages`,
               { headers: chatHeaders() }
             );
@@ -570,13 +592,20 @@ export function AiChatBody({
           messages.map((m) => ({
             role: m.sender === "USER" ? "user" : "assistant",
             content: m.content,
+            photos: m.attachments?.filter(a => a.contentType?.startsWith("image/")),
             messageId: m.messageId,
             createdAt: m.createdAt,
             proactive: m.sender === "AI_PROACTIVE",
           }))
         );
-      } catch {
-        if (current()) setTurns([]);
+      } catch (error) {
+        if (current()) {
+          setTurns([]);
+          const status = (error as { status?: number })?.status;
+          setConnectionError(status === 401 || status === 403
+            ? "대화 연결이 거부됐어요. 로그인 상태를 확인한 뒤 다시 연결해 주세요."
+            : "대화를 불러오지 못했어요. 다시 연결해 주세요.");
+        }
       } finally {
         if (current()) setLoading(false);
       }
@@ -587,7 +616,7 @@ export function AiChatBody({
       viewRevision.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionIdOverride, groupId]);
+  }, [sessionIdOverride, groupId, connectionAttempt]);
 
   // 버튼 클릭만으로 읽음 처리하지 않는다. 대화를 불러와 화면에 표시한 뒤에만 처리한다.
   useEffect(() => {
@@ -702,11 +731,11 @@ export function AiChatBody({
   };
 
   const handleSend = async (text?: string) => {
-    const content = (text ?? message).trim();
+    const content = (text ?? message).trim() || (attachments.some(a => a.attachmentId) ? "이 사진의 상품을 찾아주세요." : "");
 
     // ✅ 버그 수정(요청) — 아직 세션이 확정되기 전(loading)이거나 boundSession이 없으면
     //   전송 자체를 막음. 확정 전에 보내면 그 사이 화면이 바뀔 때 엉뚱한 세션으로 갈 수 있음.
-    if (!content || sending || loading || !boundSession.current) return;
+    if (!content || sending || loading || !boundSession.current || attachments.some(a => a.uploading || a.uploadFailed)) return;
 
     // ✅ 답장 대상이 걸려있으면 인용구를 붙여서 같은 세션에 그대로 보냄(백엔드에 별도
     //   "답장" 개념은 없어서, 리브가 문맥을 알아볼 수 있게 텍스트로 인용해서 보냄).
@@ -725,6 +754,9 @@ export function AiChatBody({
       {
         role: "user",
         content,
+        photos: attachments.filter(a => a.preview && a.attachmentId != null).map(a => ({ attachmentId: a.attachmentId!, originalFilename: a.label, preview: a.preview })),
+        attachmentIds,
+        sentContent: contentToSend,
         createdAt: new Date().toISOString(),
       },
     ]);
@@ -742,7 +774,7 @@ export function AiChatBody({
     const turn = turns[turnIndex];
     if (!turn || turn.role !== "user") return;
     setTurns((prev) => prev.map((t, i) => (i === turnIndex ? { ...t, failed: false } : t)));
-    void sendToBackend(turn.content, [], turnIndex);
+    void sendToBackend(turn.sentContent ?? turn.content, turn.attachmentIds ?? [], turnIndex);
   };
 
   // ✅ 수정(요청 — "새 대화 시작 말고 같은 세션에서 다시 물을 수 있게, 디코 답장처럼") —
@@ -763,86 +795,39 @@ export function AiChatBody({
     (kind: Attachment["kind"]) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-
-      if (!file) return;
-
-      const localId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      // 사진은 검색 API에만 보낸다. 첨부 저장 컨트롤러는 현재 백엔드에서 비활성이다.
-      const prepared = file.type.startsWith("image/") ? shrinkIfNeeded(file) : Promise.resolve(file);
-      setAttachments((prev) => [
-        ...prev,
-        {
-          label: file.name,
-          localId,
-          kind,
-          uploading: kind === "camera" || kind === "image" || kind === "document" || kind === "receipt",
-        },
-      ]);
-
-      // ✅ 실제 POST /api/chat/sessions/{sessionId}/attachments 업로드 — camera/image/document/
-      //   receipt만 백엔드에 대응 타입(IMAGE/DOCUMENT/RECEIPT)이 있어서 업로드 대상.
-      //   list/voice는 업로드하지 않음(list는 참조일 뿐이고, voice는 이 API가 지원 안 함).
-      if (kind === "document" || kind === "receipt") {
-        const uploadSession = boundSession.current;
-        prepared.then((ready) => uploadChatAttachment(kind, ready, uploadSession)).catch(() => null).then((attachmentId) => {
-          setAttachments((prev) =>
-            prev.map((a, i) =>
-              a.localId === localId
-                ? attachmentId != null
-                  ? { ...a, attachmentId, uploading: false }
-                  : { ...a, uploading: false, uploadFailed: true }
-                : a
-            )
-          );
-        });
-      }
-
-      // 검색이 끝나면 임시 사진 칩을 지운다. 저장되지 않은 attachmentId를 만들지 않는다.
-      if (kind === "camera" || kind === "image") {
-        const say = (content: string) =>
-          setTurns((prev) => [...prev, { role: "assistant", content }]);
-        prepared.then(sendPhotoSearch)
-          .then((result) => {
-            // ⚠ 09-04: tier 를 버리면 안 된다. 예전 코드는
-            //   `productName ?? results[0].productName` 로 **확신 등급을 무시하고**
-            //   1등 이름을 단정해 말했다. 서버는 confident 일 때만 productName 을
-            //   내려 주는데(photo_ship.txt 의 「잠금」), 그 설계를 마지막 한 뼘에서
-            //   되돌리는 셈이었다. 사진 자산은 CSLS 허브 보정으로 소분류 정확도를
-            //   59.0%→75.5% 로 끌어올린 물건이다 — 그 사다리를 화면 한 줄이 무너뜨렸다.
-            if (result?.error || (result?.message && !result.results?.length)) {
-              say(result.message || "사진 검색을 사용할 수 없어요. 잠시 뒤 다시 시도해 주세요.");
-              return;
-            }
-            const names = (result?.results ?? []).map((r) => r.productName).filter(Boolean);
-            if (result?.tier === "confident" && result.productName) {
-              say(`사진 속 상품은 「${result.productName}」 같아요.\n\n` + names.slice(0, 3).map((n) => `- ${n}`).join("\n"));
-            } else if (result?.tier === "category" && names.length) {
-              const where = result.categoryL2 ? `${result.categoryL2} 쪽` : "비슷한 종류";
-              say(
-                `정확히 어떤 상품인지는 확신하기 어려운데, ${where}으로 보여요.\n\n` +
-                  names.slice(0, 3).map((n) => `- ${n}`).join("\n") +
-                  `\n\n이 중에 있나요? 이름 일부를 알려주시면 더 정확히 찾아드릴게요.`
-              );
-            } else {
-              // unsure — "매장에 없습니다"라고 말하지 않는다(photo_ship.txt).
-              //   못 알아본 것과 안 파는 것은 다른 말이고, 후자는 거짓이 될 수 있다.
-              say("사진만으로는 어떤 상품인지 알아보기 어려웠어요. 상품 이름이나 브랜드를 알려주시면 찾아드릴게요.");
-            }
-          })
-          .catch((err) => {
-            // ⚠ 예전 코드는 실패를 통째로 삼켰다. 손님 화면에는 첨부 칩만 뜨고
-            //   **아무 일도 안 일어난 것처럼** 보였다 — 404 가 세 판의 점검을 통과한 이유다.
-            const tooBig = (err as { status?: number })?.status === 413;
-            say(
-              tooBig
-                ? "사진 용량이 너무 커서 보내지 못했어요. 조금 작은 사진으로 다시 시도해 주세요."
-                : err instanceof Error && !((err as { status?: number }).status) && /사진|JPG/.test(err.message) ? err.message : "사진을 확인하는 중 문제가 생겼어요. 잠시 뒤에 다시 시도해 주세요."
-            );
-          }).finally(() => setAttachments((prev) => prev.filter((a) => a.localId !== localId)));
-      }
-
       e.target.value = "";
+      if (!file || sending || loading || !boundSession.current) return;
+      if (attachments.filter(a => a.kind === "image" || a.kind === "camera" || a.kind === "receipt").length >= 3) {
+        setMicError("사진은 한 번에 3장까지 첨부할 수 있어요.");
+        return;
+      }
+      const localId = `file-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const uploadSession = boundSession.current;
+      const revision = viewRevision.current;
+      const owner = getAccessToken();
+      const current = () => revision === viewRevision.current && owner === getAccessToken();
+      setMicError("");
+      setAttachments(prev => [...prev, { label: file.name, localId, kind, uploading: true }]);
       setAttachOpen(false);
+      // Selection only stages/stores the attachment. Inference happens after explicit Send.
+      (async () => {
+        try {
+          if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+            throw new Error("JPG·PNG·WebP 사진으로 다시 선택해 주세요.");
+          const ready = await shrinkIfNeeded(file);
+          const preview = await photoPreview(ready);
+          if (!current()) return;
+          setAttachments(prev => prev.map(a => a.localId === localId ? { ...a, preview } : a));
+          const attachmentId = await uploadChatAttachment(kind as "camera" | "image" | "receipt", ready, uploadSession);
+          if (!current()) return;
+          if (attachmentId == null) throw new Error("사진을 저장하지 못했어요. 첨부를 제거하고 다시 선택해 주세요.");
+          setAttachments(prev => prev.map(a => a.localId === localId ? { ...a, attachmentId, uploading: false } : a));
+        } catch (error) {
+          if (!current()) return;
+          setAttachments(prev => prev.map(a => a.localId === localId ? { ...a, uploading: false, uploadFailed: true } : a));
+          setMicError(error instanceof Error ? error.message : "사진을 준비하지 못했어요.");
+        }
+      })();
     };
 
   const handleAttachList = (id: number, title: string, kind: "list" | "receipt") => {
@@ -1078,6 +1063,11 @@ export function AiChatBody({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {connectionError && <div role="alert" className="m-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+        <p>{connectionError}</p>
+        <button type="button" onClick={() => setConnectionAttempt(value => value + 1)}
+          className="mt-2 rounded-md border px-3 py-1.5 font-medium">대화 다시 연결</button>
+      </div>}
       <input
         ref={cameraInputRef}
         type="file"
@@ -1189,6 +1179,7 @@ export function AiChatBody({
                         )}
                         {/* ✅ 신규(요청) — 말풍선 모양(위 컨테이너의 배경/모서리)은 그대로 두고,
                             안쪽 내용만 유저는 그대로, 리브는 마크다운으로 */}
+                        {isUser && turn.photos?.map(photo => <ChatPhoto key={photo.attachmentId} photo={photo} sessionId={boundSession.current} />)}
                         {isUser ? turn.content : <MarkdownText text={turn.content} />}
                       </div>
 
@@ -1273,6 +1264,7 @@ export function AiChatBody({
                   a.uploadFailed ? "border-danger text-danger" : "border-border"
                 }`}
               >
+                {a.preview && <img src={a.preview} alt={`전송 전 사진: ${a.label}`} className="h-24 w-24 rounded-lg object-contain" />}
                 <span className="min-w-0 truncate">
                   {a.uploading ? `업로드 중... ${a.label}` : a.uploadFailed ? `업로드 실패: ${a.label}` : a.label}
                 </span>
@@ -1391,7 +1383,7 @@ export function AiChatBody({
             <button
               type="button"
               aria-label="전송"
-              disabled={loading || sending || !boundSession.current || attachments.some((a) => a.uploading)}
+              disabled={loading || sending || !boundSession.current || attachments.some((a) => a.uploading || a.uploadFailed)}
               onClick={() => handleSend()}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-brand-foreground disabled:opacity-40"
             >

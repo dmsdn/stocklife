@@ -35,6 +35,8 @@ public class ChatService {
         private final ChatSessionRepository chatSessionRepository;
         private final ChatMessageRepository chatMessageRepository;
         private final ChatAttachmentRepository chatAttachmentRepository;
+        @org.springframework.beans.factory.annotation.Autowired
+        private ChatAttachmentService chatAttachmentService;
         private final RestTemplate restTemplate;
         private final EventBroadcastService eventBroadcastService;
         private final CartGroupRepository cartGroupRepository;
@@ -217,6 +219,7 @@ public class ChatService {
                 ChatSession session = getOwnedSession(sessionId, consumerIdOrNull, anonymousIdOrNull, false);
                 Long chatSessionId = session.getChatSessionId();
 
+                chatAttachmentService.deleteSessionFilesAfterCommit(chatSessionId);
                 chatAttachmentRepository.deleteByChatSessionId(chatSessionId);
                 chatMessageRepository.deleteByChatSessionId(chatSessionId);
                 chatSessionRepository.delete(session);
@@ -294,9 +297,12 @@ public class ChatService {
                 // 첨부가 섞여 들어오지 않게 한다.
                 List<String> attachmentUrls = List.of();
                 if (request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty()) {
+                        if (request.getAttachmentIds().size() > 3) throw new IllegalArgumentException("사진은 한 번에 3장까지 보낼 수 있어요.");
                         List<ChatAttachment> pending = chatAttachmentRepository
                                 .findByChatAttachmentIdInAndChatMessageIdIsNull(request.getAttachmentIds());
 
+                        if (pending.size() != new HashSet<>(request.getAttachmentIds()).size() || pending.stream().anyMatch(a -> !a.getChatSessionId().equals(session.getChatSessionId())))
+                                throw new IllegalArgumentException("첨부한 사진을 다시 선택해 주세요.");
                         List<ChatAttachment> linkedToThisSession = new ArrayList<>();
                         for (ChatAttachment attachment : pending) {
                                 if (attachment.getChatSessionId().equals(session.getChatSessionId())) {
@@ -310,7 +316,7 @@ public class ChatService {
                         // "사진이 첨부됐다"는 사실 자체를 알 수 있다 (연결만 하고 URL을 안 넘기면 Agent 입장에선
                         // 첨부가 없었던 것과 똑같다).
                         attachmentUrls = linkedToThisSession.stream()
-                                .map(ChatAttachment::getUrl)
+                                .map(chatAttachmentService::dataUrl)
                                 .toList();
                 }
 

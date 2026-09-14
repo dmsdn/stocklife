@@ -1,0 +1,3433 @@
+{
+  "snapshotDate": "2026-09-14",
+  "baseline": "1ca7c9889eb6a00ea1ea46ebc7d937a8fc57bd7c",
+  "changedRuntimeFiles": [
+    "frontend/components/ai/ai-chat-body.tsx",
+    "frontend/app/(main)/scan/page.tsx",
+    "Backend/src/main/java/com/storeflow/chat/service/ChatService.java",
+    "Backend/src/main/java/com/storeflow/chat/service/ChatAttachmentService.java",
+    "Backend/src/main/java/com/storeflow/chat/controller/ChatAttachmentController.java",
+    "Agent/app/loop.py",
+    "Agent/app/main.py",
+    "Agent/app/watchers/runner.py",
+    "frontend/components/layout/shopping-liv-button.tsx",
+    "Agent/app/chat_photos.py"
+  ],
+  "verifiedFiles": 853,
+  "files": {
+    "Agent/app/__init__.py": {
+      "sha256": "684ee7dc3175f8a769208691080b42fb3f21ffc6c1b83c8d4589050e368e4278",
+      "mode": "lf-text"
+    },
+    "Agent/app/artifacts/availability_model.joblib": {
+      "sha256": "c578113d01b8c29bae23928e93888eceac19eabff133919e0717a1f3a9f5d8b4",
+      "mode": "bytes"
+    },
+    "Agent/app/artifacts/availability_ship.txt": {
+      "sha256": "c91b2d21baad7a47922a64dedcacead50eb6f20be413a1dbc978bfa891171fa1",
+      "mode": "lf-text"
+    },
+    "Agent/app/artifacts/photo_gallery.npz": {
+      "sha256": "e6ec355573103b4e27bf7a938001c594e7c552d6c789036bf6ea15386d7c2a3d",
+      "mode": "bytes"
+    },
+    "Agent/app/artifacts/photo_ship.txt": {
+      "sha256": "02f6e1f715756287ad0b3523fdbd7f2cac473e8ddc3a6262952f705e4b011eb8",
+      "mode": "lf-text"
+    },
+    "Agent/app/artifacts/preference_model.npz": {
+      "sha256": "6cee7ed0e93c299a28642768e2fa66ddc243e51888886ef1ada02a586a28ae40",
+      "mode": "bytes"
+    },
+    "Agent/app/artifacts/repurchase_model.joblib": {
+      "sha256": "9b447582d046c36ae67313e65a88b11409fcc5e2efdaa2365200acedbf508245",
+      "mode": "bytes"
+    },
+    "Agent/app/artifacts/repurchase_ship.txt": {
+      "sha256": "3df48a8ed8b5e06eaa14ff6cdac80c594e74f1c5e4482ac7feb99c67014391a8",
+      "mode": "lf-text"
+    },
+    "Agent/app/artifacts/searchterm.npz": {
+      "sha256": "f355d40c86fcb71a13da835a11ef83ad29ac8afdc1cc42993bc31c5df91fc5ac",
+      "mode": "bytes"
+    },
+    "Agent/app/cart_context.py": {
+      "sha256": "496a8ca4396a0edd83656f14132b9f4c57017f53be2a83bc31c1275adf133c5b",
+      "mode": "lf-text"
+    },
+    "Agent/app/chat_photos.py": {
+      "sha256": "065649c7de8561e7c2fa487b24ef9c7a80cdd58f7bd58a0c811f818ab821fd48",
+      "mode": "lf-text"
+    },
+    "Agent/app/config.py": {
+      "sha256": "5153df92d1a73999f03c6e43429667c8907f365e9cd3d3a1ddd9a54897ae78e1",
+      "mode": "lf-text"
+    },
+    "Agent/app/env.py": {
+      "sha256": "53f6d269c80e22ad699770e89faf6573ac2f947314491cddb265c8e398146b16",
+      "mode": "lf-text"
+    },
+    "Agent/app/etiquette.py": {
+      "sha256": "464f421f8b0e24e9223d3c28639ef19eafa07ffa5d7da6e1500fbc3407b41e18",
+      "mode": "lf-text"
+    },
+    "Agent/app/guard.py": {
+      "sha256": "4e1dc756e4e9be0ffa971b551528d63eb5efddcf592929578b00518636ea1b9c",
+      "mode": "lf-text"
+    },
+    "Agent/app/loop.py": {
+      "sha256": "9e9284105a35f3c19833a16e4eac7a45b493669a0d2efc2e77a57327700b11fe",
+      "mode": "lf-text"
+    },
+    "Agent/app/main.py": {
+      "sha256": "87e2760966999b8edb9393b3d908606d5266898a0bcba1e6985f3a47d7234573",
+      "mode": "lf-text"
+    },
+    "Agent/app/mock_data.py": {
+      "sha256": "39c6729af589c400f3f006bed23c5ed29111bdfa7feb9c9da29958fde2d1e5ee",
+      "mode": "lf-text"
+    },
+    "Agent/app/navigation_links.py": {
+      "sha256": "e75e1743045fa99138ddaedebbc6cb8212cd6b81eb2b7e7eb9f93b33efd275ee",
+      "mode": "lf-text"
+    },
+    "Agent/app/prompts.py": {
+      "sha256": "8d5f1e751a8a086032c83f9a4db4859f27b393e407105601c5fb35946b6a056a",
+      "mode": "lf-text"
+    },
+    "Agent/app/read_as_check.py": {
+      "sha256": "13e9bcd3b7e287bb18a9562858d0a25d70a643d33743b2371fa146637dd73ad7",
+      "mode": "lf-text"
+    },
+    "Agent/app/recommendations.py": {
+      "sha256": "bcb9fc17784bfffc407c66c188006532166ad6b07b740a1b80496b420e1cb13c",
+      "mode": "lf-text"
+    },
+    "Agent/app/routes_frontend.py": {
+      "sha256": "b6b93ff7e8e9bfa5698c25e0346fba2dabc29a641ffbdd6b856075807fe59129",
+      "mode": "lf-text"
+    },
+    "Agent/app/searchterm.py": {
+      "sha256": "74d7a39df404884ad54c7b424cc77b2885d195695a6be966adab20e28e298d81",
+      "mode": "lf-text"
+    },
+    "Agent/app/sot_client.py": {
+      "sha256": "fdfe20ad4d88fbbd5f660793585293302851fb11f6d3574ad237225bac45c307",
+      "mode": "lf-text"
+    },
+    "Agent/app/speech_check.py": {
+      "sha256": "7c4f908261065cbfb352a243609f4910501e2fe1bf88a651a16c2dedfe5af3c2",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/__init__.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/action.py": {
+      "sha256": "94a4ee3461b429e85165ea52926349125750a9b5889e10db462c22afc9ae6f3e",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/compute.py": {
+      "sha256": "630a6127dca5c18cf25d5495cc59812a6c4d895974f6bd7bb310563cb43d96b8",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/definitions.py": {
+      "sha256": "b5c3d3bd313c96091f02b305304c403c21c517434523a6dc20a44ed52a236719",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/infer.py": {
+      "sha256": "fa70965e261bb376f71f8808b2bb61b2e6e25f86c728805e02eccec6576a51d8",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/query.py": {
+      "sha256": "b992b82aa67da1ad8aeb834ded4222051fb1557cb9e1460ab440943514474ed3",
+      "mode": "lf-text"
+    },
+    "Agent/app/tools/shopping_route.py": {
+      "sha256": "fcf64850e93ba909ff822aa0b7478bdc7eff74394ffa336c04358bffef812287",
+      "mode": "lf-text"
+    },
+    "Agent/app/watchers/__init__.py": {
+      "sha256": "6e198f073216e3ec2728f67f2eb5ef1e27967bf98f6cc37a32377d46fcb492d3",
+      "mode": "lf-text"
+    },
+    "Agent/app/watchers/behavior.py": {
+      "sha256": "2ab3a6e37cc02d47680312b0012d2252e7529a002b06862fd396f69108bfcea5",
+      "mode": "lf-text"
+    },
+    "Agent/app/watchers/dispatch.py": {
+      "sha256": "59ab4a371e3b69f11c268dd6ad637dc580382f8f028856f63015432f9d425d4a",
+      "mode": "lf-text"
+    },
+    "Agent/app/watchers/runner.py": {
+      "sha256": "d96becadc1bf2cd130353743c72194bea4e1cd259fb06bed7af2afe9a20f5cef",
+      "mode": "lf-text"
+    },
+    "Agent/app/watchers/schedule.py": {
+      "sha256": "a0f1851a9662481b5868ba34e66b265be1c2ea7ddd0d5cf2a7e33897ef03a429",
+      "mode": "lf-text"
+    },
+    "Agent/app/watchers/world.py": {
+      "sha256": "108b99d027ffa671b1d088bd6efb674b3a7f57b38720a2cb06bb2a5ec4e43d34",
+      "mode": "lf-text"
+    },
+    "Agent/backend_probe.py": {
+      "sha256": "bd1999abebdef1dddcc57b1abc9d9dbc6c82b2407bfd748147127dc138c3dbff",
+      "mode": "lf-text"
+    },
+    "Agent/backend_surface.py": {
+      "sha256": "aaaeef6fe5eb452f7acc32f2293bfb3cbb747d3b1c0d81db4dc249141673dc90",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/catalog.py": {
+      "sha256": "a13f90171cb3a761158e530d98927259576502c64520bf1fbf405903c7b5eab3",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/items_food.py": {
+      "sha256": "ec857fbfc7f99383a8fa1ce79348331c294ffff9148b9c6654e98bdcbc9527e4",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/items_living.py": {
+      "sha256": "699442c8b1dc9424b5b87c055b1612143ccbe983acbcc51fc1a2b1c2a544271e",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/items_nonfood.py": {
+      "sha256": "50f77cc686282e4c8a130f2e50df13c4dbbbcee3ada2f3ed66335fc3392f1a89",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/out/products_seed.sql": {
+      "sha256": "da2ddac3b4c61aef8268501abbd46d42acbcc5333ebc1c248d97144d3b7e2a68",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/out/products_seed_5000.sql": {
+      "sha256": "57d8ef677843b6ef9afff2376911d25eea0f5749d1b3038dbe1d1dd1840cbee2",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/out/카탈로그_요약.md": {
+      "sha256": "cd67b9e213f1ae21d7b71267d06963fdbf42c7af61a5a76a60556a83fafd6eb1",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/searchterm_gen.py": {
+      "sha256": "fd176b8c740a5378af15cdbc514be63366bf432c314720c8116b98b77962c3b0",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/taxonomy.py": {
+      "sha256": "1e78c55f1f0e82088d026ecb0d64ec5bc7926984a2b05c5d2ba9b79716f590c1",
+      "mode": "lf-text"
+    },
+    "Agent/catalog/verify_seed.sql": {
+      "sha256": "7b226ec9ebb8c4a9d4094e70449abe0875716b6852c64ac34909c5f1f55820ad",
+      "mode": "lf-text"
+    },
+    "Agent/chat_cli.py": {
+      "sha256": "ee185b1fa22b91ed0ff965fee3b309e9ff6effb6e9a3aff2999404af754b4804",
+      "mode": "lf-text"
+    },
+    "Agent/chat_lists_check.py": {
+      "sha256": "230b08c2260221ca05f55a95eaa0e087a3e70f7b6d4409969574d9e165b2eb32",
+      "mode": "lf-text"
+    },
+    "Agent/chat_surface_check.py": {
+      "sha256": "9c5c774e193dceb196ebddc7a007eecab6c69d7a4bc1ca3c6580d764b32f0c83",
+      "mode": "lf-text"
+    },
+    "Agent/demo_inject.py": {
+      "sha256": "bbea51d6f52942e00fd550ec0465d991c06213dbfbdd1351cd9799d71b99a4ee",
+      "mode": "lf-text"
+    },
+    "Agent/eval/__init__.py": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": "lf-text"
+    },
+    "Agent/eval/golden_real.py": {
+      "sha256": "a1f57efa850d08c7851500aff234644267848026637157f1622084eb0d66a15f",
+      "mode": "lf-text"
+    },
+    "Agent/eval/golden_set.py": {
+      "sha256": "58c269c2e1f36b1c9bfceddebf717e2f3d920b2a50fd29b6a4a8e9ba5c7cb566",
+      "mode": "lf-text"
+    },
+    "Agent/eval/judge.py": {
+      "sha256": "d3760e1947047d95a85eacf03ea09da965b4016a32ffac8e69dfe821b4eebdd0",
+      "mode": "lf-text"
+    },
+    "Agent/eval/read_as_coverage.py": {
+      "sha256": "2dd09fba440e226518258076dde1302ee00c0275449fb1a50ee5e5dda0f2c03a",
+      "mode": "lf-text"
+    },
+    "Agent/eval/routing_audit.py": {
+      "sha256": "385ae13ae8e2474a61ee01f152728d6966cbb0bec0a9b09b7531a96bde0facc6",
+      "mode": "lf-text"
+    },
+    "Agent/eval/runner.py": {
+      "sha256": "9f5d9a7999f4b44c76732afa73eff9b5430c7df0b6904d72b292be5b46baec1f",
+      "mode": "lf-text"
+    },
+    "Agent/eval/scenario_runner.py": {
+      "sha256": "da65f178baca33ee489aa1e99aa78c069b22f4587c505e47b660787d0d70537d",
+      "mode": "lf-text"
+    },
+    "Agent/eval/scenarios.py": {
+      "sha256": "d56284f57233f098b3a49eb59b7980c01d90f02e770bcbe1b53cf938f902aae1",
+      "mode": "lf-text"
+    },
+    "Agent/golden_clock_check.py": {
+      "sha256": "7aafcdf91cfd05531c30a142c70e7247eed9faafc9c9849d0f2e55b4115ead69",
+      "mode": "lf-text"
+    },
+    "Agent/guest_cart_check.py": {
+      "sha256": "48336fc1580acf2aaa85cb3238d3c5ef8d9b7e839f602a26af99c9c67f22d9ce",
+      "mode": "lf-text"
+    },
+    "Agent/infer_check.py": {
+      "sha256": "10c7e00707c949d19072fcc5612e2784666a8569bc06b1ba4856d69402cc3e75",
+      "mode": "lf-text"
+    },
+    "Agent/integration_http_check.py": {
+      "sha256": "28eda2157d25bcbe9a9bae5340a31fdaaf7136f62da101333198c9bf54e35cb8",
+      "mode": "lf-text"
+    },
+    "Agent/models/artifacts.py": {
+      "sha256": "f9b7f759f56fed07caf9af3572ab5ee76fa16120fee0ad0536f3ca0df4f89ba3",
+      "mode": "lf-text"
+    },
+    "Agent/models/hazard.py": {
+      "sha256": "e5716ba4c20728df9bed392ad7a29cb0f803ec8bd4004c133be4f5d3ef5376a1",
+      "mode": "lf-text"
+    },
+    "Agent/models/hazard_ship.py": {
+      "sha256": "e1343a129886c7e61d9c72a568fe316005efbb08c010b0427936ec9f175934de",
+      "mode": "lf-text"
+    },
+    "Agent/models/person_period.py": {
+      "sha256": "f85bb5b8fec874eaf635fdc9c62029ea6268a7f5691d262531527d3a66e5d863",
+      "mode": "lf-text"
+    },
+    "Agent/models/preference_data.py": {
+      "sha256": "2484a209ac8ded443306beb6e47842fc553faed506b829042e0b29c1e7dabf47",
+      "mode": "lf-text"
+    },
+    "Agent/models/preference_rank.py": {
+      "sha256": "58b6943c5b4f0232fb7698d61f148dbc25562a86fb5bad7fc965b9b124bba929",
+      "mode": "lf-text"
+    },
+    "Agent/models/preference_ship.py": {
+      "sha256": "0615dfbc6b8ef8771d3b5d822a083d72a45efe06559ab005e407a61155381a7f",
+      "mode": "lf-text"
+    },
+    "Agent/models/repurchase.py": {
+      "sha256": "844f6fb8bef3bfe1f961b643563967a60e6df73e1b2de24a18af889f21753118",
+      "mode": "lf-text"
+    },
+    "Agent/models/repurchase_calibrate.py": {
+      "sha256": "495b52c36befe8172e2f7d5106da615db4342a6449efcc0d8835287f1164e513",
+      "mode": "lf-text"
+    },
+    "Agent/models/repurchase_period.py": {
+      "sha256": "d54e45929f574bef2927085f45f4b94a99746249927719b88bc9c02c0b13fb89",
+      "mode": "lf-text"
+    },
+    "Agent/models/repurchase_ship.py": {
+      "sha256": "eec83cb67aad9bcbd5e1298a5397fba500444dbf41e8e2486850282ccd468ffa",
+      "mode": "lf-text"
+    },
+    "Agent/models/repurchase_visits.py": {
+      "sha256": "3b0f2b1dca976f759aaab3999c8e8ab48cc2f9c91e17fc9f36dd02bf10890716",
+      "mode": "lf-text"
+    },
+    "Agent/pref_check.py": {
+      "sha256": "76b6c6c4ba349d3892e2418d14fa49ec2a723150f3d904ae680d6254243762ad",
+      "mode": "lf-text"
+    },
+    "Agent/route_check.py": {
+      "sha256": "0aa16e571f5cc249f1778ebab38057b41b87e1efe721fed1ebb6d6a4d6fc3bcc",
+      "mode": "lf-text"
+    },
+    "Agent/route_ui_check.py": {
+      "sha256": "d016f63c530bd08c0b0a76a2ebbf70875fab26a578364a415ea4c4f96adfa403",
+      "mode": "lf-text"
+    },
+    "Agent/schema_check.py": {
+      "sha256": "2c2b6a303e6e8b58fa0dbf943b4664a847e863051c2d1f760d12d045d248ef07",
+      "mode": "lf-text"
+    },
+    "Agent/shopping_route_check.py": {
+      "sha256": "888fd754b604ce82b2d8da9206d38d90b7ae5fe722a21177bf69f9aa072274e9",
+      "mode": "lf-text"
+    },
+    "Agent/sim/consume.py": {
+      "sha256": "52da69e76a0279d47eb413b16953ac825cba39c94653b996052cd94be0cdd011",
+      "mode": "lf-text"
+    },
+    "Agent/sim/demand.py": {
+      "sha256": "a00aae285f9509c232f68b6d1af63fd03ccde457473fd66fbd69582e1e836f28",
+      "mode": "lf-text"
+    },
+    "Agent/sim/des_engine.py": {
+      "sha256": "ff5291cb4e7a182d458461c6e2567baa29257f28199c8c5d933b71078f887f65",
+      "mode": "lf-text"
+    },
+    "Agent/sim/extract_map.py": {
+      "sha256": "815bad5c8af3d107be96edb131cf54e83585535b86d86e98ed79cd62bad061df",
+      "mode": "lf-text"
+    },
+    "Agent/sim/map_layout.py": {
+      "sha256": "8d9ec147721b6dee51bb5db96999120ca089bde5972c14883f1852072140949a",
+      "mode": "lf-text"
+    },
+    "Agent/sim/members_gen.py": {
+      "sha256": "ca3d12ff0eb18e4c7ab0784fffd0d69932c02b3f39270dcde4f52a2a3c06ce69",
+      "mode": "lf-text"
+    },
+    "Agent/sim/mode1.py": {
+      "sha256": "dc5e99044e197f9d0bb8bac7ae1e24a89e548d5cf6a678f48deb52ab2f5d16b6",
+      "mode": "lf-text"
+    },
+    "Agent/sim/mode2.py": {
+      "sha256": "a2002f273178cfe4e94dd89e64aeb02ce0e32eff460d5432263caa0105b57bf4",
+      "mode": "lf-text"
+    },
+    "Agent/sim/out/members_seed.sql": {
+      "sha256": "df3120719cff64fd19cd3ea050e7cb25466a02ebe0d374eb4c41acc89c1b3036",
+      "mode": "lf-text"
+    },
+    "Agent/sim/out/mode1/stock_sync.sql": {
+      "sha256": "aad626de88655fcf06d9e5c6bef6c6443beb3cdae698de9928877b4acbc78b6f",
+      "mode": "lf-text"
+    },
+    "Agent/sim/out/wishlist_seed.sql": {
+      "sha256": "645e99ff2cfb01f0aa5407b6358ff60730b45855fd4c6f01ee6ba23b16029a76",
+      "mode": "lf-text"
+    },
+    "Agent/sim/out/world_seed.sql": {
+      "sha256": "a0829c27adb1cefb31f0221b7aa307fbfb4edd12964046762b6478786b405239",
+      "mode": "lf-text"
+    },
+    "Agent/sim/params.py": {
+      "sha256": "570d1427650b436e431fd048873d112540c3e0dd18f7e2eb9acd742e0b5eae64",
+      "mode": "lf-text"
+    },
+    "Agent/sim/rebuild_world.py": {
+      "sha256": "4aa1adcb7524ab97506128c062d441748a9d4ad8444e3d675a777c251cb40a77",
+      "mode": "lf-text"
+    },
+    "Agent/sim/replenish.py": {
+      "sha256": "b4e0acc892dd3461ef582f2dcc28547d0b412b22e49db12400c485f03bbc7941",
+      "mode": "lf-text"
+    },
+    "Agent/sim/test_rack_layout.py": {
+      "sha256": "8df71ea5e4316150581df3bbcaa1fcf3f0566b9f58d327c3e5e26ba2bc548a5d",
+      "mode": "lf-text"
+    },
+    "Agent/sim/verify_history.py": {
+      "sha256": "b63761eb7a14c54fa4bea196320610b50d3c2e75b1ccc51fa2ac7a0528f214c3",
+      "mode": "lf-text"
+    },
+    "Agent/sim/verify_members.sql": {
+      "sha256": "5cb74921f1e775fbbefb1eba1fd6882f9332e6e6132dba6602c9628938c92714",
+      "mode": "lf-text"
+    },
+    "Agent/sim/verify_world.sql": {
+      "sha256": "279d42e724f14408cf90929b9d2a851d5e87a2b7e383cb703180f80945372abc",
+      "mode": "lf-text"
+    },
+    "Agent/sim/wishlist_gen.py": {
+      "sha256": "e4a517940ac21c5740bc459e92ad90dbfaaa9ef205d651be7971591daab38925",
+      "mode": "lf-text"
+    },
+    "Agent/sim/world_gen.py": {
+      "sha256": "2ffb78c5747cb24fba664e12ccb9cfa12662aa85214eda85d77b56b06b84efdd",
+      "mode": "lf-text"
+    },
+    "Agent/sse_check.py": {
+      "sha256": "6f53e7d850fcf731e5b409e29c442b7ff9c525b5baa06aebd0e61da552897edc",
+      "mode": "lf-text"
+    },
+    "Agent/tool_check.py": {
+      "sha256": "ef93ce639307298b0420f00466d9a9ae5d43677183b612611ed68a08686015f4",
+      "mode": "lf-text"
+    },
+    "Backend/.gitignore": {
+      "sha256": "4bcbeec047c3d29bd57e3d088dc3b94ec048460af73345d8e7de4f6ffb4acb06",
+      "mode": "lf-text"
+    },
+    "Backend/build.gradle": {
+      "sha256": "b00732fd342fdb2649c4d49180a3f76c91744c4545320d06cd7e56dda0b72e89",
+      "mode": "lf-text"
+    },
+    "Backend/config/db.js": {
+      "sha256": "db6a023abf8b9c1f3af07353386099a6de74731525da0d2fba4182b72e0eb27f",
+      "mode": "lf-text"
+    },
+    "Backend/docker-compose.yml": {
+      "sha256": "e9f254ba263e05122615cf67db3a860e789cf16de2b674ca0af6bec641a1f4a9",
+      "mode": "lf-text"
+    },
+    "Backend/gradle/wrapper/gradle-wrapper.jar": {
+      "sha256": "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7",
+      "mode": "bytes"
+    },
+    "Backend/gradle/wrapper/gradle-wrapper.properties": {
+      "sha256": "e0846bd420bf1543f500e0c9b35c01d84611b0f1afe01e24a82d0eca53c33ccb",
+      "mode": "lf-text"
+    },
+    "Backend/gradlew": {
+      "sha256": "ab5c0cad16305af2e619c159c1f58dd68d07fab9c11e36701e109c0277407f7a",
+      "mode": "lf-text"
+    },
+    "Backend/gradlew.bat": {
+      "sha256": "5c0a21ecd6b3a6292e0746bff3b75fd2d8f47b9ff226ce53dc22b30184ef3bec",
+      "mode": "lf-text"
+    },
+    "Backend/package-lock.json": {
+      "sha256": "9ee8b051ca78d5053998ab6e8d432a41b1a382d52831ed0223aa8f4120510254",
+      "mode": "lf-text"
+    },
+    "Backend/package.json": {
+      "sha256": "87b5f1c62e1ed7a8e8ce325ed0fc36c4e80f311bf49f88f65720f10b7decc6ea",
+      "mode": "lf-text"
+    },
+    "Backend/settings.gradle": {
+      "sha256": "2654d5c7d55f84e89dcd6b88453d777c82e7bb439a10d7c64fefeb59d1b4f317",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/StoreflowBackendApplication.java": {
+      "sha256": "f538739605bce1257f12a41485416d09a5015cbd6417067f42a11ba397028967",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/ai/controller/AiProxyController.java": {
+      "sha256": "39a8164a7b4922bf89c040e61ff97d922ecc08ce626b69e7abd2af35f938f30b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/controller/CartController.java": {
+      "sha256": "19f79fe7c67c817878b372f8cdbe06f3663e1f40f0b75f4fbfa78e5e4589b99c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/controller/InternalCartController.java": {
+      "sha256": "1df91a1df02e119319dcd7b1eebc56c9e1b7bae6b5d1fca15e0be24f5a645d5b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/AddCartItemRequest.java": {
+      "sha256": "e775213ca955c153907273f0cb97aff3ee19bb534e717749f679f64cf4a7e485",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/CartGroupResponse.java": {
+      "sha256": "a74442af3113bdf301aaa16bf296b55bd3426bee84aa170b19ea28d67be466a1",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/CartItemResponse.java": {
+      "sha256": "05db039c2757276d04b18b404bdf85309fc5bb5ffa720cd1a90c02a96e7f6e7f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/CreateCartGroupRequest.java": {
+      "sha256": "0d96167b34a0a161f8950a1941217bfb47b46a1baee140784b70483c454db6dd",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/InternalCartRequest.java": {
+      "sha256": "c3e2caa2ed6b581407332d141385a2baaa2d38d7728c7c9604fd18e4d1456954",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/MigrateGuestCartRequest.java": {
+      "sha256": "537d79477b29da0a01dd8ba9fd8e0cf5fea36ddf9ab21135041f184fc8bccdb1",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/SessionCartItemResponse.java": {
+      "sha256": "f3232cedefae6741b0336bc7c87e90340541ff2149d531eaa9c8b093ae0f7a2a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/SessionCartResponse.java": {
+      "sha256": "8b850869f5ac79c6e7d6fdc3aad5c52d319987111613d364dd25ef1c938ae4c3",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/UpdateCartGroupRequest.java": {
+      "sha256": "d4fc501c751899d5b83e1a623db405971a50e523361699cf68e983c3efcd886e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/dto/UpdateCartItemRequest.java": {
+      "sha256": "58d447f1c450c02aa6cda5f490de1f3e6721ce0bc1a45a4403b0b3ec94bedc16",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/entity/CartGroup.java": {
+      "sha256": "434b6f6e34776e5a748427f15c797b406f3155cd2b24e5f00bf15bf6e3b58485",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/entity/CartItem.java": {
+      "sha256": "81e2004b52376c536e0ea77568aac5fd4ed90a17900d7bd1f07c0cc648bc2576",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/repository/CartGroupRepository.java": {
+      "sha256": "7b551b826ec1c7f731c54b0479f8ebb697f40e3c9948e37670512b75256b261d",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/repository/CartItemRepository.java": {
+      "sha256": "2a64e53f754b30f27954368ff68433432f04ffc42122f2e3907cce9d012f4c9f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/cart/service/CartService.java": {
+      "sha256": "46bb610700f2c1c1637a51edc81dca74d2c86aa6eed6e8515e0202f3aba202d0",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/config/ObjectStorageConfig.java": {
+      "sha256": "cb8778d7016d7d06e1ea3f34f20ec79b805fa784c4a09df78ad87a0690b30264",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/controller/ChatAttachmentController.java": {
+      "sha256": "b30f5db6f73ecd7c72de29e7a831356f6a45b71ddbc20a028a81f218cc3fd7ba",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/controller/ChatController.java": {
+      "sha256": "d8f0e27c6192c14ee7a0932bca99211cce8fa16c32e7dce34afed575c284ccab",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/controller/InternalChatController.java": {
+      "sha256": "2bf4dcf58d662c567a723b0b3c01c3ee41de78e5030760caa11e36c6e1fff577",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/AgentChatRequest.java": {
+      "sha256": "e979ea422dc7f0b06591ebe1fe26c462e168f2b99bee6a83a9e92bca9bab7f99",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/AgentChatResponse.java": {
+      "sha256": "ed5497fc614eb2db3f69ff60170c23e73e6c35d38e28c245f1ef114c01e632d0",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ChatAttachmentResponse.java": {
+      "sha256": "48ca42882875e5be559281d58810583f217c13e5b8634757a719b5ddfb18461f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ChatMessageResponse.java": {
+      "sha256": "4c08aa4c0f836145a55c056d573df1b6e05dab0f28c0d00efc22ecbcfc40ce9e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ChatRequest.java": {
+      "sha256": "6a8f9416438fc545e972483e046a915453a38d8c2986f0010b4df12c9310a696",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ChatResponse.java": {
+      "sha256": "71723084e009a6c2bbe5821e79647ca5b267028369361d174919c278fd813bf8",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ChatSearchResultResponse.java": {
+      "sha256": "6441373e593c53c351955a9d693c04b21c3296e0a5e37d16dc117bd3083af71c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ChatSessionResponse.java": {
+      "sha256": "09cd6ea4fec05dab48409d6f8fe56d1b55d4ed6f9bb0da44e0f01540e2bda03a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/CreateChatSessionRequest.java": {
+      "sha256": "e26f8eb3d24129e82327739bc450bde569148db556d08d2038f7bc0df3a469c2",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/GuestCartContext.java": {
+      "sha256": "9d6728c3969c2b3944027dfedcd61b8b4246ba29ca39fcba5acad3aeb0b34254",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/ProactiveMessageRequest.java": {
+      "sha256": "72dc380b591a07da8d3bb6b0840f651e8a468a4a94abc2538524aa041a66fc72",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/dto/UpdateChatSessionRequest.java": {
+      "sha256": "cd813506d8d30e201ce78d4d6818ac8a308adbe84413670ade897a631ee12705",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/entity/ChatAttachment.java": {
+      "sha256": "ad896633ac6bdc3d131152d5ceca0633eaae6e9475b78901761834e081253bdf",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/entity/ChatAttachmentType.java": {
+      "sha256": "307807e802823b9d01e347c0a98e3dd2879707bcf48ae5fa328a9adebe5e3bb9",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/entity/ChatMessage.java": {
+      "sha256": "d538ba3aabc6f60c8b75a4c73f998c5954e3a1ac8492e59866013db6e39b7454",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/entity/ChatSession.java": {
+      "sha256": "4353744d4ceae0f148cafa04f2b6b7a6baa7609809362526a1c01ecbc53f69c1",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/repository/ChatAttachmentRepository.java": {
+      "sha256": "a5500bc986edfc0bf9b1386e2c057c54fd9f998334bb5c0fcf75a0b5f9a7e808",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/repository/ChatMessageRepository.java": {
+      "sha256": "57d4f800c619fa5925dd6b0d04c8fc4900d4843328d248a85e2f6df303990f0c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/repository/ChatSessionRepository.java": {
+      "sha256": "373f2b936d57ca529c83dc77f72867da3543fe4bb548c158bee4cef92fae011a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/service/ChatAttachmentService.java": {
+      "sha256": "30d4d365e2ddc6258b5def40c592b6afbbdb47c191dcb846186d033a76fafe41",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/service/ChatService.java": {
+      "sha256": "91a32d2b45d94a5c8e85b8becde841ab8120cf02636837167058207d4d7287bf",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/chat/service/ObjectStorageService.java": {
+      "sha256": "e89a3cecd7d8dcb3b900e13d3f77ccb2a2ade47f979c625981985c1036556536",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/controller/ConsumerController.java": {
+      "sha256": "a02ac971bfdb8266fc187265b4fccf95a21c07ee6d9fd332257a0f2a8495d3a7",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/ConsumerMeResponse.java": {
+      "sha256": "9021bb57a062d3c176e1c8c260fa6dd278898965027963e1a890eba152957a05",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/LoginRequest.java": {
+      "sha256": "4c16b9cc62d872aa8f28f55b27948d5a61395f48f480b1415c555ef6e2629b66",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/LoginResponse.java": {
+      "sha256": "e4ec97e0debd5e1de4267a07132174a3be1250a5c31edd6356660575042f5b9c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/RegistrationCheckRequest.java": {
+      "sha256": "aa9418548ac390acd79635423d9a5622b8129a222c0ae8ac2432f220451bfcc3",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/RegistrationStatusResponse.java": {
+      "sha256": "d4b5365dd17937f8ddb3d274face3fb322923ddf4f7cec40fa8a096096b927a4",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/ResetPasswordRequest.java": {
+      "sha256": "3a8a7d289be36569bb256483085f435bc0fbe757fab2237edad319a407249627",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/SignupRequest.java": {
+      "sha256": "e8fd12bf73684ffc3f3bbf7b5bd2b2bf2a72570c54424734189aceecc679f09e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/dto/UpdateConsumerRequest.java": {
+      "sha256": "97fe40f5ae99730f1d93c6aa98b7f73247a32600e0633344b349f9b15ff98847",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/entity/Consumer.java": {
+      "sha256": "dbb8bbbd936657ff74dfda812d22e843d96da54d3772fee0b9e4ef8c02a509f2",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/entity/Grade.java": {
+      "sha256": "c31a11a0278bf6953d1508f4841b6794be632934b3b5e9327b9bc736145bfe6e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/entity/Member.java": {
+      "sha256": "8678350928cf91e73bd979aab82e8f083b3df23550a9b61e794b49322bae7b32",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/exception/InvalidCredentialsException.java": {
+      "sha256": "3364ec76615fae295731dbb9ea7d341470f2e495f42c682ba9e05868fdbc85e3",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/exception/MemberNotFoundException.java": {
+      "sha256": "cd0118d468be7757cd77f9c3bc7627a101294c7cf5f123e96c850967cfd58363",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/repository/ConsumerRepository.java": {
+      "sha256": "9fed2f5d530b24b69af88f97622017de9f4991571819293f63238b8caa49437d",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/repository/MemberRepository.java": {
+      "sha256": "b6fb1d1ceac9f7a10bed9119b179de0d270d2b253b6ed8b71cb5c172a695d85a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/scheduler/GradeResetScheduler.java": {
+      "sha256": "c07d87bb4b078b461ca94154e9c7e2bc25d0161eaac7bf03e383b505193ae464",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/consumer/service/ConsumerService.java": {
+      "sha256": "684fc62ff4ede43d15192c87831acdccae242e365e4fc67c8057e680b95eb628",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/demo/GoldenDemoController.java": {
+      "sha256": "971a579fae7a2e247aadf4b1b3e40cdead18bf531ac758f4f60dac07684b1554",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/demo/GoldenDemoPlan.java": {
+      "sha256": "ed36a0dfbfa509cf06645509c4113737c62af4985e930808462ece549e814994",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/demo/GoldenReminderScheduler.java": {
+      "sha256": "d9e7f1d6eb0873805ba7111f9f944b7e82236db7e5736339c76b4e72bfe582e5",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/demo/SimulationRestockController.java": {
+      "sha256": "2e3ddbc2352c7cffa01be16fa3329efef6327e2e2387dbf3bcc61d7dbbe963bf",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/config/CacheConfig.java": {
+      "sha256": "6333334978e560ed7780ac1c5f9f950ce33529e9883372845eaf26c58619c4f7",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/config/CorsConfig.java": {
+      "sha256": "639a69738942b9ca72cd1df09e06e26514172a0fb1d878fedfb72b8e799fbf91",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/config/PasswordEncoderConfig.java": {
+      "sha256": "32a3cb3a7ab1cb445b1d39be0d7eff0d23191088fca9eeab58555ff1f1cf9d12",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/config/RestTemplateConfig.java": {
+      "sha256": "70cd4aec81bfac49ac00dc55714e43a710e89aff345f883a4f813177ffd1d769",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/config/TestAccountSeeder.java": {
+      "sha256": "3ef3331cb3ecfdd08dcaf4adb24f203792a6fe6e704d70b8640f928d69fdefb1",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/config/WebMvcConfig.java": {
+      "sha256": "493fe157d85edf2439f8cd4214c1ac422bf645c8266710325b210ebd7150be8e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/exception/AuthExceptionHandler.java": {
+      "sha256": "197e1d2b03defe27014ec8ce210ef69bf01b2a3f80c7caf5b53d486b7f193d6b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/exception/GlobalExceptionHandler.java": {
+      "sha256": "ee40bfbc8c0a3d93cabfe9eda5a722e2e79173a29d7e9366319a2eec897ff32f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/exception/VerificationExceptionHandler.java": {
+      "sha256": "71ef975df7e72e8c4ca4eea3c4217dbc9ae8b13bd7cfab95a02f3f1eb16367ab",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/internal/InternalServiceAuth.java": {
+      "sha256": "bb6e1b6a53d17b6f4fbc294cf27ff6ba77771db9a302ebf53b8ab2333919b871",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/jwt/ConsumerJwtUtil.java": {
+      "sha256": "b83ab1d6bd788a5e365ad6162b7f48818a689598a3876a9a7f2406d0446a6ba9",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/security/CurrentConsumer.java": {
+      "sha256": "766fc8dbcbe3fc72c9664b09380691dd64ee11faae73c8498b6b88db53fcfb4f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/security/CurrentConsumerArgumentResolver.java": {
+      "sha256": "8c81c728ef5b7793957c5c1aeff6fed8502119b2af3abd9127eca25bbb2cee55",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/global/security/MissingOrInvalidTokenException.java": {
+      "sha256": "c589f91d311c12ca58f479dce80b2a8ffa9e23a24648eeeb78681950c83570b0",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/ChangeEventController.java": {
+      "sha256": "d3fe22c8e267a615ab07ff3a043f8e5d0609a9884e60cd209e902873f6912c32",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/ConsumerEventController.java": {
+      "sha256": "a0db34860101a50be24887c5ddc0f0a147d05a5d437193f6066e7e9a74e3cb87",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/FloorInventoryController.java": {
+      "sha256": "c61baef79cec8a8823186f18d8635de6fe0736a8349135c2763372b1bf47842f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/InternalEventController.java": {
+      "sha256": "7947f66a640647845445d876565ef4f82aa77346817790574215891e8c4dc660",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/InternalReplenishmentController.java": {
+      "sha256": "f5a4c7b1ca93a89aa3224a2177d1f9e2efad8525d546aef36a6968793a7a9c01",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/InventoryBatchController.java": {
+      "sha256": "1d2e493f0d5e2a7494ec395da88a250a799660006a57f9a916d1319fd5fb564f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/InventoryController.java": {
+      "sha256": "95dd574e99745e4c36d8bb6849bdaaa8995c46d6c7692768faeb471d2faedf68",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/LocationController.java": {
+      "sha256": "b76f5c71d3c264e6fb7e3c95f4c61bc9c7d8b05819a3f5c7a147a993bdf1be0b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/controller/MapController.java": {
+      "sha256": "771070587961afc3f07887772bc15ef03d08909af680d88076333ac25c3bdcf1",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/BelowParTimestamp.java": {
+      "sha256": "e3a2590b0b1407e7d206ef9f47c1ff001c99356d6a6244b3ccda748b3c580dbb",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/ChangeEventResponse.java": {
+      "sha256": "76d3a1e86fa3f22959e5e89bd553e50d4ba014fe55e9ea8a837d9ef051345c5c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/FloorMapResponse.java": {
+      "sha256": "714b5a1b13fc8cf629f2b8d34b447bf9e24d0a15d704e4606440b5a5d7fc5706",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/InventoryItemResponse.java": {
+      "sha256": "df74c1812e03f8c0383b2ddd34d1221314f580902ae5f7d4d045f294bbafe2a5",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/LocationProductResponse.java": {
+      "sha256": "7378b3d696d69bbb1e799f6de4e52d471d04a89dda2cb2c1dcb07577464ea535",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/LocationResponse.java": {
+      "sha256": "2432655908227ff5d96ea305b4f0dfa40d234fb5c626b363c275940dca719fbe",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/LowStockLocationResponse.java": {
+      "sha256": "ee0ae14bf86dd1fcdb77fa6de5f996867fec725136f82dd1b10c1d98136f23fe",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/MapCellResponse.java": {
+      "sha256": "11814653a3b09789764a8e1d686d1596c8e2729e51980d88e714e78a7e2cc27c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/PendingReplenishmentResponse.java": {
+      "sha256": "c96f03160b6e27497440f138f355c13f275394a2ceb99be30dbfeabec639a085",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/PendingReplenishmentRow.java": {
+      "sha256": "5e7c0b990fbf1ba38338719cb4f77e007d3d75d296b0f781fed06b4df07a9b50",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/WorldHealthResponse.java": {
+      "sha256": "36c59a2ccdcbd85724839ef8a7153ef424b45160b892ac810fdbea0916e4e569",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/dto/ZoneMapResponse.java": {
+      "sha256": "88782b6ba733e8da8320e689ee6a4facc2c5dde550dfeafc89f4f1f49c9a3fb0",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/ConsumerEvent.java": {
+      "sha256": "fb283734f1de1144c713c718cff4422ae9168c9187120a53eceb3a487c2e5269",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/Location.java": {
+      "sha256": "02a0cb1ba4d594c4f5983d819bce46490cc677717fd98ae48b5b5ebe571be502",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/MapCell.java": {
+      "sha256": "17df8a8e13240813645e7548bc82e47e3d6ce3b65254c25282b8508cbf68703c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/ShelfConfig.java": {
+      "sha256": "81c264db6d65385a906e29a35dde45031bf0b14adbaf8612606ccfc780bace44",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/ShelfEvent.java": {
+      "sha256": "5e2f60c1b2b66a575d0641f82cc25b6d5cf87d2eefb6ab6e274eb28fdf5cb14a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/Stock.java": {
+      "sha256": "63ef5284e66ed6108b28bab6f9251c4871fb8210dbda0520f4893dd62614e43c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/entity/Zone.java": {
+      "sha256": "cfd0b4c8458e8c3217dfe5173826866a38fa368d0e6b41e0df87677935160a17",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/ConsumerEventRepository.java": {
+      "sha256": "cab416beed3755336b272a652d7b188b84ac6f35e6bde48ec6546b2fdbf24a5a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/LocationRepository.java": {
+      "sha256": "cc7e2934b802fb8ddb42636561b0062d4e69bb30229fd2d5e6dcf5e9439e5439",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/MapCellRepository.java": {
+      "sha256": "0c6a2b4245e33bd033dab072c1a74e8586113d90aca1abd319de2ee1500bd61d",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/ShelfConfigRepository.java": {
+      "sha256": "385c6db440b60c8c975c58174284b46787367ee2719bdc85dbe7a7acadfa1f6b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/ShelfEventRepository.java": {
+      "sha256": "36452d5ae0949898b9d113d3b97ff8b55713561499809c739314e52f5c7c103f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/StockRepository.java": {
+      "sha256": "2eb2d90adaad3fac5dcbef1b41d13773f1858addae7f96c680df718417a0d72e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/repository/ZoneRepository.java": {
+      "sha256": "69b2ea12e3ae56f02128d3ec4883d57789aa22d62db1441bba22865d408114b4",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/service/ConsumerEventService.java": {
+      "sha256": "bad1f49a7c604390e1611246f03320e6c36d1d08642df98952348c215972b8bc",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/service/InventoryService.java": {
+      "sha256": "3aebadfaeeac8efe5347fd6fbbe224b53c419eca62fba208dca7e087b671d6c4",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/inventory/service/MapService.java": {
+      "sha256": "177a7460e06d9d624cc468fa4627c4a90f214210fe00c3974eb1454ae38a0e90",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/controller/InternalNavigationController.java": {
+      "sha256": "1c9a6057f05c43eb0b20146e938712825c84c59a88769d33bb567ead00ff2458",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/controller/NavigationController.java": {
+      "sha256": "1ea963844bf4a1554609a50d2d9f5d4b593031d4a47d17749a2d25019e6905eb",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/controller/RouteController.java": {
+      "sha256": "67bc5d6a6dfd7d0374cb541656525625b3e305220f44daeaf0d68a86f40d7e3b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/NavigationRequest.java": {
+      "sha256": "d9e444efa1dd0025829d1481facf9f7b83b0cb09698b676b5307e03d262a2b85",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/NavigationResponse.java": {
+      "sha256": "109e2fac8b28d7a4c45a6cb2df2dd8dfd91f17b3b75af7d24718da83e11b0925",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/PathPointResponse.java": {
+      "sha256": "2367f1f9e4820bf8dabc58b71cb752ccba8e524c72e0ba808829dbbb44ed9db0",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/RouteLegResponse.java": {
+      "sha256": "5e310a9b38c0dab5cec5574ec2ffaa6bbd9a65fe69a859220f1dac5991d09ad3",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/RouteRequest.java": {
+      "sha256": "937ce016ddf1abbc41b68ac9261b12c2d944cf2808048c0deb0f2bbad0820f46",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/RouteResponse.java": {
+      "sha256": "17c68235ff077aeed601ce2b6d998710519106107034743beed6be3bea84d352",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/dto/RouteStopRequest.java": {
+      "sha256": "0a1c57e6c45d8a48532731e377786d8013a65d8719c2206c23babdd332160663",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/model/GridKey.java": {
+      "sha256": "050ab45d286e5db1e931ff7989fe12723b6ff40e7db086048df3a2c2ebcdc803",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/model/NavigationGraph.java": {
+      "sha256": "a2a06172ed1f75afc8deffa447b18212b9b40ca9be87c8dce3958270a8771713",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/service/AStarPathfinder.java": {
+      "sha256": "e5c76913de70d0477c07cee53cbf5995cc41d7c358ccf02eb364ea6b155b6082",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/service/CartRouteService.java": {
+      "sha256": "487e8c432915c85b39a9a427c8a2275e7ea3d07722989fac543b2645ed2ab386",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/service/NavigationGraphCache.java": {
+      "sha256": "4452a8a139b39839d7f65f39233cc5fff497703b075907b2296389db84f10793",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/navigation/service/NavigationService.java": {
+      "sha256": "55d8dd7e4c6c08909d6d4290de99d702a9a62b6544694e9feccc4ebe6af195ba",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/controller/NotificationController.java": {
+      "sha256": "d3957e8bdbd3ed26af78e976cef287eeeb0c4a1ce23cde1f2fa4f965d4e63d0e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/controller/NotificationSettingController.java": {
+      "sha256": "d83b8343c15f1996052dbb0c77614a0ff3307c43af5d86375949f6f24c0bb1cb",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/dto/NotificationResponse.java": {
+      "sha256": "52bf6a946620ce04e72b2a5255b8b6b9c2f8763bf9fb22eddec6d0f9635e0b08",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/dto/NotificationSettingResponse.java": {
+      "sha256": "36318a7604deb2ada6598ce5d492dc18484abb46006c6bcb660ff6ed3080d544",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/dto/UpdateNotificationSettingRequest.java": {
+      "sha256": "ca6bf410f59dfb8734a719b7b4a69af39cea59dcf74809e0debf10515bb17412",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/entity/Notification.java": {
+      "sha256": "094c79a8ff66a66d3dc3d855bed07a8d2c881591b89b3bcd772feda266e6f66f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/entity/NotificationSetting.java": {
+      "sha256": "38f2f403007a09e7418720ef884d21f7520bdc97934b7a162df91147d569c342",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/repository/NotificationRepository.java": {
+      "sha256": "8875b9e7b80e7ae5de1007c9603d0f2f9c0508a989db13dcdbabba4ac0ca0fca",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/repository/NotificationSettingRepository.java": {
+      "sha256": "4840d9f93c7e3614743611d4948ec1ae5e70ee2bce540b2c075081ee5073241b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/service/NotificationService.java": {
+      "sha256": "c0b0264afc57bc728ba0fa20295d4eb8733a78e9e26e0e6542b42404e89dc62d",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/notification/service/NotificationSettingService.java": {
+      "sha256": "f8a65364a1e3cf7b7ab565d4417f03f450a896edca63d365ff5a20be82d81576",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/controller/InternalOrderController.java": {
+      "sha256": "0044574a54e04ce85d3bc47a947852599a7f3a87a312d3786f408df077b52fd5",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/controller/OrderController.java": {
+      "sha256": "c4325ee6a741120964a5ad073a5299dabcb77d367fe81d7a89a646b944eb63f7",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/dto/FrequentPurchaseResponse.java": {
+      "sha256": "49e3f1ccc4e98b87fc7b2bf290bdc21a35d7dfe73aa90ebb7160ae8e7ab53adb",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/dto/OrderResponse.java": {
+      "sha256": "79b42c4fd0776ca665ae536311b6a21be23c3a4ea0d76ea3bd222bab102eb2df",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/entity/Order.java": {
+      "sha256": "cad7294d318462e5952e419b0d1297055aa8d5544bb3f4b375cdabed1e82ac97",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/entity/OrderItem.java": {
+      "sha256": "208f054f6abc2997974dfe9368a25839b935d6f42c8d41750976a90db9890c4a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/repository/FrequentPurchaseProjection.java": {
+      "sha256": "f9f44d912759d6798feec483dc5643d149e4bb70a989d8928446d33f17578989",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/repository/OrderRepository.java": {
+      "sha256": "d84e2a4d13b6d6b7c7197c772bd70d04721b9767c787c3b911256da0c1d4c681",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/order/service/OrderService.java": {
+      "sha256": "623aa6562f8121b74d3c4b7e2658b2e44e635bc2d79f48a7d67b62e5e8d369a4",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/point/controller/PointController.java": {
+      "sha256": "407eeaaa0761358252d39469c280fde926944fdca0ff0437118b087c23ebb74a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/point/dto/PointTransactionResponse.java": {
+      "sha256": "64cc41586a809f72662614f9ba45d0556b0da61be6061b1a77a675683de10afe",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/point/entity/PointTransaction.java": {
+      "sha256": "a5fdae34b9590ee05aac14106b4ccc4d75029315be92527d014d97ece2b7790f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/point/entity/PointTransactionType.java": {
+      "sha256": "b52e095bdabe5a234a674321fd3a211f6b639b5fcbdd45ce2f4d9c5cc589e83e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/point/repository/PointTransactionRepository.java": {
+      "sha256": "5b3bc12cf043c99f79ffd9a5efe2d0e2b5708502c1bccf4d654705053694d14f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/point/service/PointService.java": {
+      "sha256": "21d03617ebb128f32536b09dcb71060700b91ed04c4b17d277d1fcfbc17df292",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/controller/ProductController.java": {
+      "sha256": "a0f892220802d13f797ab0430f72f9eb9ecb7dd02d83e470d6c73f0efe988a57",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/dto/AlternativesResponse.java": {
+      "sha256": "99b2da90a136112cb0ccec539417884d693c2bca6c92f35e81c6776ae5faa7dd",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/dto/ProductDetailResponse.java": {
+      "sha256": "7bfbaa3cfdfda3d7963524ed253db06c0d2e2e32f5682b8aa372d73c7e6a0bc3",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/dto/ProductSearchResponse.java": {
+      "sha256": "8454e763d7e2da95b707c00b74767a9a300562236ddf8cbe0dfacc9fea805ca6",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/entity/Product.java": {
+      "sha256": "0934b2541af8f4ce82ebf324232a0e8f1676f2a1d377a8c25bd3843e0caf25bc",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/repository/ProductRepository.java": {
+      "sha256": "2dc5e5e2722e004e252448714c017cf21d987ccba4067f50040ecf29b6ccbf7e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/product/service/ProductSearchService.java": {
+      "sha256": "9e5eece75ec7cdcdd6214859f5c1dfa684b183bbae9af2eacf62b71a5df7bc77",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/promotion/entity/Promotion.java": {
+      "sha256": "954568a3cdad2764856d73366b04b38c038c6ead034e8a0b99a937c2f1a5bc2f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/promotion/repository/PromotionRepository.java": {
+      "sha256": "130107b9702e1ff10016458d42b2f367cb2e99bb56c29b7eac5a6c3ea7d09831",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/promotion/scheduler/PromotionNotificationScheduler.java": {
+      "sha256": "3862e5db444d86187ce32e83763c0816b86098c153b7482b3f575f5c9615aeb2",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/controller/InternalProductMetricsController.java": {
+      "sha256": "30b05b796edb292b50623cdcf3c11c22d17b5a7a90ddddc2dc089452199f56da",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/controller/InternalPurchaseController.java": {
+      "sha256": "c557be69401c90b20119265722f2379bcc1ba16971c1fd6b32e296aeeee75dff",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/controller/PurchaseController.java": {
+      "sha256": "917340de165c73e4c9938ca9dc29fa5dda8d46a5fbac0926ade381787a613c57",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/dto/CategoryPreferenceResponse.java": {
+      "sha256": "54af48bc16ccce16864bddb04803ddbed44b513212ba5849c05148bc817ae4d2",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/dto/ProductMetricsResponse.java": {
+      "sha256": "b05546d645676b8e7aff17d85b94cd7b214321495d843643b4bd7f1484bff69e",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/dto/ProductPopularityResponse.java": {
+      "sha256": "f1e39dbe1d439b48f5e0dc4cac153f08176e3156876b2d7da1059ed9220ac175",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/dto/PurchaseHistoryResponse.java": {
+      "sha256": "f63f7553ecfa1a7ed1149f44429d73991d77f6e55c66421df778f385992cfee4",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/entity/Purchase.java": {
+      "sha256": "67b7558c65ac9394e50c5d532ce89f419881b5d03a1419ee8684b7dbd1cdaf5d",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/repository/PurchaseRepository.java": {
+      "sha256": "bdacbbd0ae13b1a30c44f6598cb1061e7046d3c8475b8018141edb8d14d2503b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/service/ProductMetricsService.java": {
+      "sha256": "eb0e1094b8f02dfe58d1543a22035f058525b2ab79325b9756a4ec29c14517e6",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/purchase/service/PurchaseService.java": {
+      "sha256": "fa1442ee8ed7975812bfe966e65bb369af7744bee7c3a3f05ce64ee29ca2814f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/realtime/controller/AgentEventStreamController.java": {
+      "sha256": "42ea9ff842025a948110c8fc6e0fcb72e7468ba48d713ef3d12fa772374dfeed",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/realtime/controller/RealtimeController.java": {
+      "sha256": "2aac44c92cf1089d99b41fc642830d40cc45cd872c8dab67e457b34389685378",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/realtime/service/EventBroadcastService.java": {
+      "sha256": "17ed135c74e619e27f81526eaaf80bded2e8aa9d702a67b0832c04aa90a81c8f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/dto/MessageResponse.java": {
+      "sha256": "1e344fab8fefbcb740673486e6df2afe46893e61f821825ae16cdd6516e32956",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/dto/SendCodeRequest.java": {
+      "sha256": "fde55ea0ee4de76983920fd9530a01e352722fadcafeb16605d4bc893fa42733",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/dto/VerifyCodeRequest.java": {
+      "sha256": "734ead52b70c8f5f77ecc9dd91adb579a6f4761d9b1c5ac1e110e83fc31d7f37",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/entity/PhoneVerification.java": {
+      "sha256": "0da8081da387dd3dfd11718b7ee7f69fcdfd00251e8cf06c6bcf109ff058b352",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/entity/VerificationPurpose.java": {
+      "sha256": "0059e9b5377a586c44916ddfdd9a8d627f91bf4c3c7c7dccbdac44c0fdbfb282",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/exception/ResendTooSoonException.java": {
+      "sha256": "363e498421ba3d73c2bce2001aabce2ed2e42b3e379b2cfc3c1bb3945368b73a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/exception/VerificationCodeExpiredException.java": {
+      "sha256": "a36ba1ec4771275cc832a2310c46f0ddd6558389773a2d143d2ad53c0bb9f7f8",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/exception/VerificationCodeInvalidException.java": {
+      "sha256": "ce8fbdbde795d78c9c3831cf6fcf3e3c6c9caacbd655afa7dc96c97a00d94530",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/exception/VerificationNotCompletedException.java": {
+      "sha256": "eba8ae8c0a2d3234885994d3f3597aec53163937381a57cec551193e8e3ffc3f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/repository/PhoneVerificationRepository.java": {
+      "sha256": "218a347249af38139a1895a8ea708ae41a2eb89f56c3f714b74a20fadb265d0a",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/service/NaverSensSmsSender.java": {
+      "sha256": "ed710891e18f579e59b54fbaff4a030b218095c9c45def12448e3b888d195a60",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/service/PhoneVerificationService.java": {
+      "sha256": "ba297f97ef1f83fb82a729a916f1f04eb53920a6f91034d06164a351d92f66d9",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/verification/service/SmsSender.java": {
+      "sha256": "954bfaad51f98f7591c26b722858df891de125bf4a5aa1d651476d64bb32760c",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/wishlist/controller/InternalWishlistController.java": {
+      "sha256": "db003effcaeca51f3d68a93d9d5b544b61556b57bc9d26bbb7f339c77e9b7f8f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/wishlist/controller/WishlistController.java": {
+      "sha256": "2c76a2d51a826b267d7e6eb02dc00ca5e2b9f6e2e200504fc3b92558076fb46f",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/wishlist/dto/WishlistItemResponse.java": {
+      "sha256": "3b8c883f455b339b30f745493578d011d1ef16df8ffa523db37742e93693b9ab",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/wishlist/entity/Wishlist.java": {
+      "sha256": "9759ef9bb74f308866fccf22844c7e1b404d6c61a3b137274f43269271d3f5be",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/wishlist/repository/WishlistRepository.java": {
+      "sha256": "1a6643292f8ac8bf8780b5cd839e0d215037033c4a26eff6f8ff169b60f5e71b",
+      "mode": "lf-text"
+    },
+    "Backend/src/main/java/com/storeflow/wishlist/service/WishlistService.java": {
+      "sha256": "8b6b08727cf8d0d592f3bf850bf532fb3b6d02de05aa6287d0e213226f69699d",
+      "mode": "lf-text"
+    },
+    "Backend/src/test/java/com/storeflow/demo/GoldenDemoWeekTest.java": {
+      "sha256": "e03665cde159bb19497903928dc3bd77b46afa874ecde0a55e8bd09375dc2d3e",
+      "mode": "lf-text"
+    },
+    "Backend/src/test/java/com/storeflow/demo/SimulationRestockTest.java": {
+      "sha256": "1fc0772a49f10f8cd476fa1333f1e0df558abcd53e65f113aabafc79b574197c",
+      "mode": "lf-text"
+    },
+    "Backend/src/test/java/com/storeflow/navigation/CartRouteExitTest.java": {
+      "sha256": "bb8ff9a37292b7c01914012377ed30bd22fc768259fff0057f572a899aaa66b9",
+      "mode": "lf-text"
+    },
+    "Backend/src/test/java/com/storeflow/navigation/ShoppingNavigationTest.java": {
+      "sha256": "b3e0b30a40f15a15b91eef1e44c5ad1c719cc084fa9d2e924ab08b5e9ef8cf1a",
+      "mode": "lf-text"
+    },
+    "Backend/src/test/java/com/storeflow/navigation/controller/NavigationCompatibilityTest.java": {
+      "sha256": "2e0160a72ad2891d61f17cf3ca2739db68aa6ab652c4fe724cb31d07398452df",
+      "mode": "lf-text"
+    },
+    "Backend/src/test/java/com/storeflow/order/ShoppingCheckoutTest.java": {
+      "sha256": "db57ff68d4e63bd4b2a889e9d3161f0f03b79555dd28c3eb3b5fca06325d0e6d",
+      "mode": "lf-text"
+    },
+    "Backend/testdb.tmp.js": {
+      "sha256": "9a304d6f1330f357203b35e36c843a42205ffac2da53fbbce00e5308b55a3188",
+      "mode": "lf-text"
+    },
+    "Simulation/.gitignore": {
+      "sha256": "877c8d36f5cd89e476c871a393f3a3d6e7e31dad722a6ad719a90cb6df001e9e",
+      "mode": "lf-text"
+    },
+    "Simulation/GameCanvas.tsx": {
+      "sha256": "97bac4f063b0eeb7cbe1cff2b5af74857d2ae1ff1845d9882ec40c421b482424",
+      "mode": "lf-text"
+    },
+    "Simulation/README.md": {
+      "sha256": "59a11419e69ac759b8b694de3bf68328c3dc230febc90e783bb2b21751433153",
+      "mode": "lf-text"
+    },
+    "Simulation/StoreScene.ts": {
+      "sha256": "f739d01e17974eebdeaf4d0d96a41bc5106c767d566d90fd4bbfc00514cca988",
+      "mode": "lf-text"
+    },
+    "Simulation/dbg_0_500ms.png": {
+      "sha256": "7037d342e7a6831477a618c8fdf7cda06e991468b09a7b998362f74c158223e0",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_1_1000ms.png": {
+      "sha256": "e72c926f7a6747fdb50785ff8befb8a1195073e3d1d792b828d18e12b2dde2ab",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_2_1500ms.png": {
+      "sha256": "d443a8ffbd14373434aa2b6ad6155b312d0753446691cdd75dbd65426406b9f0",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_3_2000ms.png": {
+      "sha256": "9c07d875f163e7bd5ab33aa5e71a332399b86678c096594e996ad2092c6883c4",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_4_3000ms.png": {
+      "sha256": "0a5af24af9b7800eb1d85326df3aa9de6151f0406ed12bbd6481dc46cd29f2ce",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_5_4000ms.png": {
+      "sha256": "2f370c4b4fa05908be5be33f7617805efc017cb1f5ec17416b503554c8c907c7",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_6_6000ms.png": {
+      "sha256": "d861a66b9e91a31c49013624be280d3b54feba167978b8f8a41b3d180e56700a",
+      "mode": "bytes"
+    },
+    "Simulation/dbg_7_9000ms.png": {
+      "sha256": "98603b5ddad93cb6dd9153ae482f4e6d89381907f2b7672c8ce26d783b2de52a",
+      "mode": "bytes"
+    },
+    "Simulation/index.html": {
+      "sha256": "18df88a3d5d0184a143c7b86ef8ef11b991f8ce5dbc91271ff05c33f1a412e24",
+      "mode": "lf-text"
+    },
+    "Simulation/locations.ts": {
+      "sha256": "44cdc6267a8e265c81d8e4a04fc7511b8c62c2d8aaf37e4fd6ec8484d68ca153",
+      "mode": "lf-text"
+    },
+    "Simulation/package-lock.json": {
+      "sha256": "aa22b356b6bdfe579ad57525a2ef46f818166806dbc0341eba2b5b2a6d1edaa2",
+      "mode": "lf-text"
+    },
+    "Simulation/package.json": {
+      "sha256": "b5f51e456fed19b66ae144b2f662c312e6fbfed174e898a17b60e76fe12c853e",
+      "mode": "lf-text"
+    },
+    "Simulation/public/assets/characters/redhood/idle-1.png": {
+      "sha256": "41030b2fe7ade79cd64e8abaa0e4817c0201435bf6edb38efa3ac9306a72a867",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-10.png": {
+      "sha256": "f7a26544c8fb45d3b30641aa813de59c1e2bb900817dc81f1e40e22fd53d6c51",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-2.png": {
+      "sha256": "37e355fb8b496d8a6fd76b509494a93ccfc24b8a5831da0b8a3e02941a75d15f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-3.png": {
+      "sha256": "e51fde75813c5208a773e33d25c9588ba3db9d21b8e1f1f7fd3973ee86a11e09",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-4.png": {
+      "sha256": "94d431733ebc675e7b46213e6426735a6bb026b5133164c599ebacbc6478856c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-5.png": {
+      "sha256": "496015c03b803d75ed9db483637c4eaa6a2e4856add346b534a89eaf453938b3",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-6.png": {
+      "sha256": "8632eb38530290e742ef2bd7dddfe5140b3c265b3875f710a5a3c4e343ae1efe",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-7.png": {
+      "sha256": "8200992646717133e4d551fad8392332f37d1d48ea9ee821b1d5d2201583e4f1",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-8.png": {
+      "sha256": "c0bbb64091ede8019947a7321a152b8acd5437f8befb1850d0a920404d8a1dd1",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/idle-9.png": {
+      "sha256": "0396422912af216b5154dc8f402c0f2870af03b58816e2e605eeaf8b7b6a9451",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-1.png": {
+      "sha256": "b648d96d1f4a3153ba53212edb02116171ebe8a19fe17bac24d858c538ec224a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-2.png": {
+      "sha256": "0a4f0d30b024cbd9a60d9b5f4ee72efcd180c45d3bfa8e7e93f3eb689a618bfd",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-3.png": {
+      "sha256": "af2da78e0d050ee4c98787829a70bf9498cdcf2b86d3bc89ee6390452fee532d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-4.png": {
+      "sha256": "af784f6bd49cc01b073b63b00e92775d1eb700fbb88cc1ff9f52eec06c9f1b86",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-5.png": {
+      "sha256": "0d6a6caba24a946c560a8777a8ee1e1ade703e7fe64c30d6182ddb0eaed2bb92",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-6.png": {
+      "sha256": "c921651a83281487a5270f018fb996e360975a42a97e199bbe6bed3808600179",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-7.png": {
+      "sha256": "81c6efe68ad5ba55386470d195d5ece9705ff1fa5c9e29d54a4b9008cd045dee",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/redhood/run-8.png": {
+      "sha256": "d7ff428c0e38ef683d1e58ef9c8004028c1307929fd6921b8300930cba13427a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-1.png": {
+      "sha256": "136e191a037de7b56a6eb425a38bb405d369555212774e93efa064bfe43f1862",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-10.png": {
+      "sha256": "685b4b1c31df55a2368432d82190724fd70629c1f5c00b8813b96f35a7d7b5b2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-2.png": {
+      "sha256": "695a7cc7a3fd504270d0a55a04f5846685d5534396f295070240293fa49e2813",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-3.png": {
+      "sha256": "2f4f1d142a1fa7f16a5df45e2ce74a9c6ea14e311a36ad6ed134731ecd00b892",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-4.png": {
+      "sha256": "cdaea131817c9b048d9b097fdc1e0672e36d3d34367908af10b97804524815e9",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-5.png": {
+      "sha256": "15855566d7ec8cdc54e3092e2acdd3904ca26d4beb0f9843852f391e38d51910",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-6.png": {
+      "sha256": "fe0b4cea8aa66348b9b95c716885f65ce4dbd23b195dcfaf6d8ccc5618a1db29",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-7.png": {
+      "sha256": "54fc9c0b7f21c92d7bc08b584fc5f149653354aa2a72a4953c8629e9406b322d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-8.png": {
+      "sha256": "e9e0fcc965e8742d22d8051cdcd5fc24b30e4f9e72e5a812d0b919567bf3cbc0",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/idle-9.png": {
+      "sha256": "3afab62299681437b5aec60d97387a0da1697b2517a8d3547ef0a75347f66d11",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-1.png": {
+      "sha256": "b527d3ba4e783ea8552e13cb0c646fb4f866ddfd40da05a35f1e0c1d69153a96",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-2.png": {
+      "sha256": "a555298d22fecec9ee61bc53836f2ffc2456c052d68396b58e4b509090de71b5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-3.png": {
+      "sha256": "b1dd666177b010df1481fc86f12b4ffbb8ceb6354daa03b0c4cf86fdb4834dc2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-4.png": {
+      "sha256": "7e66f3162a841e7728f2cdf313da97d5771d2d0e3bb2749b981ce995ba6d6edf",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-5.png": {
+      "sha256": "0ce4be77a2827eddfc811911679b4f1d56157b562147aa87571e3385a528af67",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-6.png": {
+      "sha256": "a382c03edb015fe824900c14bd87ea25f2dc6ae9c556e7dbe1d58545a85d0f45",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-7.png": {
+      "sha256": "77ee0bda29d9befda37f8079688e811bb380a71b8bba23a3ab04b38445a2f22c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/characters/robot/run-8.png": {
+      "sha256": "42beef0b5e410d1ef9cd08ee07dfc2df3fe7ba606563449b7f23918a6d6d8c6f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/crate-blue.png": {
+      "sha256": "ce246bf0ab7602dc5be27b22d95813727926571734661818f44acb6db5f3124f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/crate-box.png": {
+      "sha256": "fda09bd31fc25761879c7b83443016e01df92b8d37a2de3c512755537d8e7f2e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/crate-green.png": {
+      "sha256": "f7fe200d3ff269c734fd4d0dc139102270b2edf8a0979a0ad75fe318e7c607cd",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/crate-red.png": {
+      "sha256": "480ca7f6814f7d9bec7751b019cb42cca2d2eb93f554269d7a6e5f209cf86952",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/crate-wood.png": {
+      "sha256": "a2e61e4ef0df1c8dd880f24d30b42d520bb3fe92cd9f18ee4080f2385e4c5095",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/facility-elevator.png": {
+      "sha256": "b51f27802b4bea0d382a648aaeac1ed92fccef746916e15fd78aece662f67821",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/facility-escalator-down.png": {
+      "sha256": "bdcff6d17cb3c582bd143eb24acca719e302800674cbaa28d2b9adab2426c05d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/facility-escalator-up.png": {
+      "sha256": "76cd608500f74f8195f5cd4665c284d79195fc1c546b43efcb6a7ba6bc6ac87d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/facility-restroom-female.png": {
+      "sha256": "5b9498f343e825392921e1d6c0dcf6a048fde7bb3e98437842c55ec725f51d7b",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/facility-restroom-male.png": {
+      "sha256": "65ebd74592a88a682cc26d0423d79ac71fc8bac902619fb1bfa4f14ac5b7d82a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/facility-water.png": {
+      "sha256": "8f9ecffd59018e81d3f55c473706096845274d3e66a521549557925d8b3a0179",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/floor-general.png": {
+      "sha256": "fd786340ab48385de7ecafb840bae8e7378abc8b2a8ffb8ba57c9283cea464a0",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/floor-grocery.png": {
+      "sha256": "2a5d5a60c3c5e5427f599a459ec694a8cd24d39963c477b2b5cafa96885fcea9",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/floor-sales.png": {
+      "sha256": "f6924adbf7b4d3a8aab7b15d535a6954790b56824321846c3a0b0a90b8267e2e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/floor-warehouse.png": {
+      "sha256": "9f039655ff8a066f2113fd66058365ea1a4e9a311cbff4ffe4a71ccc07db410d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/floor-warehouse2.png": {
+      "sha256": "56df90153104612b745f58e017451f2c144945d49cce879070a3d17ceb860794",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-coffee-machine.png": {
+      "sha256": "bae238a0da32f2200b6e389fb912bf8293875180978a4a947a9fb277f3fa50f2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-microwave-1.png": {
+      "sha256": "ecc2ba5c29ba44b0bcc2c45ee74ebcba77f7b65512aaee80df760fe111d71869",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-microwave-2.png": {
+      "sha256": "5619be4bca79e888a9b7cbd956a1d54b6d4c754a65a395032c90bb48cb447e6c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-storage-bin-blue.png": {
+      "sha256": "9c06442bd84f4a0129612b32a8deae897f65963638cd88a49ac9c66cee9cbd18",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-storage-bin-red.png": {
+      "sha256": "16e4adb56e0c8c34732a1f56057214a3ee37f86da04a0c9d2525ba44859784f5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-storage-bin-wood.png": {
+      "sha256": "c82626cd1873c8daf331381f8144f52b1abc1c58d0102e2f4feaba4abef5335c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-tissue-blue.png": {
+      "sha256": "e96da91785a3b7a951b631f9ad6f0f7070c86d36ca5963683c47bced85b4e93c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/item-tissue-pink.png": {
+      "sha256": "fefee974f167301b6c531406c9dd2b192c8544329f98ca92974c28ae22336fd5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-appliance.png": {
+      "sha256": "fa3c1f93f505a1f2d0677d31fae80b0399c584a0d0ca109cebb0eac2f9058416",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-as-center.png": {
+      "sha256": "81133d1f652224f39a9fcc2cdc0405659656e61f623475bbc4a43cbe5cfe6f91",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-atm.png": {
+      "sha256": "a8013832bb2d2d715b3ec03bf77d3ec77049999c8b4532305ed1b6be442f1922",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-bakery.png": {
+      "sha256": "87e3acc4e6a91c6c6a81a1f8af0b1c3ef84a83c6ce5a18a7539f97420b5f0de7",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-checkout.png": {
+      "sha256": "696b6e576c55b55653730ec213d8711d51358ed9798bccfb65538b0c3e05e28a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-customer-center.png": {
+      "sha256": "148e2f1ba261abb0d93c8faaa55eea41c39f8b6ebb843e68fc249eda44ca203e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-entrance.png": {
+      "sha256": "9b6e0f8f692b7d303c569b4d805017419df09f1752d99949e77c7e6169086bf9",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-event-1f.png": {
+      "sha256": "c8e1709e160cfc234d51b7e84ee239b1df640bbe3c623a443249347e952c3785",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-event-2f.png": {
+      "sha256": "abefd9e3e0a77a1bba50432635dee42d4860aa16cc422e1d6d8c03ea24e35594",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-food-court.png": {
+      "sha256": "00e45da75dd1553b92796a73067594b581bf923593df91d43e85b6a0063d3f50",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-lounge.png": {
+      "sha256": "b36873ddeee3153e4542b1f28d081cea5138cd99197a67f5e8a2b0d841c321ea",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-optical-hearing.png": {
+      "sha256": "16bd9426e5d2b8d472189e0b8af4e2b4c26beb027969836664518788082d5bd9",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-pharmacy.png": {
+      "sha256": "31cf311c836e53d48c721960de38c652405245a70bfcf21cd468609dcb828746",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/service-tasting-corner.png": {
+      "sha256": "7e198f2f091d1dca590ede40a54aebe0df7616ad97b44e8b3c4c666ddd7bd45f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-1-m.png": {
+      "sha256": "272b1baf333b11e09ce523ae48ebdfa1d5edcef4ea31881960ae2355c089a6a1",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-1.png": {
+      "sha256": "f001fdd32206e37a48b9cd9807516a1b1e016cee0f0343547ec68ef500bde4d1",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-2-m.png": {
+      "sha256": "3c72fc1a6baab3edf4c6078befc2ece32745231dab938b703f277250e57ad2c6",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-2.png": {
+      "sha256": "d18e6dae0f5ee062b09d0f777f36275d6e18c73792846cf5a5bc5d4f1a14b152",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-3-m.png": {
+      "sha256": "63564259d350af3af35f0be689faeb135de60c034c4bf3c717d256a00ffe04bd",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-3.png": {
+      "sha256": "00a55b49ad9d65a1dd52a7fe2f46a6012af5f76f4789f0f79dcca0b4009849b0",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned-m.png": {
+      "sha256": "521adc9967ab90b7fc8afd6b59c9bf5a22016e49ebe11e1c1c71c88802dfa77f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-a-canned.png": {
+      "sha256": "0183ee8acbe1f23a470f5dfa2ced8c2f16d1981516dd4e6c5ec08ef322346f4e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-1-m.png": {
+      "sha256": "68322f6ed161ccc1636872bb9bfa5bb62f9b5579dd58475b3d72dcf39caaa546",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-1.png": {
+      "sha256": "2937c16281c7a881cfcb446f95b3c360736d3a82c3ec850954152c9c7fc5eaf4",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-2-m.png": {
+      "sha256": "fcb782275c5e2acbc78e02981346859d345fd24ed6cbbb7d709f295d75255114",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-2.png": {
+      "sha256": "f7617fc28c536e93754710a2cdad7d3a0a58c940a3dd7431aa0f08ba452d9d3d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-3-m.png": {
+      "sha256": "55e5b66a15d905c41b8433a8d704b5e7dddc1f4d1a7f1ebc4a4db466a37ea938",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-3.png": {
+      "sha256": "dc1c8c7b4eadccf1d069d180c7208e7b46f9f3afd1b265b3ba5bba178386a8b5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack-m.png": {
+      "sha256": "484a6f73e540315c412ca406768384e8f940e1ddc2b8ac9d237bef87fe55e8f5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-b-snack.png": {
+      "sha256": "c70382fd3a3218a8739ea269be65fe744d0b492a2eb7e9387156288bd4d5c512",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-1-m.png": {
+      "sha256": "ec1762e356af75b45bbc2c162f9ed25970107e958ff86e7137becafedf8f5dd2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-1.png": {
+      "sha256": "9f0e54ec646518041e4baac9d67e862b364236dfbad567f85d5d901c6980422c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-2-m.png": {
+      "sha256": "4cfd4087d498a02d7ef75ee6732262bf82feab44d820dd2b2dddf56e03b4bc97",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-2.png": {
+      "sha256": "94d8eca4ad13013bcd015692788a7882a9fb0241710f618b9d1d5de2babc0581",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-3-m.png": {
+      "sha256": "eb5f841c05fa446398329376e428cb96b4cb9d4f28c6af2ee65570bf96313dd5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-3.png": {
+      "sha256": "2323208c59010cf9e5ad315fc17c4ff0b21ead995b08446c3c25315f3b1f9f05",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce-m.png": {
+      "sha256": "aba8373accf9558a7c0fc8f5818d6b355fefc04d8d532d9443e2b191f5f798ec",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-c-produce.png": {
+      "sha256": "b65556724c096661afb612d0abf1cf64da4be0ce2d71f4dd37ce58845123d5dd",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-d-meat-2-m.png": {
+      "sha256": "643d0b4ad23d9b2913f4bf9af30f0e5117706755d954b250de44a8b14ab64cd4",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-d-meat-2.png": {
+      "sha256": "b8887c158c8c0983926f9bd80ed69b03ac6f74bbc51cc561f1194a0bd9fe275a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-d-meat-3-m.png": {
+      "sha256": "4cf3d098013aff399fd3f0ca0093c4fee4592237953877d8a219223334b1cf18",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-d-meat-3.png": {
+      "sha256": "a8f0393511f00614f16589e6daaee883b151ed8269a015c64f70dcc6afe20b74",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-d-meat-m.png": {
+      "sha256": "2d134fb5f1c2ca316b9265c78138f46ed5616a27cacd8e535bdea0019d8c4559",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-d-meat.png": {
+      "sha256": "54ec4151d955362e952a1a01ead372995a114792030f36a386269b20e6b7ad53",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-e-sauce-1-m.png": {
+      "sha256": "2843c590f7cca9a93ad887638b97a03e1eba667d60a71e623882d00f0a3de388",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-e-sauce-1.png": {
+      "sha256": "edc6f5fe59a7c12a33e600478a8cb841befa7fd6b6b396e210577cc51c7a4926",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-e-sauce-2-m.png": {
+      "sha256": "9b64c712cb9811f73fd18496c0bd94ad2da6f6026e79043c6be06a25713531df",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-e-sauce-2.png": {
+      "sha256": "a51c997c81efae3e75701efa9f3bd9772b832e3b173c852048eeb153e48cee6c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-e-sauce-m.png": {
+      "sha256": "47e4cc19462e2505bd93f1514b0c13d44f616ad26b6135cb5d9a37751d56e9aa",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-e-sauce.png": {
+      "sha256": "3e4fd1b7ee23ccc53363616f3aee3e44a9b3f97a83b973adab81534bfad7957c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-1-m.png": {
+      "sha256": "225fcde79388f06e8a0231b61e4b15f55d09b2e8069320577a354cc513a1a9cd",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-1.png": {
+      "sha256": "b0682f6f4442b25b1ebc691d62f70d48bcdcb1382e3082b2622a82e39f77534c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-2-m.png": {
+      "sha256": "4c8a6281a7257bcfd5281a2b25e35fc925dcc8236b9f04036c2955e8954925e4",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-2.png": {
+      "sha256": "5167ed09c747f8eb61d4f04374606c09dfde8c57c0f25894be302d73f7faf5b3",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-3-m.png": {
+      "sha256": "c61481ad4947a7145d472e031ea7f58faa26f8f39e1ddb6f0f71902a265286c5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-3.png": {
+      "sha256": "c3ceffb3c41c010e30b704575a1e8de2446c8582c7a24d6f7416f06d292f3933",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-4-m.png": {
+      "sha256": "ef2d3de8cdc68b7685a9f0b221c9bc4ecdb946256aa620e61f28b941bb939cb2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-4.png": {
+      "sha256": "bc427248de83deee0652156a3b5cf2fa7dc2c2d5072972825f126c0401a0ccf1",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks-m.png": {
+      "sha256": "c0dfac6d1879d4fa1fb4ddfccc6779bf44c99ad8ac2ab76435e2b448289bdb8d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-f-drinks.png": {
+      "sha256": "2cb5c7e59837d2439b883a989eaf0f0dc2de26c125b3fbd584f30818a57da381",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-1-m.png": {
+      "sha256": "1594f867a01531723b8731a77d6f1280996cc99bf9d14fa5eb2b6eb4c2165b8e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-1.png": {
+      "sha256": "7861ae9a3ca4b554c07a11564410d2c5afc0e1ace77c53d82971c3c815ba6be1",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-2-m.png": {
+      "sha256": "3c49619058eef4de29d3c411c87ce4c23a4921b61c666e78695447d66457899a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-2.png": {
+      "sha256": "a607f28c1723ea5293662100125ecfa41df251524d55531533844fb7891e7216",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-3-m.png": {
+      "sha256": "e55dce10a2548e56f10ec323a6fdb0a4043b125795f11e5993534397fcfa1d44",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-3.png": {
+      "sha256": "ab5b9571c11b5437a4e41f870c1602ac3ecdebbed269cfdb4001717db6e2b740",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated-m.png": {
+      "sha256": "723fc0a187e302e9bf2f9d816620d0e3dfbde4a55899dae03695a57efbe5c0ae",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-g-refrigerated.png": {
+      "sha256": "66fc8bc3d6dd75487cf9e536043103b69dc075ba38a452a6fdf5641fabb005b6",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-1-m.png": {
+      "sha256": "9aea6fd2963a834b21d85bae714e6446b6f3135c193eaf79860f7e5d78ed85a6",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-1.png": {
+      "sha256": "24aaf8307855a86d405fe674bde3fb91a150cbfaffefb6396949c64993040f9f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-2-m.png": {
+      "sha256": "d5f533737e56a4c380df0b3b93ae7984368a3791921ac9db85025366767f7f57",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-2.png": {
+      "sha256": "51cbbbae7fe9d64f7142319cb7733e57c335027ddd2b1d55da174381b4ad7382",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-3-m.png": {
+      "sha256": "1a14495151a16961cf65a0f1eb6180c652070de6664b47e025c9791e501b49e9",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-3.png": {
+      "sha256": "87589fb323566a724fc4b5768f3d4e9c4c00f0e8f7f487f6c2ba369f5281f451",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen-m.png": {
+      "sha256": "f04f472278c8aa4c979a4066ef658893e9cf717ee49f0a8be7e10c063eee7cc5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f1-h-frozen.png": {
+      "sha256": "b7da2082ddf8c4375b7e7f7c78c1901eb2e5023ab00143c35186dd8361e57a0c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-a-pet-m.png": {
+      "sha256": "0b426c84c04e478a6db07768731d42a91e40c67f01c834291dcfedf937ed8aa5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-a-pet-rack-m.png": {
+      "sha256": "6b8ec616c95067f37eacb137bb549886939c211435b1f052f5c2f3a82a3ce328",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-a-pet-rack.png": {
+      "sha256": "0ea186f0630cc7e141fc1bc65ced798a874b607cde38278b79d7dcf16a92c6a7",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-a-pet.png": {
+      "sha256": "8cd501ca3a34ef2b946ae15f26948a92eb4ef6a2a340d8241149bce410a6a4a8",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-2-m.png": {
+      "sha256": "b26ad00ae81c295b56bfc74f39d4bba19d93c40da79f66c98d97f90f69ca3292",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-2.png": {
+      "sha256": "b472a20fcbab026a19a9086bbdb1b0d46afdeb2278205801242c89fbf6be2fa0",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-3-m.png": {
+      "sha256": "e66d76328fd7a24b132d08d81d2aab0cacc8387e05ea86d8ced8e1a6b5116982",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-3.png": {
+      "sha256": "4610548e1e4b2b1e61130466f674f240b3ae51cb6a1214311b6c36d4380df4f6",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-4-m.png": {
+      "sha256": "e13eb4d7f092e8a519313cd62c1b35c1d214fed76528233dc6ed19b7aa69ada5",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-4.png": {
+      "sha256": "60413e2207c8c6c006be2492b940eb91d99918e05e27cbcc1ca27e22f9306a86",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty-m.png": {
+      "sha256": "a0d99bf5607cd861adaba22d3dfef9b01245cbaf396af2333c846433e579731c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-b-beauty.png": {
+      "sha256": "c5f88bdd7a7d2f345e69cbb61c8d795041caacac79f432580c623d13f4913bf7",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-c-storage-m.png": {
+      "sha256": "968a095c51179b4ca45ae362a962fe60e435ddf144c76e636c960be9e7ded52b",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-c-storage-rack-m.png": {
+      "sha256": "f87c3a7a181ded4cc26b02a6240622b7ac00eeb9ad8ec5074f1f0edae6aa4cc4",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-c-storage-rack.png": {
+      "sha256": "50886e0a0d2759b6565229afe9326d855e5aa2f93da3e809684153489c180e1d",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-c-storage.png": {
+      "sha256": "ce246bf0ab7602dc5be27b22d95813727926571734661818f44acb6db5f3124f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-d-hygiene-m.png": {
+      "sha256": "a4c5a4e7d12538353d180ece486346b3d1e9dd297dfc7fef07dc883dae099f58",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-d-hygiene-rack-m.png": {
+      "sha256": "e19d5937c867846628540b65a8f25369292c5ae5ccf22f57366c2225326a3980",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-d-hygiene-rack.png": {
+      "sha256": "b51a880876593d42dc854015144865b5744dc7563ed3fe62aee031be3f01332c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-d-hygiene.png": {
+      "sha256": "e96da91785a3b7a951b631f9ad6f0f7070c86d36ca5963683c47bced85b4e93c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-e-kitchen-m.png": {
+      "sha256": "243e72a9bb3188b01667a45926c867fc0348e38edf51883a1f74a41159cf4504",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-e-kitchen-rack-m.png": {
+      "sha256": "35558698eb8a5bfb3b28ff242798dfa9dbea6e9438c518393d42124c09be935a",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-e-kitchen-rack.png": {
+      "sha256": "23592b1dcfd57cd386e265ac06bee1b4666d762bc9e0ea9a4f58ab84f1d02db8",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-e-kitchen.png": {
+      "sha256": "4623d79dca33235b647775fd398b8ea5f46120c81c63b82bb61018370dcb0d44",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-f-cleaning-m.png": {
+      "sha256": "c51a7310751f736dc6f1a60c95c821c0f6d6251aeadca67771dfe8881d5444a0",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-f-cleaning-rack-m.png": {
+      "sha256": "15830239ecbb152b8a9287793c0eb9c48d1f5036d48a897897eccf3951ccae16",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-f-cleaning-rack.png": {
+      "sha256": "d50d84652c2f87b7e66836c360f724d09e76bfe754c416e952614f312b71e2e2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f2-f-cleaning.png": {
+      "sha256": "ad3a7c24c2dc0d073444ebbba11d47f2f5999bd433550602790ed4fec1eb1b24",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-a-sports-m.png": {
+      "sha256": "2a60cc8e62c20ad68738551d81aad9a97d93753fe7bfafad7d9d18eb5cf0f2ae",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-a-sports.png": {
+      "sha256": "a2e61e4ef0df1c8dd880f24d30b42d520bb3fe92cd9f18ee4080f2385e4c5095",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-b-appliance-long.png": {
+      "sha256": "ae1580eb452ba0e01f8570eee285373d9b3da81d9e1a4bed4d74ca0a3cfdcdc2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-b-appliance-m.png": {
+      "sha256": "6df567b23b3f4bc5f6f30935878f069cd3f542bc84c1be092610a80245b1873f",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-b-appliance.png": {
+      "sha256": "ecc2ba5c29ba44b0bcc2c45ee74ebcba77f7b65512aaee80df760fe111d71869",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-cars-m.png": {
+      "sha256": "162297af3d010d809d0b4f8b7040f020018ba415b0eb5593831c27b6743e3ba3",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-cars.png": {
+      "sha256": "676eaa64c38d3519de934902c6667112aceb9b39926d4f609aa0ff6276b0c874",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-m.png": {
+      "sha256": "da69e455ea25a57d4b321840560c07d9ecdc9bd83ad1d972d334fdcf53ee062e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-plush1-m.png": {
+      "sha256": "ade249bb66ea685b0e1e6617704dcc429e771c28b407e53131e6c90d5eb1aee4",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-plush1.png": {
+      "sha256": "76413a6fa08c07373bd80004535e3ecdc2128872ce64e4e36efa811a6c69282e",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-plush2-m.png": {
+      "sha256": "0d3148b02bcc947b4d7c3a9c908c3fd3971938ad4849efe3b83ce64ed4243529",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys-plush2.png": {
+      "sha256": "c409c292d47cefc48b1aecbdeea4d2b2cfa120e2888427d76a23bf8d0c8b6716",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-c-toys.png": {
+      "sha256": "c37228d24405c8d76cc31705659da3e4bf93fe301737b12d8e061ccd2d1a2b38",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-1-m.png": {
+      "sha256": "b82e1d19113e81f78ec2db5ab8de9133d56caf0b93f0d3e3785b1c5e8ada7b3c",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-1.png": {
+      "sha256": "53aa3147d243493184712e9f466af2b29d570646eef64d568a63aaf8da16aaf2",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-2-m.png": {
+      "sha256": "b37536a24e32024883b972682e43ddfe372e79e25fbc7dd6e75f5a405af58d39",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-2.png": {
+      "sha256": "aa68850134b52e69c4d2c9ba0bb348716d85b1b90a4d3084eef147da1a5e29a6",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-3-m.png": {
+      "sha256": "a7a84c9c139579c6c4d3155bf1d9dbdc07cec3da4db4a82a2abd20484f9c4d25",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-3.png": {
+      "sha256": "06d2aa4dc35d327f697e2b1fe2a0341f7295258b2182e863c7ce02ea705a4174",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-4-m.png": {
+      "sha256": "1d354feab2efd141578149aef722bba0da07e7b3ee1603a3109cd2caf4553947",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-4.png": {
+      "sha256": "c932a5d76a2568d9888ca0a63b297abfd3bd6f992177a2453573bc92b1357933",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-5-m.png": {
+      "sha256": "882239ce75a808b50d3c6c7ca92fe1148be26911ae3317122904384a24f596e3",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-5.png": {
+      "sha256": "621f421562ccef40169424c6991b3dfbd4d3ebd69bb2e7fb040b67c49ed7bab8",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-long.png": {
+      "sha256": "bf0bb903d15c84acc7341b93099c453c990f474e09f5cebcf0306b4dbab29022",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing-m.png": {
+      "sha256": "56da24607df12716bedbd02392a6d5216135094b7edc76a723dcbd9b36d21c40",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-d-clothing.png": {
+      "sha256": "ce8a03bae34b5ebb7235a292a46bd4723ef61a1e60d1c94299eafd5ce6d6f545",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-e-bags-m.png": {
+      "sha256": "1c87f1c8a37f3c06815b7c9ce51589662b59748e6d2dacbfe914ff600289878b",
+      "mode": "bytes"
+    },
+    "Simulation/public/assets/tiles/zone-f3-e-bags.png": {
+      "sha256": "e3eb682691e87ab8731ae2cdfe4525d392356167d6c5846960b7f2de95a29fb4",
+      "mode": "bytes"
+    },
+    "Simulation/scripts/barcode-check.cjs": {
+      "sha256": "0396484663cb1172fa7a9c37266183445c127e0f94218913fe1b69dfc1df4825",
+      "mode": "lf-text"
+    },
+    "Simulation/scripts/displayed-path-check.cjs": {
+      "sha256": "a6c84757f0e05580b11cc5753995b855c92e2741215af474ceab479eaa443c7c",
+      "mode": "lf-text"
+    },
+    "Simulation/scripts/escalator-check.cjs": {
+      "sha256": "fc1cbf84a7dbbb4327cd3646dd21744dbaab7040818bb0594973ecb8ce1a1249",
+      "mode": "lf-text"
+    },
+    "Simulation/scripts/guest-route-check.cjs": {
+      "sha256": "981fb060f12102652e2b2eb6fad00234882cffe2bf65f572e0d31e4563d350ad",
+      "mode": "lf-text"
+    },
+    "Simulation/scripts/guided-route-check.cjs": {
+      "sha256": "69e441590dde478f126cb40dea8e8c78be05814c80cbc079b815d8a6c1b17f7e",
+      "mode": "lf-text"
+    },
+    "Simulation/scripts/member-auth-check.cjs": {
+      "sha256": "3951651c285821dc73ec71da1f75b77f0debcc3c96ebc070c18421d1225da678",
+      "mode": "lf-text"
+    },
+    "Simulation/shift_zones.py": {
+      "sha256": "55d52af9bd0d15881fecf7327c17f7cf434141dd76ab0b1f3c93281e8f6171a6",
+      "mode": "lf-text"
+    },
+    "Simulation/src/App.tsx": {
+      "sha256": "7bbe588b3a3dd73f37d3929cc78f253723ba497fc2b03e57236f338a629e929f",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/cart.ts": {
+      "sha256": "2d41fbb519945a29ecb2abbd42d648354768b18127aa437fc5e8087b364a8fc7",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/chat.ts": {
+      "sha256": "a72c1c672acd6201418615d883524d4fcef7521b5e7da89f5a58aad910682942",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/facilityBarcode.ts": {
+      "sha256": "203261f06d9626c672314487677ebb774880fd5e7f901ad260ffbe1e9dc7d32f",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/guestCart.ts": {
+      "sha256": "76ddd1bcc0aede403760d7aae0c2af9c35e10e90e24341c173fed94e87feb98d",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/locations.ts": {
+      "sha256": "714a234b4b433582de4750958998ba543a026e3d0516154be33b3b9daf53a5e8",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/memberAuth.ts": {
+      "sha256": "f851417c509a3a19076633c7e163305ae1807f3b8e332de63fd44fb392af71b7",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/products.ts": {
+      "sha256": "3dc603030bd97377fb7033113e911aa8ef0f9b885b8f3aa708f79095c888f754",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/route.ts": {
+      "sha256": "bfded5b763913970310ee1996d4cabce1b527fb4ba025beb1ff24a9d280fd6a8",
+      "mode": "lf-text"
+    },
+    "Simulation/src/api/shoppingList.ts": {
+      "sha256": "d22241dd460ac4c5b38d672a0b501ed7474db566d32cd72c1e16186c44fb720c",
+      "mode": "lf-text"
+    },
+    "Simulation/src/assets/character/back.png": {
+      "sha256": "3a52ccaaed3bd8d73877a879925387cd5150cd86015f26783453d4d1a5c8c993",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/character/front.png": {
+      "sha256": "b310a3a827874f30f7175907d8c37f4476c6313104c0754f6771892e9e525942",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/character/walk_left.png": {
+      "sha256": "960ae72b01484ca872f1ce77661df5416d8ff2874c294aaafc2acd0d4bf648b7",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/character/walk_right.png": {
+      "sha256": "8b2c6f6466060bd2dece0d3616ab8e6885926c124cce62b9bf346d853b40ed61",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/facilities/elevator.png": {
+      "sha256": "25be4c605f4592e6ac6a951c51dd9d396a68f255e7103eab1ef7084fde777118",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/facilities/escalator.png": {
+      "sha256": "ed2fbf86c0a21b65999b2292b414f9d14fa396b477e1650782d9a804eda47d7a",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/facilities/restroom.png": {
+      "sha256": "fd058cd784b68128e7cee4d71cf3d43eb9d60ab2c4147f02090549ab109d8453",
+      "mode": "bytes"
+    },
+    "Simulation/src/assets/floor_tile.png": {
+      "sha256": "6d58e2815f976a748e3265d94008c09ba0f046809140e2be3439d5807be3903a",
+      "mode": "bytes"
+    },
+    "Simulation/src/components/AIChatModal.tsx": {
+      "sha256": "fd78b91f9dd2c002ce1a46329932b6c690001009fb031d1c5ef67b0fd4fd2567",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/BarcodeModal.tsx": {
+      "sha256": "691b0116176fc1bbcb1e30b8ec1ab44654702dd4508dbeba76578001df8dbcb0",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/CartGroupModal.tsx": {
+      "sha256": "88c7e0ccd09ac2073c3f168150b22d97fdf7e8d1593c9dbd7e3d5e9afe9642a1",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/CartModal.tsx": {
+      "sha256": "0ae90b81ec952e07d3959c29681b32d8a628d4d0ee16ae524056489f00cbb25b",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/CheckoutCartModal.tsx": {
+      "sha256": "1325957b16970d840966742b059dde74c78d9b4b7bb5f5303110e84b5c6d23c4",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/CheckoutTargetModal.tsx": {
+      "sha256": "2d2be8ba97975d2b9093ab328f02969d17f567180fa4bfcd8530d58dc9dae33d",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/ElevatorFloorModal.tsx": {
+      "sha256": "c36232cb3c9e8464f56465ab82ee31254cc0ca6c5d562f889f41d54d66b31bc9",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/FloorDropdown.tsx": {
+      "sha256": "079b8188d47c12aa9fd457f1b784f35d8846f779930e870975ad166eae7feccb",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/FloorSwitcher.tsx": {
+      "sha256": "01c73dbfdbe11225600c786e4433abd9f4f247c571d434f7c47ad35ba2a9190b",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/FrontendPanel.tsx": {
+      "sha256": "b30686c52b845ca9d015ca4bc1cf1a84ed327ab38d245935d103ea0e66f15b5b",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/Modal.tsx": {
+      "sha256": "269a4a7d607b2260cb6bbbb7e8ecf9ced435d6209a62ec4bc63721f759df1ced",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/ProductPopup.tsx": {
+      "sha256": "586ea3be5f0998f5e705e0b5dfb251365417e7891ec96587f27a4a4b33de65ad",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/ShoppingListModal.tsx": {
+      "sha256": "c8158078b341bf2658c78e46151352689bc4b113ffb0658f76ac746db0c1a20d",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/SidePanel.tsx": {
+      "sha256": "88ad3ca65e16c9f68665d8135690e6d0dd69a76432a31a889a0977be4fe0b5fd",
+      "mode": "lf-text"
+    },
+    "Simulation/src/components/TransferChoiceModal.tsx": {
+      "sha256": "8a83e008b9a48167e873780c9da25e8531c5ff5151bceb2df24a13203e8527a6",
+      "mode": "lf-text"
+    },
+    "Simulation/src/data/floor0.json": {
+      "sha256": "1f60ef1c66add0a299227fe5c8a1ae06f65acd7b2b96a308796392c2a12ebccb",
+      "mode": "lf-text"
+    },
+    "Simulation/src/data/floor1.json": {
+      "sha256": "cbe0e6d9023b9192d65bfff939a4ebd0895b6577a06f38f08f0eed4ff40769b3",
+      "mode": "lf-text"
+    },
+    "Simulation/src/data/floor2.json": {
+      "sha256": "4adc834d9b4b70435b77ed3ba41a25f7dc77e3017df6ce4a3d82e83804e0fb72",
+      "mode": "lf-text"
+    },
+    "Simulation/src/data/floor3.json": {
+      "sha256": "456001fc6ec836f779e1c6d35369b0e6bb8b28660d7192a0576ae56f488e6bb8",
+      "mode": "lf-text"
+    },
+    "Simulation/src/data/floorAmenities.ts": {
+      "sha256": "e65f670a3f00b935818d836633b37e258ac14b7e87af6465d6f11925bbc3836a",
+      "mode": "lf-text"
+    },
+    "Simulation/src/data/products-agent.json": {
+      "sha256": "58b80f660527712aa48ec88363f174b46a7a9e22f3115e91084e94d9b5dfd82f",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/GameCanvas.tsx": {
+      "sha256": "76a68677f33855482b1befae561fb9d8071a0c5044cccba089d7b38e69352536",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/displayedPath.ts": {
+      "sha256": "50e8447e96b2b4552edc051dc180dd705659b77b46b7dddaf0c73a39a576dc9a",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/floorGraph.ts": {
+      "sha256": "e3c3e6ed55333d8649519b8da87184c2331cf163ad0381fdf1e36e86f83b764e",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/pathfinding/astar.ts": {
+      "sha256": "0f322a9d9fbe81e02a2e6d43236687b0ac95ef0340db6481010b273a4e4c0f9c",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/scenes/StoreScene.backup-before-2x2-merge.ts": {
+      "sha256": "4603cd309ce5a4d859fd0830f839b252d756ed3844befc76a44dc7aade79cf2b",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/scenes/StoreScene.ts": {
+      "sha256": "9e5f7c36c42d4b0edf87837d62f071830dd83b84a125c9e6649197e1a2fa13a7",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/trip.ts": {
+      "sha256": "fa3adbece84cb1c6999aefa992ab6da69c91be6d919ff60d36839312e74a7e1b",
+      "mode": "lf-text"
+    },
+    "Simulation/src/game/types.ts": {
+      "sha256": "7d0a8bec1237db80c32ec7ff3e001c856f7804d8434d62a2f93b8c35ff932fad",
+      "mode": "lf-text"
+    },
+    "Simulation/src/main.tsx": {
+      "sha256": "c11dd148006abf9261b5ba214d89d726e3febf6144eddd13adf2d4e78c8de1d0",
+      "mode": "lf-text"
+    },
+    "Simulation/src/state/currentConsumer.ts": {
+      "sha256": "0e129b36109b66da763e22c8e51311f9a4deec5e52b2712c9cead25e83bd3bc9",
+      "mode": "lf-text"
+    },
+    "Simulation/src/vite-env.d.ts": {
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+      "mode": "lf-text"
+    },
+    "Simulation/t1_initial.png": {
+      "sha256": "f8c63a1111d39a553063178ebc3cfac78778129984bcdf0d09f3566f3c998285",
+      "mode": "bytes"
+    },
+    "Simulation/t2_hold_move.png": {
+      "sha256": "a74faf83aef8cf2b890c0d556e450a2d0d113b1bbea5636a54bbea4fa7612821",
+      "mode": "bytes"
+    },
+    "Simulation/t3_same_floor_click.png": {
+      "sha256": "fd80bf2ca170214a08e4d19bf15282da239183afa11a099c3bec25a56d3fa148",
+      "mode": "bytes"
+    },
+    "Simulation/t4_view_3F.png": {
+      "sha256": "c0c695ecb4680e8261c3b909f6561492191ef0bd99b9fd9bff36075a9d68ebde",
+      "mode": "bytes"
+    },
+    "Simulation/t5_transfer_modal.png": {
+      "sha256": "61e9ff1b91600b055a65eba1c59248828296cae7bfe796c1357bd78dfca3344d",
+      "mode": "bytes"
+    },
+    "Simulation/t6_after_elevator_trip.png": {
+      "sha256": "b354d479b41e252b8c0fe8b90f4645a623d1f24a2734108a1b87c8cca22c7e40",
+      "mode": "bytes"
+    },
+    "Simulation/tsconfig.json": {
+      "sha256": "9e3d32eb24283f8b7a07ea62508b822f1ceefa7272f04190b3e36431c2c897cc",
+      "mode": "lf-text"
+    },
+    "Simulation/u1_elevator_arrived.png": {
+      "sha256": "4aa1f2de4ca1a9aabad748960670cd5f15c932a0db9938a2d2213c92e8cc68ad",
+      "mode": "bytes"
+    },
+    "Simulation/u2_view_1f_after_trip.png": {
+      "sha256": "60cf0d3d67966bd1ff50e3a3812b9b29554d6bc1e1536638a84e88154f9c1e58",
+      "mode": "bytes"
+    },
+    "Simulation/vite.config.ts": {
+      "sha256": "8a62b8ee126cd802f655d4d401c80f9df193b03dbaf242e3ceb8d0e0a4198ac2",
+      "mode": "lf-text"
+    },
+    "frontend/.gitignore": {
+      "sha256": "207e265ff4901f9ad9f96d8ce08530e04f9fc600815472a66d0a446096d654cd",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/ai/page.tsx": {
+      "sha256": "8dca68250a98ba10f30dd74e3251e6f73a1e8e5d4480e4383735c71878eeac18",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/cart/page.tsx": {
+      "sha256": "b3048cc402bbe0c8869cdd4c7e4b7f77072a304fdbb0b47ad553e496c1f86238",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/checkout-complete/page.tsx": {
+      "sha256": "d8519a852d85bec6b7be6d369eaf3ebcb77d3df0e38f9e9488b48e38263e799d",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/checkout/page.tsx": {
+      "sha256": "39514f94d46d2dcb718e1ac9c397007498cb87bd52cc41e39dc078fc065c9e0c",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/layout.tsx": {
+      "sha256": "60a711baf158f4fb737d51d5b96aa9a9dcc16e6ddbf73f59aa39d8bad92060ca",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/age/page.tsx": {
+      "sha256": "6b9072b3f208988c27f764b79233286dddf1048b103fc5b59556a2e4c8fb2919",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/gender/page.tsx": {
+      "sha256": "a4b3b6cd4d3443997510d20809355aaba1c746c8b4926771579109d55ae8f278",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/household/page.tsx": {
+      "sha256": "23f1267539aef973dfaeda6702a9a621c4b703906d9562098b6cd7d09c4d010f",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/name/page.tsx": {
+      "sha256": "9152bc6fc4af53bb169ede911978f769ff6ba7f7c26cf3c4d7eb4a9aff50e344",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/page.tsx": {
+      "sha256": "72d278e1e2cce7b6c4a25c8bdfa34a2706434205809793719edcbaaee29ec74f",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/password/page.tsx": {
+      "sha256": "78a94ab87139d04cf3d3e792f65f369f3ae1dda2afd4fddc257ec09966cff4a3",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/account/phone/page.tsx": {
+      "sha256": "bc4a0821e3544dcbe945820214756df82cb229dc2e0e48b1cc27a5a16eb11009",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/activity/page.tsx": {
+      "sha256": "9794009ae43f24c3686f6f1288e7867c068f82d945aa5b85e1064374237a62ca",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/benefits/page.tsx": {
+      "sha256": "c8de55bb659708a2ddccad35cc9b1d1d7cd6b1071ec1b50c05a988414f928948",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/coupons/page.tsx": {
+      "sha256": "4e706ddf6675c7e054231849b8969833df041ae9bb5293f0a01f8b253633be28",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/faq/page.tsx": {
+      "sha256": "2309d9af84e4d505f381fa7357daa5a6df9201d8785e6372757d6e8636404009",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/frequent/page.tsx": {
+      "sha256": "576c8a52327f40eab6b972cb6030ee67d2963b71a0ecd32f8f5180fc040f9a29",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/info/page.tsx": {
+      "sha256": "bf65b0362ab3ee03148301007792c793173e22aacc01a638ed6e165c59b71190",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/notices/[noticeId]/page.tsx": {
+      "sha256": "f293453f74bd019e7e7a5e1df06d98a7349b65791d0d7da7b3db921206037c61",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/notices/page.tsx": {
+      "sha256": "36d05664dd46913ad26cbd12399716c2b3bef70ae899e2cbae0a63b5ae0fcec7",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/notifications/inbox/page.tsx": {
+      "sha256": "46b0bcb237e17550ba1c33424cb82d862d43c0646d3ce5ac435505642a9773e6",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/notifications/page.tsx": {
+      "sha256": "7e7ae595454f6beca7805a81a6dd8cd787afe28f88198b66f20e356b7541b0a5",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/orders-management/page.tsx": {
+      "sha256": "9e28e2253b55516c796a3b92bb6d8b0dd6bbf0091fc39fb9390f6c05d8782561",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/orders/[orderId]/page.tsx": {
+      "sha256": "ba568a53194791eb9b459dccc5bb269c0892805c86b50ad6b6a403ed3ea58469",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/orders/page.tsx": {
+      "sha256": "430ea7a60dec18a91fece2e400556d232118abe351c117d939b9dc31b33f902e",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/page.tsx": {
+      "sha256": "eaed644418994d6ac90a299032135b00336f782a3f31baaa2767b3bfbb356fd4",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/permissions/page.tsx": {
+      "sha256": "36184f952f76772aab40ab44b364efc23e65c56a9d31b810fed0fb18179f76c3",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/points/page.tsx": {
+      "sha256": "a93bef2e1a5337767d758802a6818d99ed210ec500269a150b16b0658de5b309",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/receipts/[orderId]/page.tsx": {
+      "sha256": "62eb309ce869d6258bde01a7f4b9dc90df79adf8c10366f9d8d0255d92ab75c0",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/receipts/page.tsx": {
+      "sha256": "89e7d0dd7a41829637055ac825ddd8e61fd2828bdc06ed94e829e32c8b58b336",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/recent/page.tsx": {
+      "sha256": "efe84e8cc820d9be9c19afdcb0ab5102d62e1f31b09cd63772d7c3841ec06434",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/refunds/page.tsx": {
+      "sha256": "e3d7da9d0f7ad85c58fa5bf45512a351b73d8fed392cd591edbd80977eac1dec",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/spending/page.tsx": {
+      "sha256": "0a404c64a5336244d8c32c97d118e984d74bbd7bc572b0604ed4a47d78247cd5",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/support/page.tsx": {
+      "sha256": "e273e85a01cea126e00e878a77be4c6ef23c9955519c6a7c29fe15980721fc04",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/terms/page.tsx": {
+      "sha256": "998e32c71cfeb2659446bf8de3626e25222d979933cbaf96c59f1d812da7b729",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/tier-guide/page.tsx": {
+      "sha256": "4ee45dac24b85ad6f570ef217f2e376d01afad6f1d7bc3006a163b9605e10a66",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/mypage/wishlist/page.tsx": {
+      "sha256": "bc03c4c83911bb23800e081b4b4e013c53153f6fd58940b89885a9ce4f598297",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/notifications/page.tsx": {
+      "sha256": "c417f88d1eb66bc08ae0bb95d3491412bbcdbf24760c5ec0d9b914b847bff46a",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/page.tsx": {
+      "sha256": "75e7623bdfd5715f1823fe3a4ef149556abaab5a66dbbe56157e3798296dd401",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/product/[skuId]/page.tsx": {
+      "sha256": "be1c91380f1a014a9da793b9ab0877413e406076957126edb34b9f695a16ce11",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/saved/[groupId]/page.tsx": {
+      "sha256": "6773bfceb94a276da64cceb6e45579f58b6893e3366593cd6988d3bb13f49325",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/saved/page.tsx": {
+      "sha256": "6e6ca6bcb3d62176a1379f010da7c0c945496b7a2ef687538d0976f2b755fcda",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/scan/page.tsx": {
+      "sha256": "216c7ee7524a1fa58fed20d423b86421dfba1ed13a6ed8111be98fafe7998388",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/search/page.tsx": {
+      "sha256": "31419bc8ce31c936fa66cc055722942b7667c4012a5028c7a69f64fce2829c1e",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/store-hours/page.tsx": {
+      "sha256": "71564ff29d18f25f78fe68d5a96590a68ce572b5b693d8fe8749595752710a97",
+      "mode": "lf-text"
+    },
+    "frontend/app/(main)/store-map/page.tsx": {
+      "sha256": "f3e4de6c103b7f758e13022fe217eba05fb6402c16c90a09d83a8f21b32fe93d",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/layout.tsx": {
+      "sha256": "abbd06ead352716cd30c9d622209d79b4b5cf0422803d1f1bccbb84f6221373e",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/login/page.tsx": {
+      "sha256": "0647c752c82d1bb750bef6f57d486431e21d286cdd3fb478d9eaac4becca79d2",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/reset-password/new-password/page.tsx": {
+      "sha256": "23e26665346dbaf52b13d823dfeb9359dd1c6a2587db5692c4bcfd8eebe96d3a",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/reset-password/page.tsx": {
+      "sha256": "69206e58a125603971caa0cc16c8258aa7d2704cd8c608539ce439081f71c4ca",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/page.tsx": {
+      "sha256": "e183c9cc32d600996339f34909e3cd1dfb788a0166ce0a40f96b1c226eaf8ad8",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/birth-date/page.tsx": {
+      "sha256": "5ec924fb14786289db757523bc6b80fd7174c40bbdab4310a75210887b12bb09",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/car/page.tsx": {
+      "sha256": "7f4eeaf6e15d81bc2bfdd5231ddf16c98b26ffbdfb56d5d642bc8fe7bf70fd65",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/child/page.tsx": {
+      "sha256": "624af4c5c69564f89ce28bc2dae5735d7b66a796bb854bdb079f3f15a0702b62",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/confirm/page.tsx": {
+      "sha256": "8df41e0b58e08ea4d6ac801f01ab37756e2f2883e4de5d90c11a04cc5c155092",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/gender/page.tsx": {
+      "sha256": "4be87e66179c453acbf87bea563af954cb726335f8a294bf1e8142bd16d29f50",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/household-size/page.tsx": {
+      "sha256": "aa11dfbd90a7e7ca823fcf953d64733235bd8635d2bea65f1870be3d21182ba5",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/page.tsx": {
+      "sha256": "f7b4a9b3652b0261e2a57f8403ba9c0dc1a514f3aa1ee1c1eef6f0f60f6d7105",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/profile/pet/page.tsx": {
+      "sha256": "37476008f95596dd7a059890a810c693eed1bb697e8147967c1a0d3f81843d0c",
+      "mode": "lf-text"
+    },
+    "frontend/app/auth/signup/terms/page.tsx": {
+      "sha256": "ed4f29230cca253ff3afc9e2efb40f0684225e5d3be9e90ff3afbb66c8daec95",
+      "mode": "lf-text"
+    },
+    "frontend/app/favicon.ico": {
+      "sha256": "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932",
+      "mode": "bytes"
+    },
+    "frontend/app/globals.css": {
+      "sha256": "2493e532c39993ae0ee35ccb87409858b037c27e8d5a8a327e00b21d040860d2",
+      "mode": "lf-text"
+    },
+    "frontend/app/icon.svg": {
+      "sha256": "6176138fc18d185a2c8f1ebbd202f0b055a78306495ca92e9f56d1633ed6a163",
+      "mode": "lf-text"
+    },
+    "frontend/app/layout.tsx": {
+      "sha256": "a76f2a14cf5461d5d1b165b64fceac968db71627be3abca23d0955ee381cd534",
+      "mode": "lf-text"
+    },
+    "frontend/components.json": {
+      "sha256": "9928283696d86836422959a2c520df83a718d31ffbcab533a14ca8dca2c8d475",
+      "mode": "lf-text"
+    },
+    "frontend/components/ai/ai-chat-body.tsx": {
+      "sha256": "06c6f53033e52e1101ad038dd308f26a2897f0ee7e5cf50fc55d163492566434",
+      "mode": "lf-text"
+    },
+    "frontend/components/ai/ai-chat-panel.tsx": {
+      "sha256": "e9e6bec547484dba628fac09344a7ee59b6e5b447418730574c4b868c6e0b816",
+      "mode": "lf-text"
+    },
+    "frontend/components/ai/ai-chat.tsx": {
+      "sha256": "762b84c7443191848f5721118bd23332650f589b9ec8a1cd78739a4f6810bdea",
+      "mode": "lf-text"
+    },
+    "frontend/components/ai/session-list-drawer.tsx": {
+      "sha256": "c3221a2fadab12cea65973d172969e7b9a13e03bc4e856d63f3925bd08fdb3c1",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/additional-info-skip-dialog.tsx": {
+      "sha256": "8050eaf2a7f797593e4231d5eba3afb97feafa4ebc438d38e2fe0f71c9ed2a91",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/attach-list-picker-dialog.tsx": {
+      "sha256": "ae6a40125207e598ba7670c7ad36ad1909ee2c43f5ee96543e49ab2f76f80503",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/attachment-picker.tsx": {
+      "sha256": "4810450955b02a4ea56a6996e26997c36b17461f6d38a101c214fe90e98d49f4",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/birth-date-picker.tsx": {
+      "sha256": "fe81e4bfd5e4f84b5aa5fd97d5fd6612bd368f6da0f808229b9ae889fa487a3e",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/category-list.tsx": {
+      "sha256": "b572bd8a0a9879488c08dd319a30c9905c75e24287d96c618814c9c1cb853cfe",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/checkbox.tsx": {
+      "sha256": "5a30c7e8ad47f90320aa171d2fa312b160eded7c5a15ff14fe798a7e172b683c",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/event-queue-flusher.tsx": {
+      "sha256": "3f07f29b026704d379b613bd640338ef7c97926274210a2138c150dd3fae63b1",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/filter-panel.tsx": {
+      "sha256": "73df2a06ab3e616b275c8c1d00daeb6b8348577a3cc5cc47979d02538d85706b",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/grade-box.tsx": {
+      "sha256": "1c74fe3ccc988e83c22047a9d3097c9e8b5eee06608326e24fdc5d125b7edd76",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/group-picker-dialog.tsx": {
+      "sha256": "25c2bad628f113758d24152698cdd0a4feed83a3e72984fe7c889e5822383192",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/location-map-dialog.tsx": {
+      "sha256": "6bef673f5b7a4f5d762d2b3ec90f839c5ac62dfb111441e82654181d3682147a",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/login-required-dialog.tsx": {
+      "sha256": "1a758bfbbcea374a70a763dfc4629c126fb505ae8b9dbe0a3a25c19a15f8e6e6",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/logout-button.tsx": {
+      "sha256": "a700e6524cb2e2f05c9d07472ee061b03a74e6ac75be0801f1ace3bac783e421",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/permission-request-dialog.tsx": {
+      "sha256": "480525a55f4b1091194fa39e0cf4866501222130021ae162c8ed22f248c0ed54",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/price-range-slider.tsx": {
+      "sha256": "e2609a84e65c7a236532821c288f0e13fb9fb67cae5de1cc6ca754f0452ae736",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/product-card.tsx": {
+      "sha256": "008f5e599fa8c6a7345095033b854f51c07de6efc51274fe45021beead8d4e46",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/product-detail-dialog.tsx": {
+      "sha256": "be0664b34a8b5c4564c2fb198a46195f69cb889c0941bf13a4c3d9aa5917dbbc",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/product-insights.tsx": {
+      "sha256": "0af1755c8c4ad580a383b74a812e8bfe6f48cc7372e6285215a1f92ef7e5023f",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/product-location-dialog.tsx": {
+      "sha256": "e530f3004952d85609039bb6969fc9bf995fdb05903c803d9e26c187c4585124",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/profile-step.tsx": {
+      "sha256": "67ac417ed5c20a3d9687eb7549bda24f3ca3ebd240aee51a863fa932c76a3cf6",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/promo-banner.tsx": {
+      "sha256": "d9620c477ac71840fb503c16d1b5eacb0b4a792922cf569963d7252d890d376d",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/quantity-stepper.tsx": {
+      "sha256": "4150efa299665bd45e2fa62d53f3b03fd68c6faeb8bf830115b77c9e26157dd8",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/quick-tab-chips.tsx": {
+      "sha256": "9c13142507dd0d1614d4f4fa690f87ea15bf758bc305d1c412fea15374996177",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/receipt-dialog.tsx": {
+      "sha256": "f9d6e25ebb4352b54a3e458f1621953a622a32e2beb1a87883fa70db1c0583bd",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/route-dialog.tsx": {
+      "sha256": "b576db9f8d83df46fd6f9b081e8a399552c825a4982f29de6528ce791da25c74",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/save-to-list-dialog.tsx": {
+      "sha256": "0470f7cf3703c62289776a3bdabc1b88c225cfd3a44444a30ce0f37a09c7c31b",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/scan-cart-dialog.tsx": {
+      "sha256": "892d0cc1c894cd98a41347ae9605c3358d32c7b2e6b424dc5d3b5f6c18382ab1",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/scroll-to-top-button.tsx": {
+      "sha256": "56d811312ca42fe4c79717c355c10ed03acd9478c0244402b6b09e58e54c0b34",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/shopping-route-actions.tsx": {
+      "sha256": "e3687babd19a10f821904ea6b1c1cd023414300b26025e74b5d8fb8116df5756",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/simple-markdown.tsx": {
+      "sha256": "b7950ab19eddf4b9b47e09664c438c24669725f5a5f7ed77e5cf250def628ad5",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/spending-cards.tsx": {
+      "sha256": "0bffcefac60b7cccc6c83bf8d1f2016ff5ac37c796c948b79d27a4ec5b6c2257",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/split-bottom-bar.tsx": {
+      "sha256": "31c904e452a8556cbb5eaaa7c7dfd565f45a059fd9a8ef71374f20fd7f5d8de3",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/sticky-bottom-bar.tsx": {
+      "sha256": "07680d3cd7e73604b3cbf232a379ab0846d14c08c1694cb7f4beb5fb94d42865",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/store-map-dialog.tsx": {
+      "sha256": "81cabbcf6b7a8431da45116f1c66f326d6d11faad2d0ca4feb264eac7fde4ec6",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/store-map.tsx": {
+      "sha256": "1d361e41485b5fce499a327cb773c971112347ff481083d92d9a1f3f9893bc9a",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/subpage-header.tsx": {
+      "sha256": "65e11aa7ac567e97a1851cf4f8da5505cc61ff1feac2d9fc2d741bb624a4a752",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/terms-modal.tsx": {
+      "sha256": "c5a2215094fca360cc033f632a512f2e25924ac925456808e1d640508bc48400",
+      "mode": "lf-text"
+    },
+    "frontend/components/domain/withdraw-button.tsx": {
+      "sha256": "9807acece53eca560deb414631b4b981d61ca571be4844be9e7e7d496864f607",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/ai-discovered.tsx": {
+      "sha256": "db77ab95a1fb1192250064bdb3bcc25196ad2907c15df82acf251c6e73a9feb9",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/ai-guide.tsx": {
+      "sha256": "4bfa9147903b8303ab9dfe1c2947998245b3a05dabb89cfdf69f3091050e4350",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/ai-memory.tsx": {
+      "sha256": "d4a1b4e00131146ec8d3169bfc4db0b25eb423aa6320f67cbc819ff63e4a3949",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/cart-picker.tsx": {
+      "sha256": "72ca3344f8406b1d680c38a3f560f88d4e86a9534dfe1d58beb92012d5c9ad63",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/cart-summary.tsx": {
+      "sha256": "7fa00cfd0b9aac998aa80fc238155aaa4357424114e25e3d14c060acb1daf04c",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/discover.tsx": {
+      "sha256": "6ed79a8ffbe8b02566d894b2c859ee5d76bc8e8fa09173ece39d28456f668e4a",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-dashboard.tsx": {
+      "sha256": "66106eaecd822f06bfe59c3e4856decfac962af02b3a049fa33a3c64a1066129",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-greeting.tsx": {
+      "sha256": "1338b1ffabb4ab96fd8642f0c20a3f4c2f7024ae4487319f72ea7dc9379d79c5",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-hero-card.tsx": {
+      "sha256": "8f79721f9157e09e82bf8a48ff2d1b29bf3d9d148012a2dc314e092b73b407ea",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-login-banner.tsx": {
+      "sha256": "6dd55290b56983e31aef9e8b2b32a9b9704f9065d3862714d1fb85430763470f",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-notices.tsx": {
+      "sha256": "b26cccfac99fd1715dd65cfc7a3a4c7c23ce302de768bfa6491885ef3039eaff",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-payment-banner.tsx": {
+      "sha256": "605bc34fbd5c1f5e3cfae1edbc9c375ad217cc6ba110e22002d3633c4d9f0993",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-spending-analysis.tsx": {
+      "sha256": "a23ed2593789b5adf353aaf0b77ce72fd85abbd2dd026505538a7905e657a2aa",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/home-top.tsx": {
+      "sha256": "3920d4a86e5b4714afa973f98b3da98206f8e0f4bd367101d2d3dca5adb56693",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/recommended-products.tsx": {
+      "sha256": "58922bfe943f001c25b64511a185b0aeb038148656f6d516ce06d27a441f65cb",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/search.tsx": {
+      "sha256": "f6b958d201a7eba345236ebf4b7c6745d469c0a2d2582d122cced3b7957dbac8",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/section-title.tsx": {
+      "sha256": "f245fba9d904a7a9d737c8240d8f64f640c733daaa7bef2ea4b4ffc406e99bb9",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/shopping-status.tsx": {
+      "sha256": "edf6b6fd06a8414fb2ab239b2a8d1226e2730d471b67d23e6a4fa18a55841405",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/status-item.tsx": {
+      "sha256": "82b2d6464985b0853a7b9b32ace4d8eb19ebf3300ce66559d0f6ff108d0de270",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/today-briefing.tsx": {
+      "sha256": "3b20148006b9dd894340bb32c17d3951d7072898ec0289262ea83afefa20416b",
+      "mode": "lf-text"
+    },
+    "frontend/components/home/what-to-buy.tsx": {
+      "sha256": "aa6fa3b8fd6ca1ce4363d7c49076d38a1b53df85de47906a96e9f4b311b996b6",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/ai-mobile-sheet.tsx": {
+      "sha256": "3540ec390999c30d0d06d57f918e8658e21b43d76d26fced98f1f374ab0892f8",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/ai-panel-context.tsx": {
+      "sha256": "77021460fd25d0e58e1adfd9f805d596b42a08eb4fe56fccd1b331e271d2c408",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/ai-panel.tsx": {
+      "sha256": "450dec3734c2678de5ded4d798a10fb59ae7ad41cfd4e91398b39f366ce5a3e9",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/ai-proactive-bubble.tsx": {
+      "sha256": "6cb413be9816abb200f48e6ac27eb171b90f9a304e81353bc280852bb118198e",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/app-shell.tsx": {
+      "sha256": "a997750e7bbf5274d7e28c23896db7daf4db5f4bca32b8d184c45aad07e03ba6",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/bottom-bar-visibility-context.tsx": {
+      "sha256": "8a92fe151746668c6fcf3d79de9a5fdaaa59abfb30726a766915209325219d65",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/bottom-tab-bar.tsx": {
+      "sha256": "5610b23460c798045fad7c8924b525198951751649068e5288a423fe08f565e6",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/footer.tsx": {
+      "sha256": "0a3d7556539b21f7286f22398a2ff9a14cb8817c452fb1a6fcab418c058f0729",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/home-ai-header.tsx": {
+      "sha256": "29d52e4216e30e4ac6e2b86268bc7e97b827dea3c712e1906373c8485b319662",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/shopping-liv-button.tsx": {
+      "sha256": "a591d2a3f5308456c5cbb5af4737a52e19d3204d0f985b83ad699201c93ce1ee",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/shopping-liv-toggle.tsx": {
+      "sha256": "bf304aac62fea3891e60aa4dc7d93c9842e8da7c8eef689e591b75b386337157",
+      "mode": "lf-text"
+    },
+    "frontend/components/layout/swipe-nav.tsx": {
+      "sha256": "74842f953e07f74fc5124130b4e8974407c632db7ef41c70193b71eb27e5f272",
+      "mode": "lf-text"
+    },
+    "frontend/components/ui/badge.tsx": {
+      "sha256": "968b0403af74a785c9408ca69a677235e49d0c80b2c27fb9858ad421a8778c7d",
+      "mode": "lf-text"
+    },
+    "frontend/components/ui/button.tsx": {
+      "sha256": "dbe7a99e546ce5b08fa551a6d85909d96228ee93a57a04771565181b71ac070c",
+      "mode": "lf-text"
+    },
+    "frontend/components/ui/card.tsx": {
+      "sha256": "aa464c8143bcd9b44fb1ffcdc97c668a5b5f241c406f58b31f40310fd9bc435b",
+      "mode": "lf-text"
+    },
+    "frontend/components/ui/checkbox.tsx": {
+      "sha256": "16b22aacf9ff1d1627f0988cb8a70c70a179185757dc894ac5d6fbb60a1ff145",
+      "mode": "lf-text"
+    },
+    "frontend/components/ui/dialog.tsx": {
+      "sha256": "795d541cf0b8db54e74b81a4b404fc111c10a966085ce1eab3ea7021347ca737",
+      "mode": "lf-text"
+    },
+    "frontend/components/ui/input.tsx": {
+      "sha256": "f95f84a03de1b480ff0ab084ee3dfc5c4dc8b5610cf319af2d6799471dd8cf49",
+      "mode": "lf-text"
+    },
+    "frontend/eslint.config.mjs": {
+      "sha256": "870f1adccecf3051cbcd9fd307cef51d7633cf510979c181a81f4b1797273493",
+      "mode": "lf-text"
+    },
+    "frontend/lib/ai-proxy.ts": {
+      "sha256": "b8ab0a028c97d469d3259e9228dae478be0abbb57891339ef5021bd321471a04",
+      "mode": "lf-text"
+    },
+    "frontend/lib/api-client.ts": {
+      "sha256": "774b086b95e40338411699d91679af35c82ebd862592263430a547c3111bf3d3",
+      "mode": "lf-text"
+    },
+    "frontend/lib/auth.ts": {
+      "sha256": "a25f6f47d0bf1f80d8f51ee8a55b2a6ff67639595ba5ec1b39e47315812eab74",
+      "mode": "lf-text"
+    },
+    "frontend/lib/browse-map-zones.ts": {
+      "sha256": "7aa9a7f7c505554f466c85dff250dd85cd7a3cb616d23b33860dd1c9fb6a1f4a",
+      "mode": "lf-text"
+    },
+    "frontend/lib/cart-storage.ts": {
+      "sha256": "e3bbacd5bdd6ba8d80e5fa364ccba59b8dd8293ee0fb1e6447b7ace3cf6550d8",
+      "mode": "lf-text"
+    },
+    "frontend/lib/category-colors.ts": {
+      "sha256": "2f2c93599ab2d1120449c3160fb473b15158b65dad45e1866506cfadad29b66d",
+      "mode": "lf-text"
+    },
+    "frontend/lib/chat-detail-links.ts": {
+      "sha256": "2b9c40372cea57a795788c97e2b09e2f60023a85622852f1048bdd719d1c1df6",
+      "mode": "lf-text"
+    },
+    "frontend/lib/chat-search.ts": {
+      "sha256": "6d7beb21a396aca48e99ff65f64f4b5c58db460d9aea5ec13ba2c435cd333b63",
+      "mode": "lf-text"
+    },
+    "frontend/lib/checkout-draft.ts": {
+      "sha256": "0f94effc9228fb5faa85f155a51b0c57fabb67ed7c04fdaef08c7d9fe3343594",
+      "mode": "lf-text"
+    },
+    "frontend/lib/checkout-summary.ts": {
+      "sha256": "ffa6c06c3e3e162382d313798afb3a78374c6b1d4187703b3bd0aa188f8e861c",
+      "mode": "lf-text"
+    },
+    "frontend/lib/client-id.ts": {
+      "sha256": "52370b872431bb2f1e91138d2de817933f6bc7777ccf3769f8a5fc3b03a6192a",
+      "mode": "lf-text"
+    },
+    "frontend/lib/completed-groups.ts": {
+      "sha256": "b2b98c4ad2ee3735864b4af9e9c52625894abecff3230705bcc4b2936192c1f0",
+      "mode": "lf-text"
+    },
+    "frontend/lib/consumer-api.ts": {
+      "sha256": "c8e50c49e1dbbc9c55286076f965d806d78ba943004a2817be00afa266c05c78",
+      "mode": "lf-text"
+    },
+    "frontend/lib/consumer-benefits.ts": {
+      "sha256": "0332cf7f59c91045fa34dcf0ff9527e6012ac0e79b11cf4d670a730bd16063b3",
+      "mode": "lf-text"
+    },
+    "frontend/lib/consumer-events.ts": {
+      "sha256": "4c71c225648c49f436488717a43ef085435e7459da33af511b410f2c4eaef4dc",
+      "mode": "lf-text"
+    },
+    "frontend/lib/consumer-profile.ts": {
+      "sha256": "7def8ddec72eab9a7487b48f6f38df94ab62924c22a89646ab40b5cef49f650e",
+      "mode": "lf-text"
+    },
+    "frontend/lib/coupons-mock.ts": {
+      "sha256": "e7224484f4ceefce46c605ce2f8de046156bb264037c02685665a6f0fee0c558",
+      "mode": "lf-text"
+    },
+    "frontend/lib/facility-barcode.ts": {
+      "sha256": "203261f06d9626c672314487677ebb774880fd5e7f901ad260ffbe1e9dc7d32f",
+      "mode": "lf-text"
+    },
+    "frontend/lib/format-time.ts": {
+      "sha256": "7c9321f0cb3a0edbb1df10430f40dc77e3af5b20d1ff81119ea39fda226f2445",
+      "mode": "lf-text"
+    },
+    "frontend/lib/grade.ts": {
+      "sha256": "7606f4f9702190fcf94b37603132ded2774f5f739aa1c12a4c1bb47a10221517",
+      "mode": "lf-text"
+    },
+    "frontend/lib/hidden-sessions.ts": {
+      "sha256": "8af19cc29103602e20d21c306754019c0af172c18b86739a84bed54f055d68dd",
+      "mode": "lf-text"
+    },
+    "frontend/lib/home-data.ts": {
+      "sha256": "582fa678e50b2dcc253ce9da92701c5166ad4573ad604aa26545a3d2cfa635dd",
+      "mode": "lf-text"
+    },
+    "frontend/lib/journey-labels.ts": {
+      "sha256": "34698c75bc24256efa95a052c99defd9aa4da79bd9eda0f18cc2e1d429d7d31e",
+      "mode": "lf-text"
+    },
+    "frontend/lib/legal-content.ts": {
+      "sha256": "96681e112816f22bf0e217b5b657728da61f7059945f66219db23f606c92e8c9",
+      "mode": "lf-text"
+    },
+    "frontend/lib/list-groups.ts": {
+      "sha256": "a272db4232fe6f118e8ba31077ce619db02746051c71b4424f3dd08b415d45ea",
+      "mode": "lf-text"
+    },
+    "frontend/lib/location-pins.ts": {
+      "sha256": "9cd856d6413da0493d4fdf57435555c6d1a4b659b5186eafd571e3ba40fcd2f9",
+      "mode": "lf-text"
+    },
+    "frontend/lib/location-products.ts": {
+      "sha256": "cd9f4713f66eef7f18778a00c02b0672226a115010fe84c48d3db788afa57f14",
+      "mode": "lf-text"
+    },
+    "frontend/lib/map-config.ts": {
+      "sha256": "05898665b1cdfc9df676d69f87a80eea7ef05c32148c724bbe0d210a9a682048",
+      "mode": "lf-text"
+    },
+    "frontend/lib/mock-orders.ts": {
+      "sha256": "6b39b883c1d8edfce5b528f0b6edbb4ec0c21edfac7ca1775f0ceaf7f1d35f89",
+      "mode": "lf-text"
+    },
+    "frontend/lib/mock-products.ts": {
+      "sha256": "ca641f799d0df7ca4e0296e1949b1de452412e5469955c9091bde09b5014add7",
+      "mode": "lf-text"
+    },
+    "frontend/lib/navigation.ts": {
+      "sha256": "2e00aed1dba95cb201eb36a045eb2fb892f0c391bbb5557183f61deaaee9de3c",
+      "mode": "lf-text"
+    },
+    "frontend/lib/notices.ts": {
+      "sha256": "5e98b10daaa5cb2c09e724097ee99c3f1be68f483d73e129d47ecd9c38cc1a06",
+      "mode": "lf-text"
+    },
+    "frontend/lib/notification-prefs.ts": {
+      "sha256": "a27bd69e03e7de32b02316755ee6e76c6d36b2b42ca2d119bd9a78ad0accacff",
+      "mode": "lf-text"
+    },
+    "frontend/lib/pathfinding.ts": {
+      "sha256": "1dc31807769425a1c487751c8a1cfcba678bf0534107ad72ebf7e4c04da34608",
+      "mode": "lf-text"
+    },
+    "frontend/lib/proactive-notifications.ts": {
+      "sha256": "7c555548cbf448b0d391afddda51efa104b0e26ced64cd65f11b706b329aa208",
+      "mode": "lf-text"
+    },
+    "frontend/lib/product-filter.ts": {
+      "sha256": "6e624e9afcaccfeb1d4ae455e7cc5d9dcd7700294eac27ee38d7481d6468f441",
+      "mode": "lf-text"
+    },
+    "frontend/lib/product-location.ts": {
+      "sha256": "c9f23388afce71d598652ee70fdbc25ff709197efdab4fbf27e818417d8cd51e",
+      "mode": "lf-text"
+    },
+    "frontend/lib/promo-mock.ts": {
+      "sha256": "2ef37a64eff2569690db23b78228ac7964853ac39ab99ebebd695ce355a8008e",
+      "mode": "lf-text"
+    },
+    "frontend/lib/realtime.ts": {
+      "sha256": "9b7d50e151aec646f4bcdd8cab792723be2f8de23ae11971ac9aa213fc555dce",
+      "mode": "lf-text"
+    },
+    "frontend/lib/recent-views.ts": {
+      "sha256": "7682d4777db7f21f84ac2d9164daa855d4450e66c563b472c2be744009e015f2",
+      "mode": "lf-text"
+    },
+    "frontend/lib/route-display.ts": {
+      "sha256": "1d9370571ae8a8fc0568660dd50a87a3f39325751d3b11e358a6a706ec7969a5",
+      "mode": "lf-text"
+    },
+    "frontend/lib/route-order.ts": {
+      "sha256": "71d4b7f204f5e24df971ee3af783c98ae3e136bcf710e633ee92fa181fe97b06",
+      "mode": "lf-text"
+    },
+    "frontend/lib/search-history.ts": {
+      "sha256": "52c7b6d5a20e6bdb3e8670fc2cbf44a535dc28f8860b3c4f90e44468e661dc8f",
+      "mode": "lf-text"
+    },
+    "frontend/lib/session-title-override.ts": {
+      "sha256": "6e66eca77cf6bc048151cd141c379222dc07ebd697a495f2078e165de8eecc3d",
+      "mode": "lf-text"
+    },
+    "frontend/lib/session.ts": {
+      "sha256": "a4adb481187e446abe2bbe23b4ebb2ee985afd6b09622ee30087c264c4f2b438",
+      "mode": "lf-text"
+    },
+    "frontend/lib/shopping-route-progress.ts": {
+      "sha256": "4294b10825cc8236cb289a53bb1f62a8b6423d3784c80074f80c5986a71ac66f",
+      "mode": "lf-text"
+    },
+    "frontend/lib/shopping-session.ts": {
+      "sha256": "cc269fcd421e21886dca31b30465b26e846462815858e1ba28b4b6b79a7f472f",
+      "mode": "lf-text"
+    },
+    "frontend/lib/signup-draft.ts": {
+      "sha256": "d31bf7edfccacc5562ced65c3d5255322578586016a56b3b5e8e7fadbe1ee081",
+      "mode": "lf-text"
+    },
+    "frontend/lib/simulation-bridge.ts": {
+      "sha256": "3f3f99559ea70ad939f8555bff5d394e0aadccefe4df2a55f75538977f6c51d1",
+      "mode": "lf-text"
+    },
+    "frontend/lib/simulation-location.ts": {
+      "sha256": "37fbd5ec1e794ea0c590b92747f6ccca219d078f9b9896a577353d848975cbea",
+      "mode": "lf-text"
+    },
+    "frontend/lib/spending-metrics.ts": {
+      "sha256": "b1e328cd8a90958801cb24d4fa431bfccf7ad462f47a02d96ba5acf08cd0e7b2",
+      "mode": "lf-text"
+    },
+    "frontend/lib/store-hours.ts": {
+      "sha256": "c023cb1b521dca70c9026923e265244468bad0293d2c1f69f24d7f229e318253",
+      "mode": "lf-text"
+    },
+    "frontend/lib/use-barcode-scanner.ts": {
+      "sha256": "25c9202159746fcdf51be79bccac4fb5ff0a826842ade039017878ee00fb4f6b",
+      "mode": "lf-text"
+    },
+    "frontend/lib/use-media-query.ts": {
+      "sha256": "d3fb6fbe1a99669fb38bbe4b96a8ba67b311b965e7f3584d386a2af0f5587560",
+      "mode": "lf-text"
+    },
+    "frontend/lib/use-open-ai-chat.ts": {
+      "sha256": "ed0f9666b77f05e413eab53a1573e32e272e94955e79c70d776fad823370f43a",
+      "mode": "lf-text"
+    },
+    "frontend/lib/use-permission-status.ts": {
+      "sha256": "b0b0b681f099cf61198ee661eb838e335b50fce47661297382ab1cc87e158c12",
+      "mode": "lf-text"
+    },
+    "frontend/lib/use-unread-notifications.ts": {
+      "sha256": "6a1221f0500be2bb572db6d75247995c14f6d8bf951465c7cc9a7794e7eb4123",
+      "mode": "lf-text"
+    },
+    "frontend/lib/utils.ts": {
+      "sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d",
+      "mode": "lf-text"
+    },
+    "frontend/lib/visit-schedule.ts": {
+      "sha256": "8741cd247c105bd2e4d165516c0c6e2fab3967c11563d66ca1c73f079e76b031",
+      "mode": "lf-text"
+    },
+    "frontend/next.config.ts": {
+      "sha256": "61a20d09d1639e255edbf82b14403e4970c3dcf0c53d42c49dc7fceaeb498f63",
+      "mode": "lf-text"
+    },
+    "frontend/package-lock.json": {
+      "sha256": "7b0b4d057ff384b1f3b89207a7bc2617d421234267b555b14b5c43f18b5f3139",
+      "mode": "lf-text"
+    },
+    "frontend/package.json": {
+      "sha256": "2490553829a67590fda45963a1cfd0f8244d53b1f0d0c4ff33c581a4f087c16e",
+      "mode": "lf-text"
+    },
+    "frontend/postcss.config.mjs": {
+      "sha256": "97ab34f7517584bbb828c26113103bfedf1329754cc4ecdf12cd9be105630070",
+      "mode": "lf-text"
+    },
+    "frontend/public/banners/promo-list.png": {
+      "sha256": "e9d6a9376a039cc185bbd0d6feadd048b8d24a8c3c95829123997684c743329a",
+      "mode": "bytes"
+    },
+    "frontend/public/banners/promo-points.png": {
+      "sha256": "4007d529a784857ab890d0ca52e8496e929727ad942b1884eed89b20d9b8b335",
+      "mode": "bytes"
+    },
+    "frontend/public/cards/plan-with-liv.png": {
+      "sha256": "d2d75a880d56d62f31387e1ad7e6074b45d4cba39e7afe6a979f01c5b70c0d7b",
+      "mode": "bytes"
+    },
+    "frontend/public/cards/product-search.png": {
+      "sha256": "86ad5d1acac9d2ed2745deaab3f37f3824ed87c50afb14851e77602e020dd0b1",
+      "mode": "bytes"
+    },
+    "frontend/public/cards/store-map.png": {
+      "sha256": "badff3c04c13bd30899b208244ca9d22b10b2551bd5ec02314e0f5a189e729fe",
+      "mode": "bytes"
+    },
+    "frontend/public/file.svg": {
+      "sha256": "2b67812c325c199a02536cdbeea0c593a72f707d323b72ee3e08dbab06753bd4",
+      "mode": "lf-text"
+    },
+    "frontend/public/globe.svg": {
+      "sha256": "b614b9bf183925957661ac851498fe1d8029fd43a62fbfed86f9e2624a57e7cf",
+      "mode": "lf-text"
+    },
+    "frontend/public/grade/basic.svg": {
+      "sha256": "48906424c78ed9e6b00707e12a76d70ba1d57591ced37d8709267228f03427d5",
+      "mode": "lf-text"
+    },
+    "frontend/public/grade/bronze.svg": {
+      "sha256": "084866efd240eb38003c0f45036924a92da6adaa45b554c33b467fcfcbcb84c4",
+      "mode": "lf-text"
+    },
+    "frontend/public/grade/gold.svg": {
+      "sha256": "05fb7802da8588463f8e8e7bcea7305297dfac5263e2e32d8312d302075ef05c",
+      "mode": "lf-text"
+    },
+    "frontend/public/grade/silver.svg": {
+      "sha256": "cb4d912d1f0baf2899340503e988bf1b64ef2dbca1ca5d11f4d44edae67576dc",
+      "mode": "lf-text"
+    },
+    "frontend/public/icons/bell.svg": {
+      "sha256": "8eeca6106d6a6c9d19ed61c56133000a85a359d21df0da71b18d18b4ed422dcf",
+      "mode": "lf-text"
+    },
+    "frontend/public/icons/liv-full.svg": {
+      "sha256": "267cdf1175f6c79b405ed507b55144c3a0ae52520aa79894aa90e57209f1340a",
+      "mode": "lf-text"
+    },
+    "frontend/public/icons/liv-line.svg": {
+      "sha256": "811ba0db33e857f1a3d5f2749ab27c1a49c1a51c36a4507ed522b4c51bd90847",
+      "mode": "lf-text"
+    },
+    "frontend/public/icons/logo-ai.svg": {
+      "sha256": "7e1af4c1cf52cc40dc26f3eccebdfc7685b89a2e572e011ef88794e7ec74fb48",
+      "mode": "lf-text"
+    },
+    "frontend/public/icons/logo-shopping.svg": {
+      "sha256": "cc48185f180f0f38b2f3a4a2e1c86df362a867ec85a12c2ee78ac73ac6485786",
+      "mode": "lf-text"
+    },
+    "frontend/public/maps/MAP_GUIDE.md": {
+      "sha256": "e42cef086fa8facd8cdec8f2dff1780debf0928c947b2427fe728e2c326d723d",
+      "mode": "lf-text"
+    },
+    "frontend/public/maps/floor-1.png": {
+      "sha256": "c6c4849774841d88e5a9c0e85ed06ec41c084aa8011e7b2e31806c4de844d308",
+      "mode": "bytes"
+    },
+    "frontend/public/maps/floor-2.png": {
+      "sha256": "765b4e7f20dbe1ff47034012637480450b5774881b6d3c0c2fc99c3b2387402f",
+      "mode": "bytes"
+    },
+    "frontend/public/maps/floor-3.png": {
+      "sha256": "8314902c49bb8064f2720028f909d23bb474d57089137f14291db7a570e7c580",
+      "mode": "bytes"
+    },
+    "frontend/public/next.svg": {
+      "sha256": "55995dfad6ecb4945a1e856ddca03c5e16aa5bf13fd21b4df6a74ae79357bcfc",
+      "mode": "lf-text"
+    },
+    "frontend/public/store-hours/hours.png": {
+      "sha256": "06286e007b2d36911a20d8c2e4c2e2f3531d8d4a3f0494f61bb60633c08c2e4e",
+      "mode": "bytes"
+    },
+    "frontend/public/vercel.svg": {
+      "sha256": "f081337b2fee635b455b63275406a3e7f39d6a014e25ad90dab5a67e62a12ac4",
+      "mode": "lf-text"
+    },
+    "frontend/public/window.svg": {
+      "sha256": "644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/api-origin-check.cjs": {
+      "sha256": "36f2a068d4236dc5fd3c28e8c8375f41ce43bce217a247ba92c632187e42e98c",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/cart-move-check.cjs": {
+      "sha256": "999e9063c215c2fb4c493aa8dcf237405eabfce9478fc11b27edd5688c780d80",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/chat-links-recommendations-check.cjs": {
+      "sha256": "80a6d97570fbaa4dfeaa4d0de23aee5bf53c5c66d669a6bb9803e97d88055615",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/chat-session-check.cjs": {
+      "sha256": "0644551de86bb954fc6d3978590e0be00e8cfaeb18be59743948fe49ec782fdb",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/demo-fixes-check.cjs": {
+      "sha256": "bdb0c0a2c124a6666cc390e32f5dc78f46d8ffd88df09fe9c60cd8544af88b2e",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/facility-scan-check.cjs": {
+      "sha256": "173811c656ac08580888acfd55bd7c1ae28f4cffbd2cb0661b726a8cee413365",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/guest-image-check.cjs": {
+      "sha256": "ad9a1f3f70e4b6faeccd52a19837ccae1849033bc7cc652e2e9dd0bf1d4c0e10",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/integration-check.cjs": {
+      "sha256": "724a4f289c846763119227788a5b7335566ca9a7d4f82501d4fc291836198419",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/member-cache-check.cjs": {
+      "sha256": "d446b3e90be55a6e7256f1a114689d27525c45bf3b0e4b3b84d176476bae8df3",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/proactive-identity-check.cjs": {
+      "sha256": "ad8159467f352010d15945ae204a7924f1c052d8a71f88e1e7a7466cdbf61cce",
+      "mode": "lf-text"
+    },
+    "frontend/scripts/putback-check.cjs": {
+      "sha256": "14dc083a97ceadc31682fb954435e4c0b1b8e401ef0928d82b7404ec1881b626",
+      "mode": "lf-text"
+    },
+    "frontend/tests/shopping-route-progress.test.mjs": {
+      "sha256": "5d940dbbb59cee047c9c835eebe75dafe429f7e6c10d1fd776051293c7f00002",
+      "mode": "lf-text"
+    },
+    "frontend/tsconfig.json": {
+      "sha256": "86c57aa7eec3e819fc7f5f7075219d9383d4ce824b751816636e581170b7cc97",
+      "mode": "lf-text"
+    }
+  },
+  "backendClassByteMismatchCount": 0,
+  "simulationDistMatchesRelease": "1ca7c98"
+}
