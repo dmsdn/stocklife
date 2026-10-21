@@ -67,7 +67,7 @@ export function AiChatPanel({
           h-dvh
           max-h-dvh
           min-h-0
-          w-screen
+          w-full
           max-w-none
           flex-col
           overflow-hidden

@@ -82,7 +82,7 @@ export function HomeHeroCard({
   // --- SHOPPING ---------------------------------------------------------
   if (shoppingGroup && shoppingSession) {
     return (
-      <section className="w-full px-4 sm:px-6 lg:px-8">
+      <section className="mb-2 w-full px-4 sm:px-6 lg:px-8">
         <Card className="p-6">
           <p className="text-sm text-muted-foreground">장보고 있군요 🛒</p>
           <h2 className="mt-1 truncate text-lg font-semibold">{shoppingGroup.title}</h2>
@@ -116,7 +116,7 @@ export function HomeHeroCard({
   // --- EMPTY --------------------------------------------------------------
   if (readyGroups.length === 0) {
     return (
-      <section className="w-full px-4 sm:px-6 lg:px-8">
+      <section className="mb-2 w-full px-4 sm:px-6 lg:px-8">
         <Card className="p-6">
           <p className="text-lg font-semibold">필요한 걸 하나씩 담아볼까요?</p>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -145,7 +145,7 @@ export function HomeHeroCard({
   const cats = topCategories(latestGroup.products);
 
   return (
-    <section className="w-full px-4 sm:px-6 lg:px-8">
+    <section className="mb-2 w-full px-4 sm:px-6 lg:px-8">
       <Card className="p-6">
         <p className="text-sm text-muted-foreground">오늘 장볼 준비됐나요? :)</p>
         <h2 className="mt-1 truncate text-lg font-semibold">{latestGroup.title}</h2>

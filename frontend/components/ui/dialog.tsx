@@ -4,6 +4,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import { cn } from "@/lib/utils";
+import { getAppFrame } from "@/lib/app-frame";
 import { Button } from "@/components/ui/button";
 import { RiCloseLine } from "@remixicon/react";
 
@@ -23,10 +24,13 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
 }
 
 // 모달을 화면 최상단에 띄움
-function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
+// 모바일 화면 틀(#app-frame) 안에 띄워야 모달 폭과 위치가 틀에 맞춰진다.
+// (document.body에 띄우면 PC에서 브라우저 전체 폭 기준으로 커짐)
+function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
   return (
     <DialogPrimitive.Portal
       data-slot="dialog-portal"
+      container={container ?? getAppFrame() ?? undefined}
       {...props}
     />
   );

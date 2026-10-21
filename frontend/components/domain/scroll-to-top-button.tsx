@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { RiArrowUpLine, RiArrowLeftSLine } from "@remixicon/react";
+import { getScrollRoot, getScrollTop, scrollAppToTop } from "@/lib/app-frame";
 
 export function ScrollToTopButton({
   /** 이 값(px)보다 더 내려가야 버튼이 뜸. 기본 300px. */
@@ -17,10 +18,12 @@ export function ScrollToTopButton({
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > threshold);
+    // 스크롤은 브라우저(window)가 아니라 모바일 화면 틀 안(#app-scroll)에서 일어난다
+    const scrollRoot = getScrollRoot();
+    const onScroll = () => setVisible(getScrollTop() > threshold);
     onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    scrollRoot.addEventListener("scroll", onScroll, { passive: true });
+    return () => scrollRoot.removeEventListener("scroll", onScroll);
   }, [threshold]);
 
   if (!visible) return null;
@@ -28,7 +31,7 @@ export function ScrollToTopButton({
   return (
     <button
       type="button"
-      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      onClick={() => scrollAppToTop("smooth")}
       aria-label="맨 위로"
       className="fixed bottom-24 left-1/2 z-40 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-white text-foreground shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-opacity"
     >

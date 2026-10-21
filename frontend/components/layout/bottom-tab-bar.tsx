@@ -37,6 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useBottomBarVisibility } from "./bottom-bar-visibility-context";
 import { useAiPanel } from "./ai-panel-context";
+import { getScrollRoot, getScrollTop } from "@/lib/app-frame";
 
 export const navigationItems = [
   { href: "/", label: "홈", LineIcon: RiHome5Line, FillIcon: RiHome5Fill },
@@ -75,9 +76,11 @@ export function BottomTabBar() {
   const lastScrollY = useRef(0);
 
   useEffect(() => {
-    lastScrollY.current = window.scrollY;
+    // 스크롤은 브라우저(window)가 아니라 모바일 화면 틀 안(#app-scroll)에서 일어난다
+    const scrollRoot = getScrollRoot();
+    lastScrollY.current = getScrollTop();
     const onScroll = () => {
-      const y = window.scrollY;
+      const y = getScrollTop();
       const diff = y - lastScrollY.current;
       if (y < 80) {
         setHiddenByScroll(false);
@@ -88,8 +91,8 @@ export function BottomTabBar() {
       }
       lastScrollY.current = y;
     };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    scrollRoot.addEventListener("scroll", onScroll, { passive: true });
+    return () => scrollRoot.removeEventListener("scroll", onScroll);
   }, []);
 
   if (hidden) return null;

@@ -29,9 +29,6 @@
 //   뺄지" 선택 패널(n개 빼기 스테퍼 / 다 빼기)이 뜸 → 개수를 고르면 그제서야 무장되고
 //   바코드를 다시 찍어야 실제로 빠짐.
 "use client";
-import {collapseEscalatorLabels} from "@/lib/journey-labels";
-import { facilityBarcode } from "@/lib/facility-barcode";
-import {floorSegments, nextDestinationSteps} from "@/lib/route-display";
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -57,7 +54,6 @@ import {
   createCartGroup,
   getOrCreateQuickCartGroup,
   syncUpdateServerCart,
-  syncRemoveFromServerCart,
   moveProductsBetweenGroups,
   type CartGroup,
 } from "@/lib/cart-storage";
@@ -73,9 +69,7 @@ import {
 } from "@/lib/shopping-session";
 import { fetchInventoryBatch, pickLocation, formatLocationLabel } from "@/lib/product-location";
 import { isGroupCompleted, markGroupCompleted } from "@/lib/completed-groups";
-
 import { useOpenAiChat } from "@/lib/use-open-ai-chat";
-import { ShoppingLivButton } from "@/components/layout/shopping-liv-button";
 
 const DEFAULT_GROUP_ID = 1;
 // 결제 금액 대비 예상 적립 포인트율 — 백엔드 OrderService.checkout()의 실제 적립 로직
@@ -212,13 +206,16 @@ function ScanPageInner() {
   }, []);
 
   const [barcode, setBarcode] = useState("");
-  const [arrivalNotice, setArrivalNotice] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const [sessionScans, setSessionScans] = useState<Set<number>>(new Set());
 
-  const removeLock = useRef(false);
-  const [removing, setRemoving] = useState(false);
+  // ✅ 수정(2026-09, 2차) — "−" 누르면 그 상품이 선택 표시만 되고(selectedRemoveSkuId),
+  //   목록 아래에 뜨는 선택 패널에서 몇 개 뺄지(removeQuantityDraft) 고른 뒤에야
+  //   pendingAction으로 무장됨 — 그 상품 바코드를 다시 스캔해야 실제로 반영됩니다.
+  const [selectedRemoveSkuId, setSelectedRemoveSkuId] = useState<number | null>(null);
+  const [removeQuantityDraft, setRemoveQuantityDraft] = useState(1);
+  const [pendingAction, setPendingAction] = useState<{ skuId: number; quantity: number } | null>(null);
   const [checkingOut, setCheckingOut] = useState(false);
   // ✅ 신규 — 담은 상품 목록 위 손잡이를 위로 끌어올리면(또는 탭하면) 카메라·바코드
   //   입력을 숨기고 목록만 화면 가득 채워서 쭉 나열되게 함. 아래로 다시 끌면 원상복구.
@@ -271,8 +268,22 @@ function ScanPageInner() {
       const localScans = saved?.groupId===groupId ? saved.scannedSkuIds : [];
       loadCartGroups().then((loaded) => {
         setGroups(loaded);
-        const serverScanned = (loaded.find(g=>g.id===groupId)?.products ?? []).filter(p=>p.scannedAt!=null).sort((a,b)=>Date.parse(a.scannedAt!)-Date.parse(b.scannedAt!)).map(p=>p.id);
-        setSessionScans(new Set([...serverScanned.filter(id=>!localScans.includes(id)), ...localScans]));
+        // ✅ 버그 수정(요청 — "현위치 핀이 엉뚱한 데 그대로 있다") — 원인은 여기였습니다.
+        //   serverScanned를 products 배열 순서(실제 스캔 순서와 무관한, 리스트 저장 순서) 그대로
+        //   썼고, 게다가 merge 순서가 [localScans, ...serverScanned]라서 serverScanned가 하나라도
+        //   있으면 Set의 "마지막 원소"(=checkedMapPins/checkedListProducts가 현위치로 찍는 기준)가
+        //   항상 serverScanned 쪽 마지막 항목이 됐습니다 — 방금 로컬에서 막 찍은 상품이 있어도
+        //   그게 "가장 마지막"으로 인정 안 되고, 리스트 순서상 우연히 끝에 있던 예전 스캔 상품이
+        //   계속 현위치로 잡혀서 정작 방금 찍은 상품은 평범한 회색 체크 핀으로 보였던 것.
+        //   serverScanned는 scannedAt(실제 스캔 시각) 기준으로 정렬해서 진짜 순서를 맞추고,
+        //   로컬 스캔(방금 이 세션에서 찍은 것 = 가장 최신)은 항상 맨 뒤에 오도록 순서를 바꿨습니다.
+        const groupProducts = loaded.find(g=>g.id===groupId)?.products ?? [];
+        const serverScanned = groupProducts
+          .filter((p): p is typeof p & { scannedAt: string } => p.scannedAt != null)
+          .sort((a, b) => new Date(a.scannedAt).getTime() - new Date(b.scannedAt).getTime())
+          .map((p) => p.id);
+        const merged = [...serverScanned.filter((id) => !localScans.includes(id)), ...localScans];
+        setSessionScans(new Set(merged));
       }).catch(()=>{
         setSessionScans(new Set(localScans));
       });
@@ -319,7 +330,6 @@ function ScanPageInner() {
 
     const cached = readRouteProgress(groupId);
     if (cached && cached.requestKey === key) {
-      saveRouteProgress(cached);
       setRoute(cached.route);
       setMapFloor(cached.route.start.floorNo);
       setRouteError(null);
@@ -330,7 +340,6 @@ function ScanPageInner() {
       // ✅ 담긴 상품이 없거나 전부 스캔 완료 — API를 부를 필요가 없고, 부르면 오히려
       //   "빈 목록" 에러가 날 수 있어서 여기서 명확한 안내로 갈음.
       setRoute(null);
-      if(window.parent!==window) window.parent.postMessage({source:"storeflow-frontend",type:"PLANNED_ROUTE",groupId,route:null},document.referrer?new URL(document.referrer).origin:window.location.origin);
       setRouteError("담긴 상품이 없거나 전부 스캔했어요.");
       return;
     }
@@ -401,13 +410,20 @@ function ScanPageInner() {
     const skuIds = Array.from(sessionScans);
     setMovingScans(true);
     try {
-      const { warnings, movedSkuIds } = await moveProductsBetweenGroups(groupId, targetId, skuIds);
+      const { warnings } = await moveProductsBetweenGroups(groupId, targetId, skuIds);
       refreshGroups();
       setGroupId(targetId);
       setEntryPickerOpen(false);
       writeActiveScanGroupId(targetId);
-      writeShoppingSession({ groupId: targetId, scannedSkuIds: movedSkuIds });
-      if(warnings.length) setError(`${warnings.map(w=>w.name).join(", ")} — 옮기지 못해 원래 리스트에 유지했어요.`);
+      writeShoppingSession({ groupId: targetId, scannedSkuIds: skuIds });
+      // ✅ 버그 수정(요청 — "진열대 재고보다 많이 옮기려다 PATCH 409로 조용히 실패") —
+      //   재고 부족으로 일부만 옮겨졌거나 아예 못 옮긴 상품이 있으면, 콘솔 에러로만
+      //   남기지 않고 화면에 구체적으로 알려준다.
+      if (warnings.length > 0) {
+        setError(
+          `${warnings.map((w) => w.name).join(", ")} — 재고 확인 문제로 못 옮겼어요. 원래 리스트에 그대로 있어요.`
+        );
+      }
     } catch {
       setError("상품을 옮기지 못했어요. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -434,22 +450,13 @@ function ScanPageInner() {
   const decrementScannedProduct = async (skuId: number, productName: string, quantity: number) => {
     if (!groupId) return;
     const current = groups.find((g) => g.id === groupId)?.products.find((p) => p.id === skuId);
-    if (!current || !sessionScans.has(skuId)) {
-      setError(`${productName}은(는) 아직 담지 않은 상품이에요.`);
-      return;
-    }
-
-    const nextQty = Math.max(0, current.quantity - quantity);
-    if (isLoggedIn()) {
-      if (current.cartItemId == null) throw new Error("상품 정보를 다시 불러온 뒤 시도해주세요.");
-      if (nextQty === 0) await syncRemoveFromServerCart(current.cartItemId);
-      else await syncUpdateServerCart(current.cartItemId, nextQty);
-    }
+    if (!current) return;
 
     // ✅ 신규(09-03 요청 ④) — 스캔 취소(카트에서 빼기)도 행동 신호. 같은 카테고리를
     //   담았다 뺐다 반복하는 것이 망설임 감시의 재료라 SCAN_ADD와 짝을 맞춰 보냄.
     trackConsumerEvent({ event_type: "SCAN_REMOVE", sku_id: skuId });
 
+    const nextQty = current.quantity - quantity;
 
     updateCartGroups((gs) =>
       gs.map((g) =>
@@ -465,6 +472,9 @@ function ScanPageInner() {
       )
     );
 
+    if (isLoggedIn()) {
+      void syncUpdateServerCart(current.cartItemId, nextQty <= 0 ? 0 : nextQty);
+    }
 
     if (nextQty <= 0) {
       setSessionScans((prev) => {
@@ -507,28 +517,6 @@ function ScanPageInner() {
     setError(null);
 
     try {
-      // 시설 코드는 상품 조회·담기·빼기 전에 처리한다.
-      if (code.trim().startsWith("29")) {
-        const plan = route ?? await getOptimizedRoute([]);
-        const facility = plan.facilities.find(f => facilityBarcode(f.locationId) === code.trim());
-        if (facility) {
-          const saved = sessionFor(currentGroupId);
-          const anchor = {locationId: facility.locationId};
-          const remainingIds = (selectedGroup?.products ?? []).filter(p => !saved.scannedSkuIds.includes(p.id)).map(p=>p.id);
-          const nextDetour = saved.detourLocationId === facility.locationId ? undefined : saved.detourLocationId;
-          const nextRoute = route
-            ? await rebaseRouteFrom(route, facility, remainingIds)
-            : await getOptimizedRoute(remainingIds, {anchor,detourLocationId:nextDetour,paid:saved.paid});
-          nextRoute.start = {...facility,label:"현재 위치"};
-          const key = buildRequestKey({groupId:currentGroupId,skuIds:remainingIds,anchor,detourLocationId:nextDetour,paid:saved.paid});
-          saveRouteProgress({groupId:currentGroupId,requestKey:key,route:nextRoute,step:0});
-          writeShoppingSession({...saved,anchor,detourLocationId:nextDetour},{preserveRoute:true});
-          setBarcode("");
-          setArrivalNotice(`${facility.label} 도착을 확인했어요. 이 위치에서 남은 동선을 이어갑니다.`);
-          if(window.parent!==window) window.parent.postMessage({source:"storeflow-frontend",type:"SCANNED_FACILITY",route:nextRoute},document.referrer?new URL(document.referrer).origin:window.location.origin);
-          return;
-        }
-      }
       const found = await apiFetch<{
         skuId: number;
         name: string;
@@ -543,6 +531,19 @@ function ScanPageInner() {
         pickLocationId?: string | null;
         pickFloorNo?: number | null;
       }>(`/api/products/barcode/${code.trim()}`, { auth: false });
+
+      // ✅ "몇 개 뺄지" 골라서 무장해둔 상태(pendingAction)에서 그 상품 바코드를 다시
+      //   스캔했는지 확인. 맞으면 여기서 빼기를 실행하고 끝. 다른 바코드면 무장만 풀고
+      //   그 바코드는 아래 평소 담기 로직으로 그대로 이어짐(엉뚱한 상품이 안 빠지게).
+      if (pendingAction != null) {
+        const isMatch = found.skuId === pendingAction.skuId;
+        const action = pendingAction;
+        setPendingAction(null);
+        if (isMatch) {
+          await decrementScannedProduct(found.skuId, found.name, action.quantity);
+          return;
+        }
+      }
 
       // ✅ 단종 상품 — 백엔드는 조회 자체는 성공시키고 discontinued 플래그만 내려주므로,
       //   "인식 안 됨" 취급은 여기서 프론트가 직접 막습니다. 장바구니에 안 담고 안내만 표시.
@@ -769,20 +770,36 @@ function ScanPageInner() {
   //   이어붙임(예전엔 한 단계씩만 보여주고 이전/다음으로 넘겼는데 이제 그게 없음).
   const routeMapPath: (PathPoint & { floorNo: number })[] =
     route?.journeySteps.flatMap((s) => s.path) ?? [];
+
+  // ✅ 버그 수정(요청 — "동선이 이상한 방향으로 그려짐") — 원인: routeMapPath를 그냥
+  //   floorNo만으로 filter해서 StoreMap에 하나의 선(precomputedPath)으로 넘기고 있었습니다.
+  //   그런데 예를 들어 1층→에스컬레이터→2층→다시 1층(반품/화장실 등)처럼 같은 층을 두 번
+  //   지나가는 동선이면, filter는 "중간에 다른 층을 거쳐서 끊겼다"는 사실을 무시하고 1층
+  //   포인트만 순서대로 쭉 이어붙여 버립니다 — 그러면 서로 이어져 있지 않은 두 지점이 매장을
+  //   가로지르는 직선으로 연결돼서(실제로 안 걸어간 방향으로) 동선이 이상해 보였습니다.
+  //   아래 currentMapSegments/mutedMapSegments가 층이 바뀌는 지점마다 구간을 끊어서
+  //   배열의 배열로 만들고, StoreMap엔 pathSegments/mutedPathSegments로 넘겨서 끊어진
+  //   구간끼리는 선으로 안 이어지게 합니다.
+  // ✅ 버그 수정(요청 — "스캔 동선에서 이미 찍은 상품에 순번 배지(예: '2')랑 체크 배지가
+  //   같이 겹쳐서 뜸") — 원인: route(남은 상품 기준으로 계산)가 방금 스캔을 아직
+  //   반영하기 전(재계산 잠깐 지연되는 사이)엔, 방금 찍은 skuId가 routeMapPins(순번
+  //   배지)에도 남아있고 checkedMapPins(체크 배지)에도 동시에 들어가서 같은 자리에
+  //   두 배지가 겹쳐 보였음. sessionScans에 이미 있는 skuId는 routeMapPins에서
+  //   확실히 빼서, 그 사이에도 체크 배지 하나만 보이게 함.
   const routeMapPins: (MapPin & { floorNo: number })[] =
     route?.journeySteps
-      .filter((s) => ["PRODUCT","FACILITY"].includes(s.kind) && s.path.length > 0 && !(s.skuId != null && sessionScans.has(s.skuId)))
+      .filter((s) => s.kind === "PRODUCT" && s.path.length > 0 && !(s.skuId != null && sessionScans.has(s.skuId)))
       .map((s, i) => {
         const last = s.path[s.path.length - 1];
         const product = selectedGroup?.products.find((p) => p.id === s.skuId);
-        return { id: s.skuId ?? -(i+1), facility:s.kind==="FACILITY", name: s.label, price: product?.price ?? 0, x: last.x, y: last.y, floorNo: last.floorNo, image: product?.image };
+        return { id: s.skuId ?? i, name: s.label, price: product?.price ?? 0, x: last.x, y: last.y, floorNo: last.floorNo, image: product?.image };
       }) ?? [];
 
   // ✅ 신규(요청 — "동선 지도에도 방금 찍은 매대 위에 현위치 핀") — 이미 찍은 상품도
   //   좌표(coordsBySkuId)가 있으면 지도 핀으로 같이 그림(collected: true → 체크 배지).
   //   그 중 가장 마지막으로 찍은 것만 isCurrentLocation: true로 표시해서, 지도에서
   //   체크 배지 대신 흰 원+그림자+주황 핀 아이콘으로 특별하게 보이게 함.
-  const checkedMapPins: (MapPin & { floorNo: number })[] = Array.from(sessionScans).slice(-1)
+  const checkedMapPins: (MapPin & { floorNo: number })[] = Array.from(sessionScans)
     .map((skuId, i, arr) => {
       const coord = coordsBySkuId.get(skuId);
       const product = selectedGroup?.products.find((p) => p.id === skuId);
@@ -799,12 +816,68 @@ function ScanPageInner() {
         isCurrentLocation: i === arr.length - 1,
       };
     })
-    .filter((p): p is NonNullable<typeof p> => p !== null);
+    .filter((p): p is MapPin & { floorNo: number } => !!p);
+  const currentLocationPin = checkedMapPins.find((p) => p.isCurrentLocation);
 
-  // 이미 찍은 핀 + 앞으로 찍을 핀을 합쳐서 지도에 같이 그림. routeOrder는 "앞으로 찍을"
-  // 핀들의 id만 담아서, 이미 찍은 핀은 routeOrder에 안 잡혀 order===-1이 되고(체크 배지),
-  // 그 중 마지막 한 개만 위 isCurrentLocation으로 별도 스타일을 덮어씀.
-  const allMapPins: (MapPin & { floorNo: number })[] = [...checkedMapPins, ...routeMapPins];
+  // ✅ 버그 수정(요청 — "얘가 현위치 핀을 못 잡고 있는거 아니야?") — 맞았다. anchorIdx를
+  //   좌표 완전 일치(===)로 찾고 있었는데, currentLocationPin의 좌표는 coordsBySkuId(상품
+  //   재고 위치 API)에서 온 값이고 routeMapPath의 좌표는 경로 계산(A* 등) 엔진이 만든
+  //   경유점 좌표라, 같은 매대를 가리켜도 소수점 단위로 미세하게 다를 수 있다. 그래서
+  //   완전 일치 비교는 항상 실패(-1)해서 매번 "못 찾음 → 전체 경로(입구부터) 사용"으로
+  //   빠졌던 것. 완전 일치 대신, 같은 층에서 가장 가까운 점을 찾도록 바꿈.
+  const anchorIdx = (() => {
+    if (!currentLocationPin) return -1;
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    routeMapPath.forEach((p, i) => {
+      if (p.floorNo !== currentLocationPin.floorNo) return;
+      const dist = Math.hypot(p.x - currentLocationPin.x, p.y - currentLocationPin.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    });
+    return bestIdx;
+  })();
+  const routeMapPathFromAnchor = anchorIdx >= 0 ? routeMapPath.slice(anchorIdx) : routeMapPath;
+
+  // ✅ 신규(요청 — "현재 경로로 잡히는 길만 메인 주황색으로, 다른 부분은 연하게") — 스캔
+  //   화면(실제 매장에서 다음에 갈 곳)에 적용. 다음 목적지 핀(routeMapPins[0])의 좌표를
+  //   전체 경로(routeMapPathFromAnchor)에서 찾아, 거기까지(포함)는 진하게(currentMapSegments),
+  //   그 다음 상품들로 이어지는 나머지는 옅게(mutedMapSegments) 나눈다. journeySteps
+  //   내부 구조를 추측하지 않고 이미 화면에 맞게 뜨는 핀 좌표를 기준으로 삼아서 안전하다.
+  const firstMapPin = routeMapPins[0];
+  const firstMapPinIdx = firstMapPin
+    ? routeMapPathFromAnchor.findIndex((p) => p.x === firstMapPin.x && p.y === firstMapPin.y && p.floorNo === firstMapPin.floorNo)
+    : -1;
+  const mapSplitAt = firstMapPinIdx >= 0 ? firstMapPinIdx + 1 : routeMapPathFromAnchor.length;
+  const splitPathByFloor = (path: (PathPoint & { floorNo: number })[]): PathPoint[][] => {
+    const segments: PathPoint[][] = [];
+    let current: PathPoint[] = [];
+    for (const p of path) {
+      if (p.floorNo === mapFloor) {
+        current.push(p);
+      } else if (current.length) {
+        segments.push(current);
+        current = [];
+      }
+    }
+    if (current.length) segments.push(current);
+    return segments;
+  };
+  const currentMapSegments: PathPoint[][] = splitPathByFloor(routeMapPathFromAnchor.slice(0, mapSplitAt));
+  const mutedMapSegments: PathPoint[][] = splitPathByFloor(routeMapPathFromAnchor.slice(mapSplitAt));
+
+  // ✅ 버그 수정(요청 — "이 화면에는 체크 아이콘이 있을건데 확인해서 없애야해") — 이미
+  //   찍은 상품 전부를 체크 배지 핀으로 그리고 있었는데(마지막 한 개만 현위치 스타일),
+  //   이 지도는 "다음에 어디로 가야 하는지"를 보여주는 화면이라 지나온 상품들의 체크
+  //   배지는 불필요한 잡음이었다. 가장 마지막으로 찍은 것(현위치 표시용) 하나만 남기고
+  //   나머지 체크 배지는 지도에서 뺀다.
+
+  // 현위치 핀(있으면 1개) + 앞으로 찍을 핀을 합쳐서 지도에 같이 그림. routeOrder는 "앞으로
+  // 찍을" 핀들의 id만 담아서, 현위치 핀은 routeOrder에 안 잡혀도 isCurrentLocation
+  // 스타일이 따로 있어 문제없다.
+  const allMapPins: (MapPin & { floorNo: number })[] = [...(currentLocationPin ? [currentLocationPin] : []), ...routeMapPins];
 
   // ✅ 수정(요청 — "이동경로 한 줄 / 목록 한 줄이 번갈아 나오게, 찍은 건 위로 모으고
   //   이동경로는 빠지고, 마지막으로 찍은 매대에 현위치 핀") — 예전엔 "이동 경로" 요약을
@@ -826,19 +899,22 @@ function ScanPageInner() {
 
   const remainingSegments: { routeText: string; product: NonNullable<typeof selectedGroup>["products"][number] }[] = [];
   if (route) {
-    let pendingSteps: NonNullable<typeof route>["journeySteps"] = [];
+    let pendingLabels: string[] = [];
     for (const step of route.journeySteps) {
       if (step.kind === "PRODUCT") {
         const product = selectedGroup?.products.find((pp) => pp.id === step.skuId);
         if (product && !sessionScans.has(product.id)) {
           remainingSegments.push({
-            routeText: pendingSteps.length > 0 ? collapseEscalatorLabels(pendingSteps).join(" → ") : step.label,
+            routeText: pendingLabels.length > 0 ? pendingLabels.join(" → ") : step.label,
             product,
           });
         }
-        pendingSteps = [];
+        pendingLabels = [];
       } else {
-        pendingSteps.push(step);
+        // ✅ 수정(요청 — "~로 가는 길"이 너무 길어져서 접미사 없이 label을 그대로 보여줌) —
+        //   WALK/ESCALATOR/FACILITY 등 종류와 무관하게 백엔드가 준 label을 그대로(가공 없이)
+        //   보여줍니다.
+        pendingLabels.push(step.label);
       }
     }
   }
@@ -889,7 +965,7 @@ function ScanPageInner() {
           <button
             type="button"
             onClick={() => setGroupPickerOpen(true)}
-            className="flex min-w-0 max-w-[calc(100%-11rem)] items-center gap-1 text-md font-medium"
+            className="flex min-w-0 max-w-[55%] items-center gap-1 text-md font-medium"
           >
             <span className="truncate">{selectedGroup ? selectedGroup.title : "리스트 선택"}</span>
             <RiArrowDownSLine size={20} className="shrink-0 text-muted-foreground" />
@@ -955,8 +1031,8 @@ function ScanPageInner() {
                 floorNo={mapFloor}
                 pins={allMapPins.filter((p) => p.floorNo === mapFloor)}
                 routeOrder={routeMapPins.map((p) => p.id)}
-                pathSegments={floorSegments(route?.journeySteps ?? [], mapFloor)}
-                activePathSegments={floorSegments(nextDestinationSteps(route?.journeySteps ?? []),mapFloor)}
+                pathSegments={currentMapSegments}
+                mutedPathSegments={mutedMapSegments}
                 onFloorChange={setMapFloor}
                 heightClassName="h-full"
                 hideHelpText
@@ -994,7 +1070,6 @@ function ScanPageInner() {
               <span className="absolute bottom-[35%] left-[10%] h-8 w-8 border-b-2 border-l-2 border-white" />
               <span className="absolute bottom-[35%] right-[10%] h-8 w-8 border-b-2 border-r-2 border-white" />
 
-              {arrivalNotice && <p role="status" className="text-sm text-green-700">{arrivalNotice}</p>}
               {error && (
                 <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 text-center text-sm text-danger">
                   {error}
@@ -1046,9 +1121,9 @@ function ScanPageInner() {
               체크박스랑 통일") — 버튼 대신 공용 Checkbox 컴포넌트로 되돌림. 체크되어
               있으면: 스캔해도 안 담기고, 그 상품 위치를 지도에 표시하면서 동선보기
               화면(지도)으로 넘어감. */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="mt-2 flex items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={locateOnly} onChange={() => { setLocateOnly((v) => !v);  }} />
+              <Checkbox checked={locateOnly} onChange={() => setLocateOnly((v) => !v)} />
               현재 위치만 확인 (담지 않음)
             </label>
             {/* ✅ "계획 추가" 버튼은 리스트에 없는 상품 추가·시설 먼저 들르기를 모아둔
@@ -1057,7 +1132,7 @@ function ScanPageInner() {
               type="button"
               onClick={() => setPlanOpen(true)}
               disabled={groupCompleted}
-              className="ml-auto flex shrink-0 items-center gap-1 rounded-full border border-card-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+              className="flex shrink-0 items-center gap-1 rounded-full border border-card-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
             >
               <RiCalendarCheckLine size={14} />
               계획 추가
@@ -1131,7 +1206,9 @@ function ScanPageInner() {
                 return (
                 <div key={p.id} className={`${collected ? "" : "opacity-40"} ${prevIsProduct ? "border-t border-border" : ""}`}>
                   <div
-                    className="flex items-center gap-3 rounded-sm px-1 py-3"
+                    className={`flex items-center gap-3 rounded-sm px-1 py-3 ${
+                      selectedRemoveSkuId === p.id ? "bg-danger-bg" : ""
+                    }`}
                   >
                     {/* ✅ 수정(요청 — "이동경로 위에 있는 위치 아이콘은... 이동경로 텍스트
                         왼쪽에 넣고") — 상품 썸네일 위에 얹었던 현위치 핀 배지는 없앰(엉뚱한
@@ -1159,22 +1236,66 @@ function ScanPageInner() {
                     {collected && (
                     <button
                       type="button"
-                      disabled={groupCompleted || removing}
+                      disabled={groupCompleted}
                       aria-label={`${p.name} 빼기`}
-                      onClick={async () => {
-                        if (removeLock.current || groupCompleted) return;
-                        removeLock.current = true; setRemoving(true); setError(null);
-                        try { await decrementScannedProduct(p.id, p.name, 1); }
-                        catch (e) { setError(e instanceof Error ? e.message : "수량을 줄이지 못했어요."); }
-                        finally { removeLock.current = false; setRemoving(false); }
+                      onClick={() => {
+                        if (selectedRemoveSkuId === p.id) {
+                          setSelectedRemoveSkuId(null);
+                        } else {
+                          setSelectedRemoveSkuId(p.id);
+                          setRemoveQuantityDraft(1);
+                        }
                       }}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full border border-card-border text-muted-foreground disabled:opacity-40"
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full border disabled:opacity-40 ${
+                        selectedRemoveSkuId === p.id ? "border-danger text-danger" : "border-card-border text-muted-foreground"
+                      }`}
                     >
                       <RiSubtractLine size={18} />
                     </button>
                     )}
                   </div>
 
+                  {/* ✅ 수정(2026-09, 3차) — 예전엔 목록 전체 아래에 별도 패널로 떨어져
+                      있어서 "지금 어느 상품 얘기인지" 한 번 더 확인해야 했고, "몇 개
+                      뺄까요?" 질문 텍스트 + X + [스테퍼(왼쪽)][빼기/다빼기 버튼 2개(오른쪽)]
+                      로 읽는 방향이 여러 갈래라 헷갈렸음. 이제 그 상품 바로 아래에 붙고,
+                      질문 문구·X 없이 스테퍼(가운데) → 버튼(그 아래, 가로 꽉 채움) 순서로
+                      위→아래 한 방향으로만 읽히게 함. "다 빼기" 버튼도 없앰 — 스테퍼를
+                      최대치(전체 수량)까지 올리면 버튼 글자가 자동으로 "전부 빼기"로
+                      바뀌어서 버튼이 하나만 있어도 됨. */}
+                  {selectedRemoveSkuId === p.id && (
+                    <div className="mb-3 space-y-3 rounded-[14px] border border-border bg-muted p-4">
+                      <div className="flex items-center justify-center gap-4">
+                        <button
+                          type="button"
+                          aria-label="개수 줄이기"
+                          onClick={() => setRemoveQuantityDraft((n) => Math.max(1, n - 1))}
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-card-border bg-white"
+                        >
+                          <RiSubtractLine size={16} />
+                        </button>
+                        <span className="w-8 text-center text-lg font-semibold">{removeQuantityDraft}</span>
+                        <button
+                          type="button"
+                          aria-label="개수 늘리기"
+                          onClick={() => setRemoveQuantityDraft((n) => Math.min(p.quantity, n + 1))}
+                          className="flex h-10 w-10 items-center justify-center rounded-full border border-card-border bg-white"
+                        >
+                          <RiAddLine size={16} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPendingAction({ skuId: p.id, quantity: removeQuantityDraft });
+                          setSelectedRemoveSkuId(null);
+                        }}
+                        className="flex h-11 w-full items-center justify-center rounded-full bg-danger text-sm font-medium text-white"
+                      >
+                        {removeQuantityDraft >= p.quantity ? "전부 빼기" : `${removeQuantityDraft}개 빼기`}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 );
               })}
@@ -1182,7 +1303,18 @@ function ScanPageInner() {
           )}
         </div>
 
-
+        {/* ✅ 개수를 골라 무장된 상태 — 이 상품 바코드를 다시 스캔해야 실제로 빠짐. */}
+        {pendingAction != null && (
+          <div className="mx-4 mb-3 flex shrink-0 items-center justify-between gap-2 rounded-[14px] border border-danger/30 bg-danger-bg px-4 py-3 text-sm text-danger">
+            <span>
+              {scannedProducts.find((p) => p.id === pendingAction.skuId)?.name ?? "이 상품"}의 바코드를 다시
+              스캔하면 {pendingAction.quantity}개가 빠져요.
+            </span>
+            <button type="button" onClick={() => setPendingAction(null)} className="shrink-0 underline">
+              취소
+            </button>
+          </div>
+        )}
 
         {/* ✅ 수정(요청) — 목록이 접혀있을 때(max-h-48) 이 아래로 결제 푸터가 바로
             붙어버려서 화면 하단에 빈 여백이 남았음. 목록을 펼치면(listExpanded, flex-1)
@@ -1208,9 +1340,10 @@ function ScanPageInner() {
             <span>{cartTotalPrice.toLocaleString()}원</span>
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}
-          {/* ✅ 신규(요청 1번) — 비회원은 결제 API 자체가 로그인 전용이라 결제를 못 함.
-              버튼을 로그인 유도로 바꾸고, 로그인 후 이 화면(이 리스트)으로 돌아오게
-              ?next=로 현재 경로를 넘김. */}
+          {/* ✅ 수정(요청 — "리스트 상세 페이지처럼 결제하기 버튼 길게 만들고, 오른쪽에
+              리브 버튼") — 기존엔 w-fit mx-auto로 가운데 작게 떠 있던 버튼을
+              saved/[groupId]/page.tsx의 동선/리브 버튼 줄과 같은 구조(flex-1 긴
+              버튼 + 60px 원형 리브 버튼)로 맞춤. */}
           {!loggedIn ? (
             <div className="flex items-center gap-2">
               <button
@@ -1225,7 +1358,15 @@ function ScanPageInner() {
                 <RiLoginBoxLine size={20} />
                 로그인하고 결제하기
               </button>
-              <ShoppingLivButton onAsk={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)} />
+              <button
+                type="button"
+                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
+                aria-label="리브에게 물어보기"
+                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+              >
+                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+                리브
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -1238,7 +1379,15 @@ function ScanPageInner() {
                 <RiBankCardLine size={20} />
                 {checkingOut ? "결제 중..." : "결제하기"}
               </button>
-              <ShoppingLivButton onAsk={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)} />
+              <button
+                type="button"
+                onClick={() => openAiChat(selectedGroup ? `"${selectedGroup.title}" 리스트 관련해서 물어볼게` : undefined, groupId ?? undefined)}
+                aria-label="리브에게 물어보기"
+                className="flex h-[60px] w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border border-border bg-white/20 text-xs backdrop-blur-2xl"
+              >
+                <img src="/icons/liv-line.svg" alt="" aria-hidden="true" className="h-[22px] w-[22px] shrink-0" />
+                리브
+              </button>
             </div>
           )}
         </div>

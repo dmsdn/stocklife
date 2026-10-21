@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { getAppFrame } from "@/lib/app-frame";
 import { Checkbox } from "./checkbox";
 import { PriceRangeSlider } from "./price-range-slider";
 
@@ -200,6 +201,6 @@ export function FilterPanel({
         </div>
       </div>
     </div>,
-    document.body
+    getAppFrame() ?? document.body
   );
 }

@@ -322,3 +322,81 @@ input:-webkit-autofill:focus {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-3px); }
 }
+
+/* ============================================
+   모바일 화면 고정 (2026-10)
+   이 앱은 모바일 화면 기준으로 설계됐기 때문에, PC 브라우저에서도
+   가로폭을 모바일 크기로 고정하고 가운데에 띄워 보여준다.
+   ============================================ */
+
+/* 1. 반응형 브레이크포인트 제거
+   sm: · md: · lg: · xl: 접두어가 붙은 데스크톱용 스타일이 더 이상 적용되지 않아,
+   화면이 넓어도 항상 모바일 레이아웃으로 그려진다. */
+@theme {
+  --breakpoint-*: initial;
+}
+
+/* 2. 모바일 화면 틀 */
+:root {
+  --app-frame-width: 430px;  /* PC에서 보여줄 모바일 화면 가로폭 */
+  --app-stage-bg: #f4f4f6;   /* PC에서 화면 틀 바깥 배경 */
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;          /* 스크롤은 브라우저 전체가 아니라 화면 틀 안에서 */
+}
+
+body.app-stage {
+  display: flex;
+  justify-content: center;
+  background: var(--app-stage-bg);
+}
+
+/* 화면 틀
+   transform을 주면 안쪽의 position:fixed 요소(하단 탭바, 모달 등)가
+   브라우저 전체가 아니라 이 틀을 기준으로 붙는다. */
+/* 실제 휴대폰(가로 600px 미만)에서는 화면 전체를 그대로 채우고,
+   그보다 넓은 화면(태블릿 · PC)에서만 가로폭을 고정해 가운데에 띄운다. */
+.app-frame {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--background);
+  transform: translateZ(0);
+  isolation: isolate;
+}
+
+/* 화면 틀 안의 실제 스크롤 영역 */
+.app-scroll {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.app-scroll > * {
+  flex-shrink: 0;
+}
+
+/* 스크롤바 숨기기 — 휴대폰처럼 스크롤은 되지만 막대는 보이지 않게.
+   화면 틀 안의 모든 스크롤 영역(본문, 모달, 가로 슬라이드 목록 등)에 적용 */
+.app-frame,
+.app-frame * {
+  scrollbar-width: none;          /* Firefox · 최신 Chrome */
+  -ms-overflow-style: none;       /* 구형 Edge */
+}
+.app-frame::-webkit-scrollbar,
+.app-frame *::-webkit-scrollbar {
+  display: none;                  /* Chrome · Safari · Edge */
+}
+
+/* 휴대폰보다 넓은 화면(태블릿 · PC)에서만 가로폭 고정 */
+@media (min-width: 600px) {
+  .app-frame {
+    max-width: var(--app-frame-width);
+  }
+}

@@ -19,9 +19,15 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className={`${pretendard.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
-        <EventQueueFlusher />
-        {children}
+      {/* 모바일 화면 고정 — 가로폭을 모바일 크기로 고정한 화면 틀 안에 앱을 그린다.
+          스타일은 globals.css의 "모바일 화면 고정" 구역 참고 */}
+      <body className="app-stage">
+        <div id="app-frame" className="app-frame">
+          <div id="app-scroll" className="app-scroll">
+            <EventQueueFlusher />
+            {children}
+          </div>
+        </div>
       </body>
     </html>
   );

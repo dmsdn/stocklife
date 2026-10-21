@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RiArrowLeftSLine, RiSettings3Line, RiMegaphoneLine, RiVipDiamondLine, RiShoppingCart2Line } from "@remixicon/react";
 import { cn } from "@/lib/utils";
-import { apiFetch, getAccessToken, AUTH_CHANGED_EVENT } from "@/lib/api-client";
+import { apiFetch } from "@/lib/api-client";
 
 type NotificationType = "공지" | "혜택" | "주문" | "리브";
 type Tab = "전체" | NotificationType;
@@ -25,9 +25,9 @@ const TABS: Tab[] = ["전체", "공지", "혜택", "주문", "리브"];
 // 백엔드는 리스트 보유자의 재입고 알림(RESTOCK)을 생성합니다.
 // 실제 백엔드 type이 추가되면 이 매핑만 확장하면 됩니다.
 function mapBackendType(type: string): NotificationType {
-  if (["PROMO","BENEFIT","PROMOTION","POINT","GRADE","COUPON"].includes(type)) return "혜택";
+  if (type === "PROMO" || type === "BENEFIT") return "혜택";
   if (type === "ORDER") return "주문";
-  if (type === "AI_PROACTIVE" || type === "REPURCHASE" || type === "AI_CHAT" || type === "AI" || type === "CHAT") return "리브";
+  if (type === "AI_CHAT" || type === "AI" || type === "CHAT") return "리브";
   return "공지";
 }
 
@@ -50,7 +50,7 @@ function NotificationIcon({ type }: { type: NotificationType }) {
 
 // 알림 생성 시각을 현재 시점 기준 상대 시간으로 표시
 function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(/(Z|[+-]\d{2}:\d{2})$/.test(iso) ? iso : iso+"Z").getTime();
+  const diffMs = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diffMs / 60000);
   if (minutes < 1) return "방금 전";
   if (minutes < 60) return `${minutes}분 전`;
@@ -99,13 +99,10 @@ export default function NotificationsPage() {
   // ✅ 실제 GET /api/notifications 연동. 백엔드 응답 필드명(notificationId, linkUrl)이
   //   프론트가 쓰는 형태(id, href)랑 달라서 매핑해서 씁니다.
   useEffect(() => {
-    let active = true;
-    const load = () => {const token=getAccessToken();return apiFetch<
+    apiFetch<
       { notificationId: number; type: string; title: string; message: string; linkUrl: string | null; read: boolean; createdAt: string }[]
     >("/api/notifications")
       .then((list) => {
-        if (!active || token!==getAccessToken()) return;
-        setError(null);
         setNotifications(
           list.map((n) => ({
             id: String(n.notificationId),
@@ -120,16 +117,12 @@ export default function NotificationsPage() {
           }))
         );
       })
-      .catch(() => {if(active && token===getAccessToken())setError("알림을 불러오지 못했어요. 로그인 상태를 확인하고 새로고침해 주세요.");})
-      .finally(() => {if(active && token===getAccessToken())setLoading(false);});};
-    load(); const timer = window.setInterval(load, 5000);
-    const onAuth=()=>{setNotifications([]);load();};
-    window.addEventListener(AUTH_CHANGED_EVENT, onAuth);
-    return () => {active=false;window.clearInterval(timer);window.removeEventListener(AUTH_CHANGED_EVENT, onAuth);};
+      .catch(() => setError("알림을 불러오지 못했어요. 로그인 상태를 확인하고 새로고침해 주세요."))
+      .finally(() => setLoading(false));
   }, []);
 
   // ✅ 백엔드/목업 알림 + 로컬 자발형 알림을 합쳐서 최신순으로.
-  const allNotifications = [...notifications, ...proactiveNotifications.filter(p => !notifications.some(n => n.message === p.content || p.content.startsWith(n.message.replace(/…$/, "")))).map(toAppNotification)].sort(
+  const allNotifications = [...notifications, ...proactiveNotifications.map(toAppNotification)].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 

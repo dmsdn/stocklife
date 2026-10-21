@@ -1,6 +1,4 @@
 "use client";
-import {collapseEscalatorLabels} from "@/lib/journey-labels";
-import {floorSegments,nextDestinationSteps} from "@/lib/route-display";
 import {useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {useOpenAiChat} from "@/lib/use-open-ai-chat";
@@ -60,7 +58,7 @@ export function StoreMapDialog({open,onClose,groupId,collectedIds,plan=false}:Pr
       const key=buildRequestKey({groupId,skuIds:ids,anchor:session.anchor,detourLocationId:session.detourLocationId,paid:session.paid});
       const cached=readRouteProgress(groupId);
       if(cached&&cached.requestKey===key){
-        if(active){saveRouteProgress(cached);setRoute(cached.route);setStep(cached.step??0);setFloor(cached.route.start.floorNo);}
+        if(active){setRoute(cached.route);setStep(cached.step??0);setFloor(cached.route.start.floorNo);}
         return;
       }
       const result=await getOptimizedRoute(ids,{anchor:session.anchor,detourLocationId:session.detourLocationId,paid:session.paid});
@@ -103,6 +101,38 @@ export function StoreMapDialog({open,onClose,groupId,collectedIds,plan=false}:Pr
   //   백엔드가 준 정확한 데이터)의 시작/끝 층번호를 직접 읽어서 판단한다 — 몇 번을
   //   갈아타든, 라벨 문구가 뭐든 상관없이 처음 시작층과 마지막 도착층만 정확히 뽑힌다.
   type PendingItem=NonNullable<typeof route>["journeySteps"][number];
+  const collapseEscalatorLabels=(items:PendingItem[]):string[]=>{
+    const isVertical=(it:PendingItem)=>{
+      if(it.kind==="ESCALATOR"||it.label.includes("에스컬레이터")||it.label.includes("엘리베이터"))return true;
+      const f0=it.path[0]?.floorNo,f1=it.path[it.path.length-1]?.floorNo;
+      return f0!=null&&f1!=null&&f0!==f1;
+    };
+    const isBareFloor=(it:PendingItem)=>/^\s*\d+\s*층\s*$/.test(it.label);
+    const startFloorOf=(it:PendingItem)=>it.path[0]?.floorNo;
+    const endFloorOf=(it:PendingItem)=>it.path[it.path.length-1]?.floorNo;
+    const out:string[]=[];
+    let i=0;
+    while(i<items.length){
+      if(!isVertical(items[i])){out.push(items[i].label);i++;continue;}
+      let j=i;
+      let startFloor:number|undefined;
+      let lastFloor:number|undefined;
+      const kindLabel=items[i].label.includes("엘리베이터")?"엘리베이터":"에스컬레이터";
+      while(j<items.length&&(isVertical(items[j])||isBareFloor(items[j]))){
+        const s0=startFloorOf(items[j]),e0=endFloorOf(items[j]);
+        if(startFloor==null)startFloor=s0;
+        if(e0!=null)lastFloor=e0; else if(s0!=null)lastFloor=s0;
+        j++;
+      }
+      if(startFloor!=null&&lastFloor!=null&&startFloor!==lastFloor){
+        out.push(`${kindLabel}로 ${startFloor}층 → ${lastFloor}층 이동`);
+      } else {
+        for(let k=i;k<j;k++)out.push(items[k].label);
+      }
+      i=j;
+    }
+    return out;
+  };
   // ✅ 신규(요청 — "계획에서 리스트의 동선보기 내용도 스캔의 동선보기처럼. 지도 아래로
   //   이동경로, 리스트, 이동경로, 리스트 이런식으로") — 스캔 화면(app/(main)/scan/page.tsx)의
   //   listBlocks와 같은 방식: PRODUCT 단계 사이사이에 낀 이동 단계(WALK/ESCALATOR 등)
@@ -226,7 +256,7 @@ export function StoreMapDialog({open,onClose,groupId,collectedIds,plan=false}:Pr
             <StoreMap floorNo={floor} pins={routeMapPins.filter(p=>p.floorNo===floor)} routeOrder={routeMapPins.map(p=>p.id)} pathSegments={routeMapSegments} onFloorChange={setFloor} heightClassName="h-[88vw] max-h-[420px]" hideHelpText/>
           </div>
         ) : (
-          <StoreMap floorNo={floor} pins={pins} routeOrder={route.journeySteps.map((_,i)=>i+1)} pathSegments={floorSegments(route.journeySteps.slice(step),floor)} activePathSegments={floorSegments(nextDestinationSteps(route.journeySteps.slice(step)),floor)} routeOrigin={segments[0]?.[0]?{...segments[0][0],label:current?.path[0]?.floorNo===floor?"이 구간 출발":"에스컬레이터 도착"}:undefined} onFloorChange={setFloor} onLivClick={()=>openAiChat(group ? `"${group.title}" 리스트 동선 관련해서 물어볼게` : undefined, groupId)} heightClassName="h-[34vh] min-h-[190px]"/>
+          <StoreMap floorNo={floor} pins={pins} routeOrder={route.journeySteps.map((_,i)=>i+1)} pathSegments={segments} routeOrigin={segments[0]?.[0]?{...segments[0][0],label:current?.path[0]?.floorNo===floor?"이 구간 출발":"에스컬레이터 도착"}:undefined} onFloorChange={setFloor} onLivClick={()=>openAiChat(group ? `"${group.title}" 리스트 동선 관련해서 물어볼게` : undefined, groupId)} heightClassName="h-[34vh] min-h-[190px]"/>
         )}
         {!plan && current?.kind==="ESCALATOR"&&<div className="flex justify-center gap-3 p-2">{current.path.map(p=><button key={p.floorNo} className="rounded border px-3 py-2 text-xs" onClick={()=>setFloor(p.floorNo)}>{p.floorNo}층 {p===current.path[0]?"탑승":"도착"} 위치</button>)}</div>}
         {/* ✅ 이동경로/상품 목록 카드 스타일을 스캔 화면(app/(main)/scan/page.tsx의

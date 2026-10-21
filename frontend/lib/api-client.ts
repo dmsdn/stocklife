@@ -87,8 +87,6 @@ export function getRefreshToken(): string | null {
 export const AUTH_CHANGED_EVENT = "storeflow:auth-changed";
 
 /** @param persist true면 localStorage(브라우저 재시작해도 유지), false면 sessionStorage(이 탭 닫으면 로그아웃) */
-
-
 export function setTokens(accessToken: string, refreshToken: string, persist: boolean = true) {
   const storage = persist ? window.localStorage : window.sessionStorage;
   const other = persist ? window.sessionStorage : window.localStorage;
@@ -97,7 +95,6 @@ export function setTokens(accessToken: string, refreshToken: string, persist: bo
   other.removeItem(REFRESH_TOKEN_KEY);
   storage.setItem(ACCESS_TOKEN_KEY, accessToken);
   storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  for (const key of ["storeflow_shopping_session", "storeflow_shopping_route_progress", "storeflow_active_scan_group_id"]) window.sessionStorage.removeItem(key);
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 
@@ -106,7 +103,6 @@ export function clearTokens() {
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   window.sessionStorage.removeItem(ACCESS_TOKEN_KEY);
   window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-  for (const key of ["storeflow_shopping_session", "storeflow_shopping_route_progress", "storeflow_active_scan_group_id"]) window.sessionStorage.removeItem(key);
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }
 

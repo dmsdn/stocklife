@@ -8,14 +8,12 @@
 "use client";
 
 import type { ProactiveMessage } from "./realtime";
-import { AUTH_CHANGED_EVENT } from "./api-client";
 
 const KEY = "storeflow_proactive_notifications";
 const MAX_ITEMS = 50;
 
 export interface ProactiveNotificationRecord {
   id: string; // "px-<messageId>" 또는 "px-<타임스탬프>"
-  sessionId?: string;
   content: string;
   createdAt: string;
   read: boolean;
@@ -41,19 +39,15 @@ function write(list: ProactiveNotificationRecord[]) {
 
 /** ✅ 실시간으로 자발형 메시지를 받을 때마다 호출(lib/realtime.ts가 이미 messageId
  *  기준으로 중복은 걸러주므로, 여기서는 저장만 하면 됨). */
-export function saveProactiveNotification(m: ProactiveMessage, read = false) {
+export function saveProactiveNotification(m: ProactiveMessage) {
   const record: ProactiveNotificationRecord = {
     id: m.messageId != null ? `px-${m.messageId}` : `px-${Date.now()}`,
-    sessionId: m.sessionId,
     content: m.content,
     createdAt: m.createdAt ?? new Date().toISOString(),
-    read,
+    read: false,
   };
   const list = readProactiveNotifications();
-  if (list.some((n) => n.id === record.id)) {
-    if (read && list.some((n) => n.id === record.id && !n.read)) markProactiveNotificationRead(record.id);
-    return;
-  }
+  if (list.some((n) => n.id === record.id)) return; // 이미 저장된 건 다시 안 넣음
   write([record, ...list]);
   window.dispatchEvent(new Event("storeflow:proactive-notifications-changed"));
 }
@@ -62,14 +56,4 @@ export function markProactiveNotificationRead(id: string) {
   const list = readProactiveNotifications();
   write(list.map((n) => (n.id === id ? { ...n, read: true } : n)));
   window.dispatchEvent(new Event("storeflow:proactive-notifications-changed"));
-}
-
-// 팀 알림 보관 기능을 오라클의 계정 전환 경계에도 연결한다.
-export function clearProactiveNotifications() {
-  if (!canUseStorage()) return;
-  window.localStorage.removeItem(KEY);
-  window.dispatchEvent(new Event("storeflow:proactive-notifications-changed"));
-}
-if (typeof window !== "undefined") {
-  window.addEventListener(AUTH_CHANGED_EVENT, clearProactiveNotifications);
 }
